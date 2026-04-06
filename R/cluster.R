@@ -175,8 +175,8 @@ sw_plot_clusters <- function(fsom_result, plot_file = "FlowSOM_clusters.pdf") {
   grDevices::pdf(plot_file, width = 12, height = 8)
   tryCatch({
     FlowSOM::FlowSOMmary(fsom_result)
-    FlowSOM::PlotStars(fsom_result, backgroundValues = 
-                         FlowSOM::GetMetaclusters(fsom_result))
+    bg_values <- FlowSOM::GetMetaclusters(fsom_result)
+    FlowSOM::PlotStars(fsom_result, backgroundValues = bg_values)
   }, finally = {
     grDevices::dev.off()
   })
