@@ -39,10 +39,25 @@ NULL
 #' @param n_metaclusters Integer; number of metaclusters for FlowSOM
 #'   (default: 20).
 #' @param seed Integer; random seed for reproducibility (default: 42).
+#' @param unmix_from_raw Logical; if \code{TRUE}, run the AutoSpectral
+#'   unmixing pipeline on raw spectral FCS files before loading. Requires
+#'   \code{control_dir} and \code{unstained_fcs}. Default: \code{FALSE}.
+#' @param control_dir Character path to single-stain control FCS files.
+#'   Required when \code{unmix_from_raw = TRUE}.
+#' @param unstained_fcs Path(s) to unstained FCS file(s) for AF extraction.
+#'   Required when \code{unmix_from_raw = TRUE}.
+#' @param control_file Character path to a control CSV, or \code{NULL} to
+#'   auto-generate. Used when \code{unmix_from_raw = TRUE}.
+#' @param cytometer Character; cytometer type (default: \code{"aurora"}).
+#'   Used when \code{unmix_from_raw = TRUE}.
+#' @param unmix_method Character; unmixing method (default:
+#'   \code{"AutoSpectral"}). Used when \code{unmix_from_raw = TRUE}.
 #' @param ... Additional arguments.
 #'
 #' @return A named list with components:
 #'   \describe{
+#'     \item{\code{unmix_result}}{Unmixing results (if
+#'       \code{unmix_from_raw = TRUE})}
 #'     \item{\code{flowset}}{The loaded \code{flowSet}}
 #'     \item{\code{gating_set}}{The \code{GatingSet} (if gating was applied)}
 #'     \item{\code{qc_results}}{QC summary from PeacoQC}
@@ -65,6 +80,12 @@ run_pipeline <- function(fcs_dir,
                          cofactor = 6000,
                          n_metaclusters = 20,
                          seed = 42,
+                         unmix_from_raw = FALSE,
+                         control_dir = NULL,
+                         unstained_fcs = NULL,
+                         control_file = NULL,
+                         cytometer = "aurora",
+                         unmix_method = "AutoSpectral",
                          ...) {
   # --- Input validation ---
   if (!is.character(fcs_dir) || length(fcs_dir) != 1) {
@@ -107,6 +128,30 @@ run_pipeline <- function(fcs_dir,
   }
 
   results <- list()
+
+  # --- Step 0 (optional): Unmix from raw spectral data ---
+  if (unmix_from_raw) {
+    message("\n=== Step 0: Unmixing raw spectral data ===")
+    if (is.null(control_dir)) {
+      stop("'control_dir' is required when unmix_from_raw = TRUE.",
+           call. = FALSE)
+    }
+    unmix_output_dir <- file.path(output_dir, "unmixing")
+    unmix_result <- sw_unmix_pipeline(
+      control_dir = control_dir,
+      sample_input = fcs_dir,
+      unstained_fcs = unstained_fcs,
+      cytometer = cytometer,
+      control_file = control_file,
+      method = unmix_method,
+      output_dir = unmix_output_dir
+    )
+    results$unmix_result <- unmix_result
+
+    # Update fcs_dir to point to unmixed output
+    fcs_dir <- unmix_result$unmixed$output_dir
+    message("Using unmixed files from: ", fcs_dir)
+  }
 
   # --- Step 1: Load unmixed FCS files ---
   message("\n=== Step 1/6: Loading unmixed FCS files ===")
