@@ -25,6 +25,10 @@ intermediate data structures. SpectraWeaveR wraps these into **six functions** �
 functions plus a one-call orchestrator — making spectral
 unmixing accessible while preserving full expert control.
 
+This vignette walks through the complete unmixing workflow using the
+example dataset from the
+[original AutoSpectral documentation](https://drcytometer.github.io/AutoSpectral/articles/01_Full_AutoSpectral_Workflow.html).
+
 ### The six unmixing functions
 
 | Function | Purpose | AutoSpectral functions wrapped |
@@ -50,16 +54,40 @@ remotes::install_github("DrCytometer/AutoSpectral")
 remotes::install_github("DrCytometer/AutoSpectralRcpp")
 ```
 
-### Required data
+### Example data
 
-To follow along, you will need:
+This vignette uses the **9-colour Aurora panel** from the original
+AutoSpectral workflow. The data are from a mouse experiment with samples
+from three tissue types — **spleen, lung, and liver** — run on a
+**5-laser Cytek Aurora**. The different tissues allow us to demonstrate
+how to handle diverse autofluorescence profiles.
 
-1. **Single-stain control FCS files** — one file per fluorophore, plus an
-   unstained control and any compensation beads. These go in a single
-   directory (the "control directory").
-2. **Unstained sample FCS file(s)** — for autofluorescence extraction.
-   For multi-tissue experiments, one unstained file per tissue type.
-3. **Fully-stained sample FCS files** — your experimental data to unmix.
+Download the dataset from
+[Mendeley Data](https://data.mendeley.com/datasets/ch5dnspd79/1)
+(Manurung, 2024). After extracting, you should see a directory structure
+like this:
+
+```
+AutoSpectral_data/
+├── Raw/
+│   └── Set1/
+│       ├── Reference Group/    # single-stain controls (beads + cells)
+│       ├── Unstained/          # one unstained FCS per tissue
+│       │   ├── D1 Spleen_Set1.fcs
+│       │   ├── D2 Lung_Set1.fcs
+│       │   └── D3 Liver_Set1.fcs
+│       └── Stained/            # fully-stained samples
+│           ├── D4 Spleen_Set1.fcs
+│           ├── D5 Lung_Set1.fcs
+│           └── D6 Liver_Set1.fcs
+└── fcs_control_file.csv        # pre-filled control definition file
+```
+
+Set the base path to wherever you extracted the data:
+
+```{r data-paths}
+base_dir <- "~/AutoSpectral_data"
+```
 
 ## Step-by-step workflow
 
@@ -71,10 +99,10 @@ validate) the control definition CSV file.
 ```{r step1-setup}
 library(SpectraWeaveR)
 
-# Point to your single-stain controls directory
-control_dir <- "path/to/controls/"
+# Point to the single-stain controls directory
+control_dir <- file.path(base_dir, "Raw", "Set1", "Reference Group")
 
-# Initialize setup for a Cytek Aurora
+# Initialize setup for the Cytek Aurora
 setup <- sw_autospectral_setup(
   control_dir = control_dir,
   cytometer    = "aurora",
@@ -87,13 +115,15 @@ from the FCS filenames. **You must review and edit this file** before
 proceeding — it maps each FCS file to its fluorophore name and tells
 AutoSpectral which files are unstained controls, beads, etc.
 
-If you already have a validated control file:
+The example dataset includes a pre-filled control file. To use it:
 
 ```{r step1-existing-csv}
+control_file <- file.path(base_dir, "fcs_control_file.csv")
+
 setup <- sw_autospectral_setup(
   control_dir  = control_dir,
   cytometer    = "aurora",
-  control_file = "path/to/my_control_file.csv",
+  control_file = control_file,
   output_dir   = "unmix_output"
 )
 ```
@@ -125,7 +155,7 @@ names(controls)
 
 # The spectra matrix: fluorophores in rows, detectors in columns
 dim(controls$spectra)
-#> [1]  40  64   # e.g., 40 fluorophores across 64 detectors
+#> [1]  10  64   # 9 fluorophores + AF across 64 detectors
 ```
 
 **Expert escape hatch:** To customize gating, pre-define your gates with
@@ -150,37 +180,42 @@ Self-Organizing Map (SOM) clustering. This is what gives AutoSpectral its
 edge over conventional unmixing — it models cell-to-cell AF variation
 instead of using a single AF spectrum.
 
-```{r step3-af}
-# Single unstained file
-af_spectra <- sw_extract_af_spectra(
-  unstained_fcs = "path/to/unstained.fcs",
-  setup         = setup,
-  spectra       = controls$spectra,
-  refine        = TRUE,   # second pass for complex AF
-  som_dim       = 10      # up to 100 AF clusters
-)
+Since the example dataset has three tissue types, each with distinct
+autofluorescence profiles, we extract AF spectra from each:
 
-dim(af_spectra)
-#> [1] 100  64   # 100 AF clusters across 64 detectors
-```
+```{r step3-af-multi}
+unstained_dir <- file.path(base_dir, "Raw", "Set1", "Unstained")
 
-**Multi-tissue experiments:** For different tissue types with different
-autofluorescence profiles, provide a named list of unstained files:
-
-```{r step3-multitissue}
 af_spectra <- sw_extract_af_spectra(
   unstained_fcs = list(
-    spleen = "path/to/spleen_unstained.fcs",
-    lung   = "path/to/lung_unstained.fcs",
-    liver  = "path/to/liver_unstained.fcs"
+    spleen = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
+    lung   = file.path(unstained_dir, "D2 Lung_Set1.fcs"),
+    liver  = file.path(unstained_dir, "D3 Liver_Set1.fcs")
   ),
   setup   = setup,
-  spectra = controls$spectra
+  spectra = controls$spectra,
+  refine  = TRUE   # second pass for complex tissue AF
 )
 
 # Returns a named list — one AF matrix per tissue
 names(af_spectra)
 #> [1] "spleen" "lung" "liver"
+```
+
+For single-tissue experiments (e.g., PBMCs), pass a single file path
+instead of a list:
+
+```{r step3-af-single}
+af_spectra_single <- sw_extract_af_spectra(
+  unstained_fcs = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
+  setup         = setup,
+  spectra       = controls$spectra,
+  refine        = TRUE,
+  som_dim       = 10   # up to 100 AF clusters
+)
+
+dim(af_spectra_single)
+#> [1] 100  64   # 100 AF clusters across 64 detectors
 ```
 
 ### Step 4: Extract spectral variants — `sw_extract_spectral_variants()`
@@ -192,12 +227,15 @@ per-cell fluorophore optimization during unmixing.
 This step is **optional but recommended** — it can significantly reduce
 spillover spread.
 
+We use the spleen AF spectra here because the control samples are from
+spleen tissue. Always match the AF to whatever tissue your controls
+were prepared from.
+
 ```{r step4-variants}
-# For single-tissue AF, pass the af_spectra matrix directly
 variants <- sw_extract_spectral_variants(
   setup      = setup,
   spectra    = controls$spectra,
-  af_spectra = af_spectra,  # or af_spectra$spleen for multi-tissue
+  af_spectra = af_spectra$spleen,  # match AF to control tissue
   refine     = TRUE,
   som_dim    = 10,
   n_cells    = 2000  # brightest cells per fluorophore
@@ -213,38 +251,73 @@ variants <- sw_extract_spectral_variants(
 ### Step 5: Unmix samples — `sw_unmix()`
 
 Perform spectral unmixing on your fully-stained experimental FCS files.
+For multi-tissue experiments, unmix each tissue separately with its
+matched AF spectra.
 
 ```{r step5-unmix}
-result <- sw_unmix(
-  input            = "path/to/samples/",  # directory of FCS files
+stained_dir <- file.path(base_dir, "Raw", "Set1", "Stained")
+
+# Unmix spleen samples with spleen AF
+spleen_result <- sw_unmix(
+  input            = file.path(stained_dir, "D4 Spleen_Set1.fcs"),
   spectra          = controls$spectra,
   setup            = setup,
   flow_control     = controls$flow_control,
   method           = "AutoSpectral",
-  af_spectra       = af_spectra,
+  af_spectra       = af_spectra$spleen,
   spectra_variants = variants,
-  speed            = "fast",     # "fast", "medium", or "slow"
-  parallel         = TRUE,
-  chunk_size       = 2e6         # events per chunk (memory management)
+  speed            = "fast",
+  parallel         = FALSE
+)
+
+# Unmix lung samples with lung AF
+lung_result <- sw_unmix(
+  input            = file.path(stained_dir, "D5 Lung_Set1.fcs"),
+  spectra          = controls$spectra,
+  setup            = setup,
+  flow_control     = controls$flow_control,
+  method           = "AutoSpectral",
+  af_spectra       = af_spectra$lung,
+  spectra_variants = variants,
+  speed            = "fast",
+  parallel         = FALSE
+)
+
+# Unmix liver samples with liver AF
+liver_result <- sw_unmix(
+  input            = file.path(stained_dir, "D6 Liver_Set1.fcs"),
+  spectra          = controls$spectra,
+  setup            = setup,
+  flow_control     = controls$flow_control,
+  method           = "AutoSpectral",
+  af_spectra       = af_spectra$liver,
+  spectra_variants = variants,
+  speed            = "fast",
+  parallel         = FALSE
 )
 
 # Where are the unmixed files?
-result$output_files
-#> [1] "unmix_output/unmixed_fcs/sample1_AutoSpectral.fcs"
-#> [2] "unmix_output/unmixed_fcs/sample2_AutoSpectral.fcs"
+spleen_result$output_files
+#> [1] "unmix_output/unmixed_fcs/D4 Spleen_Set1_AutoSpectral.fcs"
 ```
 
 The `input` parameter is flexible:
 
 ```{r step5-input-types}
 # A directory — unmixes all FCS files in it
-result <- sw_unmix(input = "path/to/samples/", ...)
+result <- sw_unmix(input = stained_dir, ...)
 
 # A single file
-result <- sw_unmix(input = "path/to/sample1.fcs", ...)
+result <- sw_unmix(input = file.path(stained_dir, "D4 Spleen_Set1.fcs"), ...)
 
 # Multiple specific files
-result <- sw_unmix(input = c("sample1.fcs", "sample3.fcs"), ...)
+result <- sw_unmix(
+  input = c(
+    file.path(stained_dir, "D4 Spleen_Set1.fcs"),
+    file.path(stained_dir, "D5 Lung_Set1.fcs")
+  ),
+  ...
+)
 ```
 
 **Unmixing methods:**
@@ -260,15 +333,17 @@ result <- sw_unmix(input = c("sample1.fcs", "sample3.fcs"), ...)
 ## One-call pipeline: `sw_unmix_pipeline()`
 
 For a quick end-to-end unmixing without managing intermediate objects, use
-the orchestrator:
+the orchestrator. Here we unmix the spleen sample in a single call:
 
 ```{r pipeline-one-call}
 result <- sw_unmix_pipeline(
-  control_dir   = "path/to/controls/",
-  sample_input  = "path/to/samples/",
-  unstained_fcs = "path/to/unstained.fcs",
+  control_dir   = file.path(base_dir, "Raw", "Set1", "Reference Group"),
+  sample_input  = file.path(base_dir, "Raw", "Set1", "Stained",
+                            "D4 Spleen_Set1.fcs"),
+  unstained_fcs = file.path(base_dir, "Raw", "Set1", "Unstained",
+                            "D1 Spleen_Set1.fcs"),
   cytometer     = "aurora",
-  control_file  = "path/to/control_file.csv",
+  control_file  = file.path(base_dir, "fcs_control_file.csv"),
   method        = "AutoSpectral",
   speed         = "fast",
   refine        = TRUE,
@@ -300,10 +375,10 @@ Steps 3–4 are skipped automatically:
 
 ```{r pipeline-ols}
 result <- sw_unmix_pipeline(
-  control_dir  = "path/to/controls/",
-  sample_input = "path/to/samples/",
+  control_dir  = file.path(base_dir, "Raw", "Set1", "Reference Group"),
+  sample_input = file.path(base_dir, "Raw", "Set1", "Stained"),
   cytometer    = "aurora",
-  control_file = "path/to/control_file.csv",
+  control_file = file.path(base_dir, "fcs_control_file.csv"),
   method       = "OLS",
   output_dir   = "unmix_output"
 )
@@ -336,13 +411,14 @@ from raw spectral data through to clustering in a single call:
 
 ```{r full-pipeline}
 results <- run_pipeline(
-  fcs_dir         = "path/to/samples/",     # raw spectral FCS
+  fcs_dir         = file.path(base_dir, "Raw", "Set1", "Stained"),
   sample_meta     = sample_meta,
   markers         = markers,
   lineage_markers = lineage_markers,
-  unmix_from_raw  = TRUE,                   # enable unmixing step
-  control_dir     = "path/to/controls/",
-  unstained_fcs   = "path/to/unstained.fcs",
+  unmix_from_raw  = TRUE,
+  control_dir     = file.path(base_dir, "Raw", "Set1", "Reference Group"),
+  unstained_fcs   = file.path(base_dir, "Raw", "Set1", "Unstained",
+                              "D1 Spleen_Set1.fcs"),
   cytometer       = "aurora",
   unmix_method    = "AutoSpectral"
 )
@@ -350,35 +426,48 @@ results <- run_pipeline(
 
 ## Multi-tissue unmixing
 
-For experiments with multiple tissue types (e.g., spleen, lung, liver),
-each tissue has different autofluorescence. The step-by-step workflow
-handles this:
+The example dataset demonstrates a common multi-tissue scenario: spleen,
+lung, and liver samples each have distinct autofluorescence profiles.
+The step-by-step workflow handles this by extracting tissue-specific AF
+and matching it during unmixing.
 
 ```{r multi-tissue}
-# Steps 1-2: Same for all tissues (controls are the same)
-setup    <- sw_autospectral_setup(control_dir, cytometer = "aurora")
+# Steps 1-2: Same for all tissues (controls are shared)
+control_dir <- file.path(base_dir, "Raw", "Set1", "Reference Group")
+control_file <- file.path(base_dir, "fcs_control_file.csv")
+
+setup <- sw_autospectral_setup(
+  control_dir  = control_dir,
+  cytometer    = "aurora",
+  control_file = control_file
+)
 controls <- sw_prepare_controls(setup)
 
-# Step 3: Extract tissue-specific AF
+# Step 3: Extract tissue-specific AF from each unstained sample
+unstained_dir <- file.path(base_dir, "Raw", "Set1", "Unstained")
 af_spectra <- sw_extract_af_spectra(
   unstained_fcs = list(
-    spleen = "spleen_unstained.fcs",
-    lung   = "lung_unstained.fcs"
+    spleen = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
+    lung   = file.path(unstained_dir, "D2 Lung_Set1.fcs"),
+    liver  = file.path(unstained_dir, "D3 Liver_Set1.fcs")
   ),
   setup   = setup,
-  spectra = controls$spectra
+  spectra = controls$spectra,
+  refine  = TRUE
 )
 
-# Step 4: Extract variants using one tissue's AF (controls match one tissue)
+# Step 4: Extract variants using spleen AF (controls are from spleen)
 variants <- sw_extract_spectral_variants(
   setup      = setup,
   spectra    = controls$spectra,
-  af_spectra = af_spectra$spleen  # use AF matching control tissue
+  af_spectra = af_spectra$spleen
 )
 
-# Step 5: Unmix each tissue separately with matched AF
+# Step 5: Unmix each tissue with its matched AF spectra
+stained_dir <- file.path(base_dir, "Raw", "Set1", "Stained")
+
 spleen_result <- sw_unmix(
-  input        = "path/to/spleen_samples/",
+  input        = file.path(stained_dir, "D4 Spleen_Set1.fcs"),
   spectra      = controls$spectra,
   setup        = setup,
   flow_control = controls$flow_control,
@@ -387,11 +476,20 @@ spleen_result <- sw_unmix(
 )
 
 lung_result <- sw_unmix(
-  input        = "path/to/lung_samples/",
+  input        = file.path(stained_dir, "D5 Lung_Set1.fcs"),
   spectra      = controls$spectra,
   setup        = setup,
   flow_control = controls$flow_control,
   af_spectra   = af_spectra$lung,
+  spectra_variants = variants
+)
+
+liver_result <- sw_unmix(
+  input        = file.path(stained_dir, "D6 Liver_Set1.fcs"),
+  spectra      = controls$spectra,
+  setup        = setup,
+  flow_control = controls$flow_control,
+  af_spectra   = af_spectra$liver,
   spectra_variants = variants
 )
 ```
@@ -438,6 +536,20 @@ spectra  <- readRDS("spectra.rds")
 af_specs <- readRDS("af_spectra.rds")
 vars     <- readRDS("spectral_variants.rds")
 ```
+
+## References
+
+- **AutoSpectral documentation:**
+  [Full Workflow Example](https://drcytometer.github.io/AutoSpectral/articles/01_Full_AutoSpectral_Workflow.html)
+  — the original AutoSpectral tutorial using this dataset.
+- **AutoSpectral blog post:**
+  [Full Workflow Example](https://www.colibri-cytometry.com/post/autospectral-full-workflow-example)
+  on Colibri Cytometry.
+- **Example data:**
+  [Mendeley Data (ch5dnspd79)](https://data.mendeley.com/datasets/ch5dnspd79/1)
+  — 9-colour Aurora panel with spleen, lung, and liver samples.
+- **AutoSpectral GitHub:**
+  [DrCytometer/AutoSpectral](https://github.com/DrCytometer/AutoSpectral)
 
 ## Session info
 
