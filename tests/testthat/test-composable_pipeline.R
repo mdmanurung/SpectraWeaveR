@@ -495,9 +495,10 @@ test_that("pipeline modification preserves immutability", {
   pip2 <- sw_pipeline_add(pip1, sw_step("s2", function(x) x * 2))
 
   # Original pipeline should be unchanged
-
   expect_equal(sw_pipeline_length(pip1), 1)
+  expect_equal(sw_pipeline_step_names(pip1), "s1")
   expect_equal(sw_pipeline_length(pip2), 2)
+  expect_equal(sw_pipeline_step_names(pip2), c("s1", "s2"))
 })
 
 test_that("pipeline handles list inputs (multi-sample pattern)", {
