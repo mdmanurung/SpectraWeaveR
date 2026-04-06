@@ -229,7 +229,7 @@ normalized <- sw_normalize(
 ```
 
 ::: {.callout-tip}
-## When to use rank normalization
+## When to Use Rank Normalization
 
 Use `norm_method = "rank"` when combining data with heavy batch effects,
 such as data from different instruments, different panels, or different
@@ -259,7 +259,7 @@ table(labels)
 ```
 
 ::: {.callout-note}
-## SOM grid size guidance
+## SOM Grid Size Guidance
 
 - **6×6** (36 clusters): Coarse correction for very different batches
 - **8×8** (64 clusters): Good default for most spectral flow experiments
@@ -295,6 +295,9 @@ example, from manual gating or from a FlowSOM run with
 ```{r}
 #| label: custom-labels
 # Example: use FlowSOM metaclusters as labels
+# Note: sw_cluster()'s first parameter is named 'corrected' but accepts
+# any expression tibble — here we intentionally pass uncorrected data
+# to obtain cluster labels for use with sw_correct_data()
 fsom <- sw_cluster(
   corrected = uncorrected,
   lineage_markers = markers,
@@ -331,7 +334,7 @@ eval_result <- sw_evaluate_correction(
 eval_result$improved
 # [1] TRUE
 
-# Percentage reduction in MAD
+# Percentage reduction in MAD (field is named emd_reduction_pct for historical reasons)
 eval_result$emd_reduction_pct
 # [1] 72.3
 
