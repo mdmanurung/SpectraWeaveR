@@ -9,7 +9,12 @@ export(sw_get_fluor_channels)
 export(sw_set_marker_names)
 
 # Unmixing
-export(sw_unmix_autospectral)
+export(sw_autospectral_setup)
+export(sw_prepare_controls)
+export(sw_extract_af_spectra)
+export(sw_extract_spectral_variants)
+export(sw_unmix)
+export(sw_unmix_pipeline)
 export(sw_load_unmixed)
 export(sw_remove_margins)
 

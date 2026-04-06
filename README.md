@@ -8,7 +8,7 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 
 | Step | Function | Package |
 |------|----------|---------|
-| 1. Unmixing | `sw_load_unmixed()`, `sw_unmix_autospectral()` | AutoSpectral / flowCore |
+| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix()`, `sw_load_unmixed()` | AutoSpectral / flowCore |
 | 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace |
 | 3. Signal QC | `sw_signal_qc()`, `sw_signal_qc_batch()` | PeacoQC |
 | 4. Batch correction | `sw_batch_correct()`, `sw_prepare_for_correction()` | cyCombine |
