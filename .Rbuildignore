@@ -5,3 +5,9 @@
 ^PROGRESS\.md$
 ^LICENSE\.md$
 ^\.github$
+^_quarto\.yml$
+^_site$
+^index\.qmd$
+^installation\.qmd$
+^reference$
+^\.quarto$

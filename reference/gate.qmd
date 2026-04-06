@@ -1,0 +1,92 @@
+---
+title: "Gating"
+---
+
+Automated gating with the openCyto framework.
+
+## `sw_build_gating_template` {#sw_build_gating_template}
+
+Build a gating template CSV.
+
+### Usage
+
+```r
+sw_build_gating_template(output_file, template_type = "lymphocyte")
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `output_file` | Path for the output CSV file. |
+| `template_type` | Template type. Currently supports `"lymphocyte"`. |
+
+### Details
+
+Writes a default CSV gating template suitable for a standard lymphocyte panel.
+The template follows the openCyto CSV format and can be edited before use.
+Includes gating strategies for singlets (FSC-A vs FSC-H), live cells
+(viability dye negative), and lymphocytes (FSC-A vs SSC-A).
+
+### Value
+
+The file path (invisibly).
+
+---
+
+## `sw_gate` {#sw_gate}
+
+Apply automated gating.
+
+### Usage
+
+```r
+sw_gate(fcs_files, gating_template, transform_channels = NULL,
+        transform_func = NULL, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fcs_files` | Character vector of FCS file paths or a `flowSet`. |
+| `gating_template` | Path to a CSV gating template. |
+| `transform_channels` | Optional character vector of channels to transform before gating. |
+| `transform_func` | Optional transformation function. |
+| `...` | Additional arguments passed to `openCyto::gating()`. |
+
+### Details
+
+Full openCyto gating workflow: loads FCS files into a GatingSet, applies
+optional transformation, and runs hierarchical gating using a CSV template.
+
+### Value
+
+A `GatingSet` object with gates applied.
+
+---
+
+## `sw_extract_gated` {#sw_extract_gated}
+
+Extract gated populations.
+
+### Usage
+
+```r
+sw_extract_gated(gs, node)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `gs` | A `GatingSet`. |
+| `node` | Character string specifying the gate node to extract. |
+
+### Details
+
+Extracts `flowFrame` objects from a specific gate node of a `GatingSet`.
+
+### Value
+
+A named list of `flowFrame` objects, one per sample in the GatingSet.

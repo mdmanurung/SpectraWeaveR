@@ -1,0 +1,184 @@
+---
+title: "Gating Utilities"
+---
+
+Gating and event filtering utilities ported from
+[CytoPipeline](https://uclouvain-cbio.github.io/CytoPipeline/) and
+CytoPipelineUtils (UCLouvain-CBIO).
+
+## `sw_singlets_gate` {#sw_singlets_gate}
+
+Create a singlets gate.
+
+### Usage
+
+```r
+sw_singlets_gate(
+  ff,
+  filter_id = "Singlets",
+  channel1 = "FSC-A",
+  channel2 = "FSC-H",
+  nmad = 4,
+  verbose = FALSE
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `filter_id` | Gate name (default: `"Singlets"`). |
+| `channel1` | Area channel (default: `"FSC-A"`). |
+| `channel2` | Height channel (default: `"FSC-H"`). |
+| `nmad` | Number of MADs for the parallelogram width (default: 4). |
+| `verbose` | Logical; print progress messages. |
+
+### Details
+
+Creates a parallelogram-shaped polygon gate for doublet removal based on the
+ratio between two channels (typically FSC-A and FSC-H). Cells are retained if
+their channel ratio is within `nmad` median absolute deviations of the median
+ratio.
+
+### Value
+
+A `flowCore::polygonGate` object.
+
+---
+
+## `sw_remove_doublets` {#sw_remove_doublets}
+
+Remove doublets using CytoPipeline algorithm.
+
+### Usage
+
+```r
+sw_remove_doublets(
+  ff,
+  area_channels = c("FSC-A", "SSC-A"),
+  height_channels = c("FSC-H", "SSC-H"),
+  nmads = rep(4, length(area_channels)),
+  verbose = FALSE
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `area_channels` | Character vector of area channels (default: `c("FSC-A", "SSC-A")`). |
+| `height_channels` | Character vector of corresponding height channels (default: `c("FSC-H", "SSC-H")`). |
+| `nmads` | Numeric vector of MAD multipliers, one per channel pair (default: 4 for each). |
+| `verbose` | Logical; print progress messages. |
+
+### Details
+
+Removes doublet events using the parallelogram singlet gate from
+`sw_singlets_gate()`. Can apply gates on multiple channel pairs and combine
+them.
+
+### Value
+
+A `flowFrame` with doublets removed.
+
+---
+
+## `sw_remove_doublets_peacoqc` {#sw_remove_doublets_peacoqc}
+
+Remove doublets using PeacoQC.
+
+### Usage
+
+```r
+sw_remove_doublets_peacoqc(
+  ff,
+  area_channels = c("FSC-A", "SSC-A"),
+  height_channels = c("FSC-H", "SSC-H"),
+  nmads = rep(4, length(area_channels)),
+  verbose = TRUE,
+  ...
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `area_channels` | Character vector of area channels. |
+| `height_channels` | Character vector of height channels. |
+| `nmads` | Numeric vector of MAD multipliers. |
+| `verbose` | Logical; print progress messages (default: `TRUE`). |
+| `...` | Additional arguments passed to `PeacoQC::RemoveDoublets()`. |
+
+### Details
+
+Removes doublet events using `PeacoQC::RemoveDoublets()`. Can apply on
+multiple channel pairs sequentially.
+
+### Value
+
+A `flowFrame` with doublets removed.
+
+---
+
+## `sw_remove_debris_gate` {#sw_remove_debris_gate}
+
+Remove debris using a manual polygon gate.
+
+### Usage
+
+```r
+sw_remove_debris_gate(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A",
+                      gate_data)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `fsc_channel` | FSC channel name (default: `"FSC-A"`). |
+| `ssc_channel` | SSC channel name (default: `"SSC-A"`). |
+| `gate_data` | Numeric vector of polygon coordinates: first all x-coordinates (FSC), then all y-coordinates (SSC). |
+
+### Details
+
+Removes debris events using a manual polygon gate in the FSC-A vs SSC-A 2D
+space. Coordinates define the polygon boundary — events inside are retained.
+
+### Value
+
+A `flowFrame` with debris events removed.
+
+---
+
+## `sw_remove_margins_peacoqc` {#sw_remove_margins_peacoqc}
+
+Remove margin events using PeacoQC.
+
+### Usage
+
+```r
+sw_remove_margins_peacoqc(x, channel_specifications = NULL, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `x` | A `flowFrame` or `flowSet`. |
+| `channel_specifications` | Optional named list of per-channel range specifications. |
+| `...` | Additional arguments passed to `PeacoQC::RemoveMargins()`. |
+
+### Details
+
+Enhanced wrapper around `PeacoQC::RemoveMargins()` that automatically selects
+signal channels and supports per-channel range specifications. Works on both
+`flowFrame` and `flowSet` inputs.
+
+### Value
+
+A `flowFrame` or `flowSet` with margin events removed.

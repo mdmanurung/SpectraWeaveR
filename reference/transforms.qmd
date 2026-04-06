@@ -1,0 +1,75 @@
+---
+title: "Transforms"
+---
+
+Scale transformation utilities ported from
+[CytoPipeline](https://uclouvain-cbio.github.io/CytoPipeline/) (UCLouvain-CBIO).
+
+## `sw_estimate_scale_transforms` {#sw_estimate_scale_transforms}
+
+Estimate scale transformations.
+
+### Usage
+
+```r
+sw_estimate_scale_transforms(
+  ff,
+  fluo_method = c("estimateLogicle", "none"),
+  scatter_method = c("none", "linearQuantile"),
+  scatter_ref_marker = NULL,
+  specific_scatter_channels = NULL,
+  verbose = FALSE,
+  ...
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `fluo_method` | Transformation method for fluorochrome channels: `"estimateLogicle"` (default) or `"none"`. |
+| `scatter_method` | Transformation method for scatter channels: `"none"` (default) or `"linearQuantile"`. |
+| `scatter_ref_marker` | Optional reference marker name for scatter scaling. |
+| `specific_scatter_channels` | Optional character vector of scatter channel names to transform. |
+| `verbose` | Logical; print progress messages. |
+| `...` | Additional arguments passed to `flowCore::estimateLogicle()`. |
+
+### Details
+
+Estimates per-channel scale transformations to obtain well-separated positive
+and negative populations. Fluorochrome channels can be transformed with
+logicle (via `flowCore::estimateLogicle()`), while scatter channels can be
+linearly scaled to match the dynamic range of a reference fluorochrome channel.
+
+### Value
+
+A `flowCore::transformList` object.
+
+---
+
+## `sw_apply_scale_transforms` {#sw_apply_scale_transforms}
+
+Apply scale transformations.
+
+### Usage
+
+```r
+sw_apply_scale_transforms(x, trans_list)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `x` | A `flowFrame` or `flowSet`. |
+| `trans_list` | A `flowCore::transformList` (from `sw_estimate_scale_transforms()`). |
+
+### Details
+
+Applies a pre-computed `flowCore::transformList` to a `flowFrame` or
+`flowSet`.
+
+### Value
+
+The transformed `flowFrame` or `flowSet`.

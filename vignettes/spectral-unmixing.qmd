@@ -1,13 +1,10 @@
 ---
 title: "Spectral Unmixing with SpectraWeaveR and AutoSpectral"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{Spectral Unmixing with SpectraWeaveR and AutoSpectral}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include = FALSE}
+```{r}
+#| label: setup
+#| include: false
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -46,7 +43,8 @@ example dataset from the
 
 AutoSpectral is a GitHub-only package (not on CRAN or Bioconductor):
 
-```{r install-autospectral}
+```{r}
+#| label: install-autospectral
 # Required
 remotes::install_github("DrCytometer/AutoSpectral")
 
@@ -85,7 +83,8 @@ AutoSpectral_data/
 
 Set the base path to wherever you extracted the data:
 
-```{r data-paths}
+```{r}
+#| label: data-paths
 base_dir <- "~/AutoSpectral_data"
 ```
 
@@ -96,7 +95,8 @@ base_dir <- "~/AutoSpectral_data"
 Initialize AutoSpectral parameters for your cytometer and create (or
 validate) the control definition CSV file.
 
-```{r step1-setup}
+```{r}
+#| label: step1-setup
 library(SpectraWeaveR)
 
 # Point to the single-stain controls directory
@@ -117,7 +117,8 @@ AutoSpectral which files are unstained controls, beads, etc.
 
 The example dataset includes a pre-filled control file. To use it:
 
-```{r step1-existing-csv}
+```{r}
+#| label: step1-existing-csv
 control_file <- file.path(base_dir, "fcs_control_file.csv")
 
 setup <- sw_autospectral_setup(
@@ -140,7 +141,8 @@ directory. Pass it to all subsequent functions.
 Load the control FCS files, apply automated gating, clean the controls,
 and extract the fluorophore spectral signatures.
 
-```{r step2-controls}
+```{r}
+#| label: step2-controls
 controls <- sw_prepare_controls(
   setup         = setup,
   gating_system = "landmarks",  # or "density"
@@ -161,7 +163,8 @@ dim(controls$spectra)
 **Expert escape hatch:** To customize gating, pre-define your gates with
 `AutoSpectral::define.gate.landmarks()` and pass them via `gate_list`:
 
-```{r step2-custom-gates}
+```{r}
+#| label: step2-custom-gates
 # Define custom gates (expert users)
 my_gates <- AutoSpectral::define.gate.landmarks(
   control_dir, setup$control_file, setup$asp
@@ -183,7 +186,8 @@ instead of using a single AF spectrum.
 Since the example dataset has three tissue types, each with distinct
 autofluorescence profiles, we extract AF spectra from each:
 
-```{r step3-af-multi}
+```{r}
+#| label: step3-af-multi
 unstained_dir <- file.path(base_dir, "Raw", "Set1", "Unstained")
 
 af_spectra <- sw_extract_af_spectra(
@@ -205,7 +209,8 @@ names(af_spectra)
 For single-tissue experiments (e.g., PBMCs), pass a single file path
 instead of a list:
 
-```{r step3-af-single}
+```{r}
+#| label: step3-af-single
 af_spectra_single <- sw_extract_af_spectra(
   unstained_fcs = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
   setup         = setup,
@@ -231,7 +236,8 @@ We use the spleen AF spectra here because the control samples are from
 spleen tissue. Always match the AF to whatever tissue your controls
 were prepared from.
 
-```{r step4-variants}
+```{r}
+#| label: step4-variants
 variants <- sw_extract_spectral_variants(
   setup      = setup,
   spectra    = controls$spectra,
@@ -254,7 +260,8 @@ Perform spectral unmixing on your fully-stained experimental FCS files.
 For multi-tissue experiments, unmix each tissue separately with its
 matched AF spectra.
 
-```{r step5-unmix}
+```{r}
+#| label: step5-unmix
 stained_dir <- file.path(base_dir, "Raw", "Set1", "Stained")
 
 # Unmix spleen samples with spleen AF
@@ -303,7 +310,8 @@ spleen_result$output_files
 
 The `input` parameter is flexible:
 
-```{r step5-input-types}
+```{r}
+#| label: step5-input-types
 # A directory — unmixes all FCS files in it
 result <- sw_unmix(input = stained_dir, ...)
 
@@ -335,7 +343,8 @@ result <- sw_unmix(
 For a quick end-to-end unmixing without managing intermediate objects, use
 the orchestrator. Here we unmix the spleen sample in a single call:
 
-```{r pipeline-one-call}
+```{r}
+#| label: pipeline-one-call
 result <- sw_unmix_pipeline(
   control_dir   = file.path(base_dir, "Raw", "Set1", "Reference Group"),
   sample_input  = file.path(base_dir, "Raw", "Set1", "Stained",
@@ -373,7 +382,8 @@ The pipeline:
 If you don't need per-cell optimization, you can use a simpler method.
 Steps 3–4 are skipped automatically:
 
-```{r pipeline-ols}
+```{r}
+#| label: pipeline-ols
 result <- sw_unmix_pipeline(
   control_dir  = file.path(base_dir, "Raw", "Set1", "Reference Group"),
   sample_input = file.path(base_dir, "Raw", "Set1", "Stained"),
@@ -390,7 +400,8 @@ result <- sw_unmix_pipeline(
 After unmixing, the output FCS files can flow directly into the rest of
 the SpectraWeaveR pipeline (gating → QC → batch correction → clustering):
 
-```{r downstream}
+```{r}
+#| label: downstream
 # Load the unmixed files
 fs <- sw_load_unmixed(result$unmixed$output_dir)
 
@@ -409,7 +420,8 @@ names(ff_list) <- flowCore::sampleNames(fs)
 Or use `run_pipeline()` with `unmix_from_raw = TRUE` to run everything
 from raw spectral data through to clustering in a single call:
 
-```{r full-pipeline}
+```{r}
+#| label: full-pipeline
 results <- run_pipeline(
   fcs_dir         = file.path(base_dir, "Raw", "Set1", "Stained"),
   sample_meta     = sample_meta,
@@ -431,7 +443,8 @@ lung, and liver samples each have distinct autofluorescence profiles.
 The step-by-step workflow handles this by extracting tissue-specific AF
 and matching it during unmixing.
 
-```{r multi-tissue}
+```{r}
+#| label: multi-tissue
 # Steps 1-2: Same for all tissues (controls are shared)
 control_dir <- file.path(base_dir, "Raw", "Set1", "Reference Group")
 control_file <- file.path(base_dir, "fcs_control_file.csv")
@@ -526,7 +539,8 @@ liver_result <- sw_unmix(
 - Save intermediate results (e.g., `spectra`, `af_spectra`, `variants`)
   as RDS files for reuse across sessions:
 
-```{r save-intermediates}
+```{r}
+#| label: save-intermediates
 saveRDS(controls$spectra, "spectra.rds")
 saveRDS(af_spectra, "af_spectra.rds")
 saveRDS(variants, "spectral_variants.rds")
@@ -553,6 +567,8 @@ vars     <- readRDS("spectral_variants.rds")
 
 ## Session info
 
-```{r session-info, eval = TRUE}
+```{r}
+#| label: session-info
+#| eval: true
 sessionInfo()
 ```

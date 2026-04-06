@@ -1,0 +1,121 @@
+---
+title: "Installation"
+---
+
+## Prerequisites
+
+SpectraWeaveR requires **R ≥ 4.1.0** and relies on packages from CRAN,
+Bioconductor, and GitHub. Follow the sections below in order.
+
+## 1. Install Bioconductor dependencies
+
+SpectraWeaveR imports several Bioconductor packages. Install them first using
+BiocManager:
+```{r}
+#| eval: false
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(c(
+  "flowCore",       # FCS I/O, flowFrame/flowSet classes
+  "flowWorkspace",  # GatingSet, cytoset
+  "openCyto",       # CSV-driven hierarchical gating
+  "PeacoQC",        # Isolation Tree + MAD signal QC
+  "FlowSOM"         # SOM clustering + MST visualization
+))
+```
+
+## 2. Install GitHub dependencies
+
+[cyCombine](https://github.com/biosurf/cyCombine) provides ComBat-based batch
+correction and is only available on GitHub:
+```{r}
+#| eval: false
+if (!requireNamespace("remotes", quietly = TRUE))
+    install.packages("remotes")
+
+remotes::install_github("biosurf/cyCombine")
+```
+
+## 3. Install SpectraWeaveR
+```{r}
+#| eval: false
+remotes::install_github("mdmanurung/SpectraWeaveR")
+```
+
+## Optional dependencies
+
+### AutoSpectral (spectral unmixing)
+
+If you need spectral unmixing from raw data (Step 1 of the pipeline), install
+[AutoSpectral](https://github.com/DrCytometer/AutoSpectral):
+```{r}
+#| eval: false
+# Core unmixing engine
+remotes::install_github("DrCytometer/AutoSpectral")
+
+# C++ acceleration (strongly recommended)
+remotes::install_github("DrCytometer/AutoSpectralRcpp")
+```
+
+### S7 (composable pipeline framework)
+
+The composable pipeline uses [S7](https://rconsortium.github.io/S7/) classes.
+Install it if you want to use `sw_step()`, `sw_pipeline()`, and related
+functions:
+```{r}
+#| eval: false
+install.packages("S7")
+```
+
+### Visualization extras
+
+```{r}
+#| eval: false
+# Gate visualisation
+BiocManager::install("ggcyto")
+
+# UMAP dimensionality reduction
+install.packages("uwot")
+
+# Cluster annotation heatmaps
+install.packages("pheatmap")
+```
+
+## Verify installation
+
+Check that the core package loads without errors:
+```{r}
+#| eval: false
+library(SpectraWeaveR)
+packageVersion("SpectraWeaveR")
+#> [1] '0.1.0'
+```
+
+You can also verify key dependencies:
+```{r}
+#| eval: false
+sapply(c("flowCore", "flowWorkspace", "openCyto",
+         "PeacoQC", "FlowSOM", "cyCombine"),
+       packageVersion)
+```
+
+## Dependency summary
+
+| Package | Source | Required? | Purpose |
+|---------|--------|-----------|---------|
+| flowCore ≥ 2.6.0 | Bioconductor | Yes | FCS I/O, flowFrame/flowSet |
+| flowWorkspace ≥ 4.6.0 | Bioconductor | Yes | GatingSet, cytoset |
+| openCyto ≥ 2.6.0 | Bioconductor | Yes | Automated gating |
+| PeacoQC ≥ 1.4.0 | Bioconductor | Yes | Signal quality control |
+| FlowSOM ≥ 2.6.0 | Bioconductor | Yes | Clustering |
+| cyCombine ≥ 0.2.7 | GitHub | Yes | Batch correction |
+| dplyr ≥ 1.0.0 | CRAN | Yes | Data manipulation |
+| tibble ≥ 3.1.0 | CRAN | Yes | Tibble data frames |
+| AutoSpectral ≥ 1.5.0 | GitHub | Optional | Spectral unmixing |
+| AutoSpectralRcpp ≥ 1.0.0 | GitHub | Optional | C++ acceleration for unmixing |
+| S7 ≥ 0.2.0 | CRAN | Optional | Composable pipeline (R7 OOP) |
+| ggcyto ≥ 1.22.0 | Bioconductor | Optional | Gate visualisation |
+| ggplot2 | CRAN | Optional | Plotting |
+| uwot ≥ 0.1.14 | CRAN | Optional | UMAP |
+| pheatmap ≥ 1.0.12 | CRAN | Optional | Heatmaps |

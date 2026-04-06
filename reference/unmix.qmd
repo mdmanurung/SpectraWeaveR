@@ -1,0 +1,347 @@
+---
+title: "Spectral Unmixing"
+---
+
+AutoSpectral-based spectral unmixing workflow — six step-by-step functions plus
+a one-call orchestrator.
+
+## `sw_autospectral_setup` {#sw_autospectral_setup}
+
+Initialize AutoSpectral parameters and control file.
+
+### Usage
+
+```r
+sw_autospectral_setup(
+  control_dir,
+  cytometer = "aurora",
+  control_file = NULL,
+  output_dir = "SpectraWeaveR_unmix",
+  figures = TRUE
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `control_dir` | Path to the directory containing single-stain control FCS files. |
+| `cytometer` | Cytometer model. One of `"aurora"` (default), `"auroraNL"`, `"id7000"`, `"s8"`, `"a8"`, `"a5se"`, `"opteon"`, `"mosaic"`, `"xenith"`. |
+| `control_file` | Optional path to an existing control CSV. If `NULL`, a draft is generated from FCS filenames. |
+| `output_dir` | Output directory for unmixing results. |
+| `figures` | Logical; whether to generate QC figures. |
+
+### Details
+
+Sets up the AutoSpectral parameter list for a given cytometer and either
+creates a draft control file CSV from FCS filenames or validates an existing
+one. **Step 1 of the unmixing workflow.**
+
+### Value
+
+A named list (class `sw_setup`) with components: `asp` (AutoSpectral
+parameters), `control_file`, `control_dir`.
+
+---
+
+## `sw_prepare_controls` {#sw_prepare_controls}
+
+Gate, clean, and extract fluorophore spectra from single-stain controls.
+
+### Usage
+
+```r
+sw_prepare_controls(
+  setup,
+  gating_system = c("landmarks", "density"),
+  gate_list = NULL,
+  clean = TRUE,
+  af_remove = TRUE,
+  parallel = FALSE,
+  threads = NULL
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `setup` | An `sw_setup` object from `sw_autospectral_setup()`. |
+| `gating_system` | Gating method: `"landmarks"` or `"density"`. |
+| `gate_list` | Optional pre-defined gates (e.g., from `AutoSpectral::define.gate.landmarks()`). |
+| `clean` | Logical; whether to clean controls (AF intrusions, universal negatives). |
+| `af_remove` | Logical; whether to remove autofluorescence intrusions. |
+| `parallel` | Logical; whether to use parallel processing. |
+| `threads` | Number of threads for parallel processing. |
+
+### Details
+
+Loads single-stain control FCS files, applies automated gating, cleans
+controls, and extracts fluorophore spectral signatures via robust linear
+modelling. **Step 2 of the unmixing workflow.**
+
+### Value
+
+A named list (class `sw_controls`) with components: `flow_control`, `spectra`,
+`setup`.
+
+---
+
+## `sw_extract_af_spectra` {#sw_extract_af_spectra}
+
+Extract per-cell autofluorescence spectra from unstained samples.
+
+### Usage
+
+```r
+sw_extract_af_spectra(
+  unstained_fcs,
+  setup,
+  spectra,
+  refine = TRUE,
+  som_dim = 10,
+  parallel = TRUE,
+  threads = NULL
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `unstained_fcs` | Path to a single unstained FCS file, or a named list of paths for multi-tissue experiments. |
+| `setup` | An `sw_setup` object. |
+| `spectra` | Fluorophore spectra matrix from `sw_prepare_controls()`. |
+| `refine` | Logical; whether to perform second-pass refinement. |
+| `som_dim` | SOM grid dimension (creates `som_dim²` clusters). |
+| `parallel` | Logical; enable parallel processing. |
+| `threads` | Number of threads. |
+
+### Details
+
+Captures per-cell autofluorescence variation using SOM clustering. This is
+what gives AutoSpectral its edge over conventional unmixing — it models
+cell-to-cell AF variation instead of using a single AF spectrum. **Step 3 of
+the unmixing workflow.**
+
+### Value
+
+If a single path: a matrix of AF spectra (clusters in rows, detectors in
+columns). If a named list: a named list of such matrices.
+
+---
+
+## `sw_extract_spectral_variants` {#sw_extract_spectral_variants}
+
+Map fluorophore emission variability from single-stain controls.
+
+### Usage
+
+```r
+sw_extract_spectral_variants(
+  setup,
+  spectra,
+  af_spectra,
+  refine = TRUE,
+  som_dim = 10,
+  n_cells = 2000,
+  parallel = FALSE,
+  threads = NULL
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `setup` | An `sw_setup` object. |
+| `spectra` | Fluorophore spectra matrix. |
+| `af_spectra` | AF spectra matrix (matched to control tissue). |
+| `refine` | Logical; second-pass refinement. |
+| `som_dim` | SOM grid dimension. |
+| `n_cells` | Number of brightest cells per fluorophore to use. |
+| `parallel` | Logical; enable parallel processing. |
+| `threads` | Number of threads. |
+
+### Details
+
+Captures spectral variation (e.g., tandem dye degradation) that enables
+per-cell fluorophore optimisation during unmixing. This step is optional but
+recommended — it can significantly reduce spillover spread. **Step 4 of the
+unmixing workflow.**
+
+### Value
+
+A list (class `sw_variants`) containing: `thresholds`, `variants`,
+`delta.list`, `delta.norms`.
+
+---
+
+## `sw_unmix` {#sw_unmix}
+
+Unmix spectral flow cytometry data.
+
+### Usage
+
+```r
+sw_unmix(
+  input,
+  spectra,
+  setup,
+  flow_control,
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  af_spectra = NULL,
+  spectra_variants = NULL,
+  speed = c("fast", "medium", "slow"),
+  output_dir = NULL,
+  file_suffix = NULL,
+  parallel = TRUE,
+  threads = NULL,
+  chunk_size = 2e6
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `input` | Path to an FCS file, a vector of file paths, or a directory path. |
+| `spectra` | Fluorophore spectra matrix. |
+| `setup` | An `sw_setup` object. |
+| `flow_control` | Flow control object from `sw_prepare_controls()`. |
+| `method` | Unmixing method. |
+| `af_spectra` | AF spectra matrix (required for AutoSpectral/Automatic). |
+| `spectra_variants` | An `sw_variants` object (optional but recommended). |
+| `speed` | Speed/precision trade-off: `"fast"` (1 variant), `"medium"` (3), `"slow"` (10). |
+| `output_dir` | Output directory for unmixed FCS files. |
+| `file_suffix` | Suffix appended to output filenames. |
+| `parallel` | Logical; enable parallel processing. |
+| `threads` | Number of threads. |
+| `chunk_size` | Number of events per processing chunk (memory management). |
+
+### Details
+
+Performs spectral unmixing on fully-stained sample FCS files. Supports OLS,
+WLS, Poisson, and full AutoSpectral unmixing with per-cell autofluorescence
+extraction and fluorophore optimisation. **Step 5 of the unmixing workflow.**
+
+### Value
+
+A named list with components: `output_dir`, `output_files`, `spectra`,
+`method`.
+
+---
+
+## `sw_unmix_pipeline` {#sw_unmix_pipeline}
+
+End-to-end unmixing pipeline orchestrator.
+
+### Usage
+
+```r
+sw_unmix_pipeline(
+  control_dir,
+  sample_input,
+  unstained_fcs = NULL,
+  cytometer = "aurora",
+  control_file = NULL,
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  speed = c("fast", "medium", "slow"),
+  refine = TRUE,
+  output_dir = "SpectraWeaveR_unmix",
+  parallel = FALSE,
+  threads = NULL,
+  gating_system = c("landmarks", "density"),
+  som_dim = 10,
+  chunk_size = 2e6
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `control_dir` | Path to single-stain controls directory. |
+| `sample_input` | Path to sample FCS file(s) or directory. |
+| `unstained_fcs` | Path(s) to unstained FCS file(s). Skipped for OLS/WLS. |
+| `cytometer` | Cytometer model string. |
+| `control_file` | Path to control CSV file. |
+| `method` | Unmixing method. |
+| `speed` | Speed/precision trade-off. |
+| `refine` | Logical; second-pass AF refinement. |
+| `output_dir` | Output directory. |
+| `parallel` | Logical; enable parallel processing. |
+| `threads` | Number of threads. |
+| `gating_system` | Gating method for controls. |
+| `som_dim` | SOM grid dimension for AF extraction. |
+| `chunk_size` | Chunk size for memory management. |
+
+### Details
+
+Runs the complete AutoSpectral unmixing workflow in a single call: setup →
+control preparation → AF extraction → spectral variant mapping → unmixing.
+Steps 3–4 are automatically skipped for OLS/WLS methods.
+
+### Value
+
+A named list with all intermediate results: `setup`, `flow_control`,
+`spectra`, `af_spectra`, `spectra_variants`, `unmixed`.
+
+---
+
+## `sw_load_unmixed` {#sw_load_unmixed}
+
+Load pre-unmixed FCS files.
+
+### Usage
+
+```r
+sw_load_unmixed(fcs_dir, pattern = "\\.fcs$", ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fcs_dir` | Directory containing unmixed FCS files. |
+| `pattern` | Regex pattern for file matching (default: `"\\.fcs$"`). |
+| `...` | Additional arguments passed to `flowCore::read.flowSet()`. |
+
+### Details
+
+Loads FCS files that have already been spectrally unmixed into a `flowSet`.
+Enforces `truncate_max_range = FALSE` for Aurora compatibility.
+
+### Value
+
+A `flowSet` containing all matched FCS files.
+
+---
+
+## `sw_remove_margins` {#sw_remove_margins}
+
+Remove margin events.
+
+### Usage
+
+```r
+sw_remove_margins(ff, channel_specs = NULL)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `channel_specs` | Optional named list of channel-specific margin specifications. |
+
+### Details
+
+Wrapper for `PeacoQC::RemoveMargins()` that removes events at the margins of
+scatter and fluorescence channels. This should be run **before** data
+transformation (e.g., arcsinh, logicle). Margin events are cells that saturate
+detector limits (floor or ceiling).
+
+### Value
+
+A `flowFrame` with margin events removed.

@@ -1,0 +1,146 @@
+---
+title: "API Reference"
+---
+
+Complete reference for all exported SpectraWeaveR functions, grouped by module.
+
+## Utilities
+
+Core format conversion, FCS I/O, and channel classification helpers.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_read_fcs()`](utils.qmd#sw_read_fcs) | Read FCS files with Aurora-safe defaults |
+| [`sw_flowframe_to_tibble()`](utils.qmd#sw_flowframe_to_tibble) | Convert flowFrame to tibble |
+| [`sw_tibble_to_flowframe()`](utils.qmd#sw_tibble_to_flowframe) | Convert tibble to flowFrame |
+| [`sw_exprs_to_tibble()`](utils.qmd#sw_exprs_to_tibble) | Convert expression matrix to tibble |
+| [`sw_get_fluor_channels()`](utils.qmd#sw_get_fluor_channels) | Get fluorescent channel names |
+| [`sw_set_marker_names()`](utils.qmd#sw_set_marker_names) | Set marker names on a flowFrame |
+| [`sw_are_signal_cols()`](utils.qmd#sw_are_signal_cols) | Identify signal columns |
+| [`sw_are_fluor_cols()`](utils.qmd#sw_are_fluor_cols) | Identify fluorochrome columns |
+| [`sw_aggregate_and_sample()`](utils.qmd#sw_aggregate_and_sample) | Aggregate and subsample flow frames |
+| [`sw_collect_events_retained()`](utils.qmd#sw_collect_events_retained) | Collect events retained at each step |
+
+## Spectral unmixing
+
+AutoSpectral-based spectral unmixing workflow — six functions from step-by-step
+control to a one-call orchestrator.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_autospectral_setup()`](unmix.qmd#sw_autospectral_setup) | Initialize AutoSpectral parameters |
+| [`sw_prepare_controls()`](unmix.qmd#sw_prepare_controls) | Gate, clean, and extract fluorophore spectra |
+| [`sw_extract_af_spectra()`](unmix.qmd#sw_extract_af_spectra) | Extract per-cell autofluorescence spectra |
+| [`sw_extract_spectral_variants()`](unmix.qmd#sw_extract_spectral_variants) | Extract spectral variants |
+| [`sw_unmix()`](unmix.qmd#sw_unmix) | Unmix spectral flow cytometry data |
+| [`sw_unmix_pipeline()`](unmix.qmd#sw_unmix_pipeline) | End-to-end unmixing pipeline |
+| [`sw_load_unmixed()`](unmix.qmd#sw_load_unmixed) | Load pre-unmixed FCS files |
+| [`sw_remove_margins()`](unmix.qmd#sw_remove_margins) | Remove margin events |
+
+## Gating
+
+Automated gating with the openCyto framework.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_build_gating_template()`](gate.qmd#sw_build_gating_template) | Build a gating template CSV |
+| [`sw_gate()`](gate.qmd#sw_gate) | Apply automated gating |
+| [`sw_extract_gated()`](gate.qmd#sw_extract_gated) | Extract gated populations |
+
+## Signal QC
+
+Signal quality control with PeacoQC.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_signal_qc()`](qc.qmd#sw_signal_qc) | Signal QC on a single flowFrame |
+| [`sw_signal_qc_batch()`](qc.qmd#sw_signal_qc_batch) | Batch signal QC |
+| [`sw_qc_summary()`](qc.qmd#sw_qc_summary) | QC summary report |
+
+## Batch correction
+
+Batch correction with cyCombine, including all-in-one and modular workflows,
+plus diagnostic evaluation and visualisation.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_prepare_for_correction()`](batch-correct.qmd#sw_prepare_for_correction) | Prepare data for batch correction |
+| [`sw_batch_correct()`](batch-correct.qmd#sw_batch_correct) | All-in-one batch correction |
+| [`sw_normalize()`](batch-correct.qmd#sw_normalize) | Normalise data (modular step 1) |
+| [`sw_create_som()`](batch-correct.qmd#sw_create_som) | Create SOM clusters (modular step 2) |
+| [`sw_correct_data()`](batch-correct.qmd#sw_correct_data) | Apply ComBat correction (modular step 3) |
+| [`sw_evaluate_correction()`](batch-correct.qmd#sw_evaluate_correction) | Quick evaluation of correction quality |
+| [`sw_detect_batch_effect()`](batch-correct.qmd#sw_detect_batch_effect) | Detect batch effects |
+| [`sw_compute_emd()`](batch-correct.qmd#sw_compute_emd) | Compute Earth Mover's Distance |
+| [`sw_evaluate_emd()`](batch-correct.qmd#sw_evaluate_emd) | Evaluate correction with EMD |
+| [`sw_evaluate_mad()`](batch-correct.qmd#sw_evaluate_mad) | Evaluate correction with MAD |
+| [`sw_plot_batch_densities()`](batch-correct.qmd#sw_plot_batch_densities) | Plot marker density by batch |
+| [`sw_plot_batch_dimred()`](batch-correct.qmd#sw_plot_batch_dimred) | Plot dimensionality reduction by batch |
+
+## Clustering
+
+Clustering and visualisation with FlowSOM.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_cluster()`](cluster.qmd#sw_cluster) | Cluster cells using FlowSOM |
+| [`sw_get_cluster_assignments()`](cluster.qmd#sw_get_cluster_assignments) | Get metacluster assignments |
+| [`sw_cluster_mfis()`](cluster.qmd#sw_cluster_mfis) | Compute MFIs per metacluster |
+| [`sw_plot_clusters()`](cluster.qmd#sw_plot_clusters) | Plot FlowSOM clusters |
+| [`sw_map_new_data()`](cluster.qmd#sw_map_new_data) | Map new data onto trained FlowSOM |
+
+## Pipeline
+
+End-to-end pipeline orchestrator.
+
+| Function | Description |
+|----------|-------------|
+| [`run_pipeline()`](pipeline.qmd#run_pipeline) | Run the full SpectraWeaveR pipeline |
+
+## Composable pipeline
+
+R7/S7-based composable pipeline framework for building custom workflows.
+
+| Function | Description |
+|----------|-------------|
+| [`sw_step()`](composable-pipeline.qmd#sw_step) | Create a processing step |
+| [`execute_step()`](composable-pipeline.qmd#execute_step) | Execute a processing step |
+| [`sw_pipeline()`](composable-pipeline.qmd#sw_pipeline) | Create a pipeline |
+| [`sw_pipeline_add()`](composable-pipeline.qmd#sw_pipeline_add) | Add a step to a pipeline |
+| [`sw_pipeline_remove()`](composable-pipeline.qmd#sw_pipeline_remove) | Remove a step from a pipeline |
+| [`sw_pipeline_replace()`](composable-pipeline.qmd#sw_pipeline_replace) | Replace a step in a pipeline |
+| [`sw_pipeline_step_names()`](composable-pipeline.qmd#sw_pipeline_step_names) | Get step names |
+| [`sw_pipeline_length()`](composable-pipeline.qmd#sw_pipeline_length) | Get number of steps |
+| [`sw_pipeline_run()`](composable-pipeline.qmd#sw_pipeline_run) | Execute a pipeline |
+| [`sw_pipeline_concat()`](composable-pipeline.qmd#sw_pipeline_concat) | Concatenate two pipelines |
+| [`sw_pipeline_show()`](composable-pipeline.qmd#sw_pipeline_show) | Print pipeline summary |
+| [`sw_plot_pipeline()`](composable-pipeline.qmd#sw_plot_pipeline) | Plot pipeline flowchart |
+| [`sw_step_read_fcs()`](composable-pipeline.qmd#sw_step_read_fcs) | Step: read FCS files |
+| [`sw_step_remove_margins()`](composable-pipeline.qmd#sw_step_remove_margins) | Step: remove margin events |
+| [`sw_step_signal_qc()`](composable-pipeline.qmd#sw_step_signal_qc) | Step: signal QC |
+| [`sw_step_batch_correct()`](composable-pipeline.qmd#sw_step_batch_correct) | Step: batch correction |
+| [`sw_step_normalize()`](composable-pipeline.qmd#sw_step_normalize) | Step: normalisation |
+| [`sw_step_create_som()`](composable-pipeline.qmd#sw_step_create_som) | Step: SOM clustering |
+| [`sw_step_correct_data()`](composable-pipeline.qmd#sw_step_correct_data) | Step: ComBat correction |
+| [`sw_step_cluster()`](composable-pipeline.qmd#sw_step_cluster) | Step: clustering |
+
+## Transforms
+
+Scale transformation utilities (ported from CytoPipeline).
+
+| Function | Description |
+|----------|-------------|
+| [`sw_estimate_scale_transforms()`](transforms.qmd#sw_estimate_scale_transforms) | Estimate scale transformations |
+| [`sw_apply_scale_transforms()`](transforms.qmd#sw_apply_scale_transforms) | Apply scale transformations |
+
+## Gating utilities
+
+Gating and event filtering helpers (ported from CytoPipeline).
+
+| Function | Description |
+|----------|-------------|
+| [`sw_singlets_gate()`](gating-utils.qmd#sw_singlets_gate) | Create a singlets gate |
+| [`sw_remove_doublets()`](gating-utils.qmd#sw_remove_doublets) | Remove doublets (CytoPipeline) |
+| [`sw_remove_doublets_peacoqc()`](gating-utils.qmd#sw_remove_doublets_peacoqc) | Remove doublets (PeacoQC) |
+| [`sw_remove_debris_gate()`](gating-utils.qmd#sw_remove_debris_gate) | Remove debris with polygon gate |
+| [`sw_remove_margins_peacoqc()`](gating-utils.qmd#sw_remove_margins_peacoqc) | Remove margin events (PeacoQC) |
