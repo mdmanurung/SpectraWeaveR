@@ -43,9 +43,47 @@ export(sw_map_new_data)
 # Pipeline
 export(run_pipeline)
 
+# Composable Pipeline (R7/S7)
+export(sw_step)
+export(execute_step)
+export(sw_pipeline)
+export(sw_pipeline_add)
+export(sw_pipeline_remove)
+export(sw_pipeline_replace)
+export(sw_pipeline_step_names)
+export(sw_pipeline_length)
+export(sw_pipeline_run)
+export(sw_pipeline_concat)
+export(sw_pipeline_show)
+export(sw_plot_pipeline)
+export(sw_step_read_fcs)
+export(sw_step_remove_margins)
+export(sw_step_signal_qc)
+export(sw_step_batch_correct)
+export(sw_step_cluster)
+
+# Channel classification (ported from CytoPipeline)
+export(sw_are_signal_cols)
+export(sw_are_fluor_cols)
+
+# Transforms (ported from CytoPipeline)
+export(sw_estimate_scale_transforms)
+export(sw_apply_scale_transforms)
+
+# Gating utilities (ported from CytoPipeline/CytoPipelineUtils)
+export(sw_singlets_gate)
+export(sw_remove_doublets)
+export(sw_remove_doublets_peacoqc)
+export(sw_remove_debris_gate)
+export(sw_remove_margins_peacoqc)
+
+# Aggregate and event tracking
+export(sw_aggregate_and_sample)
+export(sw_collect_events_retained)
+
 # Imports
 importFrom(methods, is, new)
-importFrom(stats, median)
+importFrom(stats, median, mad, quantile, rnorm, setNames, set.seed)
 import(flowCore)
 import(dplyr)
 import(tibble)

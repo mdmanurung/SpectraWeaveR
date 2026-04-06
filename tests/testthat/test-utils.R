@@ -194,3 +194,185 @@ test_that("round-trip flowFrame -> tibble -> flowFrame preserves data", {
   expect_equal(flowCore::exprs(ff_back), flowCore::exprs(ff_orig),
                tolerance = 1e-10)
 })
+
+# =========================================================================
+# sw_are_signal_cols / sw_are_fluor_cols
+# =========================================================================
+
+test_that("sw_are_signal_cols excludes metadata channels", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(500), ncol = 5,
+                dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A",
+                                        "Time", "Original_ID")))
+  ff <- flowCore::flowFrame(mat)
+  result <- sw_are_signal_cols(ff)
+  expect_true(result["FSC-A"])
+  expect_true(result["SSC-A"])
+  expect_true(result["BV421-A"])
+  expect_false(result["Time"])
+  expect_false(result["Original_ID"])
+})
+
+test_that("sw_are_fluor_cols excludes scatter and metadata", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(500), ncol = 5,
+                dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A",
+                                        "Time", "APC-A")))
+  ff <- flowCore::flowFrame(mat)
+  result <- sw_are_fluor_cols(ff)
+  expect_false(result["FSC-A"])
+  expect_false(result["SSC-A"])
+  expect_true(result["BV421-A"])
+  expect_false(result["Time"])
+  expect_true(result["APC-A"])
+})
+
+test_that("sw_are_signal_cols rejects non-flowFrame/flowSet", {
+  skip_if_not_installed("flowCore")
+  expect_error(sw_are_signal_cols("not_ff"), "flowFrame or flowSet")
+})
+
+test_that("sw_are_signal_cols handles custom patterns", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(300), ncol = 3,
+                dimnames = list(NULL, c("FSC-A", "MyCustom", "BV421-A")))
+  ff <- flowCore::flowFrame(mat)
+  result <- sw_are_signal_cols(ff, exclude_patterns = c("MyCustom"))
+  expect_true(result["FSC-A"])
+  expect_false(result["MyCustom"])
+  expect_true(result["BV421-A"])
+})
+
+# =========================================================================
+# sw_aggregate_and_sample
+# =========================================================================
+
+test_that("sw_aggregate_and_sample rejects non-flowSet", {
+  skip_if_not_installed("flowCore")
+  expect_error(sw_aggregate_and_sample("not_fs", 100), "flowSet or flowFrame")
+})
+
+test_that("sw_aggregate_and_sample rejects invalid n_total_events", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(300), ncol = 3,
+                dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  ff <- flowCore::flowFrame(mat)
+  expect_error(sw_aggregate_and_sample(ff, -1), "positive integer")
+})
+
+test_that("sw_aggregate_and_sample works with flowFrame input", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(300), ncol = 3,
+                dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  ff <- flowCore::flowFrame(mat)
+  result <- sw_aggregate_and_sample(ff, n_total_events = 50, seed = 42)
+  expect_true(methods::is(result, "flowFrame"))
+  expect_true(nrow(result) <= 50)
+  expect_true("File" %in% flowCore::colnames(result))
+  expect_true("Original_ID" %in% flowCore::colnames(result))
+})
+
+test_that("sw_aggregate_and_sample works with flowSet input", {
+  skip_if_not_installed("flowCore")
+  mat1 <- matrix(rnorm(300), ncol = 3,
+                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  mat2 <- matrix(rnorm(450), ncol = 3,
+                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  ff1 <- flowCore::flowFrame(mat1)
+  ff2 <- flowCore::flowFrame(mat2)
+  fs <- flowCore::flowSet(ff1, ff2)
+  result <- sw_aggregate_and_sample(fs, n_total_events = 100, seed = 42)
+  expect_true(methods::is(result, "flowFrame"))
+  expect_true(nrow(result) <= 100)  # requested total
+})
+
+test_that("sw_aggregate_and_sample forceBalance strategy", {
+  skip_if_not_installed("flowCore")
+  mat1 <- matrix(rnorm(60), ncol = 3,
+                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  mat2 <- matrix(rnorm(300), ncol = 3,
+                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+  ff1 <- flowCore::flowFrame(mat1)
+  ff2 <- flowCore::flowFrame(mat2)
+  fs <- flowCore::flowSet(ff1, ff2)
+  result <- sw_aggregate_and_sample(fs, n_total_events = 100,
+                                     setup = "forceBalance", seed = 42)
+  expect_true(methods::is(result, "flowFrame"))
+  # forceBalance: max 20*2=40 (min of 20 and 100 per frame)
+  expect_true(nrow(result) <= 40)
+})
+
+# =========================================================================
+# sw_collect_events_retained
+# =========================================================================
+
+test_that("sw_collect_events_retained rejects non-list", {
+  expect_error(sw_collect_events_retained("not_a_list"), "non-empty named list")
+})
+
+test_that("sw_collect_events_retained rejects empty list", {
+  expect_error(sw_collect_events_retained(list()), "non-empty named list")
+})
+
+test_that("sw_collect_events_retained rejects unnamed list", {
+  expect_error(
+    sw_collect_events_retained(list(100, 90)),
+    "named list"
+  )
+})
+
+test_that("sw_collect_events_retained works with numeric inputs", {
+  result <- sw_collect_events_retained(list(
+    load = 1000,
+    qc = 900,
+    gate = 800,
+    cluster = 750
+  ))
+
+  expect_equal(nrow(result), 4)
+  expect_equal(result$step, c("load", "qc", "gate", "cluster"))
+  expect_equal(result$n_events, c(1000L, 900L, 800L, 750L))
+  expect_equal(result$pct_of_initial[1], 100)
+  expect_equal(result$pct_of_initial[4], 75)
+  expect_equal(result$pct_of_previous[1], 100)
+})
+
+test_that("sw_collect_events_retained works with data.frames", {
+  result <- sw_collect_events_retained(list(
+    step1 = data.frame(x = 1:100),
+    step2 = data.frame(x = 1:80)
+  ))
+  expect_equal(result$n_events, c(100L, 80L))
+  expect_equal(result$pct_of_initial[2], 80)
+})
+
+test_that("sw_collect_events_retained works with flowFrame input", {
+  skip_if_not_installed("flowCore")
+  mat1 <- matrix(rnorm(300), ncol = 3,
+                 dimnames = list(NULL, c("A", "B", "C")))
+  mat2 <- matrix(rnorm(240), ncol = 3,
+                 dimnames = list(NULL, c("A", "B", "C")))
+  ff1 <- flowCore::flowFrame(mat1)
+  ff2 <- flowCore::flowFrame(mat2)
+
+  result <- sw_collect_events_retained(list(
+    load = ff1,
+    filter = ff2
+  ))
+  expect_equal(result$n_events, c(100L, 80L))
+})
+
+test_that("sw_collect_events_retained handles list of flowFrames", {
+  skip_if_not_installed("flowCore")
+  mat1 <- matrix(rnorm(150), ncol = 3,
+                 dimnames = list(NULL, c("A", "B", "C")))
+  mat2 <- matrix(rnorm(120), ncol = 3,
+                 dimnames = list(NULL, c("A", "B", "C")))
+  ff1 <- flowCore::flowFrame(mat1)
+  ff2 <- flowCore::flowFrame(mat2)
+
+  result <- sw_collect_events_retained(list(
+    step1 = list(sample1 = ff1, sample2 = ff2)
+  ))
+  expect_equal(result$n_events, 90L)  # 50 + 40
+})
