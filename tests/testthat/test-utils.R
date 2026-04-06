@@ -267,7 +267,7 @@ test_that("sw_aggregate_and_sample works with flowFrame input", {
   ff <- flowCore::flowFrame(mat)
   result <- sw_aggregate_and_sample(ff, n_total_events = 50, seed = 42)
   expect_true(methods::is(result, "flowFrame"))
-  expect_true(nrow(result) <= 100)
+  expect_true(nrow(result) <= 50)
   expect_true("File" %in% flowCore::colnames(result))
   expect_true("Original_ID" %in% flowCore::colnames(result))
 })
@@ -283,7 +283,7 @@ test_that("sw_aggregate_and_sample works with flowSet input", {
   fs <- flowCore::flowSet(ff1, ff2)
   result <- sw_aggregate_and_sample(fs, n_total_events = 100, seed = 42)
   expect_true(methods::is(result, "flowFrame"))
-  expect_true(nrow(result) <= 200)  # max possible
+  expect_true(nrow(result) <= 100)  # requested total
 })
 
 test_that("sw_aggregate_and_sample forceBalance strategy", {

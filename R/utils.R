@@ -368,10 +368,13 @@ sw_aggregate_and_sample <- function(fs,
   setup <- match.arg(setup)
 
   if (!is.null(seed)) {
-    old_seed <- .Random.seed
-    on.exit({
-      if (exists("old_seed")) assign(".Random.seed", old_seed, envir = .GlobalEnv)
-    })
+    if (exists(".Random.seed", envir = .GlobalEnv)) {
+      old_seed <- get(".Random.seed", envir = .GlobalEnv)
+      on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv),
+              add = TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir = .GlobalEnv), add = TRUE)
+    }
     set.seed(seed)
   }
 
