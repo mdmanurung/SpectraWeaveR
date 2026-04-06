@@ -14,40 +14,34 @@
 - [x] Created `PLAN.md` — full phased implementation plan
 - [x] Created `PROGRESS.md` — this file
 
-### In Progress
-
-- [ ] `NAMESPACE` — export declarations
-- [ ] `.Rbuildignore` — exclude non-package files
-- [ ] `R/utils.R` — format conversion utilities
-- [ ] `R/unmix.R` — spectral unmixing wrappers
-- [ ] `R/gate.R` — automated gating (openCyto)
-- [ ] `R/qc.R` — signal QC (PeacoQC)
-- [ ] `R/batch_correct.R` — batch correction (cyCombine)
-- [ ] `R/cluster.R` — clustering (FlowSOM)
-- [ ] `R/pipeline.R` — end-to-end orchestrator
-- [ ] `man/` — roxygen2 documentation pages
-- [ ] `tests/testthat/` — unit tests
-
-### Blocked / Notes
-
-- R is not available in the sandbox environment; package validation (`R CMD check`) will rely on CI
-- No existing test infrastructure; tests to be created alongside source
-- Five external dependencies (AutoSpectral, openCyto, PeacoQC, cyCombine, FlowSOM) are not installed; wrapper functions will guard against missing packages via `requireNamespace()`
-
 ---
 
-## Upcoming Sessions
+## Session 2 — 2026-04-06
 
-Planned work in priority order:
+### Completed
 
-1. Create `NAMESPACE` and `.Rbuildignore`
-2. Implement `R/utils.R` (foundation for all other modules)
-3. Implement `R/unmix.R`
-4. Implement `R/gate.R`
-5. Implement `R/qc.R`
-6. Implement `R/batch_correct.R`
-7. Implement `R/cluster.R`
-8. Implement `R/pipeline.R`
-9. Generate `man/` documentation
-10. Write `tests/testthat/` tests
-11. Final `R CMD check` and parallel validation
+- [x] `NAMESPACE` — export declarations for all `sw_*` and `run_pipeline` functions; imports from flowCore, dplyr, tibble, methods, stats
+- [x] `.Rbuildignore` — exclude CLAUDE.md, PLAN.md, PROGRESS.md, .Rproj, .github
+- [x] `tests/testthat.R` — standard testthat runner
+- [x] `R/utils.R` — 6 format conversion utilities (sw_read_fcs, sw_flowframe_to_tibble, sw_tibble_to_flowframe, sw_exprs_to_tibble, sw_get_fluor_channels, sw_set_marker_names)
+- [x] `tests/testthat/test-utils.R` — 16 unit tests including round-trip flowFrame ↔ tibble
+- [x] `R/unmix.R` — 3 unmixing functions (sw_unmix_autospectral, sw_load_unmixed, sw_remove_margins)
+- [x] `tests/testthat/test-unmix.R` — 8 unit tests for unmixing wrappers
+- [x] `R/gate.R` — 3 gating functions (sw_build_gating_template, sw_gate, sw_extract_gated)
+- [x] `tests/testthat/test-gate.R` — 8 unit tests for gating
+- [x] `R/qc.R` — 3 QC functions (sw_signal_qc, sw_signal_qc_batch, sw_qc_summary)
+- [x] `tests/testthat/test-qc.R` — 9 unit tests for signal QC
+- [x] `R/batch_correct.R` — 3 batch correction functions (sw_prepare_for_correction, sw_batch_correct, sw_evaluate_correction)
+- [x] `tests/testthat/test-batch_correct.R` — 12 unit tests for batch correction
+- [x] `R/cluster.R` — 5 clustering functions (sw_cluster, sw_get_cluster_assignments, sw_cluster_mfis, sw_plot_clusters, sw_map_new_data)
+- [x] `tests/testthat/test-cluster.R` — 12 unit tests for clustering (including FlowSOM integration test)
+- [x] `R/pipeline.R` — run_pipeline() end-to-end orchestrator
+- [x] `tests/testthat/test-pipeline.R` — 7 unit tests for pipeline validation
+- [x] `README.md` — updated with installation instructions, quick start, step-by-step usage examples
+
+### Notes
+
+- R is not available in the sandbox; tests validated structurally but not executed locally
+- All wrapper functions guard against missing packages via `requireNamespace()`
+- Tests use `skip_if_not_installed()` for external dependencies
+- roxygen2 documentation is embedded in source files; `man/` pages require `devtools::document()` to generate
