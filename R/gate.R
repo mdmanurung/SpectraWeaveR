@@ -16,16 +16,29 @@ NULL
 #'
 #' @param output_file Character path where the CSV template will be written.
 #' @param template_type Character string specifying the template type.
-#'   Currently supported: \code{"lymphocyte"} (default).
+#'   Supported: \code{"lymphocyte"} (default), \code{"myeloid"},
+#'   \code{"nk"}, \code{"treg"}, \code{"full_pbmc"}.
 #'
 #' @return The file path (invisibly).
 #'
 #' @details
-#' The generated template includes gating strategies for:
-#' \itemize{
-#'   \item Singlets (FSC-A vs FSC-H)
-#'   \item Live cells (viability dye negative)
-#'   \item Lymphocytes (FSC-A vs SSC-A)
+#' Templates use marker names in the \code{dims} column (e.g., \code{"CD3"},
+#' \code{"CD4"}) except for scatter channels (\code{FSC-A}, \code{SSC-A}).
+#' Ensure marker names are set on your \code{flowFrame}/\code{flowSet}
+#' via \code{\link{sw_set_marker_names}} before gating.
+#'
+#' Available templates:
+#' \describe{
+#'   \item{\code{lymphocyte}}{nonDebris -> singlets -> lymphocytes
+#'     (FSC/SSC-based, 3 gates)}
+#'   \item{\code{myeloid}}{nonDebris -> singlets -> CD3neg -> HLA-DR+
+#'     (4 gates, targets monocytes/DCs)}
+#'   \item{\code{nk}}{nonDebris -> singlets -> CD3neg -> CD56+
+#'     (4 gates, targets NK cells)}
+#'   \item{\code{treg}}{nonDebris -> singlets -> CD3+ -> CD4+ ->
+#'     CD25hiCD127lo (5 gates, targets regulatory T cells)}
+#'   \item{\code{full_pbmc}}{nonDebris -> singlets -> branching into
+#'     T cells, B cells, NK cells, monocytes (8 gates)}
 #' }
 #'
 #' Users should review and customize the template for their specific panel
@@ -37,30 +50,13 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
     stop("'output_file' must be a single file path.", call. = FALSE)
   }
 
-  valid_types <- c("lymphocyte")
+  valid_types <- c("lymphocyte", "myeloid", "nk", "treg", "full_pbmc")
   if (!template_type %in% valid_types) {
     stop("Unknown template_type '", template_type, "'. Must be one of: ",
          paste(valid_types, collapse = ", "), call. = FALSE)
   }
 
-  if (template_type == "lymphocyte") {
-    template <- data.frame(
-      alias = c("nonDebris", "singlets", "lymphocytes"),
-      pop = c("+", "+", "+"),
-      parent = c("root", "nonDebris", "singlets"),
-      dims = c("FSC-A", "FSC-A,FSC-H", "FSC-A,SSC-A"),
-      gating_method = c("mindensity", "singletGate",
-                         "flowClust"),
-      gating_args = c("min = 50000",
-                       "wider_gate = TRUE",
-                       "K = 2, target = 1"),
-      collapseDataForGating = c(TRUE, TRUE, TRUE),
-      groupBy = c(NA, NA, NA),
-      preprocessing_method = c(NA, NA, NA),
-      preprocessing_args = c(NA, NA, NA),
-      stringsAsFactors = FALSE
-    )
-  }
+  template <- .build_template(template_type)
 
   # Ensure output directory exists
   out_dir <- dirname(output_file)
@@ -73,6 +69,93 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
 
   invisible(output_file)
 }
+
+
+# ---------------------------------------------------------------------------
+# Internal: template builders
+# ---------------------------------------------------------------------------
+
+.make_gate_row <- function(alias, pop, parent, dims, gating_method,
+                           gating_args = NA_character_,
+                           collapseDataForGating = TRUE,
+                           groupBy = NA_character_,
+                           preprocessing_method = NA_character_,
+                           preprocessing_args = NA_character_) {
+  data.frame(
+    alias = alias, pop = pop, parent = parent, dims = dims,
+    gating_method = gating_method, gating_args = gating_args,
+    collapseDataForGating = collapseDataForGating,
+    groupBy = groupBy,
+    preprocessing_method = preprocessing_method,
+    preprocessing_args = preprocessing_args,
+    stringsAsFactors = FALSE
+  )
+}
+
+.build_template <- function(type) {
+  # Common initial gates (debris + singlets)
+  debris <- .make_gate_row("nonDebris", "+", "root", "FSC-A",
+                           "mindensity", "min = 50000")
+  singlets <- .make_gate_row("singlets", "+", "nonDebris", "FSC-A,FSC-H",
+                             "singletGate", "wider_gate = TRUE")
+
+  if (type == "lymphocyte") {
+    lymph <- .make_gate_row("lymphocytes", "+", "singlets", "FSC-A,SSC-A",
+                            "flowClust", "K = 2, target = 1")
+    return(do.call(rbind, list(debris, singlets, lymph)))
+  }
+
+  if (type == "myeloid") {
+    cd3neg <- .make_gate_row("CD3neg", "-", "singlets", "CD3",
+                             "mindensity")
+    hladr <- .make_gate_row("HLADRpos", "+", "CD3neg", "HLA-DR",
+                            "mindensity")
+    return(do.call(rbind, list(debris, singlets, cd3neg, hladr)))
+  }
+
+  if (type == "nk") {
+    cd3neg <- .make_gate_row("CD3neg", "-", "singlets", "CD3",
+                             "mindensity")
+    cd56pos <- .make_gate_row("CD56pos", "+", "CD3neg", "CD56",
+                              "mindensity")
+    return(do.call(rbind, list(debris, singlets, cd3neg, cd56pos)))
+  }
+
+  if (type == "treg") {
+    cd3pos <- .make_gate_row("CD3pos", "+", "singlets", "CD3",
+                             "mindensity")
+    cd4pos <- .make_gate_row("CD4pos", "+", "CD3pos", "CD4",
+                             "mindensity")
+    treg <- .make_gate_row("Treg", "+", "CD4pos", "CD25,CD127",
+                           "flowClust", "K = 2, target = 1")
+    return(do.call(rbind, list(debris, singlets, cd3pos, cd4pos, treg)))
+  }
+
+  if (type == "full_pbmc") {
+    # T cells branch
+    cd3pos <- .make_gate_row("CD3pos", "+", "singlets", "CD3",
+                             "mindensity")
+    cd4pos <- .make_gate_row("CD4pos", "+", "CD3pos", "CD4",
+                             "mindensity")
+    cd8pos <- .make_gate_row("CD8pos", "+", "CD3pos", "CD8",
+                             "mindensity")
+    # B cells
+    cd3neg <- .make_gate_row("CD3neg", "-", "singlets", "CD3",
+                             "mindensity")
+    cd19pos <- .make_gate_row("CD19pos", "+", "CD3neg", "CD19",
+                              "mindensity")
+    # NK cells
+    cd56pos <- .make_gate_row("CD56pos", "+", "CD3neg", "CD56",
+                              "mindensity")
+    # Monocytes
+    cd14pos <- .make_gate_row("CD14pos", "+", "CD3neg", "CD14",
+                              "mindensity")
+    return(do.call(rbind, list(debris, singlets,
+                               cd3pos, cd4pos, cd8pos,
+                               cd3neg, cd19pos, cd56pos, cd14pos)))
+  }
+}
+
 
 #' Apply Automated Gating
 #'

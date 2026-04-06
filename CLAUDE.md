@@ -9,7 +9,7 @@
 ```
 SpectraWeaveR/
 ├── DESCRIPTION          # Package metadata, dependencies, and version
-├── NAMESPACE            # 69 exported functions and imported namespaces
+├── NAMESPACE            # 74 exported functions and imported namespaces
 ├── LICENSE              # MIT license
 ├── README.md            # Project overview, installation, usage examples
 ├── CLAUDE.md            # This file — repo summary for AI assistants
@@ -25,9 +25,11 @@ SpectraWeaveR/
 │   ├── pipeline.R           # Full end-to-end pipeline orchestrator
 │   ├── composable_pipeline.R # S7-based composable step/pipeline framework
 │   ├── transforms.R         # Scale transforms (ported from CytoPipeline)
-│   └── gating_utils.R       # Standalone gating utilities (ported from CytoPipeline)
+│   ├── gating_utils.R       # Standalone gating utilities (ported from CytoPipeline)
+│   ├── dimred.R             # Dimensionality reduction (UMAP/PCA)
+│   └── unmix_diagnostics.R  # Unmixing quality diagnostics (SSM)
 ├── tests/
-│   └── testthat/        # 10 test files, ~2,871 lines (testthat edition 3)
+│   └── testthat/        # 12 test files, ~3,600 lines (testthat edition 3)
 ├── inst/
 │   └── scripts/
 │       └── install_dependencies.R  # pak-based setup script

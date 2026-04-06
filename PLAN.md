@@ -139,14 +139,16 @@ Tests use synthetic in-memory data (no real FCS files required). External depend
 
 - [x] `test-utils.R` (378 lines) — format conversions, channel classification, aggregate/sample, event tracking
 - [x] `test-unmix.R` (703 lines) — all 8 unmixing functions, input validation
-- [x] `test-gate.R` (72 lines) — gating template, gating workflow, population extraction
-- [x] `test-qc.R` (100 lines) — signal QC, batch QC, summary flagging
+- [x] `test-gate.R` (~170 lines) — gating template (all 5 types), gating workflow integration, population extraction
+- [x] `test-qc.R` (~145 lines) — signal QC validation + PeacoQC integration, batch QC, summary flagging
 - [x] `test-batch_correct.R` (443 lines) — all-in-one workflow, modular workflow, diagnostics, evaluation, visualization
 - [x] `test-cluster.R` (159 lines) — kohonen SOM and FastPG clustering, prediction, MFI, plotting
-- [x] `test-pipeline.R` (98 lines) — pipeline input validation
+- [x] `test-pipeline.R` (~150 lines) — pipeline input validation + end-to-end smoke test with synthetic FCS
 - [x] `test-composable_pipeline.R` (560 lines) — step/pipeline creation, manipulation, execution, visualization
-- [x] `test-transforms.R` (73 lines) — scale transform estimation and application
+- [x] `test-transforms.R` (~120 lines) — scale transform estimation + logicle integration, application verification
 - [x] `test-gating_utils.R` (285 lines) — singlet gate, doublet removal, debris gate, margin removal
+- [x] `test-dimred.R` (~120 lines) — dimensionality reduction (PCA + UMAP), subsampling, plotting
+- [x] `test-unmix_diagnostics.R` (~160 lines) — SSM computation, orthogonality, empirical adjustment, quality metrics
 
 ---
 
@@ -157,10 +159,32 @@ Tests use synthetic in-memory data (no real FCS files required). External depend
 
 ---
 
-## Phase 6: Remaining Work
+## Phase 6: Evaluation & Phase 1 Features ✅
 
+### Bug Fixes (Session 9)
+- [x] Fixed `sw_remove_margins()` channel selection — signal-only channels
+- [x] Fixed `run_pipeline()` gating bypass — uses margin-removed data
+- [x] Completed EMD implementation in `sw_evaluate_correction()`
+- [x] Parameterized cofactor in `sw_gate()`
+
+### Phase 1 Features (Session 10)
+- [x] `R/dimred.R` — standalone UMAP/PCA module with `sw_run_dimred()` and `sw_plot_dimred()`
+- [x] Extended `sw_build_gating_template()` — 4 new templates (myeloid, nk, treg, full_pbmc)
+- [x] `R/unmix_diagnostics.R` — SSM diagnostics with `sw_spillover_spreading_matrix()`, `sw_plot_ssm()`, `sw_unmixing_quality()`
+
+---
+
+## Phase 7: Remaining Work
+
+### Next Features (Phase 2)
+- [ ] Automated cell type annotation (`R/annotate.R`)
+- [ ] Data export/interoperability (`R/export.R`) — CSV, H5AD, FCS, Seurat, SCE
+- [ ] Differential abundance & expression analysis (`R/differential.R`)
+
+### Infrastructure
 - [ ] `R CMD build && R CMD check --no-manual` passes with 0 errors, 0 warnings
 - [ ] All tests pass with real package installs
 - [ ] Generate `man/` pages via `devtools::document()`
 - [ ] Publish Quarto documentation site
+- [ ] Add reference docs for new modules (dimred, unmix_diagnostics)
 - [ ] CRAN / Bioconductor submission preparation (if desired)
