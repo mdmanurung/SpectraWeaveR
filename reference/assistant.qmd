@@ -1,0 +1,289 @@
+---
+title: "LLM Assistant"
+---
+
+LLM-powered interactive pipeline builder that guides you through
+configuring a SpectraWeaveR analysis pipeline via natural language
+conversation. Requires the [ellmer](https://ellmer.tidyverse.org/) package
+(optional dependency).
+
+## `sw_assistant` {#sw_assistant}
+
+Launch the interactive LLM pipeline builder.
+
+### Usage
+
+```r
+sw_assistant(
+  provider = "openai",
+  model = NULL,
+  interactive = TRUE,
+  privacy_notice = TRUE,
+  ...
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `provider` | LLM provider: `"openai"` (default), `"anthropic"`, `"google"`, `"ollama"`. |
+| `model` | Optional model name. If `NULL`, the provider default is used. |
+| `interactive` | If `TRUE` (default), launches a live console. If `FALSE`, returns the `Chat` object. |
+| `privacy_notice` | If `TRUE` (default), shows a privacy notice before starting. |
+| `...` | Additional arguments passed to the ellmer chat constructor. |
+
+### Details
+
+The assistant:
+
+1. Asks about your experiment (cytometer, samples, batches)
+2. Inspects your FCS files and metadata using registered tools
+3. Helps select markers and configure pipeline parameters
+4. Generates runnable R code using `run_pipeline()` or `sw_pipeline()`
+
+**Privacy**: File paths, directory listings, and column names are sent to the
+LLM provider. No cell expression data is transmitted. Use `provider = "ollama"`
+for fully local operation.
+
+### Examples
+
+```r
+# Interactive session with OpenAI
+sw_assistant()
+
+# Use Anthropic Claude
+sw_assistant(provider = "anthropic")
+
+# Local model via Ollama
+sw_assistant(provider = "ollama", model = "llama3")
+
+# Get the Chat object for programmatic use
+chat <- sw_assistant(interactive = FALSE)
+chat$chat("I have 20 Aurora FCS files in /data/fcs/")
+```
+
+---
+
+## `sw_assistant_configure` {#sw_assistant_configure}
+
+Create a configured chat object without starting an interactive session.
+
+### Usage
+
+```r
+sw_assistant_configure(provider = "openai", model = NULL, ...)
+```
+
+### Arguments
+
+Same as `sw_assistant()`, except there is no `interactive` or
+`privacy_notice` argument.
+
+### Value
+
+An ellmer `Chat` object with SpectraWeaveR tools registered.
+
+---
+
+## `sw_assistant_batch_correction` {#sw_assistant_batch_correction}
+
+Focused assistant for batch correction setup.
+
+### Usage
+
+```r
+sw_assistant_batch_correction(
+  provider = "openai", model = NULL,
+  interactive = TRUE, privacy_notice = TRUE, ...
+)
+```
+
+---
+
+## `sw_assistant_gating` {#sw_assistant_gating}
+
+Focused assistant for gating template creation and automated gating.
+
+### Usage
+
+```r
+sw_assistant_gating(
+  provider = "openai", model = NULL,
+  interactive = TRUE, privacy_notice = TRUE, ...
+)
+```
+
+---
+
+## `sw_assistant_unmixing` {#sw_assistant_unmixing}
+
+Focused assistant for spectral unmixing configuration.
+
+### Usage
+
+```r
+sw_assistant_unmixing(
+  provider = "openai", model = NULL,
+  interactive = TRUE, privacy_notice = TRUE, ...
+)
+```
+
+---
+
+## `sw_generate_pipeline_code` {#sw_generate_pipeline_code}
+
+Generate runnable R code from a pipeline configuration.
+
+### Usage
+
+```r
+sw_generate_pipeline_code(
+  config,
+  style = c("run_pipeline", "composable"),
+  output = c("console", "string", "file"),
+  path = NULL
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `config` | Named list with pipeline configuration (see below). |
+| `style` | `"run_pipeline"` (default) or `"composable"` for `sw_pipeline()` style. |
+| `output` | `"console"` (print), `"string"` (return), or `"file"` (write to `path`). |
+| `path` | File path when `output = "file"`. |
+
+### Config Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `fcs_dir` | Yes | Path to FCS files directory. |
+| `sample_meta_path` | Yes | Path to sample metadata CSV/XLSX. |
+| `markers` | Yes | Character vector of marker names. |
+| `lineage_markers` | Yes | Character vector of lineage markers for clustering. |
+| `batch_col` | No | Batch column name (default: `"batch"`). |
+| `sample_col` | No | Sample ID column name (default: `"sample"`). |
+| `file_col` | No | FCS filename column name (default: `"file"`). |
+| `condition_col` | No | Condition column name. |
+| `cofactor` | No | Arcsinh cofactor (default: 6000). |
+| `n_metaclusters` | No | Number of metaclusters (default: 20). |
+| `gating_template` | No | Path to gating template CSV or `NULL`. |
+| `output_dir` | No | Output directory (default: `"SpectraWeaveR_output"`). |
+| `seed` | No | Random seed (default: 42). |
+| `unmix_from_raw` | No | Whether to unmix from raw data (default: `FALSE`). |
+| `cytometer` | No | Cytometer type (for unmixing). |
+| `control_dir` | No | Controls directory (for unmixing). |
+| `unstained_fcs` | No | Unstained FCS path (for unmixing). |
+
+### Examples
+
+```r
+config <- list(
+  fcs_dir = "/data/fcs",
+  sample_meta_path = "/data/metadata.csv",
+  markers = c("CD3", "CD4", "CD8", "CD19"),
+  lineage_markers = c("CD3", "CD4", "CD8"),
+  cofactor = 6000,
+  n_metaclusters = 20,
+  output_dir = "results",
+  seed = 42
+)
+
+# Print to console
+sw_generate_pipeline_code(config)
+
+# Get as string
+code <- sw_generate_pipeline_code(config, output = "string")
+
+# Composable style
+sw_generate_pipeline_code(config, style = "composable")
+
+# Save to file
+sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+```
+
+---
+
+## `sw_quick_pipeline` {#sw_quick_pipeline}
+
+Generate pipeline code from a natural language description (one-shot).
+
+### Usage
+
+```r
+sw_quick_pipeline(description, provider = "openai", model = NULL, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `description` | Character string describing your experiment and analysis goals. |
+| `provider` | LLM provider (default: `"openai"`). |
+| `model` | Optional model name. |
+| `...` | Additional arguments for the chat constructor. |
+
+### Examples
+
+```r
+code <- sw_quick_pipeline(
+  description = "I have 20 Aurora 5L FCS files in /data/fcs/,
+    metadata in /data/meta.csv with columns filename, patient_id,
+    batch_number, treatment. Markers: CD3, CD4, CD8, CD19, CD56.
+    Cluster on CD3, CD4, CD8.",
+  provider = "openai"
+)
+cat(code)
+```
+
+---
+
+## `sw_pipeline_config_type` {#sw_pipeline_config_type}
+
+Returns an ellmer type schema for structured extraction of pipeline
+configuration from an LLM conversation.
+
+### Usage
+
+```r
+sw_pipeline_config_type()
+```
+
+### Value
+
+An ellmer `TypeObject` defining the pipeline configuration schema. Use
+with `chat$chat_structured()` to extract validated configuration from
+conversation context.
+
+### Examples
+
+```r
+config_type <- sw_pipeline_config_type()
+chat <- sw_assistant(interactive = FALSE)
+config <- chat$chat_structured(
+  "Extract the pipeline configuration from our conversation.",
+  type = config_type
+)
+sw_generate_pipeline_code(config)
+```
+
+---
+
+## Registered Tools
+
+The assistant has access to the following tools that it can invoke during
+conversation:
+
+| Tool | Description |
+|------|-------------|
+| `list_fcs_files` | List FCS files in a directory. |
+| `list_directory` | List files and subdirectories at a path. |
+| `read_fcs_header` | Read channel/marker names from an FCS file header. |
+| `read_csv_columns` | Preview columns and rows of a CSV file. |
+| `read_xlsx_columns` | Preview columns and rows of an XLSX file. |
+| `validate_sample_meta` | Validate metadata against FCS files. |
+| `detect_channels` | Classify FCS channels into scatter/time/fluorochrome. |
+| `check_batch_balance` | Summarise sample distribution across batches. |
+| `validate_markers` | Check that markers exist in FCS data. |

@@ -1,0 +1,252 @@
+---
+title: "LLM-Powered Pipeline Builder"
+vignette: >
+  %\VignetteIndexEntry{LLM-Powered Pipeline Builder}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+SpectraWeaveR includes an optional **LLM-powered assistant** that guides
+you through configuring your spectral flow cytometry analysis pipeline via
+natural language conversation. The assistant is powered by
+[ellmer](https://ellmer.tidyverse.org/) and can inspect your files,
+validate your metadata, and generate runnable R code.
+
+## Prerequisites
+
+### Install ellmer
+
+```{r}
+install.packages("ellmer")
+```
+
+### Set up an API key
+
+The assistant uses a large language model (LLM) provider. Set up an API
+key for your chosen provider:
+
+**OpenAI** (default):
+
+```{r}
+# Add to your ~/.Renviron file:
+# OPENAI_API_KEY=sk-...
+Sys.setenv(OPENAI_API_KEY = "sk-your-key-here")
+```
+
+**Anthropic Claude**:
+
+```{r}
+Sys.setenv(ANTHROPIC_API_KEY = "sk-ant-...")
+```
+
+**Local models** (no API key needed):
+
+```{r}
+# Install and start Ollama (https://ollama.ai)
+# Then use provider = "ollama"
+```
+
+## Quick Start
+
+### Interactive Session
+
+Launch the assistant with a single call:
+
+```{r}
+library(SpectraWeaveR)
+sw_assistant()
+```
+
+This starts a live conversation in your R console. The assistant will:
+
+1. Ask about your experiment (cytometer, number of samples, batches)
+2. Request paths to your FCS files and metadata
+3. Inspect your files using built-in tools
+4. Help you select markers and configure parameters
+5. Generate a complete, runnable SpectraWeaveR pipeline
+
+### Example Session
+
+A typical conversation might go like this:
+
+- **Assistant**: "What cytometer did you use and how many samples do you have?"
+- **You**: "Aurora 5L, 30 samples across 3 batches"
+- **Assistant**: "Where are your FCS files located?"
+- **You**: "/data/experiment1/fcs/"
+- *The assistant inspects the directory and lists found FCS files*
+- **Assistant**: "I found 30 FCS files. Do you have a sample metadata file?"
+- **You**: "/data/experiment1/metadata.csv"
+- *The assistant reads the CSV, shows columns, and validates against FCS files*
+- **Assistant**: "Which column contains the batch labels?"
+- **You**: "batch_number"
+- *The assistant continues until all parameters are configured, then generates code*
+
+### Programmatic Use
+
+You can also get the `Chat` object for programmatic interaction:
+
+```{r}
+chat <- sw_assistant(interactive = FALSE)
+response <- chat$chat("I have 20 Aurora FCS files in /data/fcs/")
+```
+
+## Specialized Assistants
+
+SpectraWeaveR provides focused assistants for specific tasks:
+
+### Batch Correction
+
+```{r}
+sw_assistant_batch_correction()
+```
+
+Helps configure batch correction: metadata validation, marker selection,
+normalization method, and evaluation code.
+
+### Gating
+
+```{r}
+sw_assistant_gating()
+```
+
+Helps create gating templates and apply automated gating with openCyto.
+
+### Spectral Unmixing
+
+```{r}
+sw_assistant_unmixing()
+```
+
+Helps configure the AutoSpectral unmixing workflow from raw spectral data.
+
+## One-Shot Pipeline Generation
+
+For scripts that need LLM-generated code without interactive conversation:
+
+```{r}
+code <- sw_quick_pipeline(
+  description = "I have 40-color Aurora 5L data, 30 samples across 3 batches,
+    FCS files in /data/fcs/, metadata in /data/meta.csv with columns:
+    filename, patient_id, batch_number, treatment_group.
+    Cluster on lineage markers CD3, CD4, CD8, CD19, CD56.",
+  provider = "openai"
+)
+cat(code)
+```
+
+## Code Generation from Config
+
+You can also generate code from a configuration list without LLM:
+
+```{r}
+config <- list(
+  fcs_dir = "/data/fcs",
+  sample_meta_path = "/data/metadata.csv",
+  markers = c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14",
+              "CD16", "HLA-DR", "CD45RA", "CD45RO"),
+  lineage_markers = c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14"),
+  batch_col = "batch_number",
+  sample_col = "patient_id",
+  file_col = "filename",
+  condition_col = "treatment_group",
+  cofactor = 6000,
+  n_metaclusters = 20,
+  output_dir = "results",
+  seed = 42
+)
+
+# Print to console
+sw_generate_pipeline_code(config)
+
+# Save to file
+sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+
+# Composable pipeline style
+sw_generate_pipeline_code(config, style = "composable")
+```
+
+## Using Different Providers
+
+### OpenAI (default)
+
+```{r}
+sw_assistant(provider = "openai")
+sw_assistant(provider = "openai", model = "gpt-4o")
+```
+
+### Anthropic Claude
+
+```{r}
+sw_assistant(provider = "anthropic")
+sw_assistant(provider = "anthropic", model = "claude-sonnet-4-20250514")
+```
+
+### Google Gemini
+
+```{r}
+sw_assistant(provider = "google")
+```
+
+### Ollama (Local)
+
+For fully private operation with no data sent externally:
+
+```{r}
+# First install and start Ollama, then pull a model:
+# ollama pull llama3
+sw_assistant(provider = "ollama", model = "llama3")
+```
+
+## Structured Configuration Extraction
+
+Advanced users can use ellmer's structured data extraction to get a
+validated configuration object from a conversation:
+```{r}
+chat <- sw_assistant(interactive = FALSE)
+# ... have a conversation ...
+
+config_type <- sw_pipeline_config_type()
+config <- chat$chat_structured(
+  "Extract the pipeline configuration from our conversation.",
+  type = config_type
+)
+
+# Generate code from the extracted config
+sw_generate_pipeline_code(config)
+```
+
+## Privacy and Security
+
+The assistant sends the following to the LLM provider:
+
+- File and directory paths
+- Directory listings (file names only)
+- FCS file headers (channel names, not expression data)
+- CSV/XLSX column names and preview rows
+- Your conversation messages
+
+**No cell expression data** (fluorescence intensities) is transmitted.
+
+For fully local operation, use Ollama:
+
+```{r}
+sw_assistant(provider = "ollama", model = "llama3")
+```
+
+To suppress the privacy notice:
+
+```{r}
+sw_assistant(privacy_notice = FALSE)
+```

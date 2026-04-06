@@ -19,6 +19,8 @@ website:
             href: vignettes/spectral-unmixing.qmd
           - text: "Batch Correction"
             href: vignettes/batch-correction.qmd
+          - text: "LLM Pipeline Builder"
+            href: vignettes/llm-assistant.qmd
       - text: "API Reference"
         menu:
           - text: "Overview"
@@ -44,6 +46,8 @@ website:
             href: reference/transforms.qmd
           - text: "Gating Utilities"
             href: reference/gating-utils.qmd
+          - text: "LLM Assistant"
+            href: reference/assistant.qmd
     right:
       - icon: github
         href: https://github.com/mdmanurung/SpectraWeaveR
