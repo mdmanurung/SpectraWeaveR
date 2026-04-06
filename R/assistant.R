@@ -390,7 +390,11 @@ NULL
     )
 
     # Check balance
-    if (max(sizes) > 2 * min(sizes)) {
+    if (n_batches < 2) {
+      result <- paste0(result,
+        "\n\n  WARNING: Only 1 batch found. Batch correction requires",
+        "\n  at least 2 batches.")
+    } else if (max(sizes) > 2 * min(sizes)) {
       result <- paste0(result,
         "\n\n  WARNING: Batches are unbalanced (largest is >2x smallest).",
         "\n  This may affect batch correction quality.")
@@ -1212,7 +1216,7 @@ sw_generate_pipeline_code <- function(config,
     "processed <- lapply(seq_along(fs), function(i) {",
     "  sw_pipeline_run(pip, input = fs[[i]], trace = TRUE)",
     "})",
-    paste0("names(processed) <- flowCore::sampleNames(fs)"),
+    "names(processed) <- flowCore::sampleNames(fs)",
     "",
     "# Step 5: Prepare for batch correction",
     "uncorrected <- sw_prepare_for_correction(",
