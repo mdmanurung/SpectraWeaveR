@@ -515,3 +515,46 @@ test_that("pipeline handles list inputs (multi-sample pattern)", {
   result <- sw_pipeline_run(pip, input = input, trace = FALSE)
   expect_equal(result$result, c(2, 4, 6, 8, 10, 12))
 })
+
+# =========================================================================
+# sw_plot_pipeline tests
+# =========================================================================
+
+test_that("sw_plot_pipeline text output works", {
+  skip_if_not_installed("S7")
+  pip <- sw_pipeline("demo", steps = list(
+    sw_step("load", identity),
+    sw_step("filter", function(x) x, list(threshold = 0.5)),
+    sw_step("cluster", function(x) x)
+  ))
+  out <- capture.output(sw_plot_pipeline(pip))
+  expect_true(any(grepl("Pipeline: demo", out)))
+  expect_true(any(grepl("load", out)))
+  expect_true(any(grepl("filter", out)))
+  expect_true(any(grepl("cluster", out)))
+})
+
+test_that("sw_plot_pipeline data style returns data.frame", {
+  skip_if_not_installed("S7")
+  pip <- sw_pipeline("demo", steps = list(
+    sw_step("s1", identity),
+    sw_step("s2", function(x) x, list(a = 1, b = 2))
+  ))
+  result <- sw_plot_pipeline(pip, style = "data")
+  expect_true(is.data.frame(result))
+  expect_equal(nrow(result), 2)
+  expect_equal(result$name, c("s1", "s2"))
+  expect_equal(result$n_args, c(0L, 2L))
+})
+
+test_that("sw_plot_pipeline handles empty pipeline", {
+  skip_if_not_installed("S7")
+  pip <- sw_pipeline("empty")
+  out <- capture.output(sw_plot_pipeline(pip))
+  expect_true(any(grepl("empty pipeline", out)))
+})
+
+test_that("sw_plot_pipeline rejects non-Pipeline", {
+  skip_if_not_installed("S7")
+  expect_error(sw_plot_pipeline("not_a_pipeline"), "Pipeline")
+})
