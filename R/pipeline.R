@@ -18,7 +18,7 @@ NULL
 #'   \item Apply automated gating (optional)
 #'   \item Signal quality control (PeacoQC)
 #'   \item Batch correction (cyCombine)
-#'   \item Clustering (FlowSOM)
+#'   \item Clustering (kohonen SOM / FastPG)
 #' }
 #'
 #' @param fcs_dir Character path to directory containing unmixed FCS files.
