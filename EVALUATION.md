@@ -176,9 +176,36 @@ Key validations:
 
 ## Summary
 
-SpectraWeaveR is a well-engineered package with production-quality code, correct bioinformatics methodology, and appropriate defaults for spectral flow cytometry. The main areas for improvement are:
+SpectraWeaveR is a well-engineered package with production-quality code, correct bioinformatics methodology, and appropriate defaults for spectral flow cytometry.
 
-1. **Fix 2 medium-severity bugs** (margin removal channel selection, pipeline gating bypass)
-2. **Complete the EMD evaluation stub**
-3. **Add integration tests** for pipeline, QC, gating, and transforms modules
-4. **Implement high-priority features** (unmixing diagnostics, dimensionality reduction, differential analysis, cell type annotation) to make the package a complete end-to-end solution
+### Completed (as of 2026-04-06)
+
+1. **All 4 bugs fixed**: margin removal channel selection, pipeline gating bypass, EMD evaluation stub, cofactor parameterization
+2. **Integration tests added** for all 4 previously-untested modules (QC, gating, transforms, pipeline)
+3. **Phase 1 features implemented**:
+   - Dimensionality reduction module (`R/dimred.R`) — UMAP + PCA
+   - Additional gating templates (myeloid, NK, Treg, full PBMC)
+   - SSM diagnostics module (`R/unmix_diagnostics.R`) — spillover spreading matrix + per-channel quality
+4. See PR #17 for full details
+
+### Still To Do
+
+**High Priority (Phase 2 features)**:
+- Automated cell type annotation (`R/annotate.R`)
+- Differential abundance & expression analysis (`R/differential.R`)
+
+**Medium Priority**:
+- Data export/interoperability (`R/export.R`) — CSV, H5AD, FCS, Seurat, SCE
+- Automated QC report generation (`R/report.R`)
+- Panel design helper (`R/panel.R`)
+
+**Low Priority (novel/niche)**:
+- Fluorochrome autofluorescence fingerprinting
+- Longitudinal batch monitoring / Levy-Jennings charts
+
+**Infrastructure**:
+- `R CMD check` with 0 errors/warnings
+- Generate `man/` pages via `devtools::document()`
+- Add reference docs for new modules (dimred, unmix_diagnostics)
+- Composable pipeline vignette
+- Publish Quarto documentation site

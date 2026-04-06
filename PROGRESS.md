@@ -211,3 +211,37 @@
 - Tests use `skip_if_not_installed()` for external dependencies
 - roxygen2 documentation is embedded in source files; `man/` pages require `devtools::document()` to generate
 - `man/` directory does not yet exist (requires running `devtools::document()` in R)
+
+---
+
+## What's Been Done (Complete)
+
+| Area | Status | Details |
+|------|--------|---------|
+| Core pipeline (5 steps) | ✅ | unmix → gate → QC → batch correct → cluster |
+| Composable pipeline (S7) | ✅ | Step/Pipeline classes, 8 convenience constructors |
+| Scale transforms | ✅ | Logicle + linear quantile (ported from CytoPipeline) |
+| Gating utilities | ✅ | Singlet gate, doublet removal, debris, margins |
+| LLM assistant | ✅ | ellmer-based interactive pipeline builder |
+| Bug fixes (4) | ✅ | Margin channels, pipeline gating, EMD, cofactor |
+| Integration tests | ✅ | All 12 modules now have integration tests |
+| Dimensionality reduction | ✅ | UMAP + PCA with auto-subsampling |
+| Gating templates (5) | ✅ | lymphocyte, myeloid, NK, Treg, full PBMC |
+| SSM diagnostics | ✅ | Spillover spreading matrix + per-channel QC |
+| Documentation site | ✅ | Quarto website, 2 vignettes, 11 reference pages |
+
+## What Still Needs To Be Done
+
+| Area | Priority | Effort | Details |
+|------|----------|--------|---------|
+| **Cell type annotation** | HIGH | Medium | Auto-annotate clusters from MFI profiles vs reference |
+| **Differential analysis** | HIGH | Medium | Abundance + expression testing between conditions |
+| **Data export** | MEDIUM | Low-Medium | CSV, H5AD, FCS, Seurat, SCE interop |
+| **QC report generation** | MEDIUM | Medium | Automated HTML pipeline summary reports |
+| **Panel design helper** | MEDIUM | High | Spectral overlap checking, cofactor suggestion |
+| **AF fingerprinting** | LOW | High | Tissue autofluorescence characterization |
+| **Batch monitoring** | LOW | Medium | Levy-Jennings charts, drift detection |
+| **Reference docs** | MEDIUM | Low | .qmd pages for dimred + unmix_diagnostics |
+| **Composable pipeline vignette** | MEDIUM | Low | Tutorial for S7 pipeline framework |
+| **R CMD check** | HIGH | Low | Requires R environment to run |
+| **man/ pages** | HIGH | Low | `devtools::document()` needed |
