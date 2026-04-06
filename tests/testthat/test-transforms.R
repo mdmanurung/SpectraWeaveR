@@ -71,3 +71,54 @@ test_that("sw_apply_scale_transforms rejects non-transformList", {
     "transformList"
   )
 })
+
+# =========================================================================
+# Integration tests — actual transformation execution
+# =========================================================================
+
+test_that("sw_estimate_scale_transforms estimates logicle for fluor channels", {
+  skip_if_not_installed("flowCore")
+
+  set.seed(42)
+  # Fluorochrome channels need data with range spanning neg/pos for logicle
+  mat <- matrix(
+    c(abs(rnorm(500, 100000, 30000)),   # FSC-A (scatter)
+      abs(rnorm(500, 60000, 20000)),    # SSC-A (scatter)
+      rnorm(500, 500, 300),             # BV421-A (fluor, some negative)
+      rnorm(500, 1000, 400)),           # PE-A (fluor, some negative)
+    ncol = 4,
+    dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A", "PE-A"))
+  )
+  ff <- flowCore::flowFrame(mat)
+
+  trans <- sw_estimate_scale_transforms(ff,
+                                         fluo_method = "estimateLogicle",
+                                         scatter_method = "none")
+  expect_true(methods::is(trans, "transformList"))
+})
+
+test_that("sw_apply_scale_transforms transforms values correctly", {
+  skip_if_not_installed("flowCore")
+
+  set.seed(42)
+  mat <- matrix(
+    c(abs(rnorm(500, 100000, 30000)),
+      abs(rnorm(500, 60000, 20000)),
+      rnorm(500, 500, 300),
+      rnorm(500, 1000, 400)),
+    ncol = 4,
+    dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A", "PE-A"))
+  )
+  ff <- flowCore::flowFrame(mat)
+
+  trans <- sw_estimate_scale_transforms(ff,
+                                         fluo_method = "estimateLogicle",
+                                         scatter_method = "none")
+  ff_t <- sw_apply_scale_transforms(ff, trans)
+
+  expect_true(methods::is(ff_t, "flowFrame"))
+  expect_equal(nrow(ff_t), nrow(ff))
+  expect_equal(ncol(ff_t), ncol(ff))
+  # Transformed values should differ from original
+  expect_false(identical(flowCore::exprs(ff), flowCore::exprs(ff_t)))
+})

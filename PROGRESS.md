@@ -153,15 +153,53 @@
 
 ---
 
+## Session 9 — 2026-04-06 (Codebase Evaluation & Bug Fixes)
+
+### Completed
+
+- [x] Created `EVALUATION.md` — comprehensive codebase evaluation covering technical quality (8.5/10), bioinformatics correctness, test gaps, and 11 proposed new features
+- [x] Fixed `sw_remove_margins()` (`R/unmix.R:1136-1139`) — now uses `sw_are_signal_cols(ff)` instead of `seq_len(ncol(ff))` to avoid margin removal on Time/Original_ID/scatter channels
+- [x] Fixed `run_pipeline()` gating step (`R/pipeline.R:173-176`) — now uses margin-removed `ff_list` instead of re-reading raw FCS files from disk
+- [x] Completed EMD implementation in `sw_evaluate_correction()` (`R/batch_correct.R:306`) — computes actual EMD values when cluster labels and cyCombine are available
+- [x] Parameterized cofactor in `sw_gate()` (`R/gate.R:132`) — cofactor is now a function parameter with default 6000
+
+---
+
+## Session 10 — 2026-04-06 (Critical Test Gaps & Phase 1 Features)
+
+### Completed
+
+- [x] Added integration tests for `sw_signal_qc()` and `sw_signal_qc_batch()` in `test-qc.R`
+- [x] Added integration tests for `sw_gate()` and `sw_extract_gated()` in `test-gate.R`
+- [x] Added integration tests for `sw_estimate_scale_transforms()` and `sw_apply_scale_transforms()` in `test-transforms.R`
+- [x] Added end-to-end smoke test for `run_pipeline()` in `test-pipeline.R` (with synthetic FCS files)
+- [x] Created `R/dimred.R` — standalone dimensionality reduction module:
+  - `sw_run_dimred()` — UMAP (uwot) and PCA with auto-subsampling, metadata preservation
+  - `sw_plot_dimred()` — ggplot2 scatter plots with continuous/discrete colour support
+- [x] Created `tests/testthat/test-dimred.R` — 12 tests for dimred module
+- [x] Extended `sw_build_gating_template()` in `R/gate.R`:
+  - Added 4 new template types: `"myeloid"`, `"nk"`, `"treg"`, `"full_pbmc"`
+  - Refactored template building with internal `.make_gate_row()` and `.build_template()` helpers
+- [x] Added template validation tests in `test-gate.R` (parent hierarchy checks)
+- [x] Created `R/unmix_diagnostics.R` — unmixing quality diagnostics module:
+  - `sw_spillover_spreading_matrix()` — SSM via absolute cosine similarity of reference spectra, with optional empirical adjustment from unmixed data
+  - `sw_plot_ssm()` — heatmap visualization (pheatmap with fallback to base)
+  - `sw_unmixing_quality()` — per-channel CV analysis with flagging
+- [x] Created `tests/testthat/test-unmix_diagnostics.R` — 13 tests for SSM and quality metrics
+- [x] Updated `NAMESPACE` — added 5 new exports
+- [x] Updated `PROGRESS.md` and `PLAN.md`
+
+---
+
 ## Summary Statistics
 
 | Category | Count |
 |----------|-------|
-| R source files | 10 |
-| R source lines | ~5,192 |
-| Exported functions | 69 |
-| Test files | 10 |
-| Test lines | ~2,871 |
+| R source files | 12 |
+| R source lines | ~5,800 |
+| Exported functions | 74 |
+| Test files | 12 |
+| Test lines | ~3,600 |
 | Documentation pages (.qmd) | 15 |
 | Vignettes | 2 |
 | CI/CD workflows | 1 |
