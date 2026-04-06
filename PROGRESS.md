@@ -2,7 +2,7 @@
 
 ---
 
-## Session 1 — 2026-04-06
+## Session 1 — 2026-04-06 (Initial Setup)
 
 ### Completed
 
@@ -16,7 +16,7 @@
 
 ---
 
-## Session 2 — 2026-04-06
+## Session 2 — 2026-04-06 (Core Implementation)
 
 ### Completed
 
@@ -24,20 +24,147 @@
 - [x] `.Rbuildignore` — exclude CLAUDE.md, PLAN.md, PROGRESS.md, .Rproj, .github
 - [x] `tests/testthat.R` — standard testthat runner
 - [x] `R/utils.R` — 6 format conversion utilities (sw_read_fcs, sw_flowframe_to_tibble, sw_tibble_to_flowframe, sw_exprs_to_tibble, sw_get_fluor_channels, sw_set_marker_names)
-- [x] `tests/testthat/test-utils.R` — 16 unit tests including round-trip flowFrame ↔ tibble
-- [x] `R/unmix.R` — 3 unmixing functions (sw_unmix_autospectral, sw_load_unmixed, sw_remove_margins)
-- [x] `tests/testthat/test-unmix.R` — 8 unit tests for unmixing wrappers
+- [x] `tests/testthat/test-utils.R` — unit tests for format conversions
+- [x] `R/unmix.R` — 3 initial unmixing functions (sw_unmix_autospectral, sw_load_unmixed, sw_remove_margins)
+- [x] `tests/testthat/test-unmix.R` — unit tests for unmixing wrappers
 - [x] `R/gate.R` — 3 gating functions (sw_build_gating_template, sw_gate, sw_extract_gated)
-- [x] `tests/testthat/test-gate.R` — 8 unit tests for gating
+- [x] `tests/testthat/test-gate.R` — unit tests for gating
 - [x] `R/qc.R` — 3 QC functions (sw_signal_qc, sw_signal_qc_batch, sw_qc_summary)
-- [x] `tests/testthat/test-qc.R` — 9 unit tests for signal QC
+- [x] `tests/testthat/test-qc.R` — unit tests for signal QC
 - [x] `R/batch_correct.R` — 3 batch correction functions (sw_prepare_for_correction, sw_batch_correct, sw_evaluate_correction)
-- [x] `tests/testthat/test-batch_correct.R` — 12 unit tests for batch correction
-- [x] `R/cluster.R` — 5 clustering functions (sw_cluster, sw_get_cluster_assignments, sw_cluster_mfis, sw_plot_clusters, sw_predict_clusters)
-- [x] `tests/testthat/test-cluster.R` — 12 unit tests for clustering (kohonen SOM / FastPG)
+- [x] `tests/testthat/test-batch_correct.R` — unit tests for batch correction
+- [x] `R/cluster.R` — 5 clustering functions using FlowSOM
+- [x] `tests/testthat/test-cluster.R` — unit tests for clustering
 - [x] `R/pipeline.R` — run_pipeline() end-to-end orchestrator
-- [x] `tests/testthat/test-pipeline.R` — 7 unit tests for pipeline validation
+- [x] `tests/testthat/test-pipeline.R` — unit tests for pipeline validation
 - [x] `README.md` — updated with installation instructions, quick start, step-by-step usage examples
+
+---
+
+## Session 3 — Post-PR #10 (Replace FlowSOM with kohonen/FastPG)
+
+### Completed
+
+- [x] Replaced FlowSOM dependency with kohonen SOM (Imports) + FastPG (Suggests) in `R/cluster.R`
+- [x] `sw_cluster()` now uses kohonen::som() with hierarchical metaclustering (ward.D2 + cutree), or FastPG::fastCluster()
+- [x] Returns `sw_cluster_result` S3 class with assignments, data, model, etc.
+- [x] Added `sw_predict_clusters()` — project new data onto trained SOM
+- [x] Updated `DESCRIPTION` — replaced FlowSOM with kohonen (≥ 3.0.0) in Imports, FastPG in Suggests
+- [x] Updated `NAMESPACE` — replaced sw_map_new_data with sw_predict_clusters
+- [x] Updated `tests/testthat/test-cluster.R` — tests for both clustering methods
+
+---
+
+## Session 4 — Post-PR #10 (Unmixing Expansion)
+
+### Completed
+
+- [x] Expanded `R/unmix.R` from 3 to 8 functions covering the full AutoSpectral workflow:
+  - `sw_autospectral_setup()` — initialize parameters and control file
+  - `sw_prepare_controls()` — gate, clean, extract fluorophore spectra
+  - `sw_extract_af_spectra()` — per-cell autofluorescence extraction (with multi-tissue support)
+  - `sw_extract_spectral_variants()` — fluorophore emission variability mapping
+  - `sw_unmix()` — unmix with OLS/WLS/Poisson/AutoSpectral methods
+  - `sw_unmix_pipeline()` — one-call end-to-end unmixing orchestrator
+- [x] AutoSpectral moved to Suggests (not Imports); all unmixing functions guard with `.check_autospectral()`
+- [x] Input validation runs BEFORE dependency checks for clear error messages
+- [x] Added AutoSpectralRcpp as optional Suggests for performance
+- [x] Updated `NAMESPACE` with all new unmixing exports
+- [x] Expanded `tests/testthat/test-unmix.R` to 703 lines covering all 8 functions
+
+---
+
+## Session 5 — Post-PR #10 (Batch Correction Expansion)
+
+### Completed
+
+- [x] Expanded `R/batch_correct.R` from 3 to 12 functions:
+  - Modular workflow: `sw_normalize()`, `sw_create_som()`, `sw_correct_data()`
+  - Diagnostics: `sw_detect_batch_effect()`
+  - Evaluation: `sw_compute_emd()`, `sw_evaluate_emd()`, `sw_evaluate_mad()`
+  - Visualization: `sw_plot_batch_densities()`, `sw_plot_batch_dimred()`
+- [x] Added DRY validation helpers: `.check_cycombine()`, `.validate_batch_df()`
+- [x] Updated `NAMESPACE` with all 12 batch correction exports
+- [x] Expanded `tests/testthat/test-batch_correct.R` to 443 lines
+
+---
+
+## Session 6 — Post-PR #10 (CytoPipeline Ports & Composable Pipeline)
+
+### Completed
+
+- [x] Created `R/composable_pipeline.R` (913 lines) — S7/R7 composable pipeline framework:
+  - ProcessingStep and Pipeline S7 classes with lazy creation and caching
+  - Full pipeline manipulation (add, remove, replace, concat, run, show, plot)
+  - 8 convenience step constructors for common SpectraWeaveR operations
+  - Text-based flowchart visualization
+- [x] Created `R/transforms.R` (258 lines) — scale transformation utilities ported from CytoPipeline:
+  - `sw_estimate_scale_transforms()` — per-channel logicle and linear quantile estimation
+  - `sw_apply_scale_transforms()` — apply pre-computed transformList
+- [x] Created `R/gating_utils.R` (455 lines) — standalone gating utilities ported from CytoPipeline/CytoPipelineUtils:
+  - `sw_singlets_gate()` — parallelogram singlet gate
+  - `sw_remove_doublets()` — CytoPipeline doublet removal algorithm
+  - `sw_remove_doublets_peacoqc()` — PeacoQC-based doublet removal
+  - `sw_remove_debris_gate()` — manual polygon debris gate
+  - `sw_remove_margins_peacoqc()` — enhanced margin removal with per-channel specs
+- [x] Extended `R/utils.R` with:
+  - `sw_are_signal_cols()` / `sw_are_fluor_cols()` — channel classification
+  - `sw_aggregate_and_sample()` — aggregate and subsample flow frames
+  - `sw_collect_events_retained()` — audit trail of event filtering
+- [x] Added S7 (≥ 0.2.0) and ggplot2 to Suggests in DESCRIPTION
+- [x] Updated NAMESPACE with 31 additional exports (total: 69)
+- [x] Created tests:
+  - `tests/testthat/test-composable_pipeline.R` (560 lines)
+  - `tests/testthat/test-transforms.R` (73 lines)
+  - `tests/testthat/test-gating_utils.R` (285 lines)
+  - Extended `tests/testthat/test-utils.R` to 378 lines
+
+---
+
+## Session 7 — Post-PR #11 (Setup Script & Documentation Site)
+
+### Completed
+
+- [x] Created `inst/scripts/install_dependencies.R` — pak-based setup script to install all dependencies
+- [x] Created Quarto documentation website:
+  - `_quarto.yml` — website configuration with navbar
+  - `index.qmd` — landing page
+  - `installation.qmd` — installation guide
+  - `vignettes/spectral-unmixing.qmd` — unmixing vignette
+  - `vignettes/batch-correction.qmd` — batch correction vignette
+  - 11 API reference pages in `reference/` directory
+- [x] Created `.github/workflows/quarto-publish.yml` — CI/CD for Quarto documentation site
+- [x] Updated `.Rbuildignore` for Quarto files
+
+---
+
+## Session 8 — 2026-04-06 (Code Audit & Documentation Refresh)
+
+### Completed
+
+- [x] Audited all 10 R source files (5,192 lines total)
+- [x] Audited all 10 test files (2,871 lines total)
+- [x] Verified NAMESPACE has 69 exports, all matching implemented functions
+- [x] Verified DESCRIPTION, .Rbuildignore, _quarto.yml are consistent
+- [x] Updated `PLAN.md` — reflects actual implementation status with all phases checked
+- [x] Updated `PROGRESS.md` — full session-by-session history (this file)
+- [x] Updated `CLAUDE.md` — matches current repository structure, functions, and dependencies
+- [x] Updated `README.md` — comprehensive feature listing and usage examples
+
+---
+
+## Summary Statistics
+
+| Category | Count |
+|----------|-------|
+| R source files | 10 |
+| R source lines | ~5,192 |
+| Exported functions | 69 |
+| Test files | 10 |
+| Test lines | ~2,871 |
+| Documentation pages (.qmd) | 15 |
+| Vignettes | 2 |
+| CI/CD workflows | 1 |
 
 ### Notes
 
@@ -45,3 +172,4 @@
 - All wrapper functions guard against missing packages via `requireNamespace()`
 - Tests use `skip_if_not_installed()` for external dependencies
 - roxygen2 documentation is embedded in source files; `man/` pages require `devtools::document()` to generate
+- `man/` directory does not yet exist (requires running `devtools::document()` in R)
