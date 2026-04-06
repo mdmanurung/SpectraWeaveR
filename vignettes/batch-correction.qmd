@@ -1,0 +1,557 @@
+---
+title: "Batch Correction with SpectraWeaveR and cyCombine"
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+Batch effects are systematic, non-biological differences between samples
+processed on different days, instruments, or with different reagent lots.
+In high-parameter spectral flow cytometry, batch effects can mask true
+biological signals and confound downstream analysis.
+
+SpectraWeaveR provides a complete batch correction workflow powered by
+[cyCombine](https://github.com/biosurf/cyCombine), which applies
+ComBat batch correction within Self-Organising Map (SOM) clusters.
+This cluster-aware approach preserves biological heterogeneity while
+removing technical variation.
+
+### Two workflows
+
+SpectraWeaveR supports both an **all-in-one** workflow and a
+**modular** workflow for batch correction:
+
+| Workflow | Functions | When to use |
+|----------|-----------|-------------|
+| All-in-one | `sw_batch_correct()` | Standard batch correction with defaults |
+| Modular | `sw_normalize()` → `sw_create_som()` → `sw_correct_data()` | When you need to tune normalization, SOM grid size, or use custom cluster labels |
+
+### The full batch correction function set
+
+| Function | Purpose |
+|----------|---------|
+| `sw_prepare_for_correction()` | Convert flowFrame list → tibble with arcsinh transformation |
+| `sw_batch_correct()` | All-in-one ComBat batch correction |
+| `sw_normalize()` | Per-batch normalization (scale/rank) |
+| `sw_create_som()` | SOM clustering for ComBat |
+| `sw_correct_data()` | ComBat correction with pre-computed labels |
+| `sw_detect_batch_effect()` | Diagnostic density + MDS + EMD plots |
+| `sw_compute_emd()` | Earth Mover's Distance per marker/cluster |
+| `sw_evaluate_emd()` | Compare EMD before vs. after correction |
+| `sw_evaluate_mad()` | Compare MAD before vs. after correction |
+| `sw_evaluate_correction()` | Quick MAD-based quality check |
+| `sw_plot_batch_densities()` | Density ridgeline plots by batch |
+| `sw_plot_batch_dimred()` | UMAP/PCA colored by batch |
+
+## Prerequisites
+
+### Install cyCombine
+
+cyCombine is available on GitHub:
+
+```{r}
+#| label: install-cycombine
+# Ensure BioConductor packages are available
+setRepositories(ind = 1:2)
+BiocManager::install(c("flowCore", "Biobase", "sva"))
+
+# Install cyCombine
+remotes::install_github("biosurf/cyCombine")
+```
+
+## Prepare input data
+
+### From FCS files
+
+The typical starting point is a directory of unmixed FCS files (e.g.,
+exported from SpectroFlo or produced by `sw_unmix_pipeline()`) along with
+a metadata table describing each sample's batch and condition.
+
+```{r}
+#| label: prepare-data
+library(SpectraWeaveR)
+
+# Load unmixed FCS files
+fcs_dir <- "path/to/unmixed_fcs"
+fs <- sw_load_unmixed(fcs_dir)
+
+# Define markers of interest
+markers <- c(
+  "CD3", "CD4", "CD8", "CD19", "CD20", "CD14", "CD56",
+  "CD45RA", "CD45RO", "CD27", "CD127", "CD25", "HLA-DR",
+  "CD69", "CD279", "CD197", "KLRG1", "GranzymeB"
+)
+
+# Create a metadata table
+# Each row matches a sample name in the flowSet
+sample_meta <- data.frame(
+  sample = sampleNames(fs),
+  batch = c(rep("Batch1", 5), rep("Batch2", 5)),
+  condition = c(rep("Healthy", 3), rep("Disease", 2),
+                rep("Healthy", 3), rep("Disease", 2))
+)
+
+# Convert flowSet to a list of flowFrames for sw_prepare_for_correction
+ff_list <- setNames(
+  lapply(sampleNames(fs), function(s) fs[[s]]),
+  sampleNames(fs)
+)
+```
+
+### Prepare the tibble
+
+`sw_prepare_for_correction()` performs three operations:
+
+1. Extracts the specified marker columns from each flowFrame
+2. Applies arcsinh transformation with the spectral flow cofactor (6000)
+3. Adds metadata columns (`sample`, `batch`, `condition`)
+
+```{r}
+#| label: prepare-tibble
+uncorrected <- sw_prepare_for_correction(
+  ff_list = ff_list,
+  sample_meta = sample_meta,
+  markers = markers,
+  cofactor = 6000  # Spectral flow cytometry default (not 5 as for CyTOF)
+)
+
+head(uncorrected)
+# Save checkpoint
+saveRDS(uncorrected, "uncorrected.rds")
+```
+
+### From a pre-existing tibble
+
+If your data is already in tibble format (e.g., from another tool or a
+CSV export), ensure it has the required columns and skip straight to
+batch correction:
+```{r}
+#| label: from-tibble
+# Your tibble must have:
+# - Marker columns (numeric, already transformed)
+# - A 'batch' column
+# - Optionally a 'sample' and 'condition' column
+str(uncorrected)
+```
+
+## Detect batch effects
+
+Before correcting, it is good practice to visualise the batch effects to
+confirm they exist and understand their magnitude.
+
+```{r}
+#| label: detect-batch
+# Diagnostic plots: density ridgelines, per-marker EMD, and MDS
+diagnostics <- sw_detect_batch_effect(
+  df = uncorrected,
+  markers = markers,
+  out_dir = "batch_diagnostics"  # Saves PNGs; use NULL for ggplot objects
+)
+```
+
+You can also visualise batch effects with UMAP or PCA:
+
+```{r}
+#| label: umap-before
+# UMAP colored by batch (uncorrected)
+set.seed(42)
+p_before <- sw_plot_batch_dimred(
+  df = uncorrected[sample(nrow(uncorrected), 20000), ],
+  markers = markers,
+  type = "umap",
+  name = "Uncorrected"
+)
+p_before
+```
+
+## All-in-one batch correction
+
+For a standard correction with sensible defaults, `sw_batch_correct()`
+handles normalization, SOM clustering, and ComBat in a single call:
+
+```{r}
+#| label: all-in-one
+corrected <- sw_batch_correct(
+  uncorrected = uncorrected,
+  markers = markers,
+  covar = "condition",     # Preserve biological condition
+  norm_method = "scale",   # z-score normalization; use "rank" for heavy effects
+  xdim = 8,                # SOM grid dimensions
+  ydim = 8,
+  rlen = 10,               # SOM training iterations
+  seed = 42
+)
+
+saveRDS(corrected, "corrected.rds")
+```
+
+### Key parameters
+
+| Parameter | Default | Guidance |
+|-----------|---------|----------|
+| `covar` | `NULL` | Set to `"condition"` to preserve biological differences |
+| `norm_method` | `"scale"` | Use `"rank"` when combining data with heavy batch effects or across platforms |
+| `xdim`, `ydim` | 8 | Lower values (e.g., 6) for coarse correction; higher (e.g., 10) for fine-grained |
+| `rlen` | 10 | Increase (e.g., 100) if using rank normalization or results are unconvincing |
+| `seed` | 42 | For reproducibility |
+
+## Modular batch correction workflow
+
+The modular workflow gives you full control over each step. This is
+recommended when you need to:
+
+- Tune the normalization method independently
+- Adjust SOM grid dimensions iteratively
+- Use custom cluster labels (e.g., from manual gating or FlowSOM)
+- Debug issues at a specific step
+
+### Step 1: Normalize
+
+Per-batch normalization ensures that marker distributions are comparable
+before SOM clustering.
+
+```{r}
+#| label: normalize
+normalized <- sw_normalize(
+  df = uncorrected,
+  markers = markers,
+  norm_method = "scale"  # "scale" (z-score) or "rank" (rank-based)
+)
+```
+
+::: {.callout-tip}
+## When to Use Rank Normalization
+
+Use `norm_method = "rank"` when combining data with heavy batch effects,
+such as data from different instruments, different panels, or different
+sites. For single-study data with moderate batch effects,
+`norm_method = "scale"` usually suffices.
+:::
+
+### Step 2: Create SOM clusters
+
+The SOM groups cells into phenotypically similar clusters. ComBat then
+corrects batch effects **within** each cluster, preventing the loss of
+real biological heterogeneity.
+
+```{r}
+#| label: create-som
+labels <- sw_create_som(
+  df = normalized,
+  markers = markers,
+  xdim = 8,
+  ydim = 8,
+  rlen = 10,
+  seed = 42
+)
+
+# labels is an integer vector — one cluster assignment per cell
+table(labels)
+```
+
+::: {.callout-note}
+## SOM Grid Size Guidance
+
+- **6×6** (36 clusters): Coarse correction for very different batches
+- **8×8** (64 clusters): Good default for most spectral flow experiments
+- **10×10** (100 clusters): Fine-grained correction when batch effects are subtle
+:::
+
+### Step 3: Apply ComBat correction
+
+Pass the **original** (un-normalized) data together with the SOM labels
+to ComBat. Normalization was only used for clustering — the correction
+operates on the original scale.
+
+```{r}
+#| label: correct
+corrected <- sw_correct_data(
+  df = uncorrected,     # Original data, NOT normalized
+  label = labels,       # SOM cluster labels from step 2
+  markers = markers,
+  covar = "condition",  # Biological covariate to preserve
+  parametric = TRUE     # Parametric ComBat (default)
+)
+
+saveRDS(corrected, "corrected.rds")
+```
+
+### Using custom cluster labels
+
+You are not restricted to SOM labels. Any integer vector of cluster
+assignments (same length as `nrow(uncorrected)`) can be used — for
+example, from manual gating or from a FlowSOM run with
+`sw_cluster()`:
+
+```{r}
+#| label: custom-labels
+# Example: use FlowSOM metaclusters as labels
+# Note: sw_cluster()'s first parameter is named 'corrected' but accepts
+# any expression tibble — here we intentionally pass uncorrected data
+# to obtain cluster labels for use with sw_correct_data()
+fsom <- sw_cluster(
+  corrected = uncorrected,
+  lineage_markers = markers,
+  xdim = 10,
+  ydim = 10,
+  n_metaclusters = 30
+)
+custom_labels <- sw_get_cluster_assignments(fsom)
+
+corrected_custom <- sw_correct_data(
+  df = uncorrected,
+  label = custom_labels,
+  markers = markers,
+  covar = "condition"
+)
+```
+
+## Evaluate correction quality
+
+### Quick evaluation with MAD
+
+`sw_evaluate_correction()` provides a fast assessment using the Median
+Absolute Deviation (MAD) of batch medians:
+
+```{r}
+#| label: eval-quick
+eval_result <- sw_evaluate_correction(
+  uncorrected = uncorrected,
+  corrected = corrected,
+  markers = markers
+)
+
+# Was there improvement?
+eval_result$improved
+# [1] TRUE
+
+# Percentage reduction in MAD (field is named emd_reduction_pct for historical reasons)
+eval_result$emd_reduction_pct
+# [1] 72.3
+
+# Per-marker MAD scores
+eval_result$mad
+```
+
+### Earth Mover's Distance evaluation
+
+For a more rigorous, cluster-aware assessment, use `sw_evaluate_emd()`.
+This computes EMD within each SOM cluster before and after correction:
+
+```{r}
+#| label: eval-emd
+# Both data frames need a 'label' column
+uncorrected$label <- corrected$label <- labels
+
+emd_eval <- sw_evaluate_emd(
+  uncorrected = uncorrected,
+  corrected = corrected,
+  markers = markers,
+  cell_col = "label",
+  batch_col = "batch"
+)
+
+# Overall EMD reduction
+emd_eval$reduction
+
+# Violin plot comparing EMDs
+emd_eval$violin
+
+# Scatter plot of per-marker EMDs
+emd_eval$scatter
+```
+
+### MAD evaluation (cyCombine-backed)
+
+```{r}
+#| label: eval-mad
+mad_eval <- sw_evaluate_mad(
+  uncorrected = uncorrected,
+  corrected = corrected,
+  markers = markers,
+  cell_col = "label",
+  batch_col = "batch"
+)
+
+# Overall MAD score
+mad_eval$score
+```
+
+## Visualize results
+
+### Density plots
+
+Compare marker density distributions across batches before and after
+correction:
+
+```{r}
+#| label: density-plots
+sw_plot_batch_densities(
+  uncorrected = uncorrected,
+  corrected = corrected,
+  markers = markers,
+  filename = "batch_densities.pdf",
+  ncol = 6
+)
+```
+
+### Dimensionality reduction
+
+UMAP or PCA projections show whether batch-driven clusters collapse
+after correction:
+
+```{r}
+#| label: dimred-plots
+# Subsample for speed
+set.seed(42)
+idx <- sample(nrow(uncorrected), min(20000, nrow(uncorrected)))
+
+# UMAP plots
+p_uncorrected <- sw_plot_batch_dimred(
+  df = uncorrected[idx, ],
+  markers = markers,
+  type = "umap",
+  name = "Uncorrected"
+)
+
+p_corrected <- sw_plot_batch_dimred(
+  df = corrected[idx, ],
+  markers = markers,
+  type = "umap",
+  name = "Corrected"
+)
+
+# Display side by side (requires patchwork or gridExtra)
+library(patchwork)
+p_uncorrected + p_corrected
+```
+
+You can also use PCA instead of UMAP:
+
+```{r}
+#| label: pca-plots
+p_pca <- sw_plot_batch_dimred(
+  df = corrected[idx, ],
+  markers = markers,
+  type = "pca",
+  name = "Corrected (PCA)"
+)
+p_pca
+```
+
+## Complete example: putting it all together
+
+Here is the full modular workflow in a single script:
+
+```{r}
+#| label: complete-example
+library(SpectraWeaveR)
+
+# ── 1. Load data ──────────────────────────────────────────────
+fcs_dir <- "path/to/unmixed_fcs"
+fs <- sw_load_unmixed(fcs_dir)
+
+markers <- c("CD3", "CD4", "CD8", "CD19", "CD14", "CD56",
+             "CD45RA", "CD27", "HLA-DR", "CD69")
+
+sample_meta <- data.frame(
+  sample = sampleNames(fs),
+  batch = c(rep("Day1", 5), rep("Day2", 5)),
+  condition = c(rep("Ctrl", 3), rep("Stim", 2),
+                rep("Ctrl", 3), rep("Stim", 2))
+)
+
+ff_list <- setNames(
+  lapply(sampleNames(fs), function(s) fs[[s]]),
+  sampleNames(fs)
+)
+
+# ── 2. Prepare tibble ────────────────────────────────────────
+uncorrected <- sw_prepare_for_correction(
+  ff_list, sample_meta, markers, cofactor = 6000
+)
+
+# ── 3. Detect batch effects ──────────────────────────────────
+sw_detect_batch_effect(uncorrected, markers, out_dir = "diagnostics")
+
+# ── 4. Modular batch correction ──────────────────────────────
+# Step 4a: Normalize
+normalized <- sw_normalize(uncorrected, markers, norm_method = "scale")
+
+# Step 4b: Cluster
+labels <- sw_create_som(normalized, markers, xdim = 8, ydim = 8, rlen = 10)
+
+# Step 4c: Correct
+corrected <- sw_correct_data(
+  uncorrected, label = labels, markers = markers, covar = "condition"
+)
+
+# ── 5. Evaluate ──────────────────────────────────────────────
+eval_result <- sw_evaluate_correction(uncorrected, corrected, markers)
+message("MAD reduction: ", eval_result$emd_reduction_pct, "%")
+
+# Cluster-aware evaluation
+uncorrected$label <- corrected$label <- labels
+emd_eval <- sw_evaluate_emd(uncorrected, corrected, markers)
+message("EMD reduction: ", emd_eval$reduction, "%")
+
+# ── 6. Visualize ─────────────────────────────────────────────
+sw_plot_batch_densities(uncorrected, corrected, markers,
+                        filename = "densities.pdf")
+
+set.seed(42)
+idx <- sample(nrow(uncorrected), 20000)
+p1 <- sw_plot_batch_dimred(uncorrected[idx, ], markers,
+                           type = "umap", name = "Uncorrected")
+p2 <- sw_plot_batch_dimred(corrected[idx, ], markers,
+                           type = "umap", name = "Corrected")
+
+# ── 7. Continue to clustering ────────────────────────────────
+fsom <- sw_cluster(
+  corrected = corrected,
+  lineage_markers = markers,
+  n_metaclusters = 20
+)
+sw_plot_clusters(fsom, plot_file = "FlowSOM_clusters.pdf")
+```
+
+## Tips and best practices
+
+1. **Cofactor**: Use 6000 for spectral flow cytometry (not 5 as used in
+   CyTOF). The higher cofactor matches the wider dynamic range of
+   Aurora/spectral instruments (~4×10⁶).
+
+2. **Normalization**: Start with `"scale"`. Switch to `"rank"` if you are
+   combining data from very different sources (e.g., spectral flow + CyTOF).
+
+3. **SOM grid size**: An 8×8 grid (64 clusters) is a good starting point.
+   If correction seems too aggressive, increase the grid; if batch effects
+   persist, decrease it.
+
+4. **Biological covariates**: Always set `covar = "condition"` (or your
+   equivalent column) to prevent ComBat from removing real biological
+   differences.
+
+5. **Evaluation**: Use both EMD and MAD metrics. A good correction shows
+   EMD reduction >50% while maintaining biological separation in
+   density plots.
+
+6. **Downstream**: After batch correction, proceed to clustering with
+   `sw_cluster()`. The corrected tibble can be passed directly.
+
+## Session info
+
+```{r}
+#| label: session-info
+#| eval: true
+sessionInfo()
+```

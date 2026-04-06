@@ -17,6 +17,8 @@ website:
         menu:
           - text: "Spectral Unmixing"
             href: vignettes/spectral-unmixing.qmd
+          - text: "Batch Correction"
+            href: vignettes/batch-correction.qmd
       - text: "API Reference"
         menu:
           - text: "Overview"
