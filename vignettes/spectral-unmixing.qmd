@@ -1,5 +1,9 @@
 ---
 title: "Spectral Unmixing with SpectraWeaveR and AutoSpectral"
+vignette: >
+  %\VignetteIndexEntry{Spectral Unmixing with SpectraWeaveR and AutoSpectral}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r}

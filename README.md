@@ -1,5 +1,10 @@
 # SpectraWeaveR
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/mdmanurung/SpectraWeaveR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mdmanurung/SpectraWeaveR/actions/workflows/R-CMD-check.yaml)
+[![R-universe status](https://mdmanurung.r-universe.dev/badges/SpectraWeaveR)](https://mdmanurung.r-universe.dev/SpectraWeaveR)
+<!-- badges: end -->
+
 End-to-end R pipeline for 40-color spectral flow cytometry analysis.
 
 ## Overview
@@ -32,6 +37,17 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 | Composable pipeline | `sw_step()`, `sw_pipeline()`, `sw_pipeline_run()` | S7-based step/pipeline framework |
 
 ## Installation
+
+### From R-universe (recommended)
+
+```r
+install.packages("SpectraWeaveR",
+  repos = c("https://mdmanurung.r-universe.dev",
+            "https://bioc.r-universe.dev",
+            "https://cloud.r-project.org"))
+```
+
+### From GitHub
 
 ```r
 # Install Bioconductor dependencies

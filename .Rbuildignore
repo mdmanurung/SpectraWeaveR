@@ -11,3 +11,6 @@
 ^installation\.qmd$
 ^reference$
 ^\.quarto$
+^codecov\.yml$
+^\.lintr$
+^README\.Rmd$
