@@ -1,0 +1,408 @@
+---
+title: "Batch Correction"
+---
+
+Batch correction with cyCombine, including all-in-one and modular workflows,
+plus diagnostic evaluation and visualisation.
+
+## All-in-one workflow
+
+### `sw_prepare_for_correction` {#sw_prepare_for_correction}
+
+Prepare data for batch correction.
+
+#### Usage
+
+```r
+sw_prepare_for_correction(ff_list, sample_meta, markers, cofactor = 6000)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff_list` | Named list of `flowFrame` objects. |
+| `sample_meta` | Data frame with columns: `file`, `sample`, `batch`, `condition`. |
+| `markers` | Character vector of marker names. |
+| `cofactor` | Arcsinh cofactor (default: 6000 for spectral flow). |
+
+#### Details
+
+Converts a list of `flowFrame` objects into a single tibble with
+arcsinh-transformed marker values and required metadata columns for cyCombine.
+
+#### Value
+
+A `tibble` with one row per cell, arcsinh-transformed marker columns, and
+metadata columns (`sample`, `batch`, `condition`).
+
+---
+
+### `sw_batch_correct` {#sw_batch_correct}
+
+All-in-one batch correction.
+
+#### Usage
+
+```r
+sw_batch_correct(uncorrected, markers, covar = NULL, label = NULL,
+                 xdim = 8, ydim = 8, rlen = 10, norm_method = "scale",
+                 seed = 42, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `uncorrected` | A `data.frame`/`tibble` with a `batch` column and marker columns. |
+| `markers` | Character vector of marker column names to correct. |
+| `covar` | Optional covariate column name(s) for ComBat. |
+| `label` | Optional pre-computed cluster labels. |
+| `xdim` | SOM grid x-dimension (default: 8). |
+| `ydim` | SOM grid y-dimension (default: 8). |
+| `rlen` | SOM training length (default: 10). |
+| `norm_method` | Normalisation method (default: `"scale"`). |
+| `seed` | Random seed (default: 42). |
+| `...` | Additional arguments passed to `cyCombine::batch_correct()`. |
+
+#### Details
+
+All-in-one wrapper for cyCombine that normalises, clusters with a
+Self-Organising Map, and applies ComBat-based batch correction.
+
+#### Value
+
+A `tibble` with batch-corrected marker values.
+
+---
+
+### `sw_evaluate_correction` {#sw_evaluate_correction}
+
+Quick evaluation of batch correction quality.
+
+#### Usage
+
+```r
+sw_evaluate_correction(uncorrected, corrected, markers)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `uncorrected` | Original tibble (before correction). |
+| `corrected` | Corrected tibble (after correction). |
+| `markers` | Character vector of marker names. |
+
+#### Details
+
+Computes per-marker MAD of batch medians before and after correction. For
+richer diagnostics, see `sw_evaluate_emd()` and `sw_evaluate_mad()`.
+
+#### Value
+
+A named list: `emd`, `mad`, `improved` (logical), `emd_reduction_pct`.
+
+---
+
+## Modular workflow
+
+The modular workflow provides finer control: normalise → cluster → correct.
+
+### `sw_normalize` {#sw_normalize}
+
+Normalise data for batch correction.
+
+#### Usage
+
+```r
+sw_normalize(df, markers, norm_method = "scale", ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble` with marker columns and a `batch` column. |
+| `markers` | Character vector of marker column names. |
+| `norm_method` | Normalisation method (default: `"scale"`). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Applies per-batch normalisation to marker columns, preparing data for SOM
+clustering. First step of the modular workflow.
+
+#### Value
+
+A `tibble` with normalised marker values.
+
+---
+
+### `sw_create_som` {#sw_create_som}
+
+Create a Self-Organising Map for batch correction.
+
+#### Usage
+
+```r
+sw_create_som(df, markers, xdim = 8, ydim = 8, rlen = 10, seed = 42, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble`. |
+| `markers` | Character vector of marker column names. |
+| `xdim` | SOM grid x-dimension (default: 8). |
+| `ydim` | SOM grid y-dimension (default: 8). |
+| `rlen` | SOM training length (default: 10). |
+| `seed` | Random seed (default: 42). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Clusters cells using a Self-Organising Map. The resulting labels are passed
+to `sw_correct_data()` so that ComBat is applied within each cluster. Second
+step of the modular workflow.
+
+#### Value
+
+An integer vector of cluster labels, one per row in `df`.
+
+---
+
+### `sw_correct_data` {#sw_correct_data}
+
+Apply ComBat batch correction with pre-computed labels.
+
+#### Usage
+
+```r
+sw_correct_data(df, label, markers, covar = NULL, parametric = TRUE, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble` with a `batch` column and marker columns. |
+| `label` | Integer vector of cluster labels (from `sw_create_som()`). |
+| `markers` | Character vector of marker column names. |
+| `covar` | Optional covariate column name(s). |
+| `parametric` | Logical; use parametric ComBat (default: `TRUE`). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Runs ComBat batch correction within each cluster defined by the supplied
+labels. Final step of the modular workflow.
+
+#### Value
+
+A `tibble` with batch-corrected marker values.
+
+---
+
+## Batch effect detection and evaluation
+
+### `sw_detect_batch_effect` {#sw_detect_batch_effect}
+
+Detect batch effects.
+
+#### Usage
+
+```r
+sw_detect_batch_effect(df, markers, out_dir = NULL, downsample = NULL,
+                       seed = 42, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble` with a `batch` column. |
+| `markers` | Character vector of marker column names. |
+| `out_dir` | Optional output directory for plots. |
+| `downsample` | Optional number of cells to downsample to. |
+| `seed` | Random seed (default: 42). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Produces diagnostic density plots, per-marker EMD scores, and an MDS plot of
+median marker expression across batches.
+
+#### Value
+
+A list of `ggplot` objects (when `out_dir = NULL`), or `NULL` invisibly after
+saving to `out_dir`.
+
+---
+
+### `sw_compute_emd` {#sw_compute_emd}
+
+Compute Earth Mover's Distance.
+
+#### Usage
+
+```r
+sw_compute_emd(df, markers, cell_col = "label", batch_col = "batch",
+               binSize = 0.1, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble` with `label` and `batch` columns. |
+| `markers` | Character vector of marker column names. |
+| `cell_col` | Cluster label column (default: `"label"`). |
+| `batch_col` | Batch column (default: `"batch"`). |
+| `binSize` | Bin size for EMD computation (default: 0.1). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Computes EMD between batch distributions for each marker within each SOM
+cluster.
+
+#### Value
+
+A named list of EMD matrices (per cluster, per marker).
+
+---
+
+### `sw_evaluate_emd` {#sw_evaluate_emd}
+
+Evaluate batch correction with EMD.
+
+#### Usage
+
+```r
+sw_evaluate_emd(uncorrected, corrected, markers, cell_col = "label",
+                batch_col = "batch", binSize = 0.1, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `uncorrected` | Original data with `label` and `batch` columns. |
+| `corrected` | Corrected data with matching `label` and `batch` columns. |
+| `markers` | Character vector of marker column names. |
+| `cell_col` | Cluster label column (default: `"label"`). |
+| `batch_col` | Batch column (default: `"batch"`). |
+| `binSize` | Bin size for EMD (default: 0.1). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Compares Earth Mover's Distance distributions before and after batch
+correction.
+
+#### Value
+
+A named list: `violin`, `scatter`, `reduction`, `emd`.
+
+---
+
+### `sw_evaluate_mad` {#sw_evaluate_mad}
+
+Evaluate batch correction with MAD.
+
+#### Usage
+
+```r
+sw_evaluate_mad(uncorrected, corrected, markers, cell_col = "label",
+                batch_col = "batch", ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `uncorrected` | Original data with `label` and `batch` columns. |
+| `corrected` | Corrected data with matching `label` and `batch` columns. |
+| `markers` | Character vector of marker column names. |
+| `cell_col` | Cluster label column (default: `"label"`). |
+| `batch_col` | Batch column (default: `"batch"`). |
+| `...` | Additional arguments. |
+
+#### Details
+
+Computes Median Absolute Deviation of batch medians within SOM clusters,
+before and after correction.
+
+#### Value
+
+A named list: `score`, `mad`.
+
+---
+
+## Visualisation
+
+### `sw_plot_batch_densities` {#sw_plot_batch_densities}
+
+Plot marker density distributions by batch.
+
+#### Usage
+
+```r
+sw_plot_batch_densities(uncorrected, corrected, markers, filename = NULL,
+                        ncol = 6, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `uncorrected` | Original data. |
+| `corrected` | Corrected data. |
+| `markers` | Character vector of marker column names. |
+| `filename` | Optional output file path. |
+| `ncol` | Number of columns in the plot grid (default: 6). |
+| `...` | Additional arguments passed to `cyCombine::plot_density()`. |
+
+#### Details
+
+Creates density ridgeline plots comparing marker distributions across
+batches, before and after correction.
+
+#### Value
+
+A `ggplot` object (or list of objects), invisibly when `filename` is given.
+
+---
+
+### `sw_plot_batch_dimred` {#sw_plot_batch_dimred}
+
+Plot dimensionality reduction coloured by batch.
+
+#### Usage
+
+```r
+sw_plot_batch_dimred(df, markers, type = "umap", name = "Batch",
+                     seed = 42, ...)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame`/`tibble` with marker and `batch` columns. |
+| `markers` | Character vector of marker column names. |
+| `type` | Dimensionality reduction type: `"umap"` or `"pca"`. |
+| `name` | Colour legend title (default: `"Batch"`). |
+| `seed` | Random seed (default: 42). |
+| `...` | Additional arguments passed to `cyCombine::plot_dimred()`. |
+
+#### Details
+
+Creates a UMAP or PCA projection coloured by batch to visualise batch effects
+or correction success.
+
+#### Value
+
+A `ggplot` object.

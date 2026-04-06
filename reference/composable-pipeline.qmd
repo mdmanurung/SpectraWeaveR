@@ -1,0 +1,404 @@
+---
+title: "Composable Pipeline"
+---
+
+R7/S7-based composable pipeline framework for building custom analysis
+workflows.
+
+::: {.callout-note}
+The composable pipeline requires the [S7](https://rconsortium.github.io/S7/)
+package (listed in `Suggests`). Install it with `install.packages("S7")`.
+:::
+
+## Core classes
+
+### `sw_step` {#sw_step}
+
+Create a processing step.
+
+#### Usage
+
+```r
+sw_step(name, FUN, ARGS = list())
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Character string — step name. |
+| `FUN` | Function to execute. |
+| `ARGS` | Named list of additional arguments (default: empty list). |
+
+#### Details
+
+Constructs a `ProcessingStep` S7 object. When executed, `FUN` is called as:
+`do.call(FUN, c(list(previous_result), ARGS))`.
+
+#### Value
+
+A `ProcessingStep` S7 object.
+
+---
+
+### `execute_step` {#execute_step}
+
+Execute a single processing step.
+
+#### Usage
+
+```r
+execute_step(step, input)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `step` | A `ProcessingStep` object. |
+| `input` | Input data (passed as first argument to the step's function). |
+
+#### Value
+
+The result of calling `step@FUN(input, ...)`.
+
+---
+
+### `sw_pipeline` {#sw_pipeline}
+
+Create a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline(name, steps = NULL)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Character string — pipeline name. |
+| `steps` | Optional list of `ProcessingStep` objects. |
+
+#### Value
+
+A `Pipeline` S7 object.
+
+---
+
+## Pipeline operations
+
+### `sw_pipeline_add` {#sw_pipeline_add}
+
+Add a step to a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_add(pipeline, step, after = NULL)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline` | A `Pipeline` object. |
+| `step` | A `ProcessingStep` to add. |
+| `after` | Optional position after which to insert (default: append at end). |
+
+#### Value
+
+A new `Pipeline` object with the step added.
+
+---
+
+### `sw_pipeline_remove` {#sw_pipeline_remove}
+
+Remove a step from a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_remove(pipeline, name_or_index)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline` | A `Pipeline` object. |
+| `name_or_index` | Step name (character) or index (integer) to remove. |
+
+#### Value
+
+A new `Pipeline` object with the step removed.
+
+---
+
+### `sw_pipeline_replace` {#sw_pipeline_replace}
+
+Replace a step in a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_replace(pipeline, name_or_index, new_step)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline` | A `Pipeline` object. |
+| `name_or_index` | Step name or index to replace. |
+| `new_step` | The new `ProcessingStep` object. |
+
+#### Value
+
+A new `Pipeline` object with the step replaced.
+
+---
+
+### `sw_pipeline_step_names` {#sw_pipeline_step_names}
+
+Get step names from a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_step_names(pipeline)
+```
+
+#### Value
+
+Character vector of step names.
+
+---
+
+### `sw_pipeline_length` {#sw_pipeline_length}
+
+Get the number of steps in a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_length(pipeline)
+```
+
+#### Value
+
+Integer.
+
+---
+
+### `sw_pipeline_run` {#sw_pipeline_run}
+
+Execute a pipeline.
+
+#### Usage
+
+```r
+sw_pipeline_run(pipeline, input, trace = TRUE)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline` | A `Pipeline` object. |
+| `input` | Initial input data for the first step. |
+| `trace` | Logical; whether to print progress messages (default: `TRUE`). |
+
+#### Details
+
+Runs all steps in order, threading data from one step to the next. If a step
+fails, execution stops and the error is reported with the step name.
+
+#### Value
+
+A named list with: `result` (final output), `intermediates` (named list of
+per-step results), `steps_completed` (integer count).
+
+---
+
+### `sw_pipeline_concat` {#sw_pipeline_concat}
+
+Concatenate two pipelines.
+
+#### Usage
+
+```r
+sw_pipeline_concat(pipeline1, pipeline2, name = NULL)
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline1` | First `Pipeline` object. |
+| `pipeline2` | Second `Pipeline` object. |
+| `name` | Optional name for the new pipeline. |
+
+#### Value
+
+A new `Pipeline` object containing all steps from both pipelines.
+
+---
+
+### `sw_pipeline_show` {#sw_pipeline_show}
+
+Print a pipeline summary.
+
+#### Usage
+
+```r
+sw_pipeline_show(pipeline)
+```
+
+#### Details
+
+Displays a human-readable summary of the pipeline and its steps. Called for
+its side effect of printing.
+
+#### Value
+
+Invisible `NULL`.
+
+---
+
+### `sw_plot_pipeline` {#sw_plot_pipeline}
+
+Plot pipeline processing queue.
+
+#### Usage
+
+```r
+sw_plot_pipeline(pipeline, style = c("text", "data"))
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `pipeline` | A `Pipeline` object. |
+| `style` | Output style: `"text"` (flowchart printed to console) or `"data"` (returns a data.frame). |
+
+#### Details
+
+Renders a text-based flowchart of the pipeline steps, showing the sequential
+flow of data through each processing step.
+
+#### Value
+
+For `style = "text"`, invisible `NULL`. For `style = "data"`, a `data.frame`
+with columns `step_number`, `name`, `n_args`.
+
+---
+
+## Pre-built step constructors
+
+Convenience constructors that create `ProcessingStep` objects wrapping
+SpectraWeaveR functions.
+
+### `sw_step_read_fcs` {#sw_step_read_fcs}
+
+```r
+sw_step_read_fcs(...)
+```
+
+Creates a step wrapping `sw_read_fcs()`. Additional arguments are passed via
+`ARGS`.
+
+---
+
+### `sw_step_remove_margins` {#sw_step_remove_margins}
+
+```r
+sw_step_remove_margins(...)
+```
+
+Creates a step wrapping `sw_remove_margins()`.
+
+---
+
+### `sw_step_signal_qc` {#sw_step_signal_qc}
+
+```r
+sw_step_signal_qc(...)
+```
+
+Creates a step wrapping `sw_signal_qc()`.
+
+---
+
+### `sw_step_batch_correct` {#sw_step_batch_correct}
+
+```r
+sw_step_batch_correct(...)
+```
+
+Creates a step wrapping `sw_batch_correct()`.
+
+---
+
+### `sw_step_normalize` {#sw_step_normalize}
+
+```r
+sw_step_normalize(...)
+```
+
+Creates a step wrapping `sw_normalize()`.
+
+---
+
+### `sw_step_create_som` {#sw_step_create_som}
+
+```r
+sw_step_create_som(...)
+```
+
+Creates a step wrapping `sw_create_som()`.
+
+---
+
+### `sw_step_correct_data` {#sw_step_correct_data}
+
+```r
+sw_step_correct_data(...)
+```
+
+Creates a step wrapping `sw_correct_data()`.
+
+---
+
+### `sw_step_cluster` {#sw_step_cluster}
+
+```r
+sw_step_cluster(...)
+```
+
+Creates a step wrapping `sw_cluster()`.
+
+---
+
+## Example
+
+```{r}
+#| eval: false
+library(SpectraWeaveR)
+
+# Build a custom pipeline
+pipe <- sw_pipeline("my-qc-pipeline")
+pipe <- sw_pipeline_add(pipe, sw_step_remove_margins())
+pipe <- sw_pipeline_add(pipe, sw_step_signal_qc())
+
+# Inspect it
+sw_pipeline_show(pipe)
+sw_plot_pipeline(pipe)
+
+# Run it
+result <- sw_pipeline_run(pipe, input = my_flowframe)
+result$result           # final cleaned flowFrame
+result$intermediates    # per-step outputs
+```

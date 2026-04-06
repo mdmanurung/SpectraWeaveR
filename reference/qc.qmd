@@ -1,0 +1,96 @@
+---
+title: "Signal QC"
+---
+
+Signal quality control with PeacoQC.
+
+## `sw_signal_qc` {#sw_signal_qc}
+
+Signal quality control on a single flowFrame.
+
+### Usage
+
+```r
+sw_signal_qc(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
+             output_dir = NULL, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowFrame`. |
+| `channels` | Optional character vector of channels to check. If `NULL`, fluorescent channels are auto-detected. |
+| `IT_limit` | Isolation Tree anomaly score threshold (default: 0.55). |
+| `MAD` | MAD multiplier for outlier detection (default: 6). |
+| `output_dir` | Optional directory for QC plots and reports. |
+| `...` | Additional arguments passed to `PeacoQC::PeacoQC()`. |
+
+### Details
+
+Wrapper for `PeacoQC::PeacoQC()` with sensible defaults for spectral flow
+cytometry data. Identifies and removes events with aberrant signal behaviour
+using Isolation Trees and MAD-based methods.
+
+### Value
+
+A list with components: `FinalFF` (cleaned flowFrame), `GoodCells` (logical
+vector), `n_removed`, `pct_removed`.
+
+---
+
+## `sw_signal_qc_batch` {#sw_signal_qc_batch}
+
+Batch signal quality control.
+
+### Usage
+
+```r
+sw_signal_qc_batch(ff_list, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff_list` | A named list of `flowFrame` objects. |
+| `...` | Additional arguments passed to `sw_signal_qc()`. |
+
+### Details
+
+Applies `sw_signal_qc()` to each flowFrame in the list and returns cleaned
+frames plus summary statistics.
+
+### Value
+
+A list with components: `cleaned` (named list of cleaned flowFrames),
+`summary` (tibble with per-sample QC statistics).
+
+---
+
+## `sw_qc_summary` {#sw_qc_summary}
+
+QC summary report.
+
+### Usage
+
+```r
+sw_qc_summary(qc_results, threshold = 30)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `qc_results` | Output from `sw_signal_qc_batch()`. |
+| `threshold` | Percentage threshold for flagging high-removal samples (default: 30). |
+
+### Details
+
+Tabulates cells removed per sample and flags samples with removal rates
+exceeding the threshold.
+
+### Value
+
+A `tibble` with columns: `sample`, `n_before`, `n_after`, `n_removed`,
+`pct_removed`, and `flagged` (logical).

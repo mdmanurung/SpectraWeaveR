@@ -1,0 +1,57 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "SpectraWeaveR"
+  description: "End-to-End Pipeline for 40-Color Spectral Flow Cytometry Analysis"
+  repo-url: https://github.com/mdmanurung/SpectraWeaveR
+  repo-actions: [issue]
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "Installation"
+        href: installation.qmd
+      - text: "Vignettes"
+        menu:
+          - text: "Spectral Unmixing"
+            href: vignettes/spectral-unmixing.qmd
+      - text: "API Reference"
+        menu:
+          - text: "Overview"
+            href: reference/index.qmd
+          - text: "---"
+          - text: "Utilities"
+            href: reference/utils.qmd
+          - text: "Unmixing"
+            href: reference/unmix.qmd
+          - text: "Gating"
+            href: reference/gate.qmd
+          - text: "Signal QC"
+            href: reference/qc.qmd
+          - text: "Batch Correction"
+            href: reference/batch-correct.qmd
+          - text: "Clustering"
+            href: reference/cluster.qmd
+          - text: "Pipeline"
+            href: reference/pipeline.qmd
+          - text: "Composable Pipeline"
+            href: reference/composable-pipeline.qmd
+          - text: "Transforms"
+            href: reference/transforms.qmd
+          - text: "Gating Utilities"
+            href: reference/gating-utils.qmd
+    right:
+      - icon: github
+        href: https://github.com/mdmanurung/SpectraWeaveR
+  page-footer:
+    center: "SpectraWeaveR is licensed under the MIT License."
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap

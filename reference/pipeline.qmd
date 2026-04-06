@@ -1,0 +1,88 @@
+---
+title: "Pipeline"
+---
+
+End-to-end pipeline orchestrator that runs all analysis steps in validated
+order.
+
+## `run_pipeline` {#run_pipeline}
+
+Run the full SpectraWeaveR pipeline.
+
+### Usage
+
+```r
+run_pipeline(
+  fcs_dir,
+  sample_meta,
+  markers,
+  lineage_markers,
+  gating_template = NULL,
+  gate_node = "lymphocytes",
+  output_dir = "SpectraWeaveR_output",
+  cofactor = 6000,
+  n_metaclusters = 20,
+  seed = 42,
+  unmix_from_raw = FALSE,
+  control_dir = NULL,
+  unstained_fcs = NULL,
+  control_file = NULL,
+  cytometer = "aurora",
+  unmix_method = "AutoSpectral",
+  ...
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fcs_dir` | Directory containing (unmixed) FCS files. |
+| `sample_meta` | Data frame with columns: `file`, `sample`, `batch`, `condition`. |
+| `markers` | Character vector of marker names for batch correction. |
+| `lineage_markers` | Character vector of lineage markers for clustering. |
+| `gating_template` | Optional path to an openCyto gating template CSV. If `NULL`, gating is skipped. |
+| `gate_node` | Gate node to extract after gating (default: `"lymphocytes"`). |
+| `output_dir` | Output directory (default: `"SpectraWeaveR_output"`). |
+| `cofactor` | Arcsinh cofactor (default: 6000 for spectral flow). |
+| `n_metaclusters` | Number of FlowSOM metaclusters (default: 20). |
+| `seed` | Random seed (default: 42). |
+| `unmix_from_raw` | Logical; if `TRUE`, run spectral unmixing first. |
+| `control_dir` | Path to controls directory (required when `unmix_from_raw = TRUE`). |
+| `unstained_fcs` | Path to unstained FCS file (for AutoSpectral unmixing). |
+| `control_file` | Path to control CSV file. |
+| `cytometer` | Cytometer model string (default: `"aurora"`). |
+| `unmix_method` | Unmixing method (default: `"AutoSpectral"`). |
+| `...` | Additional arguments passed to individual pipeline steps. |
+
+### Details
+
+Executes all steps of the spectral flow cytometry analysis pipeline in
+validated order:
+
+1. Load unmixed FCS files (or unmix from raw if `unmix_from_raw = TRUE`)
+2. Remove margin events
+3. Apply automated gating (optional, if `gating_template` provided)
+4. Signal quality control (PeacoQC)
+5. Batch correction (cyCombine)
+6. Clustering (FlowSOM)
+
+The pipeline follows the validated workflow described in den Braanker et al.
+(2021) and Quintelier et al. (2021, *Nature Protocols*).
+
+### Value
+
+A named list with components:
+
+| Component | Description |
+|-----------|-------------|
+| `unmix_result` | Unmixing results (if `unmix_from_raw = TRUE`) |
+| `flowset` | Loaded `flowSet` |
+| `gating_set` | `GatingSet` (if gating was applied) |
+| `qc_results` | QC output from `sw_signal_qc_batch()` |
+| `uncorrected` | Uncorrected expression tibble |
+| `corrected` | Batch-corrected expression tibble |
+| `correction_eval` | Correction evaluation metrics |
+| `fsom` | Trained FlowSOM object |
+| `cluster_assignments` | Per-cell metacluster labels |
+| `cluster_mfis` | MFI per metacluster |

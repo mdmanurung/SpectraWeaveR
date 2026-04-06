@@ -1,0 +1,145 @@
+---
+title: "Clustering"
+---
+
+Clustering and visualisation with FlowSOM.
+
+## `sw_cluster` {#sw_cluster}
+
+Cluster cells using FlowSOM.
+
+### Usage
+
+```r
+sw_cluster(corrected, lineage_markers, xdim = 10, ydim = 10,
+           n_metaclusters = 20, seed = 42, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `corrected` | A `data.frame`/`tibble` or matrix of expression values. |
+| `lineage_markers` | Character vector of marker columns to use for clustering. |
+| `xdim` | SOM grid x-dimension (default: 10). |
+| `ydim` | SOM grid y-dimension (default: 10). |
+| `n_metaclusters` | Number of metaclusters (default: 20). |
+| `seed` | Random seed (default: 42). |
+| `...` | Additional arguments passed to `FlowSOM::FlowSOM()`. |
+
+### Details
+
+Converts input data to a `flowFrame`, runs FlowSOM self-organising map
+clustering, and applies consensus metaclustering.
+
+### Value
+
+A FlowSOM object containing the trained SOM and metacluster assignments.
+
+---
+
+## `sw_get_cluster_assignments` {#sw_get_cluster_assignments}
+
+Get metacluster assignments.
+
+### Usage
+
+```r
+sw_get_cluster_assignments(fsom_result)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fsom_result` | A FlowSOM result object from `sw_cluster()`. |
+
+### Details
+
+Extracts per-cell metacluster assignments from a FlowSOM result.
+
+### Value
+
+An integer vector of metacluster assignments, one per cell.
+
+---
+
+## `sw_cluster_mfis` {#sw_cluster_mfis}
+
+Compute median fluorescence intensities per metacluster.
+
+### Usage
+
+```r
+sw_cluster_mfis(fsom_result)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fsom_result` | A FlowSOM result object from `sw_cluster()`. |
+
+### Details
+
+Calculates the median expression of each marker within each metacluster.
+
+### Value
+
+A `tibble` with one row per metacluster and one column per marker, plus a
+`metacluster` column.
+
+---
+
+## `sw_plot_clusters` {#sw_plot_clusters}
+
+Plot FlowSOM clusters.
+
+### Usage
+
+```r
+sw_plot_clusters(fsom_result, plot_file = "FlowSOM_clusters.pdf")
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fsom_result` | A FlowSOM result object from `sw_cluster()`. |
+| `plot_file` | Output file path (default: `"FlowSOM_clusters.pdf"`). |
+
+### Details
+
+Generates FlowSOM summary and star plots and saves them to a file.
+
+### Value
+
+The file path (invisibly).
+
+---
+
+## `sw_map_new_data` {#sw_map_new_data}
+
+Map new data onto a trained FlowSOM.
+
+### Usage
+
+```r
+sw_map_new_data(fsom_result, new_ff)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fsom_result` | A trained FlowSOM result object. |
+| `new_ff` | A `flowFrame` with new data to map. |
+
+### Details
+
+Projects new samples onto an existing trained FlowSOM model using
+`FlowSOM::NewData()`.
+
+### Value
+
+A FlowSOM object with the new data mapped onto the existing SOM.

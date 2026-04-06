@@ -1,0 +1,312 @@
+---
+title: "Utilities"
+---
+
+Core format conversion, FCS I/O, and channel classification functions.
+
+## `sw_read_fcs` {#sw_read_fcs}
+
+Read FCS files with Aurora-safe defaults.
+
+### Usage
+
+```r
+sw_read_fcs(files, ...)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `files` | Character vector of FCS file paths. |
+| `...` | Additional arguments passed to `flowCore::read.FCS()` or `flowCore::read.flowSet()`. |
+
+### Details
+
+Wrapper around `flowCore::read.FCS()` or `flowCore::read.flowSet()` with
+`truncate_max_range = FALSE` enforced. This is required for Cytek Aurora data
+because fluorescence intensities (~4×10⁶) exceed flowCore's default range
+cutoffs.
+
+### Value
+
+A `flowFrame` (single file) or `flowSet` (multiple files).
+
+---
+
+## `sw_flowframe_to_tibble` {#sw_flowframe_to_tibble}
+
+Convert a flowFrame to a tibble.
+
+### Usage
+
+```r
+sw_flowframe_to_tibble(ff, sample = NULL, batch = NULL, condition = NULL)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowCore::flowFrame` object. |
+| `sample` | Optional character string — sample identifier appended as a column. |
+| `batch` | Optional character string — batch label appended as a column. |
+| `condition` | Optional character string — condition label appended as a column. |
+
+### Details
+
+Extracts the expression matrix from a `flowFrame` and returns it as a tibble
+with optional metadata columns for sample ID, batch, and condition.
+
+### Value
+
+A `tibble` with one row per cell and one column per channel, plus metadata
+columns if specified.
+
+---
+
+## `sw_tibble_to_flowframe` {#sw_tibble_to_flowframe}
+
+Convert a tibble to a flowFrame.
+
+### Usage
+
+```r
+sw_tibble_to_flowframe(df, markers = NULL)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `df` | A `data.frame` or `tibble`. |
+| `markers` | Optional character vector of column names to include as channels. If `NULL`, all numeric columns are used. |
+
+### Details
+
+Converts a tibble (or data.frame) into a `flowCore::flowFrame`. Only the
+specified marker columns are included in the expression matrix; metadata
+columns are dropped.
+
+### Value
+
+A `flowCore::flowFrame`.
+
+---
+
+## `sw_exprs_to_tibble` {#sw_exprs_to_tibble}
+
+Convert an expression matrix to a tibble.
+
+### Usage
+
+```r
+sw_exprs_to_tibble(mat, colnames = NULL, sample = NULL, batch = NULL,
+                   condition = NULL)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `mat` | A numeric matrix (cells in rows, channels in columns). |
+| `colnames` | Optional character vector of column names. |
+| `sample` | Optional character string — sample identifier. |
+| `batch` | Optional character string — batch label. |
+| `condition` | Optional character string — condition label. |
+
+### Details
+
+Converts a numeric matrix to a tibble with optional metadata columns. Useful
+for converting output from `flowCore::exprs()` or similar matrix-returning
+functions.
+
+### Value
+
+A `tibble`.
+
+---
+
+## `sw_get_fluor_channels` {#sw_get_fluor_channels}
+
+Get fluorescent channel names.
+
+### Usage
+
+```r
+sw_get_fluor_channels(ff_or_fs)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff_or_fs` | A `flowFrame` or `flowSet`. |
+
+### Details
+
+Returns the names of fluorescent/marker channels, excluding scatter (FSC/SSC)
+and Time channels.
+
+### Value
+
+Character vector of fluorescent channel names.
+
+---
+
+## `sw_set_marker_names` {#sw_set_marker_names}
+
+Set marker names on a flowFrame.
+
+### Usage
+
+```r
+sw_set_marker_names(ff, marker_map)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `ff` | A `flowCore::flowFrame`. |
+| `marker_map` | A named character vector mapping channel names to marker names. |
+
+### Details
+
+Renames channel descriptions (markers) on a `flowFrame` according to the
+supplied mapping.
+
+### Value
+
+The modified `flowFrame` with updated marker names.
+
+---
+
+## `sw_are_signal_cols` {#sw_are_signal_cols}
+
+Identify signal columns.
+
+### Usage
+
+```r
+sw_are_signal_cols(
+  x,
+  exclude_patterns = c("Time", "Original_ID", "File", "SampleID")
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `x` | A `flowFrame` or `flowSet`. |
+| `exclude_patterns` | Character vector of patterns to exclude. |
+
+### Details
+
+Returns a logical vector indicating which columns represent true signal
+(not metadata columns like Time, Original_ID, File, SampleID). Ported from
+CytoPipeline (UCLouvain-CBIO).
+
+### Value
+
+A named logical vector with length equal to `ncol(x)`.
+
+---
+
+## `sw_are_fluor_cols` {#sw_are_fluor_cols}
+
+Identify fluorochrome columns.
+
+### Usage
+
+```r
+sw_are_fluor_cols(
+  x,
+  exclude_patterns = c("FSC", "SSC", "Time", "Original_ID", "File", "SampleID")
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `x` | A `flowFrame` or `flowSet`. |
+| `exclude_patterns` | Character vector of patterns to exclude (includes scatter channels). |
+
+### Details
+
+Returns a logical vector indicating which columns represent fluorochrome
+channels (excludes scatter channels, time, and metadata). Ported from
+CytoPipeline (UCLouvain-CBIO).
+
+### Value
+
+A named logical vector with length equal to `ncol(x)`.
+
+---
+
+## `sw_aggregate_and_sample` {#sw_aggregate_and_sample}
+
+Aggregate and subsample multiple flow frames.
+
+### Usage
+
+```r
+sw_aggregate_and_sample(
+  fs,
+  n_total_events,
+  setup = c("forceNEvent", "forceBalance"),
+  seed = NULL,
+  channels = NULL,
+  keep_order = FALSE
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `fs` | A `flowSet`. |
+| `n_total_events` | Target total number of events. |
+| `setup` | Sampling strategy: `"forceNEvent"` (forced total count) or `"forceBalance"` (equal events per file). |
+| `seed` | Optional random seed for reproducibility. |
+| `channels` | Optional character vector of channels to include. |
+| `keep_order` | Logical; whether to preserve event order within files. |
+
+### Details
+
+Pools events from multiple `flowFrame` objects in a `flowSet` and subsamples
+to a target total. Ported from CytoPipeline (UCLouvain-CBIO).
+
+### Value
+
+A single `flowCore::flowFrame` with aggregated events.
+
+---
+
+## `sw_collect_events_retained` {#sw_collect_events_retained}
+
+Collect events retained at each pipeline step.
+
+### Usage
+
+```r
+sw_collect_events_retained(intermediates)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `intermediates` | A named list of intermediate results (each a `flowFrame`, `flowSet`, or list of `flowFrame`s). |
+
+### Details
+
+Returns a summary tibble showing how many events were retained at each step,
+providing a full audit trail of event filtering across the pipeline.
+
+### Value
+
+A `tibble` with columns: `step`, `n_events`, `pct_of_initial`,
+`pct_of_previous`.
