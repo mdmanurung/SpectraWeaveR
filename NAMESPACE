@@ -47,7 +47,7 @@ export(sw_cluster)
 export(sw_get_cluster_assignments)
 export(sw_cluster_mfis)
 export(sw_plot_clusters)
-export(sw_map_new_data)
+export(sw_predict_clusters)
 
 # Pipeline
 export(run_pipeline)

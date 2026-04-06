@@ -36,7 +36,7 @@ NULL
 #' @param output_dir Character path for output files (plots, reports).
 #'   Default: \code{"SpectraWeaveR_output"}.
 #' @param cofactor Numeric; arcsinh cofactor (default: 6000).
-#' @param n_metaclusters Integer; number of metaclusters for FlowSOM
+#' @param n_metaclusters Integer; number of metaclusters for clustering
 #'   (default: 20).
 #' @param seed Integer; random seed for reproducibility (default: 42).
 #' @param unmix_from_raw Logical; if \code{TRUE}, run the AutoSpectral
@@ -64,9 +64,9 @@ NULL
 #'     \item{\code{uncorrected}}{Pre-correction tibble}
 #'     \item{\code{corrected}}{Post-correction tibble}
 #'     \item{\code{correction_eval}}{Batch correction evaluation metrics}
-#'     \item{\code{fsom}}{FlowSOM result object}
-#'     \item{\code{cluster_assignments}}{Per-cell metacluster assignments}
-#'     \item{\code{cluster_mfis}}{MFI table per metacluster}
+#'     \item{\code{cluster_result}}{Clustering result object (sw_cluster_result)}
+#'     \item{\code{cluster_assignments}}{Per-cell cluster assignments}
+#'     \item{\code{cluster_mfis}}{MFI table per cluster}
 #'   }
 #'
 #' @export
@@ -230,23 +230,23 @@ run_pipeline <- function(fcs_dir,
   results$correction_eval <- eval_result
 
   # --- Step 6: Clustering ---
-  message("\n=== Step 6/6: Clustering (FlowSOM) ===")
+  message("\n=== Step 6/6: Clustering ===")
 
-  fsom <- sw_cluster(
+  cluster_result <- sw_cluster(
     corrected,
     lineage_markers = lineage_markers,
     n_metaclusters = n_metaclusters,
     seed = seed
   )
-  results$fsom <- fsom
+  results$cluster_result <- cluster_result
 
-  results$cluster_assignments <- sw_get_cluster_assignments(fsom)
-  results$cluster_mfis <- sw_cluster_mfis(fsom)
+  results$cluster_assignments <- sw_get_cluster_assignments(cluster_result)
+  results$cluster_mfis <- sw_cluster_mfis(cluster_result)
 
   # Save cluster plots
-  plot_file <- file.path(output_dir, "FlowSOM_clusters.pdf")
+  plot_file <- file.path(output_dir, "cluster_heatmap.pdf")
   tryCatch({
-    sw_plot_clusters(fsom, plot_file)
+    sw_plot_clusters(cluster_result, plot_file)
   }, error = function(e) {
     warning("Could not generate cluster plots: ", e$message, call. = FALSE)
   })

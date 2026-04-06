@@ -8,11 +8,12 @@ Description: Provides a complete, reproducible R pipeline for spectral flow
     cytometry data analysis from spectral unmixing through clustering. The
     pipeline integrates AutoSpectral (unmixing), openCyto (automated gating),
     PeacoQC (signal quality control), cyCombine (batch correction), and
-    FlowSOM (clustering). Format conversion utilities handle transitions
-    between flowFrame, GatingSet, tibble, and matrix objects required by each
-    tool. Designed for Cytek Aurora 40-color single panels processed across
-    multiple batches, following the validated workflow described in den
-    Braanker et al. (2021) and Quintelier et al. (2021, Nature Protocols).
+    kohonen SOM or FastPG (clustering). Format conversion utilities handle
+    transitions between flowFrame, GatingSet, tibble, and matrix objects
+    required by each tool. Designed for Cytek Aurora 40-color single panels
+    processed across multiple batches, following the validated workflow
+    described in den Braanker et al. (2021) and Quintelier et al. (2021,
+    Nature Protocols).
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -24,7 +25,7 @@ Imports:
     flowWorkspace (>= 4.6.0),
     openCyto (>= 2.6.0),
     PeacoQC (>= 1.4.0),
-    FlowSOM (>= 2.6.0),
+    kohonen (>= 3.0.0),
     cyCombine (>= 0.2.7),
     dplyr (>= 1.0.0),
     tibble (>= 3.1.0),
@@ -33,6 +34,7 @@ Imports:
 Suggests:
     AutoSpectral (>= 1.5.0),
     AutoSpectralRcpp (>= 1.0.0),
+    FastPG,
     S7 (>= 0.2.0),
     ggcyto (>= 1.22.0),
     ggplot2,
