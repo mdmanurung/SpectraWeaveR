@@ -35,6 +35,7 @@ Suggests:
     AutoSpectralRcpp (>= 1.0.0),
     S7 (>= 0.2.0),
     ggcyto (>= 1.22.0),
+    ggplot2,
     uwot (>= 0.1.14),
     pheatmap (>= 1.0.12),
     testthat (>= 3.0.0),

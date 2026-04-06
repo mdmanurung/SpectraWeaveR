@@ -1,6 +1,10 @@
 # tests/testthat/test-batch_correct.R
 # Unit tests for R/batch_correct.R — Batch correction (cyCombine)
 
+# ===========================================================================
+# sw_prepare_for_correction
+# ===========================================================================
+
 test_that("sw_prepare_for_correction creates correct tibble", {
   skip_if_not_installed("flowCore")
 
@@ -96,6 +100,10 @@ test_that("sw_prepare_for_correction validates cofactor", {
   )
 })
 
+# ===========================================================================
+# sw_batch_correct
+# ===========================================================================
+
 test_that("sw_batch_correct rejects data without batch column", {
   df <- tibble::tibble(CD3 = rnorm(10))
   expect_error(sw_batch_correct(df, markers = "CD3"),
@@ -112,6 +120,10 @@ test_that("sw_batch_correct rejects non-data.frame", {
   expect_error(sw_batch_correct("not_a_df", markers = "CD3"),
                "data.frame")
 })
+
+# ===========================================================================
+# sw_evaluate_correction
+# ===========================================================================
 
 test_that("sw_evaluate_correction computes MAD metrics", {
   uncorrected <- tibble::tibble(
@@ -162,4 +174,270 @@ test_that("sw_evaluate_correction rejects missing markers", {
   df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
   expect_error(sw_evaluate_correction(df, df, markers = "MISSING"),
                "not found")
+})
+
+# ===========================================================================
+# sw_normalize — modular workflow step 1
+# ===========================================================================
+
+test_that("sw_normalize rejects non-data.frame", {
+  expect_error(sw_normalize("bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_normalize rejects missing batch column", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_normalize(df, markers = "CD3"),
+               "batch")
+})
+
+test_that("sw_normalize rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_normalize(df, markers = character(0)),
+               "non-empty")
+})
+
+test_that("sw_normalize rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_normalize(df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_normalize validates norm_method", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_normalize(df, markers = "CD3", norm_method = "invalid"),
+               "arg")
+})
+
+# ===========================================================================
+# sw_create_som — modular workflow step 2
+# ===========================================================================
+
+test_that("sw_create_som rejects non-data.frame", {
+  expect_error(sw_create_som("bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_create_som rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_create_som(df, markers = character(0)),
+               "non-empty")
+})
+
+test_that("sw_create_som rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_create_som(df, markers = "MISSING"),
+               "not found")
+})
+
+# ===========================================================================
+# sw_correct_data — modular workflow step 3
+# ===========================================================================
+
+test_that("sw_correct_data rejects non-data.frame", {
+  expect_error(sw_correct_data("bad", label = 1L, markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_correct_data rejects missing batch column", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_correct_data(df, label = rep(1L, 10), markers = "CD3"),
+               "batch")
+})
+
+test_that("sw_correct_data rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_correct_data(df, label = rep(1L, 10), markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_correct_data rejects non-numeric label", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_correct_data(df, label = letters[1:10], markers = "CD3"),
+               "numeric")
+})
+
+test_that("sw_correct_data rejects label length mismatch", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_correct_data(df, label = c(1L, 2L), markers = "CD3"),
+               "must equal nrow")
+})
+
+# ===========================================================================
+# sw_detect_batch_effect
+# ===========================================================================
+
+test_that("sw_detect_batch_effect rejects non-data.frame", {
+  expect_error(sw_detect_batch_effect("bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_detect_batch_effect rejects missing batch column", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_detect_batch_effect(df, markers = "CD3"),
+               "batch")
+})
+
+test_that("sw_detect_batch_effect rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_detect_batch_effect(df, markers = "MISSING"),
+               "not found")
+})
+
+# ===========================================================================
+# sw_compute_emd
+# ===========================================================================
+
+test_that("sw_compute_emd rejects non-data.frame", {
+  expect_error(sw_compute_emd("bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_compute_emd rejects missing label column", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_compute_emd(df, markers = "CD3"),
+               "label")
+})
+
+test_that("sw_compute_emd rejects missing batch column", {
+  df <- tibble::tibble(CD3 = rnorm(10), label = 1L)
+  expect_error(sw_compute_emd(df, markers = "CD3"),
+               "batch")
+})
+
+test_that("sw_compute_emd rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_compute_emd(df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_compute_emd rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_compute_emd(df, markers = character(0)),
+               "non-empty")
+})
+
+# ===========================================================================
+# sw_evaluate_emd
+# ===========================================================================
+
+test_that("sw_evaluate_emd rejects non-data.frame", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_emd("bad", df, markers = "CD3"),
+               "data.frame")
+  expect_error(sw_evaluate_emd(df, "bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_evaluate_emd rejects missing columns", {
+  df_ok <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  df_no_batch <- tibble::tibble(CD3 = rnorm(10), label = 1L)
+  df_no_label <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+
+  expect_error(sw_evaluate_emd(df_no_batch, df_ok, markers = "CD3"),
+               "batch")
+  expect_error(sw_evaluate_emd(df_ok, df_no_label, markers = "CD3"),
+               "label")
+})
+
+test_that("sw_evaluate_emd rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_emd(df, df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_evaluate_emd rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_emd(df, df, markers = character(0)),
+               "non-empty")
+})
+
+# ===========================================================================
+# sw_evaluate_mad (cyCombine-backed)
+# ===========================================================================
+
+test_that("sw_evaluate_mad rejects non-data.frame", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_mad("bad", df, markers = "CD3"),
+               "data.frame")
+  expect_error(sw_evaluate_mad(df, "bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_evaluate_mad rejects missing columns", {
+  df_ok <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  df_no_batch <- tibble::tibble(CD3 = rnorm(10), label = 1L)
+  df_no_label <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+
+  expect_error(sw_evaluate_mad(df_no_batch, df_ok, markers = "CD3"),
+               "batch")
+  expect_error(sw_evaluate_mad(df_ok, df_no_label, markers = "CD3"),
+               "label")
+})
+
+test_that("sw_evaluate_mad rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_mad(df, df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_evaluate_mad rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1", label = 1L)
+  expect_error(sw_evaluate_mad(df, df, markers = character(0)),
+               "non-empty")
+})
+
+# ===========================================================================
+# sw_plot_batch_densities
+# ===========================================================================
+
+test_that("sw_plot_batch_densities rejects non-data.frame", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_plot_batch_densities("bad", df, markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_plot_batch_densities rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_plot_batch_densities(df, df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_plot_batch_densities rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_plot_batch_densities(df, df, markers = character(0)),
+               "non-empty")
+})
+
+# ===========================================================================
+# sw_plot_batch_dimred
+# ===========================================================================
+
+test_that("sw_plot_batch_dimred rejects non-data.frame", {
+  expect_error(sw_plot_batch_dimred("bad", markers = "CD3"),
+               "data.frame")
+})
+
+test_that("sw_plot_batch_dimred rejects missing markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_plot_batch_dimred(df, markers = "MISSING"),
+               "not found")
+})
+
+test_that("sw_plot_batch_dimred rejects missing batch column", {
+  df <- tibble::tibble(CD3 = rnorm(10))
+  expect_error(sw_plot_batch_dimred(df, markers = "CD3"),
+               "batch")
+})
+
+test_that("sw_plot_batch_dimred rejects empty markers", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_plot_batch_dimred(df, markers = character(0)),
+               "non-empty")
+})
+
+test_that("sw_plot_batch_dimred validates type argument", {
+  df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
+  expect_error(sw_plot_batch_dimred(df, markers = "CD3", type = "invalid"),
+               "arg")
 })

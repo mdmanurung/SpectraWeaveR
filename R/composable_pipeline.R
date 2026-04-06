@@ -767,6 +767,48 @@ sw_step_batch_correct <- function(...) {
   sw_step("batch_correct", sw_batch_correct, list(...))
 }
 
+#' Create a Step for Data Normalisation
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_normalize}}.
+#'
+#' @param ... Additional arguments passed to \code{sw_normalize}.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_step_normalize <- function(...) {
+  sw_step("normalize", sw_normalize, list(...))
+}
+
+#' Create a Step for SOM Clustering
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_create_som}}.
+#'
+#' @param ... Additional arguments passed to \code{sw_create_som}.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_step_create_som <- function(...) {
+  sw_step("create_som", sw_create_som, list(...))
+}
+
+#' Create a Step for ComBat Correction
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_correct_data}}.
+#'
+#' @param ... Additional arguments passed to \code{sw_correct_data}.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_step_correct_data <- function(...) {
+  sw_step("correct_data", sw_correct_data, list(...))
+}
+
 #' Create a Step for Clustering
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
