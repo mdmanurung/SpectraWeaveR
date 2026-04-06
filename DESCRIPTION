@@ -36,7 +36,10 @@ Suggests:
     ggcyto (>= 1.22.0),
     uwot (>= 0.1.14),
     pheatmap (>= 1.0.12),
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
 Config/testthat/edition: 3
+VignetteBuilder: knitr
 URL: https://github.com/mdmanurung/SpectraWeaveR
 BugReports: https://github.com/mdmanurung/SpectraWeaveR/issues
