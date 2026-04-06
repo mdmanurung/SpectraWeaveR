@@ -1,5 +1,9 @@
 ---
 title: "Batch Correction with SpectraWeaveR and cyCombine"
+vignette: >
+  %\VignetteIndexEntry{Batch Correction with SpectraWeaveR and cyCombine}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r}
