@@ -412,7 +412,7 @@ sw_create_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
 #'   \code{\link{sw_create_som}} or any external clustering).
 #' @param markers Character vector of marker column names to correct.
 #' @param covar Character scalar naming the biological covariate column to
-#'   preserve (e.g.\ \code{"condition"}), or \code{NULL}.
+#'   preserve (e.g. \code{"condition"}), or \code{NULL}.
 #' @param parametric Logical; use parametric ComBat (default: \code{TRUE}).
 #' @param ... Additional arguments passed to \code{cyCombine::correct_data()}.
 #'
@@ -498,7 +498,7 @@ sw_detect_batch_effect <- function(df, markers, out_dir = NULL,
 # Evaluation — EMD
 # ===========================================================================
 
-#' Compute Earth Mover\u2019s Distance
+#' Compute Earth Mover's Distance
 #'
 #' Computes Earth Mover's Distance (EMD) between batch distributions for each
 #' marker within each SOM cluster.  The data must contain a \code{label}
@@ -700,7 +700,7 @@ sw_evaluate_mad <- function(uncorrected, corrected, markers,
 #' @param uncorrected A \code{tibble} with pre-correction data.
 #' @param corrected A \code{tibble} with post-correction data.
 #' @param markers Character vector of marker column names to plot.
-#' @param filename Optional file path for saving the plot (e.g.\
+#' @param filename Optional file path for saving the plot (e.g.
 #'   \code{"density.pdf"}).  If \code{NULL} (default), the plot is returned
 #'   but not saved.
 #' @param ncol Integer; number of marker columns per page (default: 6).
