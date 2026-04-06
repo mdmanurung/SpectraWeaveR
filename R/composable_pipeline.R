@@ -780,3 +780,92 @@ sw_step_batch_correct <- function(...) {
 sw_step_cluster <- function(...) {
   sw_step("cluster", sw_cluster, list(...))
 }
+
+
+# ---------------------------------------------------------------------------
+# Pipeline visualization
+# ---------------------------------------------------------------------------
+
+#' Plot Pipeline Processing Queue
+#'
+#' Renders a text-based flowchart of the pipeline steps, showing the
+#' sequential flow of data through each processing step. Inspired by
+#' CytoPipeline's \code{plotCytoPipelineProcessingQueue()}.
+#'
+#' @param pipeline A \code{Pipeline} object.
+#' @param style Character; output style. \code{"text"} (default) prints a
+#'   text-based flowchart to the console. \code{"data"} returns a data.frame
+#'   of step information without printing.
+#'
+#' @return For \code{style = "text"}, invisible \code{NULL} (called for side
+#'   effects). For \code{style = "data"}, a \code{data.frame} with columns
+#'   \code{step_number}, \code{name}, and \code{n_args}.
+#'
+#' @export
+sw_plot_pipeline <- function(pipeline, style = c("text", "data")) {
+  .check_s7()
+  pip_cls <- .get_Pipeline_class()
+
+  if (!S7::S7_inherits(pipeline, pip_cls)) {
+    stop("'pipeline' must be a Pipeline object.", call. = FALSE)
+  }
+
+  style <- match.arg(style)
+
+  steps <- pipeline@steps
+  n_steps <- length(steps)
+
+  step_info <- data.frame(
+    step_number = seq_len(n_steps),
+    name = vapply(steps, function(s) s@name, character(1)),
+    n_args = vapply(steps, function(s) length(s@ARGS), integer(1)),
+    stringsAsFactors = FALSE
+  )
+
+  if (style == "data") {
+    return(step_info)
+  }
+
+  # Text-based flowchart
+  header <- sprintf(" Pipeline: %s (%d steps)", pipeline@name, n_steps)
+  width <- max(nchar(header) + 4, 40)
+
+  cat(strrep("=", width), "\n")
+  cat(header, "\n")
+  cat(strrep("=", width), "\n")
+
+  if (n_steps == 0) {
+    cat("  (empty pipeline)\n")
+    cat(strrep("=", width), "\n")
+    return(invisible(NULL))
+  }
+
+  for (i in seq_len(n_steps)) {
+    step <- steps[[i]]
+    args_str <- if (length(step@ARGS) > 0) {
+      arg_names <- names(step@ARGS)
+      if (!is.null(arg_names) && any(arg_names != "")) {
+        paste0("(", paste(arg_names[arg_names != ""], collapse = ", "), ")")
+      } else {
+        paste0("(", length(step@ARGS), " args)")
+      }
+    } else {
+      ""
+    }
+
+    box_content <- sprintf("[%d] %s %s", i, step@name, args_str)
+    box_width <- nchar(box_content) + 4
+
+    cat("  ", strrep("-", box_width), "\n", sep = "")
+    cat("  | ", box_content, " |\n", sep = "")
+    cat("  ", strrep("-", box_width), "\n", sep = "")
+
+    if (i < n_steps) {
+      cat("       |\n")
+      cat("       v\n")
+    }
+  }
+
+  cat(strrep("=", width), "\n")
+  invisible(NULL)
+}
