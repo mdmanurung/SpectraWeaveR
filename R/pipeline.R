@@ -170,10 +170,18 @@ run_pipeline <- function(fcs_dir,
   # --- Step 3: Gating (optional) ---
   if (!is.null(gating_template)) {
     message("\n=== Step 3/6: Automated gating ===")
-    fcs_files <- file.path(fcs_dir,
-                           list.files(fcs_dir, pattern = "\\.fcs$",
-                                      ignore.case = TRUE))
-    gs <- sw_gate(fcs_files, gating_template)
+
+    # Build a flowSet from margin-removed flowFrames so gating operates
+    # on cleaned data rather than re-reading raw FCS files from disk.
+    fs_clean <- flowCore::flowSet(ff_list)
+    gs <- flowWorkspace::GatingSet(fs_clean)
+
+    # Apply gating template
+    if (!file.exists(gating_template)) {
+      stop("Gating template file not found: ", gating_template, call. = FALSE)
+    }
+    gt <- openCyto::gatingTemplate(gating_template)
+    openCyto::gt_gating(gt, gs)
     results$gating_set <- gs
 
     # Extract gated populations

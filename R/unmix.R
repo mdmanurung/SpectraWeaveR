@@ -1134,9 +1134,12 @@ sw_remove_margins <- function(ff, channel_specs = NULL) {
   n_before <- nrow(ff)
 
   if (is.null(channel_specs)) {
-    # Use all channels by default
-    channels <- seq_len(ncol(ff))
-    ff_clean <- PeacoQC::RemoveMargins(ff, channels)
+    # Use signal channels only (exclude Time, Original_ID, etc.)
+    signal_idx <- which(sw_are_signal_cols(ff))
+    if (length(signal_idx) == 0) {
+      signal_idx <- seq_len(ncol(ff))
+    }
+    ff_clean <- PeacoQC::RemoveMargins(ff, signal_idx)
   } else {
     # channel_specs should list channel indices or names
     ff_clean <- PeacoQC::RemoveMargins(ff, names(channel_specs))

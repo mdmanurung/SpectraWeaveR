@@ -85,14 +85,17 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
 #' @param transform_channels Character vector of channel names to transform.
 #'   If \code{NULL}, no transformation is applied.
 #' @param transform_func Transformation function to apply (default:
-#'   \code{flowCore::arcsinhTransform} with cofactor 6000).
+#'   \code{flowCore::arcsinhTransform} with the specified cofactor).
+#' @param cofactor Numeric; cofactor for the default arcsinh transformation
+#'   (default: 6000, appropriate for spectral flow cytometry). Ignored if
+#'   \code{transform_func} is provided.
 #' @param ... Additional arguments.
 #'
 #' @return A \code{GatingSet} object with gates applied.
 #'
 #' @export
 sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
-                    transform_func = NULL, ...) {
+                    transform_func = NULL, cofactor = 6000, ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -125,8 +128,7 @@ sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
             " channels...")
 
     if (is.null(transform_func)) {
-      # Default: arcsinh with cofactor 6000 for spectral flow
-      cofactor <- 6000
+      # Default: arcsinh for spectral flow
       trans_list <- flowCore::transformList(
         transform_channels,
         flowCore::arcsinhTransform(a = 0, b = 1 / cofactor, c = 0)
