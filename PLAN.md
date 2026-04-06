@@ -176,15 +176,48 @@ Tests use synthetic in-memory data (no real FCS files required). External depend
 
 ## Phase 7: Remaining Work
 
-### Next Features (Phase 2)
-- [ ] Automated cell type annotation (`R/annotate.R`)
-- [ ] Data export/interoperability (`R/export.R`) — CSV, H5AD, FCS, Seurat, SCE
-- [ ] Differential abundance & expression analysis (`R/differential.R`)
+### Phase 2 Features — HIGH Priority
+- [ ] **Automated cell type annotation** (`R/annotate.R`)
+  - `sw_annotate_clusters()` — match cluster MFI profiles against reference marker-to-celltype matrix (cosine similarity or Euclidean)
+  - `sw_annotate_manual()` — accept user-supplied named vector of cluster → cell type mappings
+  - `sw_plot_annotation()` — visualize annotated clusters on UMAP/heatmap
+  - Built-in reference profiles for common PBMC populations (CD4 T, CD8 T, B, NK, monocyte, DC)
+  - Leverages: `sw_cluster_mfis()` (already implemented), base R distance calculations
+- [ ] **Differential abundance & expression analysis** (`R/differential.R`)
+  - `sw_differential_abundance()` — test cluster proportion differences between conditions (GLM or Wilcoxon)
+  - `sw_differential_expression()` — test per-cluster marker expression differences (limma or Wilcoxon on per-sample medians)
+  - `sw_plot_volcano()` / `sw_plot_boxplots()` — standard visualization
+  - Leverages: edgeR/diffcyt (new Suggests) or base R `glm()` for dependency-light approach
+
+### Phase 2 Features — MEDIUM Priority
+- [ ] **Data export/interoperability** (`R/export.R`)
+  - `sw_export_csv()`, `sw_export_fcs()`, `sw_export_h5ad()`
+  - `sw_to_seurat()`, `sw_to_sce()` — convert to Seurat / SingleCellExperiment objects
+  - Leverages: flowCore::write.FCS, anndata (R), SeuratObject, SingleCellExperiment
+- [ ] **QC report generation** (`R/report.R`)
+  - `sw_generate_report()` — parameterized Quarto/rmarkdown HTML report summarizing pipeline run
+  - Event counts per step, QC removal rates, batch effect metrics, cluster compositions
+  - Leverages: rmarkdown/quarto templates, plotly, DT
+- [ ] **Panel design helper** (`R/panel.R`)
+  - `sw_check_panel_compatibility()` — pairwise spectral overlap assessment
+  - `sw_suggest_cofactors()` — per-fluorochrome optimal cofactor suggestion
+  - `sw_fluorochrome_similarity()` — cosine similarity / spectral angle between reference spectra
+  - Requires: reference spectra database in `inst/extdata/`
+
+### Phase 2 Features — LOW Priority (Novel)
+- [ ] Fluorochrome autofluorescence fingerprinting (`sw_af_fingerprint()`, `sw_classify_af_populations()`)
+- [ ] Longitudinal batch monitoring (`sw_monitor_batch_drift()`, `sw_plot_batch_timeline()`, `sw_levy_jennings()`)
+
+### Documentation
+- [ ] Add reference docs for `dimred.R` and `unmix_diagnostics.R` (new .qmd pages in `reference/`)
+- [ ] Add vignette for composable pipeline framework
+- [ ] Add vignette for clustering interpretation (MFI heatmaps, annotation)
+- [ ] Convert vignette code blocks from `eval = FALSE` to `eval = TRUE` where possible
+- [ ] Add troubleshooting / FAQ section to README
 
 ### Infrastructure
 - [ ] `R CMD build && R CMD check --no-manual` passes with 0 errors, 0 warnings
 - [ ] All tests pass with real package installs
 - [ ] Generate `man/` pages via `devtools::document()`
 - [ ] Publish Quarto documentation site
-- [ ] Add reference docs for new modules (dimred, unmix_diagnostics)
 - [ ] CRAN / Bioconductor submission preparation (if desired)
