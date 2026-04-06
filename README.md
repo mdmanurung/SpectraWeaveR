@@ -123,6 +123,12 @@ sw_plot_clusters(result, "clusters.pdf")
 - **arcsinh cofactor = 6000** is used for spectral flow cytometry (not 5 as in CyTOF).
 - Format conversion utilities (`sw_flowframe_to_tibble()`, `sw_tibble_to_flowframe()`) bridge the incompatible data structures required by each tool.
 
+## R-universe
+
+SpectraWeaveR is available on [R-universe](https://mdmanurung.r-universe.dev/SpectraWeaveR).
+
+To register this package on R-universe, go to <https://r-universe.dev/add> and follow the prompts. This creates a `universe` registry repo with a `packages.json` pointing to this repository.
+
 ## License
 
 MIT
