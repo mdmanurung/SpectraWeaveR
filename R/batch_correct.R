@@ -226,8 +226,10 @@ sw_batch_correct <- function(uncorrected, markers, covar = NULL,
 #'
 #' @return A named list with components:
 #'   \describe{
-#'     \item{\code{emd}}{A \code{tibble} (currently empty; use
-#'       \code{\link{sw_evaluate_emd}} for proper EMD evaluation)}
+#'     \item{\code{emd}}{A \code{tibble} of per-marker, per-cluster EMD
+#'       scores (before and after correction).  Populated when both data
+#'       frames contain a \code{label} column and \pkg{cyCombine} is
+#'       available; otherwise an empty tibble.}
 #'     \item{\code{mad}}{A \code{tibble} with MAD scores per marker}
 #'     \item{\code{improved}}{Logical; TRUE if overall MAD decreased}
 #'     \item{\code{emd_reduction_pct}}{Percentage reduction in mean MAD}
@@ -302,8 +304,38 @@ sw_evaluate_correction <- function(uncorrected, corrected, markers) {
   message("  Mean MAD after:  ", round(avg_mad_after, 4))
   message("  Reduction: ", reduction_pct, "%")
 
+  # Compute EMD if cluster labels are available and cyCombine is installed
+  emd_result <- tibble::tibble()
+  if ("label" %in% names(uncorrected) && "label" %in% names(corrected) &&
+      requireNamespace("cyCombine", quietly = TRUE)) {
+    tryCatch({
+      emd_before <- cyCombine::compute_emd(
+        uncorrected, markers = markers,
+        cell_col = "label", batch_col = "batch"
+      )
+      emd_after <- cyCombine::compute_emd(
+        corrected, markers = markers,
+        cell_col = "label", batch_col = "batch"
+      )
+      join_cols <- setdiff(
+        intersect(names(emd_before), names(emd_after)), "emd"
+      )
+      emd_result <- dplyr::left_join(
+        emd_before %>% dplyr::rename(emd_before = "emd"),
+        emd_after %>% dplyr::rename(emd_after = "emd"),
+        by = join_cols
+      )
+      emd_median_before <- stats::median(emd_before$emd, na.rm = TRUE)
+      emd_median_after <- stats::median(emd_after$emd, na.rm = TRUE)
+      message("  EMD median before: ", round(emd_median_before, 4))
+      message("  EMD median after:  ", round(emd_median_after, 4))
+    }, error = function(e) {
+      message("  EMD computation skipped: ", conditionMessage(e))
+    })
+  }
+
   list(
-    emd = tibble::tibble(),
+    emd = emd_result,
     mad = mad_df,
     improved = improved,
     emd_reduction_pct = reduction_pct
