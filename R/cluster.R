@@ -177,7 +177,7 @@ sw_cluster <- function(corrected, lineage_markers,
 .cluster_fastpg <- function(mat, lineage_markers, k, seed, ...) {
   if (!requireNamespace("FastPG", quietly = TRUE)) {
     stop("Package 'FastPG' is required for FastPG clustering. ",
-         "Install it from GitHub: remotes::install_github('sararselitsky/FastPG').",
+         "Install it from GitHub: remotes::install_github('SamGG/FastPG').",
          call. = FALSE)
   }
 
