@@ -33,8 +33,8 @@
 - [x] `tests/testthat/test-qc.R` — 9 unit tests for signal QC
 - [x] `R/batch_correct.R` — 3 batch correction functions (sw_prepare_for_correction, sw_batch_correct, sw_evaluate_correction)
 - [x] `tests/testthat/test-batch_correct.R` — 12 unit tests for batch correction
-- [x] `R/cluster.R` — 5 clustering functions (sw_cluster, sw_get_cluster_assignments, sw_cluster_mfis, sw_plot_clusters, sw_map_new_data)
-- [x] `tests/testthat/test-cluster.R` — 12 unit tests for clustering (including FlowSOM integration test)
+- [x] `R/cluster.R` — 5 clustering functions (sw_cluster, sw_get_cluster_assignments, sw_cluster_mfis, sw_plot_clusters, sw_predict_clusters)
+- [x] `tests/testthat/test-cluster.R` — 12 unit tests for clustering (kohonen SOM / FastPG)
 - [x] `R/pipeline.R` — run_pipeline() end-to-end orchestrator
 - [x] `tests/testthat/test-pipeline.R` — 7 unit tests for pipeline validation
 - [x] `README.md` — updated with installation instructions, quick start, step-by-step usage examples

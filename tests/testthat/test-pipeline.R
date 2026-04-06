@@ -84,15 +84,15 @@ test_that("run_pipeline returns expected structure (smoke test)", {
   # This is a structural test only — it verifies the expected return slots
 
   # without actually running the pipeline (which requires all dependencies).
-  # The full integration test requires flowCore, PeacoQC, cyCombine, FlowSOM.
+  # The full integration test requires flowCore, PeacoQC, cyCombine, kohonen.
 
   expected_slots <- c("flowset", "gating_set", "qc_results", "uncorrected",
-                       "corrected", "correction_eval", "fsom",
+                       "corrected", "correction_eval", "cluster_result",
                        "cluster_assignments", "cluster_mfis")
 
   # Just verify the slot names are documented correctly
 
   expect_true(length(expected_slots) == 9)
-  expect_true("fsom" %in% expected_slots)
+  expect_true("cluster_result" %in% expected_slots)
   expect_true("corrected" %in% expected_slots)
 })

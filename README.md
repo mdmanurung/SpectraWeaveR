@@ -12,7 +12,7 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 | 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace |
 | 3. Signal QC | `sw_signal_qc()`, `sw_signal_qc_batch()` | PeacoQC |
 | 4. Batch correction | `sw_batch_correct()`, `sw_prepare_for_correction()` | cyCombine |
-| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | FlowSOM |
+| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | kohonen / FastPG |
 | End-to-end | `run_pipeline()` | all of the above |
 
 ## Installation
@@ -22,7 +22,10 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 BiocManager::install(c("flowCore", "flowWorkspace", "openCyto",
-                       "PeacoQC", "FlowSOM"))
+                       "PeacoQC"))
+
+# Install kohonen from CRAN
+install.packages("kohonen")
 
 # Install cyCombine from GitHub
 remotes::install_github("biosurf/cyCombine")
@@ -92,10 +95,10 @@ uncorrected <- sw_prepare_for_correction(
 corrected <- sw_batch_correct(uncorrected, markers, covar = "condition")
 
 # 5. Clustering
-fsom <- sw_cluster(corrected, lineage_markers, n_metaclusters = 20)
-assignments <- sw_get_cluster_assignments(fsom)
-mfis <- sw_cluster_mfis(fsom)
-sw_plot_clusters(fsom, "clusters.pdf")
+result <- sw_cluster(corrected, lineage_markers, n_metaclusters = 20)
+assignments <- sw_get_cluster_assignments(result)
+mfis <- sw_cluster_mfis(result)
+sw_plot_clusters(result, "clusters.pdf")
 ```
 
 ## Key Design Decisions

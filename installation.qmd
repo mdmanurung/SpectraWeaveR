@@ -20,9 +20,11 @@ BiocManager::install(c(
   "flowCore",       # FCS I/O, flowFrame/flowSet classes
   "flowWorkspace",  # GatingSet, cytoset
   "openCyto",       # CSV-driven hierarchical gating
-  "PeacoQC",        # Isolation Tree + MAD signal QC
-  "FlowSOM"         # SOM clustering + MST visualization
+  "PeacoQC"         # Isolation Tree + MAD signal QC
 ))
+
+# Install kohonen from CRAN
+install.packages("kohonen")  # Self-organizing map clustering
 ```
 
 ## 2. Install GitHub dependencies
@@ -82,6 +84,15 @@ install.packages("uwot")
 install.packages("pheatmap")
 ```
 
+### FastPG (graph-based clustering)
+
+An alternative clustering backend. Install if you want to use
+`sw_cluster(..., method = "fastpg")`:
+```{r}
+#| eval: false
+remotes::install_github("SamGG/FastPG")
+```
+
 ## Verify installation
 
 Check that the core package loads without errors:
@@ -96,7 +107,7 @@ You can also verify key dependencies:
 ```{r}
 #| eval: false
 sapply(c("flowCore", "flowWorkspace", "openCyto",
-         "PeacoQC", "FlowSOM", "cyCombine"),
+         "PeacoQC", "kohonen", "cyCombine"),
        packageVersion)
 ```
 
@@ -108,12 +119,13 @@ sapply(c("flowCore", "flowWorkspace", "openCyto",
 | flowWorkspace ≥ 4.6.0 | Bioconductor | Yes | GatingSet, cytoset |
 | openCyto ≥ 2.6.0 | Bioconductor | Yes | Automated gating |
 | PeacoQC ≥ 1.4.0 | Bioconductor | Yes | Signal quality control |
-| FlowSOM ≥ 2.6.0 | Bioconductor | Yes | Clustering |
+| kohonen ≥ 3.0.0 | CRAN | Yes | SOM clustering |
 | cyCombine ≥ 0.2.7 | GitHub | Yes | Batch correction |
 | dplyr ≥ 1.0.0 | CRAN | Yes | Data manipulation |
 | tibble ≥ 3.1.0 | CRAN | Yes | Tibble data frames |
 | AutoSpectral ≥ 1.5.0 | GitHub | Optional | Spectral unmixing |
 | AutoSpectralRcpp ≥ 1.0.0 | GitHub | Optional | C++ acceleration for unmixing |
+| FastPG | GitHub | Optional | Graph-based clustering |
 | S7 ≥ 0.2.0 | CRAN | Optional | Composable pipeline (R7 OOP) |
 | ggcyto ≥ 1.22.0 | Bioconductor | Optional | Gate visualisation |
 | ggplot2 | CRAN | Optional | Plotting |

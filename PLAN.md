@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a complete, installable R package (`SpectraWeaveR`) that provides an end-to-end pipeline for 40-color spectral flow cytometry analysis. The package wraps five established tools—AutoSpectral, openCyto, PeacoQC, cyCombine, and FlowSOM—into a coherent, format-safe workflow.
+Build a complete, installable R package (`SpectraWeaveR`) that provides an end-to-end pipeline for 40-color spectral flow cytometry analysis. The package wraps five established tools—AutoSpectral, openCyto, PeacoQC, cyCombine, and kohonen/FastPG—into a coherent, format-safe workflow.
 
 ---
 
@@ -48,12 +48,12 @@ These functions are the connective tissue of the pipeline. Every other module de
 - [ ] `sw_batch_correct(uncorrected, markers, covar, xdim, ydim, norm_method, seed, ...)` — wrapper for `cyCombine::batch_correct()`
 - [ ] `sw_evaluate_correction(uncorrected, corrected, markers)` — compute EMD and MAD metrics; return named list with interpretation flags
 
-### `R/cluster.R` — Step 5: Clustering (FlowSOM)
-- [ ] `sw_cluster(corrected, lineage_markers, xdim, ydim, n_metaclusters, seed, ...)` — convert tibble → flowFrame → `FlowSOM::FlowSOM()` wrapper
-- [ ] `sw_get_cluster_assignments(fsom_result)` — return per-cell metacluster vector
-- [ ] `sw_cluster_mfis(fsom_result)` — return median fluorescence intensity table per metacluster
-- [ ] `sw_plot_clusters(fsom_result, plot_file)` — save `FlowSOMmary` PDF and star plot
-- [ ] `sw_map_new_data(fsom_result, new_ff)` — project new samples onto trained FlowSOM via `NewData()`
+### `R/cluster.R` — Step 5: Clustering (kohonen / FastPG)
+- [ ] `sw_cluster(corrected, lineage_markers, method, xdim, ydim, n_metaclusters, seed, ...)` — cluster using kohonen SOM (default) or FastPG; returns `sw_cluster_result` S3 object
+- [ ] `sw_get_cluster_assignments(cluster_result)` — return per-cell cluster vector
+- [ ] `sw_cluster_mfis(cluster_result)` — return median fluorescence intensity table per cluster
+- [ ] `sw_plot_clusters(cluster_result, plot_file)` — save cluster heatmap (pheatmap or base heatmap)
+- [ ] `sw_predict_clusters(cluster_result, new_data)` — predict clusters for new data using trained model
 
 ### `R/pipeline.R` — End-to-end orchestrator
 - [ ] `run_pipeline(fcs_dir, sample_meta, markers, lineage_markers, gating_template, output_dir, ...)` — calls all steps in validated order with progress messages; returns a named list with all intermediate and final results
@@ -82,7 +82,7 @@ Tests use synthetic in-memory data (no real FCS files required).
 - [ ] `test-gate.R` — `sw_build_gating_template` creates valid CSV; `sw_extract_gated` returns flowFrame
 - [ ] `test-qc.R` — `sw_signal_qc` returns `FinalFF` and `GoodCells`; `sw_qc_summary` flags high-removal samples
 - [ ] `test-batch_correct.R` — `sw_prepare_for_correction` column names; arcsinh cofactor applied; EMD/MAD metrics returned
-- [ ] `test-cluster.R` — `sw_cluster` returns FlowSOM object; `sw_get_cluster_assignments` length matches input rows
+- [ ] `test-cluster.R` — `sw_cluster` returns sw_cluster_result object; `sw_get_cluster_assignments` length matches input rows
 - [ ] `test-pipeline.R` — `run_pipeline` returns named list with expected slots; smoke test end-to-end
 
 ---

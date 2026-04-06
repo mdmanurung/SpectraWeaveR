@@ -79,15 +79,15 @@ plus diagnostic evaluation and visualisation.
 
 ## Clustering
 
-Clustering and visualisation with FlowSOM.
+Clustering with kohonen SOM or FastPG.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_cluster()`](cluster.qmd#sw_cluster) | Cluster cells using FlowSOM |
-| [`sw_get_cluster_assignments()`](cluster.qmd#sw_get_cluster_assignments) | Get metacluster assignments |
-| [`sw_cluster_mfis()`](cluster.qmd#sw_cluster_mfis) | Compute MFIs per metacluster |
-| [`sw_plot_clusters()`](cluster.qmd#sw_plot_clusters) | Plot FlowSOM clusters |
-| [`sw_map_new_data()`](cluster.qmd#sw_map_new_data) | Map new data onto trained FlowSOM |
+| [`sw_cluster()`](cluster.qmd#sw_cluster) | Cluster cells using kohonen SOM or FastPG |
+| [`sw_get_cluster_assignments()`](cluster.qmd#sw_get_cluster_assignments) | Get cluster assignments |
+| [`sw_cluster_mfis()`](cluster.qmd#sw_cluster_mfis) | Compute MFIs per cluster |
+| [`sw_plot_clusters()`](cluster.qmd#sw_plot_clusters) | Plot cluster heatmap |
+| [`sw_predict_clusters()`](cluster.qmd#sw_predict_clusters) | Predict clusters for new data |
 
 ## Pipeline
 
