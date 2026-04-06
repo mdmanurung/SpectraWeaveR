@@ -106,10 +106,7 @@ sw_autospectral_setup <- function(control_dir,
                                   control_file = NULL,
                                   output_dir = "SpectraWeaveR_unmix",
                                   figures = TRUE) {
-  .check_autospectral()
-
-  # Validate control_dir
-
+  # Validate inputs before checking dependency
   if (!is.character(control_dir) || length(control_dir) != 1) {
     stop("'control_dir' must be a single directory path.", call. = FALSE)
   }
@@ -117,7 +114,6 @@ sw_autospectral_setup <- function(control_dir,
     stop("Control directory does not exist: ", control_dir, call. = FALSE)
   }
 
-  # Validate cytometer
   if (!is.character(cytometer) || length(cytometer) != 1) {
     stop("'cytometer' must be a single character string.", call. = FALSE)
   }
@@ -127,10 +123,24 @@ sw_autospectral_setup <- function(control_dir,
          paste(valid, collapse = ", "), call. = FALSE)
   }
 
-  # Validate output_dir
   if (!is.character(output_dir) || length(output_dir) != 1) {
     stop("'output_dir' must be a single directory path.", call. = FALSE)
   }
+
+  if (!is.logical(figures) || length(figures) != 1) {
+    stop("'figures' must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  if (!is.null(control_file)) {
+    if (!is.character(control_file) || length(control_file) != 1) {
+      stop("'control_file' must be a single file path.", call. = FALSE)
+    }
+    if (!file.exists(control_file)) {
+      stop("Control file does not exist: ", control_file, call. = FALSE)
+    }
+  }
+
+  .check_autospectral()
 
   # Initialize AutoSpectral parameters
   message("Initializing AutoSpectral parameters for cytometer: ", cytometer)
@@ -151,7 +161,7 @@ sw_autospectral_setup <- function(control_dir,
     on.exit(setwd(old_wd), add = TRUE)
     AutoSpectral::create.control.file(control_dir, asp)
     setwd(old_wd)
-    on.exit(NULL)
+    on.exit(add = TRUE)  # clear safely without removing all handlers
 
     # Find the generated file
     csv_files <- list.files(output_dir, pattern = "^fcs_control_file.*\\.csv$",
@@ -169,14 +179,7 @@ sw_autospectral_setup <- function(control_dir,
     message("  https://drcytometer.github.io/AutoSpectral/articles/",
             "02_Control_File_example.html")
   } else {
-    # Validate existing control file
-    if (!is.character(control_file) || length(control_file) != 1) {
-      stop("'control_file' must be a single file path.", call. = FALSE)
-    }
-    if (!file.exists(control_file)) {
-      stop("Control file does not exist: ", control_file, call. = FALSE)
-    }
-
+    # Validate and check existing control file
     message("Validating control file: ", control_file)
     AutoSpectral::check.control.file(control_dir, control_file, asp)
     message("Control file validation passed.")
@@ -244,9 +247,7 @@ sw_prepare_controls <- function(setup,
                                 af_remove = TRUE,
                                 parallel = FALSE,
                                 threads = NULL) {
-  .check_autospectral()
-
-  # Validate setup
+  # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
     stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
          call. = FALSE)
@@ -263,6 +264,12 @@ sw_prepare_controls <- function(setup,
   if (!is.logical(parallel) || length(parallel) != 1) {
     stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
   }
+  if (!is.null(threads) && (!is.numeric(threads) || length(threads) != 1 ||
+                            threads < 1)) {
+    stop("'threads' must be NULL or a positive integer.", call. = FALSE)
+  }
+
+  .check_autospectral()
 
   asp <- setup$asp
   control_dir <- setup$control_dir
@@ -371,15 +378,12 @@ sw_extract_af_spectra <- function(unstained_fcs,
                                   som_dim = 10,
                                   parallel = TRUE,
                                   threads = NULL) {
-  .check_autospectral()
-
-  # Validate setup
+  # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
     stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
          call. = FALSE)
   }
 
-  # Validate spectra
   if (!is.matrix(spectra)) {
     stop("'spectra' must be a matrix of fluorophore spectral signatures.",
          call. = FALSE)
@@ -391,6 +395,22 @@ sw_extract_af_spectra <- function(unstained_fcs,
   if (!is.numeric(som_dim) || length(som_dim) != 1 || som_dim < 2) {
     stop("'som_dim' must be a single integer >= 2.", call. = FALSE)
   }
+  if (!is.logical(parallel) || length(parallel) != 1) {
+    stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(threads) && (!is.numeric(threads) || length(threads) != 1 ||
+                            threads < 1)) {
+    stop("'threads' must be NULL or a positive integer.", call. = FALSE)
+  }
+
+  # Validate unstained_fcs type early (before AutoSpectral check)
+  if (!(is.character(unstained_fcs) && length(unstained_fcs) == 1) &&
+      !is.list(unstained_fcs)) {
+    stop("'unstained_fcs' must be a single file path or a named list of ",
+         "file paths.", call. = FALSE)
+  }
+
+  .check_autospectral()
 
   # Warn if AutoSpectralRcpp is not available
   if (!requireNamespace("AutoSpectralRcpp", quietly = TRUE)) {
@@ -517,9 +537,7 @@ sw_extract_spectral_variants <- function(setup,
                                          n_cells = 2000,
                                          parallel = FALSE,
                                          threads = NULL) {
-  .check_autospectral()
-
-  # Validate inputs
+  # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
     stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
          call. = FALSE)
@@ -541,6 +559,15 @@ sw_extract_spectral_variants <- function(setup,
   if (!is.numeric(n_cells) || length(n_cells) != 1 || n_cells < 1) {
     stop("'n_cells' must be a positive integer.", call. = FALSE)
   }
+  if (!is.logical(parallel) || length(parallel) != 1) {
+    stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(threads) && (!is.numeric(threads) || length(threads) != 1 ||
+                            threads < 1)) {
+    stop("'threads' must be NULL or a positive integer.", call. = FALSE)
+  }
+
+  .check_autospectral()
 
   asp <- setup$asp
   control_dir <- setup$control_dir
@@ -646,9 +673,7 @@ sw_unmix <- function(input,
                      parallel = TRUE,
                      threads = NULL,
                      chunk_size = 2e6) {
-  .check_autospectral()
-
-  # Validate inputs
+  # Validate inputs before checking dependency
   if (!is.character(input) || length(input) == 0) {
     stop("'input' must be a non-empty character vector (file path(s) ",
          "or directory).", call. = FALSE)
@@ -665,6 +690,21 @@ sw_unmix <- function(input,
     stop("'flow_control' must be the flow.control list from ",
          "sw_prepare_controls().", call. = FALSE)
   }
+  if (!is.logical(parallel) || length(parallel) != 1) {
+    stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(threads) && (!is.numeric(threads) || length(threads) != 1 ||
+                            threads < 1)) {
+    stop("'threads' must be NULL or a positive integer.", call. = FALSE)
+  }
+  if (!is.numeric(chunk_size) || length(chunk_size) != 1 || chunk_size < 1) {
+    stop("'chunk_size' must be a positive number.", call. = FALSE)
+  }
+  if (!is.null(file_suffix) &&
+      (!is.character(file_suffix) || length(file_suffix) != 1)) {
+    stop("'file_suffix' must be NULL or a single character string.",
+         call. = FALSE)
+  }
 
   method <- match.arg(method)
   speed <- match.arg(speed)
@@ -675,6 +715,8 @@ sw_unmix <- function(input,
          "Use sw_extract_af_spectra() to obtain it, or choose ",
          "method = 'OLS' or 'WLS'.", call. = FALSE)
   }
+
+  .check_autospectral()
 
   if (method == "AutoSpectral" && is.null(spectra_variants)) {
     message("Note: Providing 'spectra_variants' via ",
@@ -861,10 +903,29 @@ sw_unmix_pipeline <- function(control_dir,
   speed <- match.arg(speed)
   gating_system <- match.arg(gating_system)
 
-  # Validate sample_input
+  # Validate inputs
+  if (!is.character(control_dir) || length(control_dir) != 1) {
+    stop("'control_dir' must be a single directory path.", call. = FALSE)
+  }
   if (!is.character(sample_input) || length(sample_input) == 0) {
     stop("'sample_input' must be a non-empty character vector (file path(s) ",
          "or directory).", call. = FALSE)
+  }
+  if (!is.logical(refine) || length(refine) != 1) {
+    stop("'refine' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(parallel) || length(parallel) != 1) {
+    stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(threads) && (!is.numeric(threads) || length(threads) != 1 ||
+                            threads < 1)) {
+    stop("'threads' must be NULL or a positive integer.", call. = FALSE)
+  }
+  if (!is.numeric(som_dim) || length(som_dim) != 1 || som_dim < 2) {
+    stop("'som_dim' must be a single integer >= 2.", call. = FALSE)
+  }
+  if (!is.numeric(chunk_size) || length(chunk_size) != 1 || chunk_size < 1) {
+    stop("'chunk_size' must be a positive number.", call. = FALSE)
   }
 
   # Check that unstained is provided for AutoSpectral
