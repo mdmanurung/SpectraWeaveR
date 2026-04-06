@@ -20,7 +20,7 @@ SpectraWeaveR/
 │   ├── gate.R           # Step 2: Automated gating (openCyto)
 │   ├── qc.R             # Step 3: Signal stability QC (PeacoQC)
 │   ├── batch_correct.R  # Step 4: Batch correction (cyCombine)
-│   ├── cluster.R        # Step 5: Clustering and visualization (FlowSOM)
+│   ├── cluster.R        # Step 5: Clustering (kohonen SOM / FastPG)
 │   ├── utils.R          # Format conversion utilities
 │   └── pipeline.R       # Full end-to-end pipeline orchestrator
 ├── man/                 # Roxygen2-generated .Rd documentation
@@ -40,7 +40,7 @@ SpectraWeaveR/
 | 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace | flowSet → GatingSet |
 | 3. Signal QC | `sw_signal_qc()` | PeacoQC | flowFrame (gated) → flowFrame (cleaned) |
 | 4. Batch correction | `sw_batch_correct()` | cyCombine | flowSet → tibble (corrected) |
-| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | FlowSOM | tibble/matrix → FlowSOM object |
+| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | kohonen / FastPG | tibble/matrix → sw_cluster_result |
 | End-to-end | `run_pipeline()` | all of the above | FCS files → annotated clusters |
 
 ## Key Design Constraints
@@ -57,11 +57,12 @@ SpectraWeaveR/
 - `flowWorkspace` (≥ 4.6.0) — GatingSet, cytoset
 - `openCyto` (≥ 2.6.0) — CSV-driven hierarchical gating
 - `PeacoQC` (≥ 1.4.0) — Isolation Tree + MAD signal QC
-- `FlowSOM` (≥ 2.6.0) — SOM clustering + MST visualization
+- `kohonen` (≥ 3.0.0) — Self-organizing map clustering
 - `cyCombine` (≥ 0.2.7) — ComBat batch correction on SOM clusters
 - `dplyr`, `tibble` — tibble manipulation
 
 ### Optional (Suggests)
+- `FastPG` — Fast graph-based clustering
 - `ggcyto` — gate visualization
 - `uwot` — UMAP dimensionality reduction
 - `pheatmap` — cluster annotation heatmaps

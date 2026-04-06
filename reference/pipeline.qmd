@@ -45,7 +45,7 @@ run_pipeline(
 | `gate_node` | Gate node to extract after gating (default: `"lymphocytes"`). |
 | `output_dir` | Output directory (default: `"SpectraWeaveR_output"`). |
 | `cofactor` | Arcsinh cofactor (default: 6000 for spectral flow). |
-| `n_metaclusters` | Number of FlowSOM metaclusters (default: 20). |
+| `n_metaclusters` | Number of metaclusters (default: 20). |
 | `seed` | Random seed (default: 42). |
 | `unmix_from_raw` | Logical; if `TRUE`, run spectral unmixing first. |
 | `control_dir` | Path to controls directory (required when `unmix_from_raw = TRUE`). |
@@ -65,7 +65,7 @@ validated order:
 3. Apply automated gating (optional, if `gating_template` provided)
 4. Signal quality control (PeacoQC)
 5. Batch correction (cyCombine)
-6. Clustering (FlowSOM)
+6. Clustering (kohonen SOM / FastPG)
 
 The pipeline follows the validated workflow described in den Braanker et al.
 (2021) and Quintelier et al. (2021, *Nature Protocols*).
@@ -83,6 +83,6 @@ A named list with components:
 | `uncorrected` | Uncorrected expression tibble |
 | `corrected` | Batch-corrected expression tibble |
 | `correction_eval` | Correction evaluation metrics |
-| `fsom` | Trained FlowSOM object |
-| `cluster_assignments` | Per-cell metacluster labels |
-| `cluster_mfis` | MFI per metacluster |
+| `cluster_result` | Trained `sw_cluster_result` object |
+| `cluster_assignments` | Per-cell cluster labels |
+| `cluster_mfis` | MFI per cluster |
