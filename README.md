@@ -9,7 +9,9 @@ End-to-end R pipeline for 40-color spectral flow cytometry analysis.
 
 ## Overview
 
-SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a single reproducible pipeline for spectral flow cytometry data — from spectral unmixing through clustering and visualization.
+SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a single reproducible pipeline for spectral flow cytometry data — from spectral unmixing through clustering and visualization. It also provides CytoPipeline-ported preprocessing utilities and a composable S7-based pipeline framework.
+
+### Core Pipeline
 
 | Step | Function | Package |
 |------|----------|---------|
@@ -19,6 +21,20 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 | 4. Batch correction | `sw_batch_correct()`, `sw_prepare_for_correction()` | cyCombine |
 | 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | kohonen / FastPG |
 | End-to-end | `run_pipeline()` | all of the above |
+
+### Extended Features
+
+| Module | Functions | Description |
+|--------|-----------|-------------|
+| Batch diagnostics | `sw_detect_batch_effect()`, `sw_evaluate_emd()`, `sw_evaluate_mad()` | Batch effect detection and correction evaluation |
+| Batch visualization | `sw_plot_batch_densities()`, `sw_plot_batch_dimred()` | Density and dimensionality reduction plots |
+| Modular batch correction | `sw_normalize()` → `sw_create_som()` → `sw_correct_data()` | Fine-grained batch correction control |
+| Scale transforms | `sw_estimate_scale_transforms()`, `sw_apply_scale_transforms()` | Logicle / linear transforms (CytoPipeline) |
+| Gating utilities | `sw_singlets_gate()`, `sw_remove_doublets()`, `sw_remove_debris_gate()` | Standalone preprocessing gates (CytoPipeline) |
+| Channel classification | `sw_are_signal_cols()`, `sw_are_fluor_cols()` | Channel type detection |
+| Aggregation | `sw_aggregate_and_sample()` | Pool and subsample events |
+| Audit trail | `sw_collect_events_retained()` | Track events across pipeline steps |
+| Composable pipeline | `sw_step()`, `sw_pipeline()`, `sw_pipeline_run()` | S7-based step/pipeline framework |
 
 ## Installation
 
@@ -37,8 +53,7 @@ install.packages("SpectraWeaveR",
 # Install Bioconductor dependencies
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-BiocManager::install(c("flowCore", "flowWorkspace", "openCyto",
-                       "PeacoQC"))
+BiocManager::install(c("flowCore", "flowWorkspace", "openCyto", "PeacoQC"))
 
 # Install kohonen from CRAN
 install.packages("kohonen")
@@ -48,6 +63,30 @@ remotes::install_github("biosurf/cyCombine")
 
 # Install SpectraWeaveR
 remotes::install_github("mdmanurung/SpectraWeaveR")
+```
+
+Or use the included setup script to install all dependencies at once:
+
+```r
+source(system.file("scripts/install_dependencies.R", package = "SpectraWeaveR"))
+```
+
+### Optional Dependencies
+
+```r
+# AutoSpectral for spectral unmixing (required only for Step 1)
+remotes::install_github("DrCytometer/AutoSpectral")
+remotes::install_github("DrCytometer/AutoSpectralRcpp")  # faster
+
+# FastPG for graph-based clustering (alternative to kohonen SOM)
+remotes::install_github("SamGG/FastPG")
+
+# S7 for composable pipeline framework
+install.packages("S7")
+
+# Visualization extras
+install.packages(c("pheatmap", "uwot"))
+BiocManager::install("ggcyto")
 ```
 
 ## Quick Start
@@ -117,17 +156,63 @@ mfis <- sw_cluster_mfis(result)
 sw_plot_clusters(result, "clusters.pdf")
 ```
 
+### Composable Pipeline
+
+```r
+library(SpectraWeaveR)
+
+# Build a custom pipeline with S7 steps
+pip <- sw_pipeline("my_analysis", steps = list(
+  sw_step("qc", sw_signal_qc, list(IT_limit = 0.55, MAD = 6)),
+  sw_step("transform", function(qc) qc$FinalFF)
+))
+
+# Run it
+result <- sw_pipeline_run(pip, input = my_flowframe)
+
+# Visualize the pipeline
+sw_plot_pipeline(pip)
+```
+
+### Spectral Unmixing (from raw data)
+
+```r
+library(SpectraWeaveR)
+
+# One-call unmixing pipeline
+result <- sw_unmix_pipeline(
+  control_dir  = "path/to/controls/",
+  sample_input = "path/to/samples/",
+  unstained_fcs = "path/to/unstained.fcs",
+  cytometer    = "aurora",
+  method       = "AutoSpectral"
+)
+
+# Or step by step:
+setup    <- sw_autospectral_setup("controls/", cytometer = "aurora")
+controls <- sw_prepare_controls(setup)
+af       <- sw_extract_af_spectra("unstained.fcs", setup, controls$spectra)
+variants <- sw_extract_spectral_variants(setup, controls$spectra, af)
+unmixed  <- sw_unmix("samples/", controls$spectra, setup,
+                     controls$flow_control, af_spectra = af,
+                     spectra_variants = variants)
+```
+
 ## Key Design Decisions
 
 - **`truncate_max_range = FALSE`** is enforced when reading FCS files — Aurora fluorescence intensities (~4×10⁶) exceed flowCore's default range cutoffs.
 - **arcsinh cofactor = 6000** is used for spectral flow cytometry (not 5 as in CyTOF).
+- **RemoveMargins before transformation** — margin removal operates on raw signal intensities.
+- **kohonen SOM** (not FlowSOM) for clustering — simpler dependency chain with hierarchical metaclustering via ward.D2.
+- **AutoSpectral in Suggests** — unmixing is optional; users can start from pre-unmixed files.
 - Format conversion utilities (`sw_flowframe_to_tibble()`, `sw_tibble_to_flowframe()`) bridge the incompatible data structures required by each tool.
 
-## R-universe
+## Documentation
 
-SpectraWeaveR is available on [R-universe](https://mdmanurung.r-universe.dev/SpectraWeaveR).
-
-To register this package on R-universe, go to <https://r-universe.dev/add> and follow the prompts. This creates a `universe` registry repo with a `packages.json` pointing to this repository.
+Full documentation is available at the [Quarto website](https://mdmanurung.github.io/SpectraWeaveR/), including:
+- Installation guide
+- Vignettes for spectral unmixing and batch correction
+- Complete API reference for all 69 exported functions
 
 ## License
 
