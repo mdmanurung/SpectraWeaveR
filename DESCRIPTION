@@ -46,6 +46,11 @@ Suggests:
     knitr,
     rmarkdown,
     quarto
+Remotes:
+    biosurf/cyCombine,
+    DrCytometer/AutoSpectral,
+    DrCytometer/AutoSpectralRcpp,
+    SamGG/FastPG
 Config/testthat/edition: 3
 VignetteBuilder: quarto
 URL: https://github.com/mdmanurung/SpectraWeaveR
