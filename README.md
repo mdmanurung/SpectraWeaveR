@@ -35,6 +35,7 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 | Aggregation | `sw_aggregate_and_sample()` | Pool and subsample events |
 | Audit trail | `sw_collect_events_retained()` | Track events across pipeline steps |
 | Composable pipeline | `sw_step()`, `sw_pipeline()`, `sw_pipeline_run()` | S7-based step/pipeline framework |
+| LLM assistant | `sw_assistant()`, `sw_quick_pipeline()` | LLM-powered pipeline builder (ellmer) |
 
 ## Installation
 
@@ -74,6 +75,9 @@ source(system.file("scripts/install_dependencies.R", package = "SpectraWeaveR"))
 ### Optional Dependencies
 
 ```r
+# ellmer for LLM-powered pipeline builder assistant
+install.packages("ellmer")
+
 # AutoSpectral for spectral unmixing (required only for Step 1)
 remotes::install_github("DrCytometer/AutoSpectral")
 remotes::install_github("DrCytometer/AutoSpectralRcpp")  # faster
@@ -174,6 +178,41 @@ result <- sw_pipeline_run(pip, input = my_flowframe)
 sw_plot_pipeline(pip)
 ```
 
+### LLM-Powered Pipeline Builder
+
+SpectraWeaveR includes an optional LLM assistant (powered by
+[ellmer](https://ellmer.tidyverse.org/)) that guides you through pipeline
+configuration via natural language conversation:
+
+```r
+library(SpectraWeaveR)
+
+# Interactive session — the assistant asks questions and inspects your files
+sw_assistant()
+
+# Use a specific provider
+sw_assistant(provider = "anthropic")
+
+# Local model via Ollama (fully private, no data sent externally)
+sw_assistant(provider = "ollama", model = "llama3")
+
+# One-shot code generation from a description
+code <- sw_quick_pipeline(
+  "I have 30 Aurora 5L FCS files in /data/fcs/, metadata in /data/meta.csv
+   with columns filename, patient_id, batch, treatment. Markers: CD3, CD4,
+   CD8, CD19, CD56. Cluster on CD3, CD4, CD8."
+)
+
+# Generate code from a config list (no LLM needed)
+sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+```
+
+Install the optional dependency:
+
+```r
+install.packages("ellmer")
+```
+
 ### Spectral Unmixing (from raw data)
 
 ```r
@@ -211,8 +250,8 @@ unmixed  <- sw_unmix("samples/", controls$spectra, setup,
 
 Full documentation is available at the [Quarto website](https://mdmanurung.github.io/SpectraWeaveR/), including:
 - Installation guide
-- Vignettes for spectral unmixing and batch correction
-- Complete API reference for all 69 exported functions
+- Vignettes for spectral unmixing, batch correction, and LLM assistant
+- Complete API reference for all exported functions
 
 ## License
 

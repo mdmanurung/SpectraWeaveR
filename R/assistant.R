@@ -24,6 +24,12 @@ NULL
   }
 }
 
+#' Null-coalescing operator (backport for R < 4.4.0)
+#' @noRd
+.null_default <- function(x, default) {
+  if (is.null(x)) default else x
+}
+
 # ---------------------------------------------------------------------------
 # System prompt helpers
 # ---------------------------------------------------------------------------
@@ -130,8 +136,10 @@ NULL
     channels <- character(par_count)
     markers <- character(par_count)
     for (i in seq_len(par_count)) {
-      channels[i] <- kw[[paste0("$P", i, "N")]] %||% ""
-      markers[i] <- kw[[paste0("$P", i, "S")]] %||% ""
+      channels[i] <- kw[[paste0("$P", i, "N")]]
+      if (is.null(channels[i])) channels[i] <- ""
+      markers[i] <- kw[[paste0("$P", i, "S")]]
+      if (is.null(markers[i])) markers[i] <- ""
     }
 
     # Build formatted output
@@ -941,14 +949,14 @@ sw_generate_pipeline_code <- function(config,
   }
 
   # Apply defaults
-  config$cofactor <- config$cofactor %||% 6000
-  config$n_metaclusters <- config$n_metaclusters %||% 20L
-  config$seed <- config$seed %||% 42L
-  config$output_dir <- config$output_dir %||% "SpectraWeaveR_output"
-  config$batch_col <- config$batch_col %||% "batch"
-  config$sample_col <- config$sample_col %||% "sample"
-  config$file_col <- config$file_col %||% "file"
-  config$unmix_from_raw <- config$unmix_from_raw %||% FALSE
+  config$cofactor <- .null_default(config$cofactor, 6000)
+  config$n_metaclusters <- .null_default(config$n_metaclusters, 20L)
+  config$seed <- .null_default(config$seed, 42L)
+  config$output_dir <- .null_default(config$output_dir, "SpectraWeaveR_output")
+  config$batch_col <- .null_default(config$batch_col, "batch")
+  config$sample_col <- .null_default(config$sample_col, "sample")
+  config$file_col <- .null_default(config$file_col, "file")
+  config$unmix_from_raw <- .null_default(config$unmix_from_raw, FALSE)
 
   # Generate code
   code <- if (style == "run_pipeline") {
@@ -1067,9 +1075,9 @@ sw_generate_pipeline_code <- function(config,
   if (isTRUE(config$unmix_from_raw)) {
     pipeline_args <- c(pipeline_args,
       "  unmix_from_raw  = TRUE",
-      paste0('  control_dir     = "', config$control_dir %||% "", '"'),
-      paste0('  unstained_fcs   = "', config$unstained_fcs %||% "", '"'),
-      paste0('  cytometer       = "', config$cytometer %||% "aurora", '"')
+      paste0('  control_dir     = "', .null_default(config$control_dir, ""), '"'),
+      paste0('  unstained_fcs   = "', .null_default(config$unstained_fcs, ""), '"'),
+      paste0('  cytometer       = "', .null_default(config$cytometer, "aurora"), '"')
     )
   }
 
