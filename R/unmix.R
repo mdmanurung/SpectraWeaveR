@@ -155,13 +155,12 @@ sw_autospectral_setup <- function(control_dir,
   # Handle control file
   if (is.null(control_file)) {
     message("Creating draft control file from FCS files in: ", control_dir)
-    # Save current working directory and change to output_dir so the CSV
-    # is written there
+    # Temporarily change to output_dir so the CSV is written there;
+    # on.exit restores wd even if create.control.file() errors
     old_wd <- setwd(output_dir)
     on.exit(setwd(old_wd), add = TRUE)
     AutoSpectral::create.control.file(control_dir, asp)
     setwd(old_wd)
-    on.exit(add = TRUE)  # clear safely without removing all handlers
 
     # Find the generated file
     csv_files <- list.files(output_dir, pattern = "^fcs_control_file.*\\.csv$",

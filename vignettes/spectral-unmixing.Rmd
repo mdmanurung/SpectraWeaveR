@@ -21,8 +21,8 @@ SpectraWeaveR provides a streamlined interface to the
 [AutoSpectral](https://github.com/DrCytometer/AutoSpectral) package for
 spectral unmixing of high-parameter flow cytometry data. AutoSpectral's
 full workflow normally requires 10+ individual function calls with complex
-intermediate data structures. SpectraWeaveR wraps these into **five
-step-by-step functions** plus a **one-call orchestrator**, making spectral
+intermediate data structures. SpectraWeaveR wraps these into **six functions** — five step-by-step
+functions plus a one-call orchestrator — making spectral
 unmixing accessible while preserving full expert control.
 
 ### The six unmixing functions
