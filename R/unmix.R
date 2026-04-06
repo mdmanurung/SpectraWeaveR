@@ -830,6 +830,17 @@ sw_unmix <- function(input,
 #' in sequence. Steps 3--4 are skipped when \code{method} is \code{"OLS"}
 #' or \code{"WLS"} (no per-cell optimization needed).
 #'
+#' \strong{Multi-tissue experiments}: When \code{unstained_fcs} is a named
+#' list of tissue-specific unstained files, the pipeline extracts AF spectra
+#' for each tissue but uses only the first tissue's AF spectra for spectral
+#' variant extraction and for the final unmixing call. This is because
+#' spectral variants are derived from single-stain controls (which come from
+#' one tissue type), and the pipeline cannot automatically match sample
+#' files to tissue types. For tissue-specific unmixing with matched AF
+#' spectra, call \code{\link{sw_unmix}} separately for each tissue group,
+#' passing the corresponding AF spectra from the named list returned by
+#' \code{\link{sw_extract_af_spectra}}.
+#'
 #' @export
 sw_unmix_pipeline <- function(control_dir,
                               sample_input,
@@ -916,8 +927,9 @@ sw_unmix_pipeline <- function(control_dir,
     message("Step 4/5: Extract Spectral Variants")
     message(strrep("=", 60))
 
-    # For multi-tissue AF, use the first one for variant extraction
-    # (variants come from control cells, not sample cells)
+    # For multi-tissue AF, use the first tissue's AF for variant
+    # extraction. Variants come from single-stain controls which share
+    # the same tissue source, so the first entry is representative.
     af_for_variants <- if (is.list(af_spectra) && !is.matrix(af_spectra)) {
       af_spectra[[1]]
     } else {
@@ -947,9 +959,11 @@ sw_unmix_pipeline <- function(control_dir,
   message("Step 5/5: Unmix Samples")
   message(strrep("=", 60))
 
-  # For multi-tissue AF with AutoSpectral method, handle single AF for now
+  # For multi-tissue AF with AutoSpectral method, use first tissue's AF.
+  # For tissue-specific unmixing, call sw_unmix() separately per tissue.
   unmix_af <- if (is.list(af_spectra) && !is.matrix(af_spectra)) {
-    message("Note: Using first tissue AF spectra for unmixing. ",
+    message("Note: Multiple tissue AF spectra provided. Using '",
+            names(af_spectra)[1], "' for unmixing. ",
             "For tissue-specific AF, call sw_unmix() separately per tissue.")
     af_spectra[[1]]
   } else {

@@ -32,7 +32,11 @@ SpectraWeaveR/
 
 | Step | Function(s) | Underlying Package | Input → Output |
 |------|-------------|-------------------|----------------|
-| 1. Unmixing | `sw_read_fcs()`, `sw_unmix()` | AutoSpectral / flowCore | FCS files → flowSet |
+| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix()`, `sw_load_unmixed()` | AutoSpectral / flowCore | FCS files → unmixed FCS / flowSet |
+| 1a. Setup | `sw_autospectral_setup()` | AutoSpectral | control dir → sw_setup |
+| 1b. Controls | `sw_prepare_controls()` | AutoSpectral | sw_setup → spectra + flow.control |
+| 1c. AF Spectra | `sw_extract_af_spectra()` | AutoSpectral | unstained FCS → AF spectra matrix |
+| 1d. Variants | `sw_extract_spectral_variants()` | AutoSpectral | controls → spectral variants |
 | 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace | flowSet → GatingSet |
 | 3. Signal QC | `sw_signal_qc()` | PeacoQC | flowFrame (gated) → flowFrame (cleaned) |
 | 4. Batch correction | `sw_batch_correct()` | cyCombine | flowSet → tibble (corrected) |

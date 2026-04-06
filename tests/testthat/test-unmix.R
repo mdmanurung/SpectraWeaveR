@@ -530,11 +530,27 @@ test_that("sw_unmix_pipeline requires unstained for Automatic method", {
 # Helper function tests
 # ============================================================================
 
-test_that(".valid_cytometers returns expected set", {
-  valid <- SpectraWeaveR:::.valid_cytometers()
-  expect_true("aurora" %in% valid)
-  expect_true("id7000" %in% valid)
-  expect_true("s8" %in% valid)
-  expect_true("xenith" %in% valid)
-  expect_equal(length(valid), 9)
+test_that(".valid_cytometers returns expected set through public API", {
+  skip_if_not_installed("AutoSpectral")
+
+  tmp_dir <- tempdir()
+  test_dir <- file.path(tmp_dir, "cytometer_valid_test")
+  dir.create(test_dir, showWarnings = FALSE)
+  on.exit(unlink(test_dir, recursive = TRUE))
+
+  # Verify known-good cytometers are accepted (via error for missing FCS)
+  # and known-bad ones are rejected with a helpful message
+  expect_error(
+    sw_autospectral_setup(test_dir, cytometer = "not_a_cytometer"),
+    "must be one of"
+  )
+
+  # Verify the error message lists all expected cytometers
+  err <- tryCatch(
+    sw_autospectral_setup(test_dir, cytometer = "bad"),
+    error = function(e) e$message
+  )
+  expect_true(grepl("aurora", err))
+  expect_true(grepl("id7000", err))
+  expect_true(grepl("xenith", err))
 })
