@@ -98,9 +98,11 @@ NULL
 
   cls <- S7::new_class("ProcessingStep",
     properties = list(
-      name = S7::class_character,
-      FUN  = S7::class_function,
-      ARGS = S7::class_list
+      name        = S7::class_character,
+      FUN         = S7::class_function,
+      ARGS        = S7::class_list,
+      input_type  = S7::class_character,
+      output_type = S7::class_character
     ),
     validator = function(self) {
       errors <- character()
@@ -111,12 +113,50 @@ NULL
     }
   )
 
+  # Register an S7 print method on the class so top-level auto-print at the
+  # REPL shows the same flowchart that sw_pipeline_show() has always shown.
+  # Requires R/zzz.R to call `S7::methods_register()` at package load.
+  S7::method(print, cls) <- function(x, ...) {
+    cat(sprintf("<ProcessingStep> %s", x@name))
+    itypes <- .step_input_type(x)
+    otypes <- .step_output_type(x)
+    if (length(itypes) > 0 || length(otypes) > 0) {
+      cat(sprintf("  [%s -> %s]",
+                  if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
+                  if (length(otypes) > 0) paste(otypes, collapse = "|") else "*"))
+    }
+    if (length(x@ARGS) > 0) {
+      cat(sprintf("  (%d arg%s)", length(x@ARGS),
+                  if (length(x@ARGS) > 1) "s" else ""))
+    }
+    cat("\n")
+    invisible(x)
+  }
+
   ns$.ProcessingStep_class <- cls
   cls
 }
 
 # Cache slot
 .ProcessingStep_class <- NULL
+
+# ---------------------------------------------------------------------------
+# Safe accessors for optional type properties.
+#
+# Wrapped in tryCatch so that ProcessingStep objects serialised against an
+# OLDER schema (e.g. RDS files already in a user's `_targets/.sw_defs/` store
+# from a prior SpectraWeaveR version) degrade gracefully to "opt out" rather
+# than throwing "no property called input_type". Legacy pipelines therefore
+# keep working, and the next call to `sw_pipeline_run_targets()` rewrites
+# the RDS files with the new schema.
+# ---------------------------------------------------------------------------
+.step_input_type <- function(step) {
+  tryCatch(step@input_type,  error = function(e) character(0))
+}
+
+.step_output_type <- function(step) {
+  tryCatch(step@output_type, error = function(e) character(0))
+}
 
 #' Create a Processing Step
 #'
@@ -131,6 +171,14 @@ NULL
 #' @param ARGS A named list of additional arguments to pass to \code{FUN}.
 #'   The data from the previous step is always passed as the first argument;
 #'   \code{ARGS} provides the remaining arguments. Default: \code{list()}.
+#' @param input_type Optional character vector of class names that this
+#'   step's input is expected to match. Checked at run time via
+#'   \code{methods::is()}, so inherited, virtual, and S4 classes all work.
+#'   Pass \code{character(0)} (the default) to opt out of the check.
+#' @param output_type Optional character vector of class names declaring
+#'   what this step produces. Used for the static pre-run compatibility
+#'   walk in \code{\link{sw_pipeline_run}}. \code{character(0)} (default)
+#'   means "unknown / don't check".
 #'
 #' @return A \code{ProcessingStep} S7 object.
 #'
@@ -151,10 +199,16 @@ NULL
 #'
 #' # Use a function name (resolved via match.fun)
 #' step_log <- sw_step("log_transform", "log1p", list())
+#'
+#' # Declare port types for run-time validation
+#' step_typed <- sw_step("double", function(x) x * 2,
+#'                       input_type = "numeric", output_type = "numeric")
 #' }
 #'
 #' @export
-sw_step <- function(name, FUN, ARGS = list()) {
+sw_step <- function(name, FUN, ARGS = list(),
+                    input_type  = character(0),
+                    output_type = character(0)) {
   if (!is.character(name) || length(name) != 1 || nchar(name) == 0) {
     stop("'name' must be a single non-empty character string.", call. = FALSE)
   }
@@ -182,8 +236,16 @@ sw_step <- function(name, FUN, ARGS = list()) {
     stop("'ARGS' must be a list.", call. = FALSE)
   }
 
+  if (!is.character(input_type)) {
+    stop("'input_type' must be a character vector.", call. = FALSE)
+  }
+  if (!is.character(output_type)) {
+    stop("'output_type' must be a character vector.", call. = FALSE)
+  }
+
   cls <- .get_ProcessingStep_class()
-  cls(name = name, FUN = FUN, ARGS = ARGS)
+  cls(name = name, FUN = FUN, ARGS = ARGS,
+      input_type = input_type, output_type = output_type)
 }
 
 #' Execute a Processing Step
@@ -258,6 +320,13 @@ execute_step <- function(step, input) {
       if (length(errors) > 0) errors else NULL
     }
   )
+
+  # Register an S7 print method so typing `pip` at the REPL shows the
+  # flowchart automatically (same output as sw_pipeline_show()).
+  S7::method(print, cls) <- function(x, ...) {
+    sw_pipeline_show(x)
+    invisible(x)
+  }
 
   ns$.Pipeline_class <- cls
   cls
@@ -520,6 +589,20 @@ sw_pipeline_length <- function(pipeline) {
 #' @param input The initial input data (e.g., file paths, a flowFrame, etc.).
 #' @param trace Logical; if \code{TRUE}, prints step-by-step progress
 #'   messages. Default: \code{TRUE}.
+#' @param backend Execution backend. Either \code{"sequential"} (the default)
+#'   to run steps in-process as a simple for-loop, or \code{"targets"} to
+#'   dispatch each step as a \code{targets::tar_target()} (enables
+#'   incremental reruns and parallelism). The \code{targets} package must be
+#'   installed for the latter.
+#' @param store When \code{backend = "targets"}, the path to the targets
+#'   data store. Use a stable, persistent path to benefit from incremental
+#'   reruns. Default: \code{"_targets"}.
+#' @param script When \code{backend = "targets"}, the path to the
+#'   \code{_targets.R} script that will be (re)written. Default:
+#'   \code{"_targets.R"}.
+#' @param ... When \code{backend = "targets"}, additional arguments forwarded
+#'   to \code{\link{sw_pipeline_run_targets}} (and from there to
+#'   \code{targets::tar_make()}).
 #'
 #' @return A named list with:
 #'   \describe{
@@ -537,6 +620,11 @@ sw_pipeline_length <- function(pipeline) {
 #' If a step fails, execution stops and the error is reported with the step
 #' name for easy debugging.
 #'
+#' When \code{backend = "targets"}, execution is delegated to
+#' \code{\link{sw_pipeline_run_targets}}, which writes a \code{_targets.R}
+#' script and invokes \code{targets::tar_make()}. The returned list has the
+#' same shape as the sequential backend.
+#'
 #' @examples
 #' \dontrun{
 #' pip <- sw_pipeline("transform", steps = list(
@@ -545,15 +633,38 @@ sw_pipeline_length <- function(pipeline) {
 #' ))
 #' result <- sw_pipeline_run(pip, input = 5)
 #' # result$result == 11 (5 * 2 + 1)
+#'
+#' # Same pipeline through the targets backend (cached, incremental reruns):
+#' result2 <- sw_pipeline_run(pip, input = 5,
+#'                            backend = "targets",
+#'                            store   = tempfile("targets_store_"))
 #' }
 #'
+#' @seealso \code{\link{sw_pipeline_run_targets}},
+#'   \code{\link{sw_pipeline_to_targets}}
 #' @export
-sw_pipeline_run <- function(pipeline, input, trace = TRUE) {
+sw_pipeline_run <- function(pipeline, input, trace = TRUE,
+                            backend = c("sequential", "targets"),
+                            store = "_targets",
+                            script = "_targets.R",
+                            ...) {
   .check_s7()
   pip_cls <- .get_Pipeline_class()
 
   if (!S7::S7_inherits(pipeline, pip_cls)) {
     stop("'pipeline' must be a Pipeline object.", call. = FALSE)
+  }
+
+  backend <- match.arg(backend)
+  if (backend == "targets") {
+    return(sw_pipeline_run_targets(
+      pipeline = pipeline,
+      input    = input,
+      script   = script,
+      store    = store,
+      trace    = trace,
+      ...
+    ))
   }
 
   steps <- pipeline@steps
@@ -562,9 +673,39 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE) {
          call. = FALSE)
   }
 
+  # --- Static pre-run type-compatibility walk -----------------------------
+  # Consumes `output_type` declarations so they are not dead metadata.
+  # Uses string intersection (we only have class names here, no live
+  # object), so we emit warnings rather than errors — the actual guarantee
+  # comes from the runtime `methods::is()` check in the loop below.
+  if (length(steps) >= 2) {
+    for (i in seq_len(length(steps) - 1)) {
+      out_t <- .step_output_type(steps[[i]])
+      in_t  <- .step_input_type(steps[[i + 1]])
+      if (length(out_t) > 0 && length(in_t) > 0 &&
+          length(intersect(out_t, in_t)) == 0) {
+        warning(sprintf(
+          paste0("Pipeline '%s': declared types incompatible between ",
+                 "step %d ('%s', outputs %s) and step %d ('%s', expects %s). ",
+                 "Execution will proceed but may fail."),
+          pipeline@name,
+          i,     steps[[i]]@name,     paste(out_t, collapse = "|"),
+          i + 1, steps[[i + 1]]@name, paste(in_t,  collapse = "|")),
+          call. = FALSE)
+      }
+    }
+  }
+
   intermediates <- list()
   current <- input
   n_steps <- length(steps)
+
+  # Pre-compute whether the pipeline is "typed at all" so that fully
+  # untyped legacy pipelines don't flood trace output with "skipped" notes,
+  # while mixed pipelines still surface opt-outs to the user.
+  any_typed <- any(vapply(steps,
+                          function(s) length(.step_input_type(s)) > 0,
+                          logical(1)))
 
   for (i in seq_along(steps)) {
     step <- steps[[i]]
@@ -573,6 +714,26 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE) {
     if (trace) {
       message(sprintf("=== [%d/%d] %s: %s ===",
                       i, n_steps, pipeline@name, step_name))
+    }
+
+    # --- Runtime input-type check ---------------------------------------
+    declared_in <- .step_input_type(step)
+    if (length(declared_in) > 0) {
+      ok <- any(vapply(declared_in,
+                       function(t) methods::is(current, t),
+                       logical(1)))
+      if (!isTRUE(ok)) {
+        stop(sprintf(
+          paste0("Pipeline '%s' type check failed at step %d ('%s'): ",
+                 "expected input of type %s, got %s."),
+          pipeline@name, i, step_name,
+          paste(declared_in, collapse = "|"),
+          paste(class(current), collapse = "/")),
+          call. = FALSE)
+      }
+    } else if (trace && any_typed) {
+      message(sprintf("    (step '%s': type check skipped — no input_type declared)",
+                      step_name))
     }
 
     current <- tryCatch(
@@ -647,6 +808,100 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
 
 
 # ---------------------------------------------------------------------------
+# Pipeline composition DSL: `%>>%`
+# ---------------------------------------------------------------------------
+
+# Internal helper: wrap a bare ProcessingStep as a singleton Pipeline.
+.sw_step_as_pipeline <- function(step) {
+  cls <- .get_Pipeline_class()
+  cls(name = step@name, steps = list(step))
+}
+
+#' Compose Pipeline Steps with `\%>>\%`
+#'
+#' Infix operator that composes any two of \code{ProcessingStep} /
+#' \code{Pipeline} into a new \code{Pipeline}. Inspired by
+#' \href{https://mlr3pipelines.mlr-org.com/}{mlr3pipelines}' \code{\%>>\%},
+#' but adapted for SpectraWeaveR's functional, linear pipeline model.
+#'
+#' The four supported cases all return a fresh \code{Pipeline} and are
+#' purely functional — the left- and right-hand operands are never
+#' modified:
+#'
+#' \itemize{
+#'   \item \code{step \%>>\% step}  — build a 2-step pipeline
+#'   \item \code{step \%>>\% pipe}  — prepend the step to the pipeline
+#'   \item \code{pipe \%>>\% step}  — append the step to the pipeline
+#'   \item \code{pipe \%>>\% pipe}  — concatenate the two pipelines
+#' }
+#'
+#' Duplicate step names across the operands raise an error, inherited from
+#' \code{\link{sw_pipeline_concat}}. \code{NULL} operands are rejected
+#' up-front with a clear message. R's custom infix operators are
+#' left-associative, so \code{a \%>>\% b \%>>\% c} reads as
+#' \code{(a \%>>\% b) \%>>\% c}, matching user intent.
+#'
+#' @param lhs A \code{ProcessingStep} or \code{Pipeline}.
+#' @param rhs A \code{ProcessingStep} or \code{Pipeline}.
+#'
+#' @return A new \code{Pipeline} object.
+#'
+#' @examples
+#' \dontrun{
+#' pip <- sw_step("double", function(x) x * 2) \%>>\%
+#'        sw_step("plus1",  function(x) x + 1)
+#' sw_pipeline_run(pip, input = 5)  # 11
+#' }
+#'
+#' @seealso \code{\link{sw_pipeline_concat}},
+#'   \code{\link{sw_pipeline_add}}
+#' @name grapes-greater-greater-grapes
+#' @export
+`%>>%` <- function(lhs, rhs) {
+  .check_s7()
+
+  if (is.null(lhs) || is.null(rhs)) {
+    stop("'%>>%' operands must be ProcessingStep or Pipeline objects, ",
+         "not NULL.", call. = FALSE)
+  }
+
+  step_cls <- .get_ProcessingStep_class()
+  pip_cls  <- .get_Pipeline_class()
+
+  lhs_is_step <- S7::S7_inherits(lhs, step_cls)
+  lhs_is_pipe <- S7::S7_inherits(lhs, pip_cls)
+  rhs_is_step <- S7::S7_inherits(rhs, step_cls)
+  rhs_is_pipe <- S7::S7_inherits(rhs, pip_cls)
+
+  if (!(lhs_is_step || lhs_is_pipe)) {
+    stop("'%>>%' left operand must be a ProcessingStep or Pipeline.",
+         call. = FALSE)
+  }
+  if (!(rhs_is_step || rhs_is_pipe)) {
+    stop("'%>>%' right operand must be a ProcessingStep or Pipeline.",
+         call. = FALSE)
+  }
+
+  lhs_pip <- if (lhs_is_step) .sw_step_as_pipeline(lhs) else lhs
+  rhs_pip <- if (rhs_is_step) .sw_step_as_pipeline(rhs) else rhs
+
+  combined_name <- paste0(lhs_pip@name, " >> ", rhs_pip@name)
+
+  tryCatch(
+    sw_pipeline_concat(lhs_pip, rhs_pip, name = combined_name),
+    error = function(e) {
+      msg <- conditionMessage(e)
+      if (grepl("^Duplicate step name", msg)) {
+        stop("'%>>%': ", tolower(substring(msg, 1, 1)), substring(msg, 2),
+             call. = FALSE)
+      }
+      stop("'%>>%': ", msg, call. = FALSE)
+    }
+  )
+}
+
+
+# ---------------------------------------------------------------------------
 # Show / print helpers
 # ---------------------------------------------------------------------------
 
@@ -674,32 +929,26 @@ sw_pipeline_show <- function(pipeline) {
     cat("---\n")
     for (i in seq_along(pipeline@steps)) {
       step <- pipeline@steps[[i]]
-      fun_name <- tryCatch(
-        deparse(substitute(step@FUN)),
-        error = function(e) "<function>"
-      )
-      # Try to get a more informative function name
-      fun_label <- tryCatch({
-        env <- environment(step@FUN)
-        if (!is.null(env)) {
-          # Check if the function matches a known name in the parent env
-          body_str <- paste(deparse(body(step@FUN)), collapse = " ")
-          if (nchar(body_str) > 60) {
-            body_str <- paste0(substr(body_str, 1, 57), "...")
-          }
-          body_str
-        } else {
-          "<function>"
-        }
-      }, error = function(e) "<function>")
 
       n_args <- length(step@ARGS)
       args_str <- if (n_args > 0) {
-        paste0(" (", n_args, " arg", if (n_args > 1) "s", ")")
+        paste0(" (", n_args, " arg", if (n_args > 1) "s" else "", ")")
       } else {
         ""
       }
-      cat(sprintf("  %d. %s%s\n", i, step@name, args_str))
+
+      # Include declared port types when present, formatted as [in -> out].
+      itypes <- .step_input_type(step)
+      otypes <- .step_output_type(step)
+      type_str <- if (length(itypes) > 0 || length(otypes) > 0) {
+        sprintf(" [%s -> %s]",
+                if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
+                if (length(otypes) > 0) paste(otypes, collapse = "|") else "*")
+      } else {
+        ""
+      }
+
+      cat(sprintf("  %d. %s%s%s\n", i, step@name, type_str, args_str))
     }
   }
 
@@ -711,116 +960,190 @@ sw_pipeline_show <- function(pipeline) {
 # Convenience: pre-built step constructors for SpectraWeaveR functions
 # ---------------------------------------------------------------------------
 
+# Sensible default port types for the built-in convenience constructors.
+# These reflect the real first-argument / return types of the underlying
+# SpectraWeaveR functions (verified by reading their roxygen blocks).
+# A `character(0)` entry means "output is a compound list / heterogeneous
+# structure that cannot be cleanly type-matched — opt out of the static
+# and runtime checks for that edge".
+.SW_STEP_DEFAULT_TYPES <- list(
+  read_fcs       = list(input = "character",
+                        output = c("flowFrame", "flowSet")),
+  remove_margins = list(input = "flowFrame",
+                        output = "flowFrame"),
+  signal_qc      = list(input = "flowFrame",
+                        output = character(0)),
+  batch_correct  = list(input = c("tbl_df", "data.frame"),
+                        output = c("tbl_df", "data.frame")),
+  normalize      = list(input = c("tbl_df", "data.frame"),
+                        output = c("tbl_df", "data.frame")),
+  create_som     = list(input = c("tbl_df", "data.frame"),
+                        output = character(0)),
+  correct_data   = list(input = c("tbl_df", "data.frame"),
+                        output = c("tbl_df", "data.frame")),
+  cluster        = list(input = c("tbl_df", "data.frame", "matrix"),
+                        output = character(0))
+)
+
 #' Create a Step for Reading FCS Files
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_read_fcs}}.
+#' \code{\link{sw_read_fcs}}. Declares sensible port types by default
+#' (input: \code{"character"}, output: \code{c("flowFrame","flowSet")});
+#' override via the \code{input_type}/\code{output_type} parameters.
 #'
 #' @param ... Additional arguments passed to \code{sw_read_fcs}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_read_fcs <- function(...) {
-  sw_step("read_fcs", sw_read_fcs, list(...))
+sw_step_read_fcs <- function(...,
+                             input_type  = .SW_STEP_DEFAULT_TYPES$read_fcs$input,
+                             output_type = .SW_STEP_DEFAULT_TYPES$read_fcs$output) {
+  sw_step("read_fcs", sw_read_fcs, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Margin Removal
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_remove_margins}}.
+#' \code{\link{sw_remove_margins}}. Defaults: input/output
+#' \code{"flowFrame"}.
 #'
 #' @param ... Additional arguments passed to \code{sw_remove_margins}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_remove_margins <- function(...) {
-  sw_step("remove_margins", sw_remove_margins, list(...))
+sw_step_remove_margins <- function(...,
+                                   input_type  = .SW_STEP_DEFAULT_TYPES$remove_margins$input,
+                                   output_type = .SW_STEP_DEFAULT_TYPES$remove_margins$output) {
+  sw_step("remove_margins", sw_remove_margins, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Signal QC
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_signal_qc}}.
+#' \code{\link{sw_signal_qc}}. Default input \code{"flowFrame"}; output is
+#' left unspecified because \code{sw_signal_qc} returns a compound list
+#' (\code{$FinalFF}, \code{$PlotPath}, \code{$Summary}). Downstream steps
+#' that need to thread the flowFrame should declare
+#' \code{input_type = "flowFrame"} and extract \code{$FinalFF} themselves.
 #'
 #' @param ... Additional arguments passed to \code{sw_signal_qc}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_signal_qc <- function(...) {
-  sw_step("signal_qc", sw_signal_qc, list(...))
+sw_step_signal_qc <- function(...,
+                              input_type  = .SW_STEP_DEFAULT_TYPES$signal_qc$input,
+                              output_type = .SW_STEP_DEFAULT_TYPES$signal_qc$output) {
+  sw_step("signal_qc", sw_signal_qc, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Batch Correction
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_batch_correct}}.
+#' \code{\link{sw_batch_correct}}. Defaults: tibble/data.frame in and out.
 #'
 #' @param ... Additional arguments passed to \code{sw_batch_correct}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_batch_correct <- function(...) {
-  sw_step("batch_correct", sw_batch_correct, list(...))
+sw_step_batch_correct <- function(...,
+                                  input_type  = .SW_STEP_DEFAULT_TYPES$batch_correct$input,
+                                  output_type = .SW_STEP_DEFAULT_TYPES$batch_correct$output) {
+  sw_step("batch_correct", sw_batch_correct, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Data Normalisation
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_normalize}}.
+#' \code{\link{sw_normalize}}. Defaults: tibble/data.frame in and out.
 #'
 #' @param ... Additional arguments passed to \code{sw_normalize}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_normalize <- function(...) {
-  sw_step("normalize", sw_normalize, list(...))
+sw_step_normalize <- function(...,
+                              input_type  = .SW_STEP_DEFAULT_TYPES$normalize$input,
+                              output_type = .SW_STEP_DEFAULT_TYPES$normalize$output) {
+  sw_step("normalize", sw_normalize, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for SOM Clustering
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_create_som}}.
+#' \code{\link{sw_create_som}}. Default input: tibble/data.frame; output
+#' left unspecified (returns an integer vector of cluster labels).
 #'
 #' @param ... Additional arguments passed to \code{sw_create_som}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_create_som <- function(...) {
-  sw_step("create_som", sw_create_som, list(...))
+sw_step_create_som <- function(...,
+                               input_type  = .SW_STEP_DEFAULT_TYPES$create_som$input,
+                               output_type = .SW_STEP_DEFAULT_TYPES$create_som$output) {
+  sw_step("create_som", sw_create_som, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for ComBat Correction
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_correct_data}}.
+#' \code{\link{sw_correct_data}}. Defaults: tibble/data.frame in and out.
 #'
 #' @param ... Additional arguments passed to \code{sw_correct_data}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_correct_data <- function(...) {
-  sw_step("correct_data", sw_correct_data, list(...))
+sw_step_correct_data <- function(...,
+                                 input_type  = .SW_STEP_DEFAULT_TYPES$correct_data$input,
+                                 output_type = .SW_STEP_DEFAULT_TYPES$correct_data$output) {
+  sw_step("correct_data", sw_correct_data, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Clustering
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_cluster}}.
+#' \code{\link{sw_cluster}}. Default input: tibble/data.frame/matrix;
+#' output left unspecified (returns an \code{sw_cluster_result} list).
 #'
 #' @param ... Additional arguments passed to \code{sw_cluster}.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_cluster <- function(...) {
-  sw_step("cluster", sw_cluster, list(...))
+sw_step_cluster <- function(...,
+                            input_type  = .SW_STEP_DEFAULT_TYPES$cluster$input,
+                            output_type = .SW_STEP_DEFAULT_TYPES$cluster$output) {
+  sw_step("cluster", sw_cluster, list(...),
+          input_type = input_type, output_type = output_type)
 }
 
 

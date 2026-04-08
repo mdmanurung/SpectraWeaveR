@@ -4,15 +4,23 @@
 \alias{sw_step_normalize}
 \title{Create a Step for Data Normalisation}
 \usage{
-sw_step_normalize(...)
+sw_step_normalize(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$normalize$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$normalize$output
+)
 }
 \arguments{
 \item{...}{Additional arguments passed to \code{sw_normalize}.}
+
+\item{input_type}{Character vector overriding the default input port type.}
+
+\item{output_type}{Character vector overriding the default output port type.}
 }
 \value{
 A \code{ProcessingStep} object.
 }
 \description{
 Convenience constructor for a \code{ProcessingStep} that wraps
-\code{\link{sw_normalize}}.
+\code{\link{sw_normalize}}. Defaults: tibble/data.frame in and out.
 }

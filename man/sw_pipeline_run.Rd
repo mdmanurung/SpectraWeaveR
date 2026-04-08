@@ -4,7 +4,15 @@
 \alias{sw_pipeline_run}
 \title{Execute a Pipeline}
 \usage{
-sw_pipeline_run(pipeline, input, trace = TRUE)
+sw_pipeline_run(
+  pipeline,
+  input,
+  trace = TRUE,
+  backend = c("sequential", "targets"),
+  store = "_targets",
+  script = "_targets.R",
+  ...
+)
 }
 \arguments{
 \item{pipeline}{A \code{Pipeline} object.}
@@ -13,6 +21,24 @@ sw_pipeline_run(pipeline, input, trace = TRUE)
 
 \item{trace}{Logical; if \code{TRUE}, prints step-by-step progress
 messages. Default: \code{TRUE}.}
+
+\item{backend}{Execution backend. Either \code{"sequential"} (the default)
+to run steps in-process as a simple for-loop, or \code{"targets"} to
+dispatch each step as a \code{targets::tar_target()} (enables
+incremental reruns and parallelism). The \code{targets} package must be
+installed for the latter.}
+
+\item{store}{When \code{backend = "targets"}, the path to the targets
+data store. Use a stable, persistent path to benefit from incremental
+reruns. Default: \code{"_targets"}.}
+
+\item{script}{When \code{backend = "targets"}, the path to the
+\code{_targets.R} script that will be (re)written. Default:
+\code{"_targets.R"}.}
+
+\item{...}{When \code{backend = "targets"}, additional arguments forwarded
+to \code{\link{sw_pipeline_run_targets}} (and from there to
+\code{targets::tar_make()}).}
 }
 \value{
 A named list with:
@@ -34,6 +60,11 @@ CytoPipeline's \code{execute()} method.
 
 If a step fails, execution stops and the error is reported with the step
 name for easy debugging.
+
+When \code{backend = "targets"}, execution is delegated to
+\code{\link{sw_pipeline_run_targets}}, which writes a \code{_targets.R}
+script and invokes \code{targets::tar_make()}. The returned list has the
+same shape as the sequential backend.
 }
 \examples{
 \dontrun{
@@ -43,6 +74,15 @@ pip <- sw_pipeline("transform", steps = list(
 ))
 result <- sw_pipeline_run(pip, input = 5)
 # result$result == 11 (5 * 2 + 1)
+
+# Same pipeline through the targets backend (cached, incremental reruns):
+result2 <- sw_pipeline_run(pip, input = 5,
+                           backend = "targets",
+                           store   = tempfile("targets_store_"))
 }
 
+}
+\seealso{
+\code{\link{sw_pipeline_run_targets}},
+\code{\link{sw_pipeline_to_targets}}
 }

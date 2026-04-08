@@ -71,6 +71,11 @@ S7/R7-based step-and-pipeline framework inspired by CytoPipeline:
 - `sw_pipeline()` / `sw_pipeline_run()` — create and execute pipelines
 - Pipeline manipulation: `add`, `remove`, `replace`, `concat`, `show`, `plot`
 - 8 convenience step constructors for common operations
+- **`targets` backend** (`R/targets_backend.R`): opt-in via
+  `sw_pipeline_run(..., backend = "targets", store = "_targets")`, or use
+  `sw_pipeline_run_targets()` / `sw_pipeline_to_targets()` directly. Each
+  `sw_step()` becomes one `targets::tar_target()` so reruns are incremental
+  and steps can be parallelised. `targets` is in Suggests.
 
 ### Scale Transforms (`R/transforms.R`)
 Ported from CytoPipeline (UCLouvain-CBIO):

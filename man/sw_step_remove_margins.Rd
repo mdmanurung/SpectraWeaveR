@@ -4,15 +4,24 @@
 \alias{sw_step_remove_margins}
 \title{Create a Step for Margin Removal}
 \usage{
-sw_step_remove_margins(...)
+sw_step_remove_margins(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$remove_margins$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$remove_margins$output
+)
 }
 \arguments{
 \item{...}{Additional arguments passed to \code{sw_remove_margins}.}
+
+\item{input_type}{Character vector overriding the default input port type.}
+
+\item{output_type}{Character vector overriding the default output port type.}
 }
 \value{
 A \code{ProcessingStep} object.
 }
 \description{
 Convenience constructor for a \code{ProcessingStep} that wraps
-\code{\link{sw_remove_margins}}.
+\code{\link{sw_remove_margins}}. Defaults: input/output
+\code{"flowFrame"}.
 }

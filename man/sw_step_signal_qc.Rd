@@ -4,15 +4,27 @@
 \alias{sw_step_signal_qc}
 \title{Create a Step for Signal QC}
 \usage{
-sw_step_signal_qc(...)
+sw_step_signal_qc(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$signal_qc$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$signal_qc$output
+)
 }
 \arguments{
 \item{...}{Additional arguments passed to \code{sw_signal_qc}.}
+
+\item{input_type}{Character vector overriding the default input port type.}
+
+\item{output_type}{Character vector overriding the default output port type.}
 }
 \value{
 A \code{ProcessingStep} object.
 }
 \description{
 Convenience constructor for a \code{ProcessingStep} that wraps
-\code{\link{sw_signal_qc}}.
+\code{\link{sw_signal_qc}}. Default input \code{"flowFrame"}; output is
+left unspecified because \code{sw_signal_qc} returns a compound list
+(\code{$FinalFF}, \code{$PlotPath}, \code{$Summary}). Downstream steps
+that need to thread the flowFrame should declare
+\code{input_type = "flowFrame"} and extract \code{$FinalFF} themselves.
 }

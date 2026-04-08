@@ -42,6 +42,7 @@ Suggests:
     ggplot2,
     uwot (>= 0.1.14),
     pheatmap (>= 1.0.12),
+    targets (>= 1.4.0),
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
