@@ -83,7 +83,7 @@ remotes::install_github("DrCytometer/AutoSpectral")
 remotes::install_github("DrCytometer/AutoSpectralRcpp")  # faster
 
 # FastPG for graph-based clustering (alternative to kohonen SOM)
-remotes::install_github("SamGG/FastPG")
+remotes::install_github("sararselitsky/FastPG")
 
 # S7 for composable pipeline framework
 install.packages("S7")

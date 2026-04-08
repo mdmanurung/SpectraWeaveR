@@ -46,7 +46,7 @@ optional_pkgs <- c(
   # GitHub
   "DrCytometer/AutoSpectral",     # Spectral unmixing engine
   "DrCytometer/AutoSpectralRcpp", # C++ acceleration for unmixing
-  "SamGG/FastPG",                 # Graph-based clustering
+  "sararselitsky/FastPG",                 # Graph-based clustering
 
   # Bioconductor
   "bioc::ggcyto",                 # Gate visualization
