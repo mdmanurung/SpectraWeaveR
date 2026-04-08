@@ -4,15 +4,24 @@
 \alias{sw_step_create_som}
 \title{Create a Step for SOM Clustering}
 \usage{
-sw_step_create_som(...)
+sw_step_create_som(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$create_som$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$create_som$output
+)
 }
 \arguments{
 \item{...}{Additional arguments passed to \code{sw_create_som}.}
+
+\item{input_type}{Character vector overriding the default input port type.}
+
+\item{output_type}{Character vector overriding the default output port type.}
 }
 \value{
 A \code{ProcessingStep} object.
 }
 \description{
 Convenience constructor for a \code{ProcessingStep} that wraps
-\code{\link{sw_create_som}}.
+\code{\link{sw_create_som}}. Default input: tibble/data.frame; output
+left unspecified (returns an integer vector of cluster labels).
 }

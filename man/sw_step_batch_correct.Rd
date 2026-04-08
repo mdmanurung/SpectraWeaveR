@@ -4,15 +4,23 @@
 \alias{sw_step_batch_correct}
 \title{Create a Step for Batch Correction}
 \usage{
-sw_step_batch_correct(...)
+sw_step_batch_correct(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$batch_correct$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$batch_correct$output
+)
 }
 \arguments{
 \item{...}{Additional arguments passed to \code{sw_batch_correct}.}
+
+\item{input_type}{Character vector overriding the default input port type.}
+
+\item{output_type}{Character vector overriding the default output port type.}
 }
 \value{
 A \code{ProcessingStep} object.
 }
 \description{
 Convenience constructor for a \code{ProcessingStep} that wraps
-\code{\link{sw_batch_correct}}.
+\code{\link{sw_batch_correct}}. Defaults: tibble/data.frame in and out.
 }

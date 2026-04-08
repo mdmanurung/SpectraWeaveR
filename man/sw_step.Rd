@@ -4,7 +4,13 @@
 \alias{sw_step}
 \title{Create a Processing Step}
 \usage{
-sw_step(name, FUN, ARGS = list())
+sw_step(
+  name,
+  FUN,
+  ARGS = list(),
+  input_type = character(0),
+  output_type = character(0)
+)
 }
 \arguments{
 \item{name}{Character; a unique name for this step (e.g., "load_fcs",
@@ -17,6 +23,16 @@ time.}
 \item{ARGS}{A named list of additional arguments to pass to \code{FUN}.
 The data from the previous step is always passed as the first argument;
 \code{ARGS} provides the remaining arguments. Default: \code{list()}.}
+
+\item{input_type}{Optional character vector of class names that this
+step's input is expected to match. Checked at run time via
+\code{methods::is()}, so inherited, virtual, and S4 classes all work.
+Pass \code{character(0)} (the default) to opt out of the check.}
+
+\item{output_type}{Optional character vector of class names declaring
+what this step produces. Used for the static pre-run compatibility
+walk in \code{\link{sw_pipeline_run}}. \code{character(0)} (default)
+means "unknown / don't check".}
 }
 \value{
 A \code{ProcessingStep} S7 object.
@@ -42,6 +58,10 @@ step_filter <- sw_step("filter_low", function(ff) ff[1:100, ], list())
 
 # Use a function name (resolved via match.fun)
 step_log <- sw_step("log_transform", "log1p", list())
+
+# Declare port types for run-time validation
+step_typed <- sw_step("double", function(x) x * 2,
+                      input_type = "numeric", output_type = "numeric")
 }
 
 }

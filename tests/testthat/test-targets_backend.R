@@ -230,3 +230,31 @@ test_that("step names with spaces are sanitised but kept as intermediates keys",
   expect_equal(res$result, 11)
   expect_equal(names(res$intermediates), c("times 2", "plus 1"))
 })
+
+# -------------------------------------------------------------------------
+# Port typing round-trips through the targets backend
+# -------------------------------------------------------------------------
+
+test_that("typed ProcessingStep round-trips through targets backend + type check fires", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  # Use a typed pipeline — the new input_type property must survive the
+  # saveRDS/readRDS round-trip that the targets backend performs for each
+  # step definition.
+  pip <- sw_step("double", .swt_times2, input_type = "numeric") %>>%
+         sw_step("plus1",  .swt_plus1,  input_type = "numeric")
+
+  # Happy path: numeric input passes type check in child session.
+  res <- sw_pipeline_run_targets(pip, input = 8,
+                                 callr_function = NULL, trace = FALSE)
+  expect_equal(res$result, 17)
+
+  # Wrong-type input: the type check in the child session should fire and
+  # the wrapped error should surface through the targets backend.
+  expect_error(
+    sw_pipeline_run_targets(pip, input = "eight",
+                            callr_function = NULL, trace = FALSE),
+    "type check failed"
+  )
+})
