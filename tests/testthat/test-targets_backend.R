@@ -201,6 +201,20 @@ test_that("a failing step surfaces a wrapped error from the targets backend", {
 # Step-name sanitisation
 # -------------------------------------------------------------------------
 
+test_that("step names that collide with reserved internal targets are rejected", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  pip <- sw_pipeline("toy", steps = list(
+    sw_step("sw_input", .swt_times2)
+  ))
+
+  expect_error(
+    sw_pipeline_to_targets(pip, input = 1),
+    "collide with internal target names"
+  )
+})
+
 test_that("step names with spaces are sanitised but kept as intermediates keys", {
   skip_targets_unavailable()
   local_targets_dir()
