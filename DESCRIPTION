@@ -50,7 +50,7 @@ Remotes:
     biosurf/cyCombine,
     DrCytometer/AutoSpectral,
     DrCytometer/AutoSpectralRcpp,
-    SamGG/FastPG
+    sararselitsky/FastPG
 Config/testthat/edition: 3
 VignetteBuilder: quarto
 URL: https://github.com/mdmanurung/SpectraWeaveR

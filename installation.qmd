@@ -90,7 +90,7 @@ An alternative clustering backend. Install if you want to use
 `sw_cluster(..., method = "fastpg")`:
 ```{r}
 #| eval: false
-remotes::install_github("SamGG/FastPG")
+remotes::install_github("sararselitsky/FastPG")
 ```
 
 ## Verify installation
