@@ -41,6 +41,16 @@ NULL
 #'
 #' @return A \code{flowCore::transformList} object.
 #'
+#' @examples
+#' \dontrun{
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(abs(rnorm(500, 50000, 15000)), ncol = 5,
+#'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   trans <- sw_estimate_scale_transforms(ff, fluo_method = "estimateLogicle")
+#' }
+#' }
+#'
 #' @export
 sw_estimate_scale_transforms <- function(
     ff,
@@ -238,6 +248,12 @@ sw_estimate_scale_transforms <- function(
 #'   obtained from \code{\link{sw_estimate_scale_transforms}}.
 #'
 #' @return The transformed \code{flowFrame} or \code{flowSet}.
+#'
+#' @examples
+#' \dontrun{
+#' trans <- sw_estimate_scale_transforms(ff, fluo_method = "estimateLogicle")
+#' ff_transformed <- sw_apply_scale_transforms(ff, trans)
+#' }
 #'
 #' @export
 sw_apply_scale_transforms <- function(x, trans_list) {

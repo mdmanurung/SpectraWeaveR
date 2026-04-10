@@ -44,6 +44,12 @@ NULL
 #' Users should review and customize the template for their specific panel
 #' before applying it with \code{\link{sw_gate}}.
 #'
+#' @examples
+#' tmp <- tempfile(fileext = ".csv")
+#' sw_build_gating_template(tmp, template_type = "lymphocyte")
+#' head(read.csv(tmp))
+#' unlink(tmp)
+#'
 #' @export
 sw_build_gating_template <- function(output_file, template_type = "lymphocyte") {
   if (!is.character(output_file) || length(output_file) != 1) {
@@ -176,6 +182,14 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
 #'
 #' @return A \code{GatingSet} object with gates applied.
 #'
+#' @examples
+#' \dontrun{
+#' # Build template and apply
+#' tmpl <- tempfile(fileext = ".csv")
+#' sw_build_gating_template(tmpl, "lymphocyte")
+#' gs <- sw_gate(c("sample1.fcs", "sample2.fcs"), gating_template = tmpl)
+#' }
+#'
 #' @export
 sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
                     transform_func = NULL, cofactor = 6000, ...) {
@@ -247,6 +261,12 @@ sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
 #'
 #' @return A named list of \code{flowFrame} objects, one per sample in the
 #'   GatingSet.
+#'
+#' @examples
+#' \dontrun{
+#' ff_list <- sw_extract_gated(gs, node = "/singlets/lymphocytes")
+#' length(ff_list)
+#' }
 #'
 #' @export
 sw_extract_gated <- function(gs, node) {

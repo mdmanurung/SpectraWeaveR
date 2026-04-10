@@ -80,17 +80,28 @@ test_that("run_pipeline rejects non-character fcs_dir", {
   )
 })
 
-test_that("run_pipeline returns expected structure (smoke test)", {
-  # This is a structural test only — it verifies the expected return slots
-  # without actually running the pipeline (which requires all dependencies).
+test_that("run_pipeline rejects duplicate sample names in metadata", {
+  tmp_dir <- tempdir()
+  expect_error(
+    run_pipeline(
+      fcs_dir = tmp_dir,
+      sample_meta = tibble::tibble(
+        file = c("a.fcs", "b.fcs"),
+        sample = c("S1", "S1"),
+        batch = c("B1", "B2")
+      ),
+      markers = "CD3",
+      lineage_markers = "CD3"
+    ),
+    "duplicate sample name"
+  )
+})
 
-  expected_slots <- c("flowset", "gating_set", "qc_results", "uncorrected",
-                       "corrected", "correction_eval", "cluster_result",
-                       "cluster_assignments", "cluster_mfis")
-
-  expect_true(length(expected_slots) == 9)
-  expect_true("cluster_result" %in% expected_slots)
-  expect_true("corrected" %in% expected_slots)
+test_that("run_pipeline function signature has expected parameters", {
+  params <- names(formals(run_pipeline))
+  expect_true(all(c("fcs_dir", "sample_meta", "markers", "lineage_markers",
+                     "gating_template", "gate_node", "output_dir", "cofactor",
+                     "n_metaclusters", "seed") %in% params))
 })
 
 # =========================================================================
