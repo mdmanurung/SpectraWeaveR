@@ -9,6 +9,33 @@
 #' @keywords internal
 NULL
 
+# ---------------------------------------------------------------------------
+# Shared internal validation helpers
+# ---------------------------------------------------------------------------
+
+#' @noRd
+.validate_markers <- function(markers) {
+  if (!is.character(markers) || length(markers) == 0) {
+    stop("'markers' must be a non-empty character vector.", call. = FALSE)
+  }
+}
+
+#' @noRd
+.validate_df <- function(df, arg_name = "df") {
+  if (!is.data.frame(df)) {
+    stop("'", arg_name, "' must be a data.frame or tibble.", call. = FALSE)
+  }
+}
+
+#' @noRd
+.validate_markers_in_df <- function(df, markers, arg_name = "df") {
+  missing_markers <- setdiff(markers, names(df))
+  if (length(missing_markers) > 0) {
+    stop("Marker(s) not found in '", arg_name, "': ",
+         paste(missing_markers, collapse = ", "), call. = FALSE)
+  }
+}
+
 #' Read FCS Files with Aurora-Safe Defaults
 #'
 #' Wrapper around \code{\link[flowCore]{read.FCS}} or
@@ -65,6 +92,15 @@ sw_read_fcs <- function(files, ...) {
 #' @return A \code{tibble} with one row per cell and one column per channel,
 #'   plus metadata columns if specified.
 #'
+#' @examples
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(rnorm(30), ncol = 3,
+#'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   df <- sw_flowframe_to_tibble(ff, sample = "S1", batch = "B1")
+#'   head(df)
+#' }
+#'
 #' @export
 sw_flowframe_to_tibble <- function(ff, sample = NULL, batch = NULL,
                                    condition = NULL) {
@@ -98,26 +134,27 @@ sw_flowframe_to_tibble <- function(ff, sample = NULL, batch = NULL,
 #'
 #' @return A \code{flowCore::flowFrame}.
 #'
+#' @examples
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   df <- data.frame(CD3 = rnorm(10), CD4 = rnorm(10), label = letters[1:10])
+#'   ff <- sw_tibble_to_flowframe(df, markers = c("CD3", "CD4"))
+#'   flowCore::colnames(ff)
+#' }
+#'
 #' @export
 sw_tibble_to_flowframe <- function(df, markers = NULL) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
 
-  if (!is.data.frame(df)) {
-    stop("'df' must be a data.frame or tibble.", call. = FALSE)
-  }
+  .validate_df(df, "df")
 
   if (is.null(markers)) {
     # Use all numeric columns
     markers <- names(df)[vapply(df, is.numeric, logical(1))]
   }
 
-  missing_markers <- setdiff(markers, names(df))
-  if (length(missing_markers) > 0) {
-    stop("Marker(s) not found in data: ",
-         paste(missing_markers, collapse = ", "), call. = FALSE)
-  }
+  .validate_markers_in_df(df, markers, "df")
 
   mat <- as.matrix(df[, markers, drop = FALSE])
   storage.mode(mat) <- "double"
@@ -140,6 +177,10 @@ sw_tibble_to_flowframe <- function(df, markers = NULL) {
 #'   (default: \code{NULL}).
 #'
 #' @return A \code{tibble}.
+#'
+#' @examples
+#' mat <- matrix(rnorm(20), ncol = 2, dimnames = list(NULL, c("CD3", "CD4")))
+#' sw_exprs_to_tibble(mat, sample = "S1", batch = "B1")
 #'
 #' @export
 sw_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
@@ -257,6 +298,14 @@ sw_set_marker_names <- function(ff, marker_map) {
 #'   "File", "SampleID")}.
 #'
 #' @return A named logical vector with length equal to \code{ncol(x)}.
+#'
+#' @examples
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(rnorm(40), ncol = 4,
+#'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "Time")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   sw_are_signal_cols(ff)
+#' }
 #'
 #' @export
 sw_are_signal_cols <- function(x,
@@ -431,8 +480,10 @@ sw_aggregate_and_sample <- function(fs,
     n_excess <- n_excess - n_withdraw
   }
 
-  # Build aggregated flowFrame
-  result_ff <- NULL
+  # Build aggregated flowFrame — collect matrices first, then rbind once
+  # to avoid O(n^2) memory allocation from growing rbind inside a loop.
+  mat_list <- vector("list", n_frames)
+  use_cols <- NULL
 
   for (i in seq_len(n_frames)) {
     current_ff <- fs[[i]]
@@ -448,7 +499,7 @@ sw_aggregate_and_sample <- function(fs,
     )
     current_ff <- flowCore::fr_append_cols(current_ff[ids, ], m)
 
-    if (is.null(result_ff)) {
+    if (i == 1L) {
       if (!is.null(channels)) {
         # Resolve marker names to channel names if needed
         all_cols <- flowCore::colnames(current_ff)
@@ -457,23 +508,26 @@ sw_aggregate_and_sample <- function(fs,
           stop("No matching channels found.", call. = FALSE)
         }
         tracking <- c("File", "File_scattered", "Original_ID")
-        current_ff <- current_ff[, c(resolved, tracking), drop = FALSE]
+        use_cols <- c(resolved, tracking)
+      } else {
+        use_cols <- flowCore::colnames(current_ff)
       }
-      result_ff <- current_ff
     } else {
-      common_cols <- intersect(
-        flowCore::colnames(current_ff),
-        flowCore::colnames(result_ff)
-      )
-      if (length(common_cols) == 0) {
+      use_cols <- intersect(use_cols, flowCore::colnames(current_ff))
+      if (length(use_cols) == 0) {
         stop("No common channels between flow frames.", call. = FALSE)
       }
-      flowCore::exprs(result_ff) <- rbind(
-        flowCore::exprs(result_ff)[, common_cols, drop = FALSE],
-        flowCore::exprs(current_ff)[, common_cols, drop = FALSE]
-      )
     }
+
+    mat_list[[i]] <- flowCore::exprs(current_ff)
   }
+
+  # Subset to common columns and combine in one operation
+  mat_list <- lapply(mat_list, function(m) m[, use_cols, drop = FALSE])
+  combined_mat <- do.call(rbind, mat_list)
+
+  # Build result flowFrame from the combined matrix
+  result_ff <- flowCore::flowFrame(combined_mat)
 
   result_ff
 }
@@ -510,6 +564,14 @@ sw_aggregate_and_sample <- function(fs,
 #'     \item{\code{pct_of_previous}}{Numeric; percentage of previous step's
 #'       events retained}
 #'   }
+#'
+#' @examples
+#' intermediates <- list(
+#'   raw = 10000,
+#'   after_qc = 8500,
+#'   after_gating = data.frame(x = rnorm(6000))
+#' )
+#' sw_collect_events_retained(intermediates)
 #'
 #' @export
 sw_collect_events_retained <- function(intermediates) {

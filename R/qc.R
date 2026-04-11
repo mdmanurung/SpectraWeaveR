@@ -36,6 +36,17 @@ NULL
 #'     \item{\code{pct_removed}}{Percentage of events removed}
 #'   }
 #'
+#' @examples
+#' \dontrun{
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(abs(rnorm(2000, 50000, 15000)), ncol = 4,
+#'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A", "PE-A")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   result <- sw_signal_qc(ff, channels = c("BV421-A", "PE-A"))
+#'   cat("Removed:", result$n_removed, "events\n")
+#' }
+#' }
+#'
 #' @export
 sw_signal_qc <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
                          output_dir = NULL, ...) {

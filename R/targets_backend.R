@@ -179,6 +179,16 @@ NULL
 #'   `sym_map` (the original-to-sanitised step name map).
 #'
 #' @seealso [`sw_pipeline_run_targets()`] for one-shot generate-and-run.
+#'
+#' @examples
+#' \dontrun{
+#' pip <- sw_pipeline("my_pipeline", steps = list(
+#'   sw_step("double", function(x) x * 2),
+#'   sw_step("add_one", function(x) x + 1)
+#' ))
+#' sw_pipeline_to_targets(pip, input = 5, script = tempfile())
+#' }
+#'
 #' @export
 sw_pipeline_to_targets <- function(pipeline, input,
                                    script = "_targets.R",

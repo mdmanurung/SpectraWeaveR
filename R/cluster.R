@@ -90,6 +90,18 @@ NULL
 #'     \item{\code{n_clusters}}{Integer; total number of clusters found.}
 #'   }
 #'
+#' @examples
+#' \dontrun{
+#' df <- data.frame(
+#'   CD3 = c(rnorm(100, 1), rnorm(100, 5)),
+#'   CD4 = c(rnorm(100, 2), rnorm(100, 6))
+#' )
+#' result <- sw_cluster(df, lineage_markers = c("CD3", "CD4"),
+#'                      method = "som", xdim = 5, ydim = 5,
+#'                      n_metaclusters = 5)
+#' table(sw_get_cluster_assignments(result))
+#' }
+#'
 #' @export
 sw_cluster <- function(corrected, lineage_markers,
                        method = c("som", "fastpg"),

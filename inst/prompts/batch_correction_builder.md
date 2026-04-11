@@ -33,3 +33,10 @@ Generate clean R code using SpectraWeaveR functions. Always include:
 - Batch correction (`sw_batch_correct()`)
 - Evaluation (`sw_evaluate_correction()`)
 - Visualization (`sw_plot_batch_densities()`, `sw_plot_batch_dimred()`)
+
+## Data Privacy
+
+- When inspecting sample metadata, prefer `columns_only = TRUE` for initial inspection.
+- Do not echo patient-identifiable values (names, MRNs, diagnoses) from metadata previews.
+- Batch and condition cross-tabulations show aggregate counts, which is acceptable. But if condition labels contain sensitive clinical information, note this and suggest coded labels.
+- The tools will automatically detect and redact potentially sensitive columns.

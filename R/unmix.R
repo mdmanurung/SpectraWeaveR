@@ -100,6 +100,11 @@ NULL
 #' the user to review and edit it before proceeding to
 #' \code{\link{sw_prepare_controls}}.
 #'
+#' @examples
+#' \dontrun{
+#' setup <- sw_autospectral_setup("path/to/controls", cytometer = "aurora")
+#' }
+#'
 #' @export
 sw_autospectral_setup <- function(control_dir,
                                   cytometer = "aurora",
@@ -1065,6 +1070,12 @@ sw_unmix_pipeline <- function(control_dir,
 #'
 #' @return A \code{flowSet} containing all matched FCS files.
 #'
+#' @examples
+#' \dontrun{
+#' fs <- sw_load_unmixed("path/to/unmixed_fcs/")
+#' flowCore::sampleNames(fs)
+#' }
+#'
 #' @export
 sw_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
@@ -1115,6 +1126,16 @@ sw_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
 #' These can skew downstream analysis and should be removed early.
 #' The function must be called before any data transformation because
 #' RemoveMargins relies on raw signal intensities.
+#'
+#' @examples
+#' \dontrun{
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(abs(rnorm(500, 50000, 15000)), ncol = 5,
+#'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   ff_clean <- sw_remove_margins(ff)
+#' }
+#' }
 #'
 #' @export
 sw_remove_margins <- function(ff, channel_specs = NULL) {

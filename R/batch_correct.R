@@ -32,24 +32,15 @@ NULL
 # Internal helper: common input validation for batch-correction functions
 # ---------------------------------------------------------------------------
 .validate_batch_df <- function(df, markers = NULL, arg_name = "df") {
-
-  if (!is.data.frame(df)) {
-    stop("'", arg_name, "' must be a data.frame or tibble.", call. = FALSE)
-  }
+  .validate_df(df, arg_name)
 
   if (!"batch" %in% names(df)) {
     stop("'", arg_name, "' must contain a 'batch' column.", call. = FALSE)
   }
 
   if (!is.null(markers)) {
-    if (!is.character(markers) || length(markers) == 0) {
-      stop("'markers' must be a non-empty character vector.", call. = FALSE)
-    }
-    missing_markers <- setdiff(markers, names(df))
-    if (length(missing_markers) > 0) {
-      stop("Marker(s) not found in data: ",
-           paste(missing_markers, collapse = ", "), call. = FALSE)
-    }
+    .validate_markers(markers)
+    .validate_markers_in_df(df, markers, arg_name)
   }
 }
 
@@ -68,7 +59,22 @@ NULL
 #'   (default: 6000 for spectral flow).
 #'
 #' @return A \code{tibble} with one row per cell, arcsinh-transformed marker
-#'   columns, and metadata columns (sample, batch, condition).
+#'   columns, metadata columns (sample, batch, condition), and a
+#'   \code{.cell_id} column for per-sample cell tracking.
+#'
+#' @examples
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat1 <- matrix(c(1000, 2000, 3000, 4000, 5000, 6000), ncol = 2,
+#'                  dimnames = list(NULL, c("CD3", "CD4")))
+#'   mat2 <- matrix(c(1500, 2500, 3500, 4500, 5500, 6500), ncol = 2,
+#'                  dimnames = list(NULL, c("CD3", "CD4")))
+#'   ff_list <- list(S1 = flowCore::flowFrame(mat1),
+#'                   S2 = flowCore::flowFrame(mat2))
+#'   meta <- data.frame(sample = c("S1", "S2"), batch = c("B1", "B2"))
+#'   result <- sw_prepare_for_correction(ff_list, meta,
+#'                                       markers = c("CD3", "CD4"))
+#'   head(result)
+#' }
 #'
 #' @export
 sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
@@ -86,9 +92,7 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
     stop("'ff_list' must be a named list.", call. = FALSE)
   }
 
-  if (!is.data.frame(sample_meta)) {
-    stop("'sample_meta' must be a data.frame or tibble.", call. = FALSE)
-  }
+  .validate_df(sample_meta, "sample_meta")
 
   required_cols <- c("sample", "batch")
   missing_cols <- setdiff(required_cols, names(sample_meta))
@@ -97,9 +101,13 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
-  if (!is.character(markers) || length(markers) == 0) {
-    stop("'markers' must be a non-empty character vector.", call. = FALSE)
+  dup_samples <- sample_meta$sample[duplicated(sample_meta$sample)]
+  if (length(dup_samples) > 0) {
+    stop("'sample_meta' contains duplicate sample name(s): ",
+         paste(unique(dup_samples), collapse = ", "), call. = FALSE)
   }
+
+  .validate_markers(markers)
 
   if (!is.numeric(cofactor) || cofactor <= 0) {
     stop("'cofactor' must be a positive number.", call. = FALSE)
@@ -143,8 +151,8 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
       df$condition <- meta_row$condition[1]
     }
 
-    # Add cell ID for tracking
-    df$id <- seq_len(nrow(df))
+    # Add cell ID for tracking (use .cell_id to avoid overwriting user columns)
+    df$.cell_id <- seq_len(nrow(df))
 
     dfs[[sn]] <- df
   }
@@ -182,6 +190,17 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
 #' @param ... Additional arguments passed to \code{cyCombine::batch_correct()}.
 #'
 #' @return A \code{tibble} with batch-corrected marker values.
+#'
+#' @examples
+#' \dontrun{
+#' uncorrected <- tibble::tibble(
+#'   CD3 = c(rnorm(100, 1), rnorm(100, 3)),
+#'   CD4 = c(rnorm(100, 2), rnorm(100, 4)),
+#'   batch = rep(c("B1", "B2"), each = 100),
+#'   sample = rep(c("S1", "S2"), each = 100)
+#' )
+#' corrected <- sw_batch_correct(uncorrected, markers = c("CD3", "CD4"))
+#' }
 #'
 #' @export
 sw_batch_correct <- function(uncorrected, markers, covar = NULL,
@@ -234,6 +253,19 @@ sw_batch_correct <- function(uncorrected, markers, covar = NULL,
 #'     \item{\code{improved}}{Logical; TRUE if overall MAD decreased}
 #'     \item{\code{emd_reduction_pct}}{Percentage reduction in mean MAD}
 #'   }
+#'
+#' @examples
+#' set.seed(42)
+#' uncorrected <- data.frame(
+#'   CD3 = c(rnorm(50, 1), rnorm(50, 3)),
+#'   batch = rep(c("B1", "B2"), each = 50)
+#' )
+#' corrected <- data.frame(
+#'   CD3 = c(rnorm(50, 2), rnorm(50, 2.1)),
+#'   batch = rep(c("B1", "B2"), each = 50)
+#' )
+#' result <- sw_evaluate_correction(uncorrected, corrected, markers = "CD3")
+#' result$improved
 #'
 #' @export
 sw_evaluate_correction <- function(uncorrected, corrected, markers) {

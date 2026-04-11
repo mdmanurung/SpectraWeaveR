@@ -29,3 +29,8 @@ SpectraWeaveR also provides standalone gating utilities:
 - `sw_remove_doublets()` — doublet removal via FSC-A/FSC-H ratio
 - `sw_remove_debris_gate()` — manual polygon debris gate
 - `sw_remove_margins_peacoqc()` — margin event removal
+
+## Data Privacy
+
+- If the user provides sample metadata for reference, prefer `columns_only = TRUE` and do not echo patient-identifiable values.
+- The tools will automatically detect and redact potentially sensitive columns in metadata previews.

@@ -48,6 +48,16 @@ NULL
 #' @seealso \code{\link{sw_plot_dimred}},
 #'   \code{\link{sw_plot_batch_dimred}}
 #'
+#' @examples
+#' \dontrun{
+#' df <- data.frame(CD3 = rnorm(200), CD4 = rnorm(200), batch = "B1")
+#' # PCA (no extra dependency)
+#' result <- sw_run_dimred(df, markers = c("CD3", "CD4"), method = "pca")
+#' head(result)
+#' # UMAP (requires uwot)
+#' result <- sw_run_dimred(df, markers = c("CD3", "CD4"), method = "umap")
+#' }
+#'
 #' @export
 sw_run_dimred <- function(df, markers,
                           method = c("umap", "pca"),
@@ -59,19 +69,9 @@ sw_run_dimred <- function(df, markers,
                           seed = 42L,
                           ...) {
   # --- Input validation ---
-  if (!is.data.frame(df)) {
-    stop("'df' must be a data.frame or tibble.", call. = FALSE)
-  }
-
-  if (!is.character(markers) || length(markers) == 0) {
-    stop("'markers' must be a non-empty character vector.", call. = FALSE)
-  }
-
-  missing_markers <- setdiff(markers, names(df))
-  if (length(missing_markers) > 0) {
-    stop("Marker(s) not found in data: ",
-         paste(missing_markers, collapse = ", "), call. = FALSE)
-  }
+  .validate_df(df, "df")
+  .validate_markers(markers)
+  .validate_markers_in_df(df, markers, "df")
 
   method <- match.arg(method)
 
@@ -175,6 +175,14 @@ sw_run_dimred <- function(df, markers,
 #'
 #' @seealso \code{\link{sw_run_dimred}}
 #'
+#' @examples
+#' \dontrun{
+#' dr <- data.frame(dim1 = rnorm(100), dim2 = rnorm(100),
+#'                  cluster = sample(1:3, 100, replace = TRUE))
+#' attr(dr, "method") <- "pca"
+#' sw_plot_dimred(dr, color_by = "cluster")
+#' }
+#'
 #' @export
 sw_plot_dimred <- function(dimred_result, color_by = NULL,
                            point_size = 0.5, alpha = 0.6,
@@ -184,9 +192,7 @@ sw_plot_dimred <- function(dimred_result, color_by = NULL,
          "Install it with: install.packages('ggplot2')", call. = FALSE)
   }
 
-  if (!is.data.frame(dimred_result)) {
-    stop("'dimred_result' must be a data.frame or tibble.", call. = FALSE)
-  }
+  .validate_df(dimred_result, "dimred_result")
 
   if (!all(c("dim1", "dim2") %in% names(dimred_result))) {
     stop("'dimred_result' must contain 'dim1' and 'dim2' columns. ",

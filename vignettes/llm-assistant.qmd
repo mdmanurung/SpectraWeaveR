@@ -227,9 +227,72 @@ config <- chat$chat_structured(
 sw_generate_pipeline_code(config)
 ```
 
+## R Environment Introspection (btw)
+
+When the [btw](https://posit-dev.github.io/btw/) package is installed, the
+assistant automatically gains the ability to inspect your R environment. This
+means it can:
+
+- **Describe data frames** in your session (column names, types, summary
+  statistics)
+- **Read package documentation** (help pages, vignettes)
+- **Inspect session info** (loaded packages, R version)
+- **Explore local files** in your working directory
+
+Install btw:
+
+```{r}
+install.packages("btw")
+```
+
+The btw tools are registered automatically when available. To disable them:
+
+```{r}
+sw_assistant(include_btw = FALSE)
+```
+
+## MCP Server for External AI Tools
+
+SpectraWeaveR can expose its file-inspection tools via the
+[Model Context Protocol](https://modelcontextprotocol.io) (MCP), allowing
+external AI applications — Claude Code, VS Code Copilot Chat, Cursor — to
+call them directly.
+
+### Setup
+
+Install the required packages:
+
+```{r}
+install.packages(c("mcptools", "btw"))
+```
+
+### Claude Code
+
+```bash
+claude mcp add -s user spectraweaver -- \
+  Rscript -e "SpectraWeaveR::sw_mcp_server()"
+```
+
+### VS Code (`.vscode/mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "spectraweaver": {
+      "command": "Rscript",
+      "args": ["-e", "SpectraWeaveR::sw_mcp_server()"]
+    }
+  }
+}
+```
+
+Once configured, your AI coding assistant can inspect FCS files, validate
+metadata, detect channels, and check batch balance without leaving your
+editor.
+
 ## Privacy and Security
 
-The assistant sends the following to the LLM provider:
+### What is sent to the LLM provider
 
 - File and directory paths
 - Directory listings (file names only)
@@ -239,14 +302,37 @@ The assistant sends the following to the LLM provider:
 
 **No cell expression data** (fluorescence intensities) is transmitted.
 
-For fully local operation, use Ollama:
+### Sensitivity levels
+
+SpectraWeaveR provides two privacy modes via the `sensitivity` parameter:
+
+| Aspect | `"standard"` (default) | `"strict"` |
+|--------|----------------------|------------|
+| CSV/XLSX preview | Auto-redacts PII columns | Column names only (no row values) |
+| btw tool groups | env, docs, session, files | docs, session only |
+| Batch cross-tabs | Shown | Shown with advisory note |
+| FCS headers | Channel names only (safe) | Channel names only (safe) |
+
+PII detection matches common patterns: `patient_id`, `name`, `dob`, `mrn`,
+`ssn`, `diagnosis`, `address`, `email`, etc.
+
+### For clinical / sensitive data
 
 ```{r}
-sw_assistant(provider = "ollama", model = "llama3")
+# Maximum privacy: local model + strict mode
+sw_assistant(provider = "ollama", model = "llama3",
+             sensitivity = "strict")
+
+# Or just strict mode with a cloud provider
+sw_assistant(sensitivity = "strict")
 ```
 
-To suppress the privacy notice:
+### Other privacy controls
 
 ```{r}
+# Disable btw environment tools entirely
+sw_assistant(include_btw = FALSE)
+
+# Suppress the privacy notice
 sw_assistant(privacy_notice = FALSE)
 ```

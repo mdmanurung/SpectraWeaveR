@@ -69,6 +69,22 @@ NULL
 #'     \item{\code{cluster_mfis}}{MFI table per cluster}
 #'   }
 #'
+#' @examples
+#' \dontrun{
+#' meta <- data.frame(
+#'   file = c("sample1.fcs", "sample2.fcs"),
+#'   sample = c("S1", "S2"),
+#'   batch = c("B1", "B2")
+#' )
+#' result <- run_pipeline(
+#'   fcs_dir = "path/to/fcs",
+#'   sample_meta = meta,
+#'   markers = c("CD3", "CD4", "CD8"),
+#'   lineage_markers = c("CD3", "CD4", "CD8")
+#' )
+#' names(result)
+#' }
+#'
 #' @export
 run_pipeline <- function(fcs_dir,
                          sample_meta,
@@ -96,9 +112,7 @@ run_pipeline <- function(fcs_dir,
     stop("FCS directory does not exist: ", fcs_dir, call. = FALSE)
   }
 
-  if (!is.data.frame(sample_meta)) {
-    stop("'sample_meta' must be a data.frame or tibble.", call. = FALSE)
-  }
+  .validate_df(sample_meta, "sample_meta")
 
   required_meta_cols <- c("file", "sample", "batch")
   missing_meta <- setdiff(required_meta_cols, names(sample_meta))
@@ -107,9 +121,13 @@ run_pipeline <- function(fcs_dir,
          paste(missing_meta, collapse = ", "), call. = FALSE)
   }
 
-  if (!is.character(markers) || length(markers) == 0) {
-    stop("'markers' must be a non-empty character vector.", call. = FALSE)
+  dup_samples <- sample_meta$sample[duplicated(sample_meta$sample)]
+  if (length(dup_samples) > 0) {
+    stop("'sample_meta' contains duplicate sample name(s): ",
+         paste(unique(dup_samples), collapse = ", "), call. = FALSE)
   }
+
+  .validate_markers(markers)
 
   if (!is.character(lineage_markers) || length(lineage_markers) == 0) {
     stop("'lineage_markers' must be a non-empty character vector.",

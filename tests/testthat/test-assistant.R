@@ -498,3 +498,196 @@ test_that("sw_pipeline_config_type returns ellmer type object", {
   config_type <- sw_pipeline_config_type()
   expect_true(inherits(config_type, "TypeObject"))
 })
+
+# ===========================================================================
+# MCP server and btw integration tests
+# ===========================================================================
+
+test_that("sw_mcp_server requires mcptools", {
+  skip_if(requireNamespace("mcptools", quietly = TRUE),
+          "mcptools is installed; cannot test missing-package error")
+
+  expect_error(sw_mcp_server(), "mcptools")
+})
+
+test_that("sw_mcp_server has include_btw parameter", {
+  params <- names(formals(sw_mcp_server))
+  expect_true("include_btw" %in% params)
+})
+
+test_that(".sw_tool_list returns list of tools", {
+  skip_if_not_installed("ellmer")
+
+  tools <- SpectraWeaveR:::.sw_tool_list()
+  expect_true(is.list(tools))
+  expect_true(length(tools) == 9)  # 9 SpectraWeaveR custom tools
+})
+
+test_that("sw_assistant accepts include_btw parameter", {
+  params <- names(formals(sw_assistant))
+  expect_true("include_btw" %in% params)
+})
+
+test_that("sw_assistant_configure accepts include_btw parameter", {
+  params <- names(formals(sw_assistant_configure))
+  expect_true("include_btw" %in% params)
+})
+
+test_that("sw_assistant works with include_btw = FALSE", {
+  skip_if_not_installed("ellmer")
+  skip_if(Sys.getenv("OPENAI_API_KEY") == "", "No OpenAI API key")
+
+  chat <- sw_assistant(interactive = FALSE, privacy_notice = FALSE,
+                       include_btw = FALSE)
+  expect_true(inherits(chat, "Chat"))
+})
+
+# ===========================================================================
+# Privacy safeguard tests
+# ===========================================================================
+
+# ---- .detect_sensitive_columns ----
+
+test_that(".detect_sensitive_columns detects PII column names", {
+  sensitive <- SpectraWeaveR:::.detect_sensitive_columns(
+    c("patient_id", "name", "dob", "mrn", "ssn", "diagnosis",
+      "batch", "file", "sample", "CD3", "CD4")
+  )
+  expect_true("patient_id" %in% sensitive)
+  expect_true("name" %in% sensitive)
+  expect_true("dob" %in% sensitive)
+  expect_true("mrn" %in% sensitive)
+  expect_true("ssn" %in% sensitive)
+  expect_true("diagnosis" %in% sensitive)
+  expect_false("batch" %in% sensitive)
+  expect_false("file" %in% sensitive)
+  expect_false("sample" %in% sensitive)
+  expect_false("CD3" %in% sensitive)
+})
+
+test_that(".detect_sensitive_columns is case-insensitive", {
+  sensitive <- SpectraWeaveR:::.detect_sensitive_columns(
+    c("PatientID", "PATIENT_ID", "Patient_Id", "Name", "DOB")
+  )
+  expect_equal(length(sensitive), 5)
+})
+
+test_that(".detect_sensitive_columns returns empty for safe columns", {
+  sensitive <- SpectraWeaveR:::.detect_sensitive_columns(
+    c("batch", "file", "sample", "condition", "CD3", "marker_count")
+  )
+  expect_equal(length(sensitive), 0)
+})
+
+test_that(".detect_sensitive_columns handles empty input", {
+  expect_equal(length(SpectraWeaveR:::.detect_sensitive_columns(character(0))), 0)
+})
+
+# ---- .redact_preview ----
+
+test_that(".redact_preview redacts sensitive columns", {
+  df <- data.frame(
+    patient_id = c("P001", "P002"),
+    batch = c("B1", "B2"),
+    diagnosis = c("Leukemia", "Lymphoma"),
+    stringsAsFactors = FALSE
+  )
+  redacted <- SpectraWeaveR:::.redact_preview(df, c("patient_id", "diagnosis"))
+  expect_equal(redacted$patient_id, c("[REDACTED]", "[REDACTED]"))
+  expect_equal(redacted$diagnosis, c("[REDACTED]", "[REDACTED]"))
+  expect_equal(redacted$batch, c("B1", "B2"))  # unchanged
+})
+
+test_that(".redact_preview with no sensitive columns returns unchanged df", {
+  df <- data.frame(batch = c("B1", "B2"), file = c("a.fcs", "b.fcs"))
+  result <- SpectraWeaveR:::.redact_preview(df, character(0))
+  expect_equal(result, df)
+})
+
+# ---- .tool_read_csv_columns with privacy modes ----
+
+test_that(".tool_read_csv_columns columns_only suppresses rows", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  write.csv(data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
+            tmp, row.names = FALSE)
+
+  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, columns_only = TRUE)
+  expect_match(result, "patient_id")
+  expect_match(result, "Row preview suppressed")
+  expect_no_match(result, "P001")
+})
+
+test_that(".tool_read_csv_columns standard mode redacts PII", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  write.csv(data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
+            tmp, row.names = FALSE)
+
+  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, sensitivity = "standard")
+  expect_match(result, "REDACTED")
+  expect_match(result, "patient_id")
+  expect_no_match(result, "P001")
+  expect_match(result, "B1")  # non-sensitive values still shown
+})
+
+test_that(".tool_read_csv_columns strict mode forces columns_only", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  write.csv(data.frame(batch = "B1", CD3 = 1.5), tmp, row.names = FALSE)
+
+  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, sensitivity = "strict")
+  expect_match(result, "strict privacy mode")
+  expect_match(result, "batch")
+  expect_no_match(result, "B1")
+})
+
+test_that(".tool_read_csv_columns standard mode passes through safe data", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  write.csv(data.frame(batch = "B1", file = "s1.fcs", CD3 = 1.5),
+            tmp, row.names = FALSE)
+
+  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, sensitivity = "standard")
+  expect_no_match(result, "REDACTED")
+  expect_match(result, "B1")  # safe preview shown
+})
+
+# ---- sensitivity parameter acceptance ----
+
+test_that("all assistant functions accept sensitivity parameter", {
+  for (fn_name in c("sw_assistant", "sw_assistant_configure",
+                    "sw_assistant_batch_correction", "sw_assistant_gating",
+                    "sw_assistant_unmixing", "sw_mcp_server")) {
+    fn <- get(fn_name, envir = asNamespace("SpectraWeaveR"))
+    expect_true("sensitivity" %in% names(formals(fn)),
+                info = paste(fn_name, "missing sensitivity param"))
+  }
+})
+
+test_that("sensitivity rejects invalid values", {
+  skip_if_not_installed("ellmer")
+  skip_if(Sys.getenv("OPENAI_API_KEY") == "", "No OpenAI API key")
+
+  expect_error(
+    sw_assistant(interactive = FALSE, privacy_notice = FALSE,
+                 sensitivity = "invalid"),
+    "arg"
+  )
+})
+
+# ---- system prompts contain Data Privacy ----
+
+test_that("all system prompts contain Data Privacy section", {
+  prompt_dir <- system.file("prompts", package = "SpectraWeaveR")
+  skip_if(!nzchar(prompt_dir), "prompts directory not found")
+
+  for (name in c("pipeline_builder", "batch_correction_builder",
+                  "gating_builder", "unmixing_builder")) {
+    path <- file.path(prompt_dir, paste0(name, ".md"))
+    skip_if(!file.exists(path), paste("prompt file missing:", name))
+    content <- paste(readLines(path, warn = FALSE), collapse = "\n")
+    expect_match(content, "Data Privacy",
+                 info = paste(name, "missing Data Privacy section"))
+  }
+})

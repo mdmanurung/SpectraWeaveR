@@ -55,6 +55,17 @@ NULL
 #' @seealso \code{\link{sw_plot_ssm}}, \code{\link{sw_unmixing_quality}},
 #'   \code{\link{sw_prepare_controls}}
 #'
+#' @examples
+#' # Create toy reference spectra (3 fluorophores, 5 detectors)
+#' spectra <- matrix(c(1, 0.1, 0, 0, 0,
+#'                     0, 1, 0.2, 0, 0,
+#'                     0, 0, 0.1, 1, 0.3),
+#'                   nrow = 3, byrow = TRUE,
+#'                   dimnames = list(c("BV421", "PE", "APC"),
+#'                                   paste0("Det", 1:5)))
+#' ssm <- sw_spillover_spreading_matrix(spectra)
+#' ssm$summary
+#'
 #' @export
 sw_spillover_spreading_matrix <- function(reference_spectra,
                                           unmixed_ff = NULL) {
@@ -225,6 +236,17 @@ sw_plot_ssm <- function(ssm, plot_file = NULL, ...) {
 #'   \code{sd}, \code{cv}, \code{pct_negative}, and \code{flagged}.
 #'
 #' @seealso \code{\link{sw_spillover_spreading_matrix}}
+#'
+#' @examples
+#' \dontrun{
+#' if (requireNamespace("flowCore", quietly = TRUE)) {
+#'   mat <- matrix(abs(rnorm(300, 5000, 2000)), ncol = 3,
+#'                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
+#'   ff <- flowCore::flowFrame(mat)
+#'   quality <- sw_unmixing_quality(ff, channels = c("CD3", "CD4", "CD8"))
+#'   quality
+#' }
+#' }
 #'
 #' @export
 sw_unmixing_quality <- function(unmixed_ff, channels = NULL,

@@ -30,7 +30,7 @@ test_that("sw_prepare_for_correction creates correct tibble", {
                                       cofactor = 6000)
 
   expect_s3_class(result, "tbl_df")
-  expect_true(all(c("CD3", "CD4", "sample", "batch", "condition", "id") %in%
+  expect_true(all(c("CD3", "CD4", "sample", "batch", "condition", ".cell_id") %in%
                     names(result)))
   expect_equal(nrow(result), 6) # 3 cells per sample * 2 samples
 
@@ -440,4 +440,97 @@ test_that("sw_plot_batch_dimred validates type argument", {
   df <- tibble::tibble(CD3 = rnorm(10), batch = "B1")
   expect_error(sw_plot_batch_dimred(df, markers = "CD3", type = "invalid"),
                "arg")
+})
+
+# ===========================================================================
+# Integration tests — functional happy-path tests with cyCombine
+# ===========================================================================
+
+test_that("sw_batch_correct runs end-to-end with cyCombine", {
+  skip_if_not_installed("cyCombine")
+
+  set.seed(42)
+  n <- 100
+  uncorrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3)),
+    CD4 = c(rnorm(n, mean = 2), rnorm(n, mean = 4)),
+    batch = rep(c("B1", "B2"), each = n),
+    sample = rep(c("S1", "S2"), each = n)
+  )
+
+  corrected <- sw_batch_correct(uncorrected, markers = c("CD3", "CD4"),
+                                xdim = 4, ydim = 4, rlen = 5, seed = 42)
+
+  expect_s3_class(corrected, "tbl_df")
+  expect_true(all(c("CD3", "CD4") %in% names(corrected)))
+  expect_equal(nrow(corrected), 2 * n)
+  expect_true("batch" %in% names(corrected))
+})
+
+test_that("modular batch correction workflow (normalize -> create_som -> correct_data)", {
+  skip_if_not_installed("cyCombine")
+
+  set.seed(42)
+  n <- 100
+  df <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3)),
+    CD4 = c(rnorm(n, mean = 2), rnorm(n, mean = 4)),
+    batch = rep(c("B1", "B2"), each = n),
+    sample = rep(c("S1", "S2"), each = n)
+  )
+  markers <- c("CD3", "CD4")
+
+  # Step 1: Normalize
+  normalized <- sw_normalize(df, markers = markers, norm_method = "scale")
+  expect_s3_class(normalized, "tbl_df")
+  expect_equal(nrow(normalized), 2 * n)
+  expect_true(all(markers %in% names(normalized)))
+
+  # Step 2: Create SOM
+  labels <- sw_create_som(normalized, markers = markers,
+                          xdim = 4, ydim = 4, rlen = 5, seed = 42)
+  expect_true(is.numeric(labels) || is.integer(labels))
+  expect_equal(length(labels), 2 * n)
+  expect_true(all(labels >= 1))
+
+  # Step 3: Correct data (using original, unnormalized df)
+  corrected <- sw_correct_data(df, label = labels, markers = markers)
+  expect_s3_class(corrected, "tbl_df")
+  expect_equal(nrow(corrected), 2 * n)
+  expect_true(all(markers %in% names(corrected)))
+})
+
+test_that("sw_prepare_for_correction rejects duplicate sample names", {
+  skip_if_not_installed("flowCore")
+
+  mat <- matrix(rnorm(10), ncol = 2, dimnames = list(NULL, c("CD3", "CD4")))
+  ff <- flowCore::flowFrame(mat)
+
+  expect_error(
+    sw_prepare_for_correction(
+      list(S1 = ff, S2 = ff),
+      tibble::tibble(sample = c("S1", "S1"), batch = c("B1", "B2")),
+      markers = "CD3"
+    ),
+    "duplicate sample name"
+  )
+})
+
+test_that("sw_plot_batch_densities produces a ggplot object", {
+  skip_if_not_installed("cyCombine")
+  skip_if_not_installed("ggplot2")
+
+  set.seed(42)
+  n <- 50
+  uncorrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3)),
+    batch = rep(c("B1", "B2"), each = n)
+  )
+  corrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 2), rnorm(n, mean = 2.1)),
+    batch = rep(c("B1", "B2"), each = n)
+  )
+
+  p <- sw_plot_batch_densities(uncorrected, corrected, markers = "CD3")
+  expect_s3_class(p, "gg")
 })

@@ -77,3 +77,12 @@ When generating pipeline code:
 - RemoveMargins must run BEFORE any transformation.
 - For Aurora data, always use cofactor = 6000, not 5.
 - If the user mentions CyTOF/mass cytometry data, advise them that SpectraWeaveR is designed for spectral flow cytometry and the cofactor should be adjusted (typically 5 for CyTOF).
+
+## Data Privacy
+
+- **Never request or repeat patient-identifiable information** (names, MRNs, dates of birth, SSNs, diagnoses) in your responses.
+- When previewing metadata files, prefer `columns_only = TRUE` for the initial inspection. Only request row previews if column names alone are insufficient to determine the column mapping.
+- If a column preview contains values that look like patient identifiers, do NOT echo those values back. Refer to them by column name only.
+- If the user's metadata contains columns that appear to hold sensitive clinical data, proactively suggest that they use coded identifiers (e.g., "S001" instead of patient names) before proceeding.
+- For batch and condition columns, use the aggregate counts (cross-tabulations) rather than listing individual values.
+- The tools will automatically detect and redact potentially sensitive columns. Do not attempt to work around this redaction.
