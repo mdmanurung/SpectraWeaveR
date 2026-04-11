@@ -735,8 +735,8 @@ NULL
     .tool_validate_markers,
     "Check that specified marker names exist in an FCS file.",
     markers = ellmer::type_array(
-      ellmer::type_string("A marker name."),
-      "Character vector of marker names to validate."
+      items = ellmer::type_string("A marker name."),
+      description = "Character vector of marker names to validate."
     ),
     fcs_file = ellmer::type_string("Absolute path to an FCS file.")
   ))
@@ -1609,12 +1609,12 @@ sw_pipeline_config_type <- function() {
     ),
     file_col = ellmer::type_string("Column containing FCS filenames."),
     markers = ellmer::type_array(
-      ellmer::type_string("Marker name."),
-      "All marker names for the pipeline."
+      items = ellmer::type_string("Marker name."),
+      description = "All marker names for the pipeline."
     ),
     lineage_markers = ellmer::type_array(
-      ellmer::type_string("Lineage marker name."),
-      "Lineage markers used for clustering."
+      items = ellmer::type_string("Lineage marker name."),
+      description = "Lineage markers used for clustering."
     ),
     cofactor = ellmer::type_number(
       "Arcsinh cofactor (default 6000 for spectral flow)."
@@ -1635,9 +1635,9 @@ sw_pipeline_config_type <- function() {
       "Whether to unmix from raw spectral data."
     ),
     cytometer = ellmer::type_enum(
-      c("aurora", "auroraNL", "id7000", "s8", "a8", "a5se",
+      values = c("aurora", "auroraNL", "id7000", "s8", "a8", "a5se",
         "opteon", "mosaic", "xenith"),
-      "Cytometer type.",
+      description = "Cytometer type.",
       required = FALSE
     ),
     control_dir = ellmer::type_string(
@@ -1650,13 +1650,13 @@ sw_pipeline_config_type <- function() {
     ),
     seed = ellmer::type_integer("Random seed for reproducibility."),
     clustering_method = ellmer::type_enum(
-      c("som", "fastpg"),
-      "Clustering method.",
+      values = c("som", "fastpg"),
+      description = "Clustering method.",
       required = FALSE
     ),
     norm_method = ellmer::type_enum(
-      c("scale", "rank", "none"),
-      "Normalization method for batch correction.",
+      values = c("scale", "rank", "none"),
+      description = "Normalization method for batch correction.",
       required = FALSE
     )
   )
@@ -1771,8 +1771,8 @@ sw_pipeline_config_type <- function() {
       .tool_validate_markers,
       "Check that specified marker names exist in an FCS file.",
       markers = ellmer::type_array(
-        ellmer::type_string("A marker name."),
-        "Character vector of marker names to validate."
+        items = ellmer::type_string("A marker name."),
+        description = "Character vector of marker names to validate."
       ),
       fcs_file = ellmer::type_string("Absolute path to an FCS file.")
     )
