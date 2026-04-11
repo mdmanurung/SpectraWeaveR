@@ -53,6 +53,9 @@ optional_pkgs <- c(
 
   # CRAN
   "S7",                           # Composable pipeline (R7 OOP)
+  "ellmer",                       # LLM chat (assistant)
+  "btw",                          # R environment tools for LLMs
+  "mcptools",                     # Model Context Protocol server/client
   "ggplot2",                      # Plotting
   "uwot",                         # UMAP dimensionality reduction
   "pheatmap",                     # Cluster annotation heatmaps

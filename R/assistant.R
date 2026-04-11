@@ -473,9 +473,24 @@ NULL
 
 #' Register all SpectraWeaveR tools with a chat object
 #' @param chat An ellmer Chat object.
+#' @param include_btw Logical; if \code{TRUE} (default), also register btw
+#'   tools for R environment introspection when the btw package is available.
 #' @return The chat object (modified in place) with tools registered.
 #' @noRd
-.register_tools <- function(chat) {
+.register_tools <- function(chat, include_btw = TRUE) {
+  # --- btw tools for R environment introspection ---
+  if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
+    btw_groups <- c("env", "docs", "session", "files")
+    tryCatch({
+      chat$register_tools(btw::btw_tools(btw_groups))
+      message("Registered btw tools (", paste(btw_groups, collapse = ", "),
+              ") for R environment introspection.")
+    }, error = function(e) {
+      warning("Could not register btw tools: ", e$message, call. = FALSE)
+    })
+  }
+
+  # --- SpectraWeaveR-specific tools ---
   chat$register_tool(ellmer::tool(
     .tool_list_fcs_files,
     "List FCS files in a directory to help identify sample files.",
@@ -577,6 +592,8 @@ NULL
 #'   If \code{NULL}, the provider's default model is used.
 #' @param system_prompt Character string or \code{NULL}. If \code{NULL},
 #'   the default pipeline builder prompt is loaded.
+#' @param include_btw Logical; if \code{TRUE} (default), register btw tools
+#'   for R environment introspection alongside SpectraWeaveR tools.
 #' @param ... Additional arguments passed to the ellmer chat constructor
 #'   (e.g. \code{api_key}).
 #'
@@ -586,11 +603,24 @@ NULL
 .create_chat <- function(provider = "openai",
                          model = NULL,
                          system_prompt = NULL,
+                         include_btw = TRUE,
                          ...) {
   .check_ellmer()
 
   if (is.null(system_prompt)) {
     system_prompt <- .load_prompt("pipeline_builder")
+  }
+
+  # Append btw context hint to system prompt when btw is available
+  if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
+    btw_hint <- paste0(
+      "\n\nYou have access to btw tools for R environment introspection. ",
+      "You can use them to describe data frames in the user's session, ",
+      "read package documentation, inspect session info, and explore files. ",
+      "Use these tools proactively when the user mentions data they have ",
+      "loaded in R."
+    )
+    system_prompt <- paste0(system_prompt, btw_hint)
   }
 
   # Build arguments for provider constructor
@@ -610,7 +640,7 @@ NULL
          call. = FALSE)
   )
 
-  .register_tools(chat)
+  .register_tools(chat, include_btw = include_btw)
   chat
 }
 
@@ -649,6 +679,10 @@ NULL
 #'   object for programmatic use.
 #' @param privacy_notice Logical; if \code{TRUE} (default), displays a
 #'   privacy notice before starting.
+#' @param include_btw Logical; if \code{TRUE} (default), also register
+#'   \pkg{btw} tools for R environment introspection (describing data
+#'   frames, reading documentation, inspecting session info). Requires the
+#'   \pkg{btw} package to be installed; silently skipped if not available.
 #' @param ... Additional arguments passed to the ellmer chat constructor.
 #'
 #' @return If \code{interactive = TRUE}, returns the \code{Chat} object
@@ -669,6 +703,9 @@ NULL
 #' # Get the Chat object for programmatic use
 #' chat <- sw_assistant(interactive = FALSE)
 #' chat$chat("I have 20 Aurora FCS files in /data/fcs/")
+#'
+#' # Without btw environment tools
+#' sw_assistant(include_btw = FALSE)
 #' }
 #'
 #' @export
@@ -676,10 +713,18 @@ sw_assistant <- function(provider = "openai",
                          model = NULL,
                          interactive = TRUE,
                          privacy_notice = TRUE,
+                         include_btw = TRUE,
                          ...) {
   .check_ellmer()
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
+    btw_note <- ""
+    if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
+      btw_note <- paste0(
+        "The assistant can also inspect your R environment (data frames,\n",
+        "session info, documentation) via btw tools.\n"
+      )
+    }
     message(
       "---\n",
       "SpectraWeaveR LLM Assistant\n",
@@ -687,11 +732,13 @@ sw_assistant <- function(provider = "openai",
       "This assistant sends file paths, directory listings, and column names\n",
       "to the '", provider, "' LLM provider. No cell expression data is\n",
       "transmitted. For local operation, use provider = \"ollama\".\n",
+      btw_note,
       "---"
     )
   }
 
-  chat <- .create_chat(provider = provider, model = model, ...)
+  chat <- .create_chat(provider = provider, model = model,
+                        include_btw = include_btw, ...)
 
   if (isTRUE(interactive)) {
     ellmer::live_console(chat)
@@ -708,6 +755,8 @@ sw_assistant <- function(provider = "openai",
 #'
 #' @param provider Character; LLM provider name.
 #' @param model Character; model name (optional).
+#' @param include_btw Logical; if \code{TRUE} (default), register btw tools
+#'   for R environment introspection.
 #' @param ... Additional arguments passed to the ellmer chat constructor.
 #'
 #' @return An ellmer \code{Chat} object with SpectraWeaveR tools registered.
@@ -721,8 +770,10 @@ sw_assistant <- function(provider = "openai",
 #' @export
 sw_assistant_configure <- function(provider = "openai",
                                    model = NULL,
+                                   include_btw = TRUE,
                                    ...) {
-  .create_chat(provider = provider, model = model, ...)
+  .create_chat(provider = provider, model = model,
+               include_btw = include_btw, ...)
 }
 
 # ---------------------------------------------------------------------------
@@ -748,12 +799,14 @@ sw_assistant_batch_correction <- function(provider = "openai",
                                           model = NULL,
                                           interactive = TRUE,
                                           privacy_notice = TRUE,
+                                          include_btw = TRUE,
                                           ...) {
   .check_ellmer()
 
   prompt <- .load_prompt("batch_correction_builder")
   chat <- .create_chat(provider = provider, model = model,
-                        system_prompt = prompt, ...)
+                        system_prompt = prompt,
+                        include_btw = include_btw, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -793,12 +846,14 @@ sw_assistant_gating <- function(provider = "openai",
                                 model = NULL,
                                 interactive = TRUE,
                                 privacy_notice = TRUE,
+                                include_btw = TRUE,
                                 ...) {
   .check_ellmer()
 
   prompt <- .load_prompt("gating_builder")
   chat <- .create_chat(provider = provider, model = model,
-                        system_prompt = prompt, ...)
+                        system_prompt = prompt,
+                        include_btw = include_btw, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -838,12 +893,14 @@ sw_assistant_unmixing <- function(provider = "openai",
                                   model = NULL,
                                   interactive = TRUE,
                                   privacy_notice = TRUE,
+                                  include_btw = TRUE,
                                   ...) {
   .check_ellmer()
 
   prompt <- .load_prompt("unmixing_builder")
   chat <- .create_chat(provider = provider, model = model,
-                        system_prompt = prompt, ...)
+                        system_prompt = prompt,
+                        include_btw = include_btw, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -1393,4 +1450,170 @@ sw_pipeline_config_type <- function() {
       required = FALSE
     )
   )
+}
+
+
+# ---------------------------------------------------------------------------
+# MCP server
+# ---------------------------------------------------------------------------
+
+#' Build the list of SpectraWeaveR tools as ellmer tool objects
+#'
+#' Creates the canonical tool list for use with MCP servers and
+#' programmatic registration. Returned as a plain list of
+#' \code{ellmer::tool} objects.
+#'
+#' @return A list of ellmer tool objects.
+#' @noRd
+.sw_tool_list <- function() {
+  .check_ellmer()
+
+  list(
+    ellmer::tool(
+      .tool_list_fcs_files,
+      "List FCS files in a directory to help identify sample files.",
+      dir_path = ellmer::type_string(
+        "Absolute path to directory containing FCS files."
+      )
+    ),
+    ellmer::tool(
+      .tool_list_directory,
+      "List files and subdirectories at a given path.",
+      dir_path = ellmer::type_string("Absolute path to a directory.")
+    ),
+    ellmer::tool(
+      .tool_read_fcs_header,
+      "Read channel and marker names from the header of an FCS file (no expression data).",
+      file_path = ellmer::type_string("Absolute path to an FCS file.")
+    ),
+    ellmer::tool(
+      .tool_read_csv_columns,
+      "Preview column names and first few rows of a CSV file.",
+      file_path = ellmer::type_string("Absolute path to a CSV file."),
+      n_rows = ellmer::type_integer(
+        "Number of rows to preview (default 5).",
+        required = FALSE
+      )
+    ),
+    ellmer::tool(
+      .tool_read_xlsx_columns,
+      "Preview column names and first few rows of an Excel XLSX file.",
+      file_path = ellmer::type_string("Absolute path to an XLSX file."),
+      sheet = ellmer::type_integer(
+        "Sheet index (default 1).",
+        required = FALSE
+      ),
+      n_rows = ellmer::type_integer(
+        "Number of rows to preview (default 5).",
+        required = FALSE
+      )
+    ),
+    ellmer::tool(
+      .tool_validate_sample_meta,
+      "Validate that sample metadata has required columns and matches FCS files.",
+      meta_path = ellmer::type_string(
+        "Absolute path to a CSV or XLSX metadata file."
+      ),
+      fcs_dir = ellmer::type_string(
+        "Absolute path to the FCS files directory."
+      )
+    ),
+    ellmer::tool(
+      .tool_detect_channels,
+      "Read an FCS file and classify channels into scatter, time, and fluorochrome categories.",
+      file_path = ellmer::type_string("Absolute path to an FCS file.")
+    ),
+    ellmer::tool(
+      .tool_check_batch_balance,
+      "Summarise the sample distribution across batches in a metadata file.",
+      meta_path = ellmer::type_string(
+        "Absolute path to a CSV or XLSX metadata file."
+      ),
+      batch_col = ellmer::type_string(
+        "Name of the column containing batch labels."
+      )
+    ),
+    ellmer::tool(
+      .tool_validate_markers,
+      "Check that specified marker names exist in an FCS file.",
+      markers = ellmer::type_array(
+        ellmer::type_string("A marker name."),
+        "Character vector of marker names to validate."
+      ),
+      fcs_file = ellmer::type_string("Absolute path to an FCS file.")
+    )
+  )
+}
+
+#' Start an MCP Server Exposing SpectraWeaveR Tools
+#'
+#' Launches a \href{https://modelcontextprotocol.io}{Model Context Protocol}
+#' (MCP) server that exposes SpectraWeaveR's file-inspection tools and,
+#' optionally, \pkg{btw} R-environment introspection tools.
+#'
+#' External AI applications — such as Claude Code, VS Code Copilot Chat,
+#' or Cursor — can connect to this server to inspect FCS files, validate
+#' sample metadata, detect channels, and check batch balance directly from
+#' the user's R session.
+#'
+#' @section Setup for Claude Code:
+#' \preformatted{
+#' claude mcp add -s user spectraweaver -- \\
+#'   Rscript -e "SpectraWeaveR::sw_mcp_server()"
+#' }
+#'
+#' @section Setup for VS Code (\code{.vscode/mcp.json}):
+#' \preformatted{
+#' {
+#'   "mcpServers": {
+#'     "spectraweaver": {
+#'       "command": "Rscript",
+#'       "args": ["-e", "SpectraWeaveR::sw_mcp_server()"]
+#'     }
+#'   }
+#' }
+#' }
+#'
+#' @param include_btw Logical; if \code{TRUE} (default), also expose
+#'   \pkg{btw} tools for R environment introspection (data-frame
+#'   descriptions, package documentation, session info). Requires
+#'   \pkg{btw}; silently skipped if not installed.
+#'
+#' @return This function does not return. It blocks the R process to serve
+#'   MCP requests. Terminate with Ctrl-C or by stopping the process.
+#'
+#' @examples
+#' \dontrun{
+#' # Start MCP server (blocks the process)
+#' sw_mcp_server()
+#'
+#' # Without btw tools
+#' sw_mcp_server(include_btw = FALSE)
+#' }
+#'
+#' @export
+sw_mcp_server <- function(include_btw = TRUE) {
+  if (!requireNamespace("mcptools", quietly = TRUE)) {
+    stop(
+      "Package 'mcptools' is required for MCP server functionality.\n",
+      "Install it with: install.packages('mcptools')",
+      call. = FALSE
+    )
+  }
+  .check_ellmer()
+
+  # Collect tools
+  tools <- .sw_tool_list()
+
+  if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
+    btw_groups <- c("env", "docs", "session", "files")
+    tryCatch({
+      btw_tool_list <- btw::btw_tools(btw_groups)
+      tools <- c(btw_tool_list, tools)
+    }, error = function(e) {
+      warning("Could not load btw tools: ", e$message, call. = FALSE)
+    })
+  }
+
+  mcptools::mcp_server(tools = tools)
 }

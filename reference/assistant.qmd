@@ -5,7 +5,10 @@ title: "LLM Assistant"
 LLM-powered interactive pipeline builder that guides you through
 configuring a SpectraWeaveR analysis pipeline via natural language
 conversation. Requires the [ellmer](https://ellmer.tidyverse.org/) package
-(optional dependency).
+(optional dependency). Optionally integrates with
+[btw](https://posit-dev.github.io/btw/) for R environment introspection
+and [mcptools](https://posit-dev.github.io/mcptools/) for MCP server
+exposure.
 
 ## `sw_assistant` {#sw_assistant}
 
@@ -19,6 +22,7 @@ sw_assistant(
   model = NULL,
   interactive = TRUE,
   privacy_notice = TRUE,
+  include_btw = TRUE,
   ...
 )
 ```
@@ -31,6 +35,7 @@ sw_assistant(
 | `model` | Optional model name. If `NULL`, the provider default is used. |
 | `interactive` | If `TRUE` (default), launches a live console. If `FALSE`, returns the `Chat` object. |
 | `privacy_notice` | If `TRUE` (default), shows a privacy notice before starting. |
+| `include_btw` | If `TRUE` (default), register btw tools for R environment introspection. |
 | `...` | Additional arguments passed to the ellmer chat constructor. |
 
 ### Details
@@ -271,10 +276,53 @@ sw_generate_pipeline_code(config)
 
 ---
 
+## `sw_mcp_server` {#sw_mcp_server}
+
+Start an MCP server exposing SpectraWeaveR tools to external AI
+applications (Claude Code, VS Code Copilot, Cursor).
+
+### Usage
+
+```r
+sw_mcp_server(include_btw = TRUE)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `include_btw` | If `TRUE` (default), also expose btw tools for R environment introspection. |
+
+### Setup
+
+**Claude Code:**
+
+```bash
+claude mcp add -s user spectraweaver -- \
+  Rscript -e "SpectraWeaveR::sw_mcp_server()"
+```
+
+**VS Code (`.vscode/mcp.json`):**
+
+```json
+{
+  "mcpServers": {
+    "spectraweaver": {
+      "command": "Rscript",
+      "args": ["-e", "SpectraWeaveR::sw_mcp_server()"]
+    }
+  }
+}
+```
+
+---
+
 ## Registered Tools
 
 The assistant has access to the following tools that it can invoke during
 conversation:
+
+### SpectraWeaveR Tools
 
 | Tool | Description |
 |------|-------------|
@@ -287,3 +335,15 @@ conversation:
 | `detect_channels` | Classify FCS channels into scatter/time/fluorochrome. |
 | `check_batch_balance` | Summarise sample distribution across batches. |
 | `validate_markers` | Check that markers exist in FCS data. |
+
+### btw Tools (when installed)
+
+When the `btw` package is installed and `include_btw = TRUE`, the assistant
+also gains tools from these groups:
+
+| Group | Description |
+|-------|-------------|
+| `env` | Describe data frames and objects in your R environment. |
+| `docs` | Read package documentation, vignettes, and help pages. |
+| `session` | Inspect R session info (packages, versions). |
+| `files` | Explore local files in the working directory. |

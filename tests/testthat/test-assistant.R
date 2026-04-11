@@ -498,3 +498,46 @@ test_that("sw_pipeline_config_type returns ellmer type object", {
   config_type <- sw_pipeline_config_type()
   expect_true(inherits(config_type, "TypeObject"))
 })
+
+# ===========================================================================
+# MCP server and btw integration tests
+# ===========================================================================
+
+test_that("sw_mcp_server requires mcptools", {
+  skip_if(requireNamespace("mcptools", quietly = TRUE),
+          "mcptools is installed; cannot test missing-package error")
+
+  expect_error(sw_mcp_server(), "mcptools")
+})
+
+test_that("sw_mcp_server has include_btw parameter", {
+  params <- names(formals(sw_mcp_server))
+  expect_true("include_btw" %in% params)
+})
+
+test_that(".sw_tool_list returns list of tools", {
+  skip_if_not_installed("ellmer")
+
+  tools <- SpectraWeaveR:::.sw_tool_list()
+  expect_true(is.list(tools))
+  expect_true(length(tools) == 9)  # 9 SpectraWeaveR custom tools
+})
+
+test_that("sw_assistant accepts include_btw parameter", {
+  params <- names(formals(sw_assistant))
+  expect_true("include_btw" %in% params)
+})
+
+test_that("sw_assistant_configure accepts include_btw parameter", {
+  params <- names(formals(sw_assistant_configure))
+  expect_true("include_btw" %in% params)
+})
+
+test_that("sw_assistant works with include_btw = FALSE", {
+  skip_if_not_installed("ellmer")
+  skip_if(Sys.getenv("OPENAI_API_KEY") == "", "No OpenAI API key")
+
+  chat <- sw_assistant(interactive = FALSE, privacy_notice = FALSE,
+                       include_btw = FALSE)
+  expect_true(inherits(chat, "Chat"))
+})

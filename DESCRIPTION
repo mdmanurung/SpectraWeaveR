@@ -37,6 +37,8 @@ Suggests:
     FastPG,
     S7 (>= 0.2.0),
     ellmer (>= 0.1.0),
+    btw (>= 0.1.0),
+    mcptools (>= 0.1.0),
     readxl,
     ggcyto (>= 1.22.0),
     ggplot2,
