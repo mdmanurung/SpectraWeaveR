@@ -36,6 +36,7 @@ sw_assistant(
 | `interactive` | If `TRUE` (default), launches a live console. If `FALSE`, returns the `Chat` object. |
 | `privacy_notice` | If `TRUE` (default), shows a privacy notice before starting. |
 | `include_btw` | If `TRUE` (default), register btw tools for R environment introspection. |
+| `sensitivity` | `"standard"` (default): auto-redacts PII columns in metadata previews. `"strict"`: suppresses all row previews, limits btw tools. Use `"strict"` for clinical data. |
 | `...` | Additional arguments passed to the ellmer chat constructor. |
 
 ### Details
@@ -100,7 +101,8 @@ Focused assistant for batch correction setup.
 ```r
 sw_assistant_batch_correction(
   provider = "openai", model = NULL,
-  interactive = TRUE, privacy_notice = TRUE, ...
+  interactive = TRUE, privacy_notice = TRUE,
+  sensitivity = c("standard", "strict"), ...
 )
 ```
 
@@ -115,7 +117,8 @@ Focused assistant for gating template creation and automated gating.
 ```r
 sw_assistant_gating(
   provider = "openai", model = NULL,
-  interactive = TRUE, privacy_notice = TRUE, ...
+  interactive = TRUE, privacy_notice = TRUE,
+  sensitivity = c("standard", "strict"), ...
 )
 ```
 
@@ -130,7 +133,8 @@ Focused assistant for spectral unmixing configuration.
 ```r
 sw_assistant_unmixing(
   provider = "openai", model = NULL,
-  interactive = TRUE, privacy_notice = TRUE, ...
+  interactive = TRUE, privacy_notice = TRUE,
+  sensitivity = c("standard", "strict"), ...
 )
 ```
 
@@ -284,7 +288,7 @@ applications (Claude Code, VS Code Copilot, Cursor).
 ### Usage
 
 ```r
-sw_mcp_server(include_btw = TRUE)
+sw_mcp_server(include_btw = TRUE, sensitivity = c("standard", "strict"))
 ```
 
 ### Arguments
@@ -292,6 +296,7 @@ sw_mcp_server(include_btw = TRUE)
 | Argument | Description |
 |----------|-------------|
 | `include_btw` | If `TRUE` (default), also expose btw tools for R environment introspection. |
+| `sensitivity` | `"standard"` (default): auto-redacts PII. `"strict"`: columns only, btw limited to docs+session. |
 
 ### Setup
 

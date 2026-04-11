@@ -31,6 +31,54 @@ NULL
 }
 
 # ---------------------------------------------------------------------------
+# Privacy helpers
+# ---------------------------------------------------------------------------
+
+#' Regex patterns matching common PII / sensitive column names
+#' @noRd
+.PII_PATTERNS <- c(
+  "^patient[_\\.]?id$", "^pat[_\\.]?id$", "^subject[_\\.]?id$",
+  "^subj[_\\.]?id$", "^participant[_\\.]?id$",
+  "^name$", "^first[_\\.]?name$", "^last[_\\.]?name$",
+  "^surname$", "^full[_\\.]?name$", "^patient[_\\.]?name$",
+  "^dob$", "^date[_\\.]?of[_\\.]?birth$", "^birth[_\\.]?date$",
+  "^mrn$", "^medical[_\\.]?record", "^record[_\\.]?number$",
+  "^ssn$", "^social[_\\.]?security",
+  "^diagnosis$", "^dx$", "^icd", "^icd[_\\.]?code$",
+  "^address$", "^zip$", "^zip[_\\.]?code$", "^postal",
+  "^phone$", "^email$", "^telephone$",
+  "^ethnicity$", "^race$"
+)
+
+#' Detect columns with names matching common PII patterns
+#'
+#' @param col_names Character vector of column names.
+#' @return Character vector of column names that match PII patterns
+#'   (may be empty).
+#' @noRd
+.detect_sensitive_columns <- function(col_names) {
+  if (length(col_names) == 0) return(character(0))
+  pattern <- paste(.PII_PATTERNS, collapse = "|")
+  col_names[grepl(pattern, col_names, ignore.case = TRUE)]
+}
+
+#' Redact values in sensitive columns of a data.frame
+#'
+#' Replaces all values in columns matching \code{sensitive_cols} with
+#' \code{"[REDACTED]"}.
+#'
+#' @param df A data.frame.
+#' @param sensitive_cols Character vector of column names to redact.
+#' @return The modified data.frame with sensitive column values replaced.
+#' @noRd
+.redact_preview <- function(df, sensitive_cols) {
+  for (col in intersect(sensitive_cols, names(df))) {
+    df[[col]] <- rep("[REDACTED]", nrow(df))
+  }
+  df
+}
+
+# ---------------------------------------------------------------------------
 # System prompt helpers
 # ---------------------------------------------------------------------------
 
@@ -162,12 +210,19 @@ NULL
 #' Read CSV columns and preview rows
 #' @param file_path Path to a CSV file.
 #' @param n_rows Number of preview rows (default 5).
-#' @return Character summary of columns and preview data.
+#' @param columns_only If TRUE, return column names and types only (no rows).
+#' @param sensitivity Privacy level: "standard" (redact PII) or "strict"
+#'   (columns only, no row values).
+#' @return Character summary of columns and optionally preview data.
 #' @noRd
-.tool_read_csv_columns <- function(file_path, n_rows = 5L) {
+.tool_read_csv_columns <- function(file_path, n_rows = 5L,
+                                   columns_only = FALSE,
+                                   sensitivity = "standard") {
   if (!file.exists(file_path)) {
     return(paste0("Error: File does not exist: ", file_path))
   }
+
+  if (sensitivity == "strict") columns_only <- TRUE
 
   tryCatch({
     df <- utils::read.csv(file_path, nrows = n_rows, stringsAsFactors = FALSE)
@@ -175,9 +230,29 @@ NULL
 
     col_info <- paste0("Columns (", length(cols), "): ",
                        paste(cols, collapse = ", "))
-    preview <- utils::capture.output(print(utils::head(df, n_rows)))
 
-    paste0(col_info, "\n\nPreview:\n", paste(preview, collapse = "\n"))
+    if (isTRUE(columns_only)) {
+      col_types <- vapply(df, function(x) class(x)[1], character(1))
+      type_info <- paste0("  ", cols, ": ", col_types, collapse = "\n")
+      return(paste0(col_info, "\n\nColumn types:\n", type_info,
+                    "\n\n(Row preview suppressed",
+                    if (sensitivity == "strict") " — strict privacy mode" else "",
+                    ")"))
+    }
+
+    sensitive <- .detect_sensitive_columns(cols)
+    note <- ""
+    if (length(sensitive) > 0) {
+      df <- .redact_preview(df, sensitive)
+      note <- paste0(
+        "\n\nNOTE: Values redacted in column(s) ",
+        paste(sensitive, collapse = ", "),
+        " (potential PII detected)."
+      )
+    }
+
+    preview <- utils::capture.output(print(utils::head(df, n_rows)))
+    paste0(col_info, "\n\nPreview:\n", paste(preview, collapse = "\n"), note)
   }, error = function(e) {
     paste0("Error reading CSV: ", conditionMessage(e))
   })
@@ -187,9 +262,14 @@ NULL
 #' @param file_path Path to an XLSX file.
 #' @param sheet Sheet name or index (default 1).
 #' @param n_rows Number of preview rows (default 5).
-#' @return Character summary of columns and preview data.
+#' @param columns_only If TRUE, return column names and types only (no rows).
+#' @param sensitivity Privacy level: "standard" (redact PII) or "strict"
+#'   (columns only, no row values).
+#' @return Character summary of columns and optionally preview data.
 #' @noRd
-.tool_read_xlsx_columns <- function(file_path, sheet = 1L, n_rows = 5L) {
+.tool_read_xlsx_columns <- function(file_path, sheet = 1L, n_rows = 5L,
+                                    columns_only = FALSE,
+                                    sensitivity = "standard") {
   if (!file.exists(file_path)) {
     return(paste0("Error: File does not exist: ", file_path))
   }
@@ -198,15 +278,37 @@ NULL
     return("Error: Package 'readxl' is not installed. Install with: install.packages('readxl')")
   }
 
+  if (sensitivity == "strict") columns_only <- TRUE
+
   tryCatch({
     df <- readxl::read_excel(file_path, sheet = sheet, n_max = n_rows)
     cols <- names(df)
 
     col_info <- paste0("Columns (", length(cols), "): ",
                        paste(cols, collapse = ", "))
-    preview <- utils::capture.output(print(utils::head(df, n_rows)))
 
-    paste0(col_info, "\n\nPreview:\n", paste(preview, collapse = "\n"))
+    if (isTRUE(columns_only)) {
+      col_types <- vapply(df, function(x) class(x)[1], character(1))
+      type_info <- paste0("  ", cols, ": ", col_types, collapse = "\n")
+      return(paste0(col_info, "\n\nColumn types:\n", type_info,
+                    "\n\n(Row preview suppressed",
+                    if (sensitivity == "strict") " — strict privacy mode" else "",
+                    ")"))
+    }
+
+    sensitive <- .detect_sensitive_columns(cols)
+    note <- ""
+    if (length(sensitive) > 0) {
+      df <- .redact_preview(df, sensitive)
+      note <- paste0(
+        "\n\nNOTE: Values redacted in column(s) ",
+        paste(sensitive, collapse = ", "),
+        " (potential PII detected)."
+      )
+    }
+
+    preview <- utils::capture.output(print(utils::head(df, n_rows)))
+    paste0(col_info, "\n\nPreview:\n", paste(preview, collapse = "\n"), note)
   }, error = function(e) {
     paste0("Error reading XLSX: ", conditionMessage(e))
   })
@@ -244,6 +346,15 @@ NULL
     cols <- names(meta)
     info <- c(info, paste0("Columns found: ", paste(cols, collapse = ", ")))
     info <- c(info, paste0("Rows: ", nrow(meta)))
+
+    # Detect potentially sensitive columns
+    sensitive <- .detect_sensitive_columns(cols)
+    if (length(sensitive) > 0) {
+      info <- c(info,
+        paste0("PRIVACY NOTE: Potentially sensitive column(s) detected: ",
+               paste(sensitive, collapse = ", "),
+               ". Consider using coded identifiers."))
+    }
 
     # Check for expected columns
     expected <- c("file", "sample", "batch")
@@ -352,9 +463,11 @@ NULL
 #' Check batch balance in sample metadata
 #' @param meta_path Path to a CSV or XLSX metadata file.
 #' @param batch_col Name of the batch column.
+#' @param sensitivity Privacy level: "standard" or "strict".
 #' @return Character summary of batch distribution.
 #' @noRd
-.tool_check_batch_balance <- function(meta_path, batch_col) {
+.tool_check_batch_balance <- function(meta_path, batch_col,
+                                      sensitivity = "standard") {
   if (!file.exists(meta_path)) {
     return(paste0("Error: File not found: ", meta_path))
   }
@@ -411,6 +524,20 @@ NULL
       result <- paste0(result,
         "\n\n  Condition ('", cond_col, "') × Batch cross-tabulation:\n",
         paste(utils::capture.output(print(cross_tab)), collapse = "\n"))
+      if (sensitivity == "strict") {
+        result <- paste0(result,
+          "\n\n  NOTE: Condition labels are shown for design validation. ",
+          "If these contain sensitive clinical information, ",
+          "consider using coded labels.")
+      }
+    }
+
+    # Report sensitive columns in metadata
+    sensitive <- .detect_sensitive_columns(names(meta))
+    if (length(sensitive) > 0) {
+      result <- paste0(result,
+        "\n\n  PRIVACY NOTE: Potentially sensitive column(s) detected: ",
+        paste(sensitive, collapse = ", "), ".")
     }
 
     result
@@ -472,15 +599,27 @@ NULL
 # ---------------------------------------------------------------------------
 
 #' Register all SpectraWeaveR tools with a chat object
+#'
+#' Uses closure-based wrappers so that the \code{sensitivity} level is
+#' baked into each tool function — the LLM cannot override it.
+#'
 #' @param chat An ellmer Chat object.
 #' @param include_btw Logical; if \code{TRUE} (default), also register btw
 #'   tools for R environment introspection when the btw package is available.
+#' @param sensitivity Character; \code{"standard"} (default) auto-redacts PII
+#'   in metadata previews; \code{"strict"} suppresses all row previews and
+#'   disables btw env/files tools.
 #' @return The chat object (modified in place) with tools registered.
 #' @noRd
-.register_tools <- function(chat, include_btw = TRUE) {
+.register_tools <- function(chat, include_btw = TRUE,
+                            sensitivity = "standard") {
   # --- btw tools for R environment introspection ---
   if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
-    btw_groups <- c("env", "docs", "session", "files")
+    btw_groups <- if (sensitivity == "strict") {
+      c("docs", "session")
+    } else {
+      c("env", "docs", "session", "files")
+    }
     tryCatch({
       chat$register_tools(btw::btw_tools(btw_groups))
       message("Registered btw tools (", paste(btw_groups, collapse = ", "),
@@ -488,6 +627,27 @@ NULL
     }, error = function(e) {
       warning("Could not register btw tools: ", e$message, call. = FALSE)
     })
+  }
+
+  # --- Closure wrappers that capture `sensitivity` ---
+  # The LLM sees columns_only as a tool parameter but cannot override
+  # the sensitivity level, which is controlled by the user.
+  local_read_csv <- function(file_path, n_rows = 5L, columns_only = FALSE) {
+    .tool_read_csv_columns(file_path, n_rows = n_rows,
+                           columns_only = columns_only,
+                           sensitivity = sensitivity)
+  }
+
+  local_read_xlsx <- function(file_path, sheet = 1L, n_rows = 5L,
+                              columns_only = FALSE) {
+    .tool_read_xlsx_columns(file_path, sheet = sheet, n_rows = n_rows,
+                            columns_only = columns_only,
+                            sensitivity = sensitivity)
+  }
+
+  local_check_batch <- function(meta_path, batch_col) {
+    .tool_check_batch_balance(meta_path, batch_col,
+                              sensitivity = sensitivity)
   }
 
   # --- SpectraWeaveR-specific tools ---
@@ -512,18 +672,22 @@ NULL
   ))
 
   chat$register_tool(ellmer::tool(
-    .tool_read_csv_columns,
-    "Preview column names and first few rows of a CSV file.",
+    local_read_csv,
+    "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
     file_path = ellmer::type_string("Absolute path to a CSV file."),
     n_rows = ellmer::type_integer(
       "Number of rows to preview (default 5).",
+      required = FALSE
+    ),
+    columns_only = ellmer::type_boolean(
+      "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
       required = FALSE
     )
   ))
 
   chat$register_tool(ellmer::tool(
-    .tool_read_xlsx_columns,
-    "Preview column names and first few rows of an Excel XLSX file.",
+    local_read_xlsx,
+    "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
     file_path = ellmer::type_string("Absolute path to an XLSX file."),
     sheet = ellmer::type_integer(
       "Sheet index (default 1).",
@@ -531,6 +695,10 @@ NULL
     ),
     n_rows = ellmer::type_integer(
       "Number of rows to preview (default 5).",
+      required = FALSE
+    ),
+    columns_only = ellmer::type_boolean(
+      "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
       required = FALSE
     )
   ))
@@ -553,7 +721,7 @@ NULL
   ))
 
   chat$register_tool(ellmer::tool(
-    .tool_check_batch_balance,
+    local_check_batch,
     "Summarise the sample distribution across batches in a metadata file.",
     meta_path = ellmer::type_string(
       "Absolute path to a CSV or XLSX metadata file."
@@ -594,6 +762,8 @@ NULL
 #'   the default pipeline builder prompt is loaded.
 #' @param include_btw Logical; if \code{TRUE} (default), register btw tools
 #'   for R environment introspection alongside SpectraWeaveR tools.
+#' @param sensitivity Character; \code{"standard"} (auto-redacts PII) or
+#'   \code{"strict"} (columns only, no row previews, limited btw tools).
 #' @param ... Additional arguments passed to the ellmer chat constructor
 #'   (e.g. \code{api_key}).
 #'
@@ -604,6 +774,7 @@ NULL
                          model = NULL,
                          system_prompt = NULL,
                          include_btw = TRUE,
+                         sensitivity = "standard",
                          ...) {
   .check_ellmer()
 
@@ -611,15 +782,25 @@ NULL
     system_prompt <- .load_prompt("pipeline_builder")
   }
 
+  sensitivity <- match.arg(sensitivity, c("standard", "strict"))
+
   # Append btw context hint to system prompt when btw is available
   if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
-    btw_hint <- paste0(
-      "\n\nYou have access to btw tools for R environment introspection. ",
-      "You can use them to describe data frames in the user's session, ",
-      "read package documentation, inspect session info, and explore files. ",
-      "Use these tools proactively when the user mentions data they have ",
-      "loaded in R."
-    )
+    btw_hint <- if (sensitivity == "strict") {
+      paste0(
+        "\n\nYou have access to btw tools for R documentation and session ",
+        "info. Environment inspection and file exploration tools are ",
+        "disabled in strict privacy mode to protect sensitive data."
+      )
+    } else {
+      paste0(
+        "\n\nYou have access to btw tools for R environment introspection. ",
+        "You can use them to describe data frames in the user's session, ",
+        "read package documentation, inspect session info, and explore files. ",
+        "Use these tools proactively when the user mentions data they have ",
+        "loaded in R."
+      )
+    }
     system_prompt <- paste0(system_prompt, btw_hint)
   }
 
@@ -640,7 +821,7 @@ NULL
          call. = FALSE)
   )
 
-  .register_tools(chat, include_btw = include_btw)
+  .register_tools(chat, include_btw = include_btw, sensitivity = sensitivity)
   chat
 }
 
@@ -683,6 +864,12 @@ NULL
 #'   \pkg{btw} tools for R environment introspection (describing data
 #'   frames, reading documentation, inspecting session info). Requires the
 #'   \pkg{btw} package to be installed; silently skipped if not available.
+#' @param sensitivity Character; privacy sensitivity level.
+#'   \code{"standard"} (default) auto-detects and redacts columns matching
+#'   common PII patterns (patient ID, name, DOB, MRN, etc.) in metadata
+#'   previews. \code{"strict"} suppresses all metadata row previews
+#'   (column names only), disables btw env/files tools, and adds advisory
+#'   notes. Use \code{"strict"} for clinical data with patient identifiers.
 #' @param ... Additional arguments passed to the ellmer chat constructor.
 #'
 #' @return If \code{interactive = TRUE}, returns the \code{Chat} object
@@ -697,15 +884,12 @@ NULL
 #' # Use Anthropic Claude
 #' sw_assistant(provider = "anthropic")
 #'
-#' # Local model via Ollama
-#' sw_assistant(provider = "ollama", model = "llama3")
+#' # Strict privacy for clinical data
+#' sw_assistant(sensitivity = "strict")
 #'
-#' # Get the Chat object for programmatic use
-#' chat <- sw_assistant(interactive = FALSE)
-#' chat$chat("I have 20 Aurora FCS files in /data/fcs/")
-#'
-#' # Without btw environment tools
-#' sw_assistant(include_btw = FALSE)
+#' # Maximum privacy: local model + strict mode
+#' sw_assistant(provider = "ollama", model = "llama3",
+#'              sensitivity = "strict")
 #' }
 #'
 #' @export
@@ -714,31 +898,46 @@ sw_assistant <- function(provider = "openai",
                          interactive = TRUE,
                          privacy_notice = TRUE,
                          include_btw = TRUE,
+                         sensitivity = c("standard", "strict"),
                          ...) {
   .check_ellmer()
+  sensitivity <- match.arg(sensitivity)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     btw_note <- ""
     if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
-      btw_note <- paste0(
-        "The assistant can also inspect your R environment (data frames,\n",
-        "session info, documentation) via btw tools.\n"
-      )
+      btw_note <- if (sensitivity == "strict") {
+        "  btw tools: docs and session only (env/files disabled).\n"
+      } else {
+        paste0(
+          "  btw tools can inspect your R environment (data frames, files).\n",
+          "  Disable with: include_btw = FALSE\n"
+        )
+      }
     }
     message(
       "---\n",
       "SpectraWeaveR LLM Assistant\n",
       "---\n",
       "This assistant sends file paths, directory listings, and column names\n",
-      "to the '", provider, "' LLM provider. No cell expression data is\n",
-      "transmitted. For local operation, use provider = \"ollama\".\n",
+      "to the '", provider, "' LLM provider.\n\n",
+      "PRIVACY:\n",
+      "  No cell expression data (fluorescence intensities) is transmitted.\n",
+      "  Metadata previews: columns matching PII patterns are auto-redacted.\n",
+      if (sensitivity == "strict") {
+        "  STRICT MODE: Row previews fully suppressed. btw env/files disabled.\n"
+      } else {
+        "  For clinical data, use: sensitivity = \"strict\"\n"
+      },
       btw_note,
+      "  For fully local operation: provider = \"ollama\"\n",
       "---"
     )
   }
 
   chat <- .create_chat(provider = provider, model = model,
-                        include_btw = include_btw, ...)
+                        include_btw = include_btw,
+                        sensitivity = sensitivity, ...)
 
   if (isTRUE(interactive)) {
     ellmer::live_console(chat)
@@ -771,9 +970,11 @@ sw_assistant <- function(provider = "openai",
 sw_assistant_configure <- function(provider = "openai",
                                    model = NULL,
                                    include_btw = TRUE,
+                                   sensitivity = c("standard", "strict"),
                                    ...) {
+  sensitivity <- match.arg(sensitivity)
   .create_chat(provider = provider, model = model,
-               include_btw = include_btw, ...)
+               include_btw = include_btw, sensitivity = sensitivity, ...)
 }
 
 # ---------------------------------------------------------------------------
@@ -800,13 +1001,16 @@ sw_assistant_batch_correction <- function(provider = "openai",
                                           interactive = TRUE,
                                           privacy_notice = TRUE,
                                           include_btw = TRUE,
+                                          sensitivity = c("standard", "strict"),
                                           ...) {
   .check_ellmer()
+  sensitivity <- match.arg(sensitivity)
 
   prompt <- .load_prompt("batch_correction_builder")
   chat <- .create_chat(provider = provider, model = model,
                         system_prompt = prompt,
-                        include_btw = include_btw, ...)
+                        include_btw = include_btw,
+                        sensitivity = sensitivity, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -847,13 +1051,16 @@ sw_assistant_gating <- function(provider = "openai",
                                 interactive = TRUE,
                                 privacy_notice = TRUE,
                                 include_btw = TRUE,
+                                sensitivity = c("standard", "strict"),
                                 ...) {
   .check_ellmer()
+  sensitivity <- match.arg(sensitivity)
 
   prompt <- .load_prompt("gating_builder")
   chat <- .create_chat(provider = provider, model = model,
                         system_prompt = prompt,
-                        include_btw = include_btw, ...)
+                        include_btw = include_btw,
+                        sensitivity = sensitivity, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -894,13 +1101,16 @@ sw_assistant_unmixing <- function(provider = "openai",
                                   interactive = TRUE,
                                   privacy_notice = TRUE,
                                   include_btw = TRUE,
+                                  sensitivity = c("standard", "strict"),
                                   ...) {
   .check_ellmer()
+  sensitivity <- match.arg(sensitivity)
 
   prompt <- .load_prompt("unmixing_builder")
   chat <- .create_chat(provider = provider, model = model,
                         system_prompt = prompt,
-                        include_btw = include_btw, ...)
+                        include_btw = include_btw,
+                        sensitivity = sensitivity, ...)
 
   if (isTRUE(privacy_notice) && isTRUE(interactive)) {
     message(
@@ -1459,14 +1669,30 @@ sw_pipeline_config_type <- function() {
 
 #' Build the list of SpectraWeaveR tools as ellmer tool objects
 #'
-#' Creates the canonical tool list for use with MCP servers and
-#' programmatic registration. Returned as a plain list of
-#' \code{ellmer::tool} objects.
+#' Uses closure wrappers for tools that need the \code{sensitivity} level.
 #'
+#' @param sensitivity Character; \code{"standard"} or \code{"strict"}.
 #' @return A list of ellmer tool objects.
 #' @noRd
-.sw_tool_list <- function() {
+.sw_tool_list <- function(sensitivity = "standard") {
   .check_ellmer()
+
+  # Closure wrappers capturing sensitivity
+  local_read_csv <- function(file_path, n_rows = 5L, columns_only = FALSE) {
+    .tool_read_csv_columns(file_path, n_rows = n_rows,
+                           columns_only = columns_only,
+                           sensitivity = sensitivity)
+  }
+  local_read_xlsx <- function(file_path, sheet = 1L, n_rows = 5L,
+                              columns_only = FALSE) {
+    .tool_read_xlsx_columns(file_path, sheet = sheet, n_rows = n_rows,
+                            columns_only = columns_only,
+                            sensitivity = sensitivity)
+  }
+  local_check_batch <- function(meta_path, batch_col) {
+    .tool_check_batch_balance(meta_path, batch_col,
+                              sensitivity = sensitivity)
+  }
 
   list(
     ellmer::tool(
@@ -1487,17 +1713,21 @@ sw_pipeline_config_type <- function() {
       file_path = ellmer::type_string("Absolute path to an FCS file.")
     ),
     ellmer::tool(
-      .tool_read_csv_columns,
-      "Preview column names and first few rows of a CSV file.",
+      local_read_csv,
+      "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
       file_path = ellmer::type_string("Absolute path to a CSV file."),
       n_rows = ellmer::type_integer(
         "Number of rows to preview (default 5).",
         required = FALSE
+      ),
+      columns_only = ellmer::type_boolean(
+        "If TRUE, return only column names and types without row values.",
+        required = FALSE
       )
     ),
     ellmer::tool(
-      .tool_read_xlsx_columns,
-      "Preview column names and first few rows of an Excel XLSX file.",
+      local_read_xlsx,
+      "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
       file_path = ellmer::type_string("Absolute path to an XLSX file."),
       sheet = ellmer::type_integer(
         "Sheet index (default 1).",
@@ -1505,6 +1735,10 @@ sw_pipeline_config_type <- function() {
       ),
       n_rows = ellmer::type_integer(
         "Number of rows to preview (default 5).",
+        required = FALSE
+      ),
+      columns_only = ellmer::type_boolean(
+        "If TRUE, return only column names and types without row values.",
         required = FALSE
       )
     ),
@@ -1524,7 +1758,7 @@ sw_pipeline_config_type <- function() {
       file_path = ellmer::type_string("Absolute path to an FCS file.")
     ),
     ellmer::tool(
-      .tool_check_batch_balance,
+      local_check_batch,
       "Summarise the sample distribution across batches in a metadata file.",
       meta_path = ellmer::type_string(
         "Absolute path to a CSV or XLSX metadata file."
@@ -1578,6 +1812,9 @@ sw_pipeline_config_type <- function() {
 #'   \pkg{btw} tools for R environment introspection (data-frame
 #'   descriptions, package documentation, session info). Requires
 #'   \pkg{btw}; silently skipped if not installed.
+#' @param sensitivity Character; \code{"standard"} (default) auto-redacts
+#'   PII in metadata previews; \code{"strict"} suppresses row previews and
+#'   limits btw tools to docs and session only.
 #'
 #' @return This function does not return. It blocks the R process to serve
 #'   MCP requests. Terminate with Ctrl-C or by stopping the process.
@@ -1587,12 +1824,13 @@ sw_pipeline_config_type <- function() {
 #' # Start MCP server (blocks the process)
 #' sw_mcp_server()
 #'
-#' # Without btw tools
-#' sw_mcp_server(include_btw = FALSE)
+#' # Strict privacy for clinical data
+#' sw_mcp_server(sensitivity = "strict")
 #' }
 #'
 #' @export
-sw_mcp_server <- function(include_btw = TRUE) {
+sw_mcp_server <- function(include_btw = TRUE,
+                          sensitivity = c("standard", "strict")) {
   if (!requireNamespace("mcptools", quietly = TRUE)) {
     stop(
       "Package 'mcptools' is required for MCP server functionality.\n",
@@ -1601,12 +1839,17 @@ sw_mcp_server <- function(include_btw = TRUE) {
     )
   }
   .check_ellmer()
+  sensitivity <- match.arg(sensitivity)
 
-  # Collect tools
-  tools <- .sw_tool_list()
+  # Collect tools with sensitivity baked in via closures
+  tools <- .sw_tool_list(sensitivity = sensitivity)
 
   if (isTRUE(include_btw) && requireNamespace("btw", quietly = TRUE)) {
-    btw_groups <- c("env", "docs", "session", "files")
+    btw_groups <- if (sensitivity == "strict") {
+      c("docs", "session")
+    } else {
+      c("env", "docs", "session", "files")
+    }
     tryCatch({
       btw_tool_list <- btw::btw_tools(btw_groups)
       tools <- c(btw_tool_list, tools)
