@@ -2,7 +2,9 @@ name: Deploy Quarto Website to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'claude/**'
   workflow_dispatch:
 
 permissions:
@@ -11,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.ref }}"
   cancel-in-progress: false
 
 env:
@@ -20,6 +22,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      R_KEEP_PKG_SOURCE: yes
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,19 +39,35 @@ jobs:
       - name: Install R dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          packages: |
+          dependencies: '"all"'
+          extra-packages: |
             any::knitr
             any::rmarkdown
+            any::devtools
+            any::BiocManager
+
+      - name: Install SpectraWeaveR
+        run: |
+          Rscript -e 'devtools::install(".", dependencies = FALSE, upgrade = "never")'
 
       - name: Render Quarto website
         uses: quarto-dev/quarto-actions/render@v2
 
       - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
+      - name: Upload preview artifact
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quarto-site-${{ github.sha }}
+          path: _site
+
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
