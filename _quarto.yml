@@ -21,6 +21,18 @@ website:
             href: vignettes/batch-correction.qmd
           - text: "LLM Pipeline Builder"
             href: vignettes/llm-assistant.qmd
+          - text: "---"
+          - text: "End-to-End Tutorial"
+          - text: "1. Loading & Preprocessing"
+            href: vignettes/tutorial-01-loading-preprocessing.qmd
+          - text: "2. Gating & Signal QC"
+            href: vignettes/tutorial-02-gating-signal-qc.qmd
+          - text: "3. Batch Correction"
+            href: vignettes/tutorial-03-batch-correction.qmd
+          - text: "4. Clustering & Visualization"
+            href: vignettes/tutorial-04-clustering-visualization.qmd
+          - text: "5. Pipeline Frameworks"
+            href: vignettes/tutorial-05-pipeline-frameworks.qmd
       - text: "API Reference"
         menu:
           - text: "Overview"
