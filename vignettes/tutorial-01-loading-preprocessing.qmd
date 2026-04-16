@@ -1,0 +1,428 @@
+---
+title: "Tutorial Part 1: Data Loading & Preprocessing"
+vignette: >
+  %\VignetteIndexEntry{Tutorial Part 1: Data Loading & Preprocessing}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## Overview
+
+This is **Part 1** of the SpectraWeaveR end-to-end tutorial series:
+
+1. **Data Loading & Preprocessing** (this vignette)
+2. [Gating & Signal QC](tutorial-02-gating-signal-qc.qmd)
+3. [Batch Correction](tutorial-03-batch-correction.qmd)
+4. [Clustering & Visualization](tutorial-04-clustering-visualization.qmd)
+5. [Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)
+
+This part covers: creating synthetic FCS files, reading them with
+Aurora-safe defaults, inspecting channels, renaming markers, converting
+between data formats, removing margin events and doublets, and tracking
+events through preprocessing.
+
+## Create synthetic FCS data
+
+We generate 6 synthetic FCS files (3 samples per batch, 2 batches) with
+10 channels: 4 scatter channels and 6 fluorescence detectors. Three
+Gaussian sub-populations (CD4+ T cells, CD8+ T cells, B cells) give
+clustering something meaningful to find later.
+
+```{r}
+#| label: synthetic-data
+library(SpectraWeaveR)
+library(flowCore)
+
+set.seed(42)
+
+# --- Shared helper used across all tutorial vignettes ---
+make_tutorial_fcs <- function(fcs_dir, n_per_pop = 150, batch_shift = 0) {
+  markers <- c("BV421-A", "BV510-A", "BV605-A", "BV711-A", "PE-A", "APC-A")
+  n <- n_per_pop * 3
+
+  # Three sub-populations with distinct marker profiles
+  pop_cd4  <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 150000, 20000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 120000, 18000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  50000, 10000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  40000,  9000)),
+    `BV421-A` = abs(rnorm(n_per_pop, 3000 + batch_shift, 500)),
+    `BV510-A` = abs(rnorm(n_per_pop, 5000 + batch_shift, 800)),
+    `BV605-A` = abs(rnorm(n_per_pop,  400 + batch_shift, 150)),
+    `BV711-A` = abs(rnorm(n_per_pop,  300 + batch_shift, 100)),
+    `PE-A`    = abs(rnorm(n_per_pop,  200 + batch_shift, 100)),
+    `APC-A`   = abs(rnorm(n_per_pop,  500 + batch_shift, 200))
+  )
+
+  pop_cd8  <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 140000, 20000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 110000, 18000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  45000, 10000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  36000,  9000)),
+    `BV421-A` = abs(rnorm(n_per_pop, 2500 + batch_shift, 500)),
+    `BV510-A` = abs(rnorm(n_per_pop,  400 + batch_shift, 150)),
+    `BV605-A` = abs(rnorm(n_per_pop, 4500 + batch_shift, 700)),
+    `BV711-A` = abs(rnorm(n_per_pop,  350 + batch_shift, 120)),
+    `PE-A`    = abs(rnorm(n_per_pop,  250 + batch_shift, 100)),
+    `APC-A`   = abs(rnorm(n_per_pop,  450 + batch_shift, 180))
+  )
+
+  pop_bcell <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 130000, 18000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 100000, 16000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  40000,  8000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  32000,  7000)),
+    `BV421-A` = abs(rnorm(n_per_pop,  300 + batch_shift, 120)),
+    `BV510-A` = abs(rnorm(n_per_pop,  350 + batch_shift, 130)),
+    `BV605-A` = abs(rnorm(n_per_pop,  280 + batch_shift, 100)),
+    `BV711-A` = abs(rnorm(n_per_pop, 4000 + batch_shift, 600)),
+    `PE-A`    = abs(rnorm(n_per_pop, 3500 + batch_shift, 500)),
+    `APC-A`   = abs(rnorm(n_per_pop, 2000 + batch_shift, 400))
+  )
+
+  mat <- rbind(pop_cd4, pop_cd8, pop_bcell)
+  mat <- mat[sample(nrow(mat)), ]
+  storage.mode(mat) <- "double"
+  ff <- flowFrame(mat)
+  ff
+}
+
+# Create temp directory and write 6 FCS files
+fcs_dir <- file.path(tempdir(), "tutorial_fcs")
+dir.create(fcs_dir, showWarnings = FALSE, recursive = TRUE)
+
+sample_info <- data.frame(
+  file   = paste0("sample", 1:6, ".fcs"),
+  sample = paste0("S", 1:6),
+  batch  = rep(c("B1", "B2"), each = 3),
+  condition = rep(c("control", "treatment"), 3),
+  stringsAsFactors = FALSE
+)
+
+for (i in seq_len(nrow(sample_info))) {
+  shift <- if (sample_info$batch[i] == "B2") 300 else 0
+  ff <- make_tutorial_fcs(fcs_dir, n_per_pop = 150, batch_shift = shift)
+  write.FCS(ff, file.path(fcs_dir, sample_info$file[i]))
+}
+
+sample_meta <- tibble::as_tibble(sample_info)
+cat("Wrote", nrow(sample_meta), "FCS files to", fcs_dir, "\n")
+print(sample_meta)
+```
+
+## Reading FCS files
+
+`sw_read_fcs()` wraps `flowCore::read.FCS()` with `truncate_max_range = FALSE`,
+which is critical for Aurora data where fluorescence intensities can reach
+~4 million and would otherwise be clipped.
+
+```{r}
+#| label: read-fcs
+# Single file → flowFrame
+fcs_path <- file.path(fcs_dir, "sample1.fcs")
+ff_single <- sw_read_fcs(fcs_path)
+stopifnot(is(ff_single, "flowFrame"))
+cat("Single file:", nrow(ff_single), "events,", ncol(ff_single), "channels\n")
+
+# Multiple files → flowSet
+all_paths <- file.path(fcs_dir, sample_meta$file)
+fs <- sw_read_fcs(all_paths)
+stopifnot(is(fs, "flowSet"))
+cat("flowSet:", length(fs), "samples\n")
+```
+
+`sw_load_unmixed()` is a directory-level loader that reads all FCS files
+matching a pattern:
+
+```{r}
+#| label: load-unmixed
+fs_loaded <- sw_load_unmixed(fcs_dir)
+stopifnot(is(fs_loaded, "flowSet"))
+stopifnot(length(fs_loaded) == 6)
+cat("Loaded", length(fs_loaded), "samples via sw_load_unmixed()\n")
+```
+
+## Channel utilities
+
+### Identify fluorescence channels
+
+```{r}
+#| label: fluor-channels
+fluor_ch <- sw_get_fluor_channels(ff_single)
+cat("Fluorescence channels:", paste(fluor_ch, collapse = ", "), "\n")
+stopifnot(length(fluor_ch) == 6)
+stopifnot(!any(grepl("^(FSC|SSC)", fluor_ch)))
+```
+
+### Classify signal vs fluorescence columns
+
+`sw_are_signal_cols()` returns `TRUE` for all real signal channels
+(scatter + fluorescence), excluding metadata like Time and Original_ID.
+`sw_are_fluor_cols()` further excludes scatter channels.
+
+```{r}
+#| label: classify-cols
+signal_mask <- sw_are_signal_cols(ff_single)
+fluor_mask  <- sw_are_fluor_cols(ff_single)
+
+cat("Signal columns:\n")
+print(signal_mask)
+cat("\nFluor columns:\n")
+print(fluor_mask)
+
+# All channels are signal (no Time column in synthetic data)
+stopifnot(all(signal_mask))
+# Scatter channels are signal but not fluor
+stopifnot(fluor_mask["BV421-A"] == TRUE)
+stopifnot(fluor_mask["FSC-A"] == FALSE)
+```
+
+### Rename detector channels to marker names
+
+In real Aurora workflows, channels have detector names (BV421-A, PE-A, etc.)
+and you map them to biological marker names (CD3, CD4, etc.) via
+`sw_set_marker_names()`.
+
+```{r}
+#| label: set-marker-names
+marker_map <- c(
+  "BV421-A" = "CD3",  "BV510-A" = "CD4",  "BV605-A" = "CD8",
+  "BV711-A" = "CD19", "PE-A"    = "CD56", "APC-A"   = "HLADR"
+)
+
+ff_named <- sw_set_marker_names(ff_single, marker_map)
+
+pdata <- pData(parameters(ff_named))
+named_markers <- pdata$desc[!is.na(pdata$desc)]
+cat("Marker names set:", paste(named_markers, collapse = ", "), "\n")
+stopifnot(all(c("CD3", "CD4", "CD8", "CD19", "CD56", "HLADR") %in% named_markers))
+```
+
+## Format conversions
+
+SpectraWeaveR provides three conversion functions that bridge the gap
+between flowCore objects and tibbles used by cyCombine / dplyr.
+
+### flowFrame → tibble
+
+```{r}
+#| label: ff-to-tibble
+tbl <- sw_flowframe_to_tibble(ff_single, sample = "S1", batch = "B1",
+                               condition = "control")
+stopifnot(is.data.frame(tbl))
+stopifnot(nrow(tbl) == nrow(ff_single))
+stopifnot(all(c("BV421-A", "FSC-A", "sample", "batch", "condition") %in% names(tbl)))
+cat("Converted flowFrame to tibble:", nrow(tbl), "rows,", ncol(tbl), "cols\n")
+head(tbl, 3)
+```
+
+### Expression matrix → tibble
+
+```{r}
+#| label: exprs-to-tibble
+mat <- exprs(ff_single)
+tbl_from_mat <- sw_exprs_to_tibble(mat, sample = "S1", batch = "B1")
+stopifnot(is.data.frame(tbl_from_mat))
+stopifnot(nrow(tbl_from_mat) == nrow(mat))
+stopifnot("sample" %in% names(tbl_from_mat))
+cat("Converted matrix to tibble:", nrow(tbl_from_mat), "rows\n")
+```
+
+### tibble → flowFrame (round-trip)
+
+```{r}
+#| label: tibble-to-ff
+marker_cols <- c("BV421-A", "BV510-A", "BV605-A", "BV711-A", "PE-A", "APC-A")
+ff_back <- sw_tibble_to_flowframe(tbl, markers = marker_cols)
+stopifnot(is(ff_back, "flowFrame"))
+stopifnot(nrow(ff_back) == nrow(tbl))
+stopifnot(all(marker_cols %in% colnames(ff_back)))
+
+# Verify round-trip fidelity
+orig_vals <- exprs(ff_single)[, marker_cols]
+back_vals <- exprs(ff_back)
+stopifnot(all.equal(orig_vals, back_vals, tolerance = 1e-10))
+cat("Round-trip flowFrame -> tibble -> flowFrame: values match\n")
+```
+
+## Margin removal
+
+Margin events are cells that saturate detector limits. They must be
+removed **before** any data transformation because `RemoveMargins` relies
+on raw signal intensities.
+
+### Standard margin removal
+
+```{r}
+#| label: remove-margins
+ff_clean <- sw_remove_margins(ff_single)
+stopifnot(is(ff_clean, "flowFrame"))
+stopifnot(nrow(ff_clean) <= nrow(ff_single))
+cat("Margin removal:", nrow(ff_single), "->", nrow(ff_clean), "events\n")
+```
+
+### PeacoQC-based margin removal
+
+`sw_remove_margins_peacoqc()` is an enhanced wrapper that auto-selects
+signal channels and supports per-channel range specifications.
+
+```{r}
+#| label: remove-margins-peacoqc
+ff_clean_pqc <- sw_remove_margins_peacoqc(ff_single)
+stopifnot(is(ff_clean_pqc, "flowFrame"))
+stopifnot(nrow(ff_clean_pqc) <= nrow(ff_single))
+cat("PeacoQC margin removal:", nrow(ff_single), "->",
+    nrow(ff_clean_pqc), "events\n")
+```
+
+## Doublet removal
+
+Doublets are two cells stuck together that appear as a single event with
+anomalous area-to-height ratios.
+
+### Singlets gate (parallelogram)
+
+`sw_singlets_gate()` creates a parallelogram polygon gate from
+FSC-A vs FSC-H. You can then apply it with `flowCore::filter()`.
+
+```{r}
+#| label: singlets-gate
+gate <- sw_singlets_gate(ff_clean, channel1 = "FSC-A", channel2 = "FSC-H")
+stopifnot(is(gate, "polygonGate"))
+cat("Created singlets gate:", gate@filterId, "\n")
+
+# Apply the gate
+filt_result <- filter(ff_clean, gate)
+ff_singlets <- Subset(ff_clean, filt_result)
+stopifnot(is(ff_singlets, "flowFrame"))
+cat("After singlets gate:", nrow(ff_clean), "->", nrow(ff_singlets), "events\n")
+```
+
+### Remove doublets (CytoPipeline algorithm)
+
+`sw_remove_doublets()` applies singlet gates on one or two channel pairs
+(FSC-A/FSC-H and optionally SSC-A/SSC-H) and returns the filtered flowFrame.
+
+```{r}
+#| label: remove-doublets
+ff_no_doublets <- sw_remove_doublets(
+  ff_clean,
+  area_channels   = c("FSC-A"),
+  height_channels = c("FSC-H"),
+  nmads = 4
+)
+stopifnot(is(ff_no_doublets, "flowFrame"))
+stopifnot(nrow(ff_no_doublets) <= nrow(ff_clean))
+cat("Doublet removal:", nrow(ff_clean), "->", nrow(ff_no_doublets), "events\n")
+```
+
+### Remove doublets (PeacoQC algorithm)
+
+```{r}
+#| label: remove-doublets-peacoqc
+ff_no_doublets_pqc <- sw_remove_doublets_peacoqc(
+  ff_clean,
+  area_channels   = c("FSC-A"),
+  height_channels = c("FSC-H"),
+  nmads = 4
+)
+stopifnot(is(ff_no_doublets_pqc, "flowFrame"))
+stopifnot(nrow(ff_no_doublets_pqc) <= nrow(ff_clean))
+cat("PeacoQC doublet removal:", nrow(ff_clean), "->",
+    nrow(ff_no_doublets_pqc), "events\n")
+```
+
+## Debris removal
+
+`sw_remove_debris_gate()` applies a manual polygon gate in FSC-A vs SSC-A
+space. You provide the polygon vertices as a numeric vector (first half =
+x-coords, second half = y-coords).
+
+```{r}
+#| label: remove-debris
+# Define a generous polygon that keeps most cells
+gate_coords <- c(
+  80000, 80000, 200000, 200000,    # FSC-A x-coords (4 vertices)
+  10000, 80000,  80000,  10000     # SSC-A y-coords (4 vertices)
+)
+
+ff_no_debris <- sw_remove_debris_gate(ff_clean, gate_data = gate_coords)
+stopifnot(is(ff_no_debris, "flowFrame"))
+stopifnot(nrow(ff_no_debris) <= nrow(ff_clean))
+cat("Debris removal:", nrow(ff_clean), "->", nrow(ff_no_debris), "events\n")
+```
+
+## Aggregate and subsample
+
+`sw_aggregate_and_sample()` pools events from multiple samples in a
+flowSet and subsamples to a target total. Useful for creating a combined
+overview before analysis.
+
+```{r}
+#| label: aggregate
+ff_agg <- sw_aggregate_and_sample(fs, n_total_events = 500, seed = 42)
+stopifnot(is(ff_agg, "flowFrame"))
+stopifnot(nrow(ff_agg) <= 500)
+stopifnot("File" %in% colnames(ff_agg))
+stopifnot("Original_ID" %in% colnames(ff_agg))
+cat("Aggregated", length(fs), "samples into", nrow(ff_agg), "events\n")
+```
+
+## Event audit trail
+
+`sw_collect_events_retained()` tracks how many events survive each
+preprocessing step, providing a full audit trail.
+
+```{r}
+#| label: events-retained
+intermediates <- list(
+  raw           = nrow(ff_single),
+  after_margins = nrow(ff_clean),
+  after_singlets = nrow(ff_no_doublets),
+  after_debris  = nrow(ff_no_debris)
+)
+
+audit <- sw_collect_events_retained(intermediates)
+stopifnot(is.data.frame(audit))
+stopifnot(all(c("step", "n_events", "pct_of_initial", "pct_of_previous") %in%
+              names(audit)))
+print(audit)
+```
+
+## Clean up
+
+```{r}
+#| label: cleanup
+unlink(fcs_dir, recursive = TRUE)
+cat("Tutorial Part 1 complete. All functions verified.\n")
+```
+
+## Functions covered
+
+| Function | Module |
+|----------|--------|
+| `sw_read_fcs()` | utils |
+| `sw_load_unmixed()` | unmix |
+| `sw_get_fluor_channels()` | utils |
+| `sw_are_signal_cols()` | utils |
+| `sw_are_fluor_cols()` | utils |
+| `sw_set_marker_names()` | utils |
+| `sw_flowframe_to_tibble()` | utils |
+| `sw_exprs_to_tibble()` | utils |
+| `sw_tibble_to_flowframe()` | utils |
+| `sw_remove_margins()` | unmix |
+| `sw_remove_margins_peacoqc()` | gating_utils |
+| `sw_singlets_gate()` | gating_utils |
+| `sw_remove_doublets()` | gating_utils |
+| `sw_remove_doublets_peacoqc()` | gating_utils |
+| `sw_remove_debris_gate()` | gating_utils |
+| `sw_aggregate_and_sample()` | utils |
+| `sw_collect_events_retained()` | utils |
+
+**Next:** [Part 2 — Gating & Signal QC](tutorial-02-gating-signal-qc.qmd)

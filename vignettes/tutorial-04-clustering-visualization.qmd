@@ -1,0 +1,337 @@
+---
+title: "Tutorial Part 4: Clustering & Visualization"
+vignette: >
+  %\VignetteIndexEntry{Tutorial Part 4: Clustering & Visualization}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## Overview
+
+This is **Part 4** of the SpectraWeaveR end-to-end tutorial series:
+
+1. [Data Loading & Preprocessing](tutorial-01-loading-preprocessing.qmd)
+2. [Gating & Signal QC](tutorial-02-gating-signal-qc.qmd)
+3. [Batch Correction](tutorial-03-batch-correction.qmd)
+4. **Clustering & Visualization** (this vignette)
+5. [Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)
+
+This part covers: clustering with kohonen SOM, extracting assignments,
+computing MFIs, heatmap visualization, predicting clusters on new data,
+dimensionality reduction (PCA and UMAP), and unmixing quality diagnostics.
+
+## Synthetic data setup
+
+We create a batch-corrected tibble that represents the output of Part 3.
+
+```{r}
+#| label: synthetic-data
+library(SpectraWeaveR)
+
+set.seed(42)
+
+markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "HLADR")
+lineage_markers <- c("CD3", "CD4", "CD8", "CD19", "CD56")
+
+# Simulate 3 populations of batch-corrected data
+n_per_pop <- 200
+pop1 <- data.frame(
+  CD3 = rnorm(n_per_pop, 2.0, 0.3), CD4 = rnorm(n_per_pop, 2.5, 0.4),
+  CD8 = rnorm(n_per_pop, 0.1, 0.2), CD19 = rnorm(n_per_pop, 0.05, 0.1),
+  CD56 = rnorm(n_per_pop, 0.05, 0.1), HLADR = rnorm(n_per_pop, 0.3, 0.2)
+)
+pop2 <- data.frame(
+  CD3 = rnorm(n_per_pop, 1.8, 0.3), CD4 = rnorm(n_per_pop, 0.1, 0.2),
+  CD8 = rnorm(n_per_pop, 2.2, 0.4), CD19 = rnorm(n_per_pop, 0.05, 0.1),
+  CD56 = rnorm(n_per_pop, 0.1, 0.1), HLADR = rnorm(n_per_pop, 0.2, 0.15)
+)
+pop3 <- data.frame(
+  CD3 = rnorm(n_per_pop, 0.05, 0.1), CD4 = rnorm(n_per_pop, 0.05, 0.1),
+  CD8 = rnorm(n_per_pop, 0.05, 0.1), CD19 = rnorm(n_per_pop, 2.0, 0.3),
+  CD56 = rnorm(n_per_pop, 1.5, 0.3), HLADR = rnorm(n_per_pop, 1.2, 0.3)
+)
+
+corrected <- tibble::as_tibble(rbind(pop1, pop2, pop3))
+corrected$sample <- rep(paste0("S", 1:6), each = 100)
+corrected$batch  <- rep(rep(c("B1", "B2"), each = 3), each = 100)
+corrected$condition <- rep(rep(c("control", "treatment"), 3), each = 100)
+
+cat("Corrected data:", nrow(corrected), "cells,",
+    length(markers), "markers\n")
+```
+
+## Clustering with kohonen SOM
+
+`sw_cluster()` performs Self-Organizing Map (SOM) clustering followed by
+hierarchical metaclustering. It also supports FastPG graph-based
+clustering when that package is available.
+
+```{r}
+#| label: cluster
+cluster_result <- sw_cluster(
+  corrected,
+  lineage_markers = lineage_markers,
+  method = "som",
+  xdim = 5, ydim = 5,
+  n_metaclusters = 5,
+  seed = 42
+)
+
+stopifnot(inherits(cluster_result, "sw_cluster_result"))
+stopifnot(is.integer(cluster_result$assignments))
+stopifnot(length(cluster_result$assignments) == nrow(corrected))
+stopifnot(cluster_result$method == "som")
+stopifnot(cluster_result$n_clusters == 5)
+cat("Clustering complete:", cluster_result$n_clusters, "metaclusters\n")
+```
+
+### Extract cluster assignments
+
+```{r}
+#| label: get-assignments
+assignments <- sw_get_cluster_assignments(cluster_result)
+stopifnot(is.integer(assignments))
+stopifnot(length(assignments) == nrow(corrected))
+cat("Cluster distribution:\n")
+print(table(assignments))
+```
+
+### Compute median fluorescence intensities (MFI)
+
+```{r}
+#| label: cluster-mfis
+mfis <- sw_cluster_mfis(cluster_result)
+stopifnot(is.data.frame(mfis))
+stopifnot("cluster" %in% names(mfis))
+stopifnot(nrow(mfis) == cluster_result$n_clusters)
+stopifnot(all(lineage_markers %in% names(mfis)))
+cat("MFI table:\n")
+print(mfis)
+```
+
+### Cluster heatmap
+
+`sw_plot_clusters()` generates a heatmap of median marker expression
+per cluster and saves it to a PDF file.
+
+```{r}
+#| label: plot-clusters
+heatmap_file <- tempfile(fileext = ".pdf")
+result_path <- sw_plot_clusters(cluster_result, plot_file = heatmap_file)
+stopifnot(file.exists(heatmap_file))
+cat("Heatmap saved to:", heatmap_file, "\n")
+cat("File size:", file.size(heatmap_file), "bytes\n")
+```
+
+### Predict clusters for new data
+
+`sw_predict_clusters()` maps new cells onto the trained SOM and assigns
+them to metaclusters.
+
+```{r}
+#| label: predict-clusters
+# Create new data (simulate 50 "new" cells)
+new_data <- tibble::tibble(
+  CD3 = rnorm(50, 2.0, 0.3), CD4 = rnorm(50, 2.5, 0.4),
+  CD8 = rnorm(50, 0.1, 0.2), CD19 = rnorm(50, 0.05, 0.1),
+  CD56 = rnorm(50, 0.05, 0.1)
+)
+
+predicted <- sw_predict_clusters(cluster_result, newdata = new_data)
+stopifnot(inherits(predicted, "sw_cluster_result"))
+stopifnot(length(predicted$assignments) == 50)
+cat("Predicted clusters for 50 new cells:\n")
+print(table(predicted$assignments))
+```
+
+## Dimensionality reduction
+
+### PCA
+
+`sw_run_dimred()` computes a 2D embedding. PCA is always available
+(no extra dependencies). The result includes a `variance_explained`
+attribute.
+
+```{r}
+#| label: dimred-pca
+pca_result <- sw_run_dimred(
+  corrected, markers = markers,
+  method = "pca", seed = 42
+)
+
+stopifnot(is.data.frame(pca_result))
+stopifnot(all(c("dim1", "dim2") %in% names(pca_result)))
+stopifnot(attr(pca_result, "method") == "pca")
+var_expl <- attr(pca_result, "variance_explained")
+stopifnot(!is.null(var_expl))
+stopifnot(length(var_expl) == 2)
+cat("PCA variance explained:", round(var_expl * 100, 1), "%\n")
+head(pca_result[, c("dim1", "dim2", "sample", "batch")])
+```
+
+### UMAP (optional)
+
+UMAP requires the `uwot` package.
+
+```{r}
+#| label: dimred-umap
+#| eval: !expr requireNamespace("uwot", quietly = TRUE)
+umap_result <- sw_run_dimred(
+  corrected, markers = markers,
+  method = "umap", n_neighbors = 15, min_dist = 0.2, seed = 42
+)
+
+stopifnot(is.data.frame(umap_result))
+stopifnot(all(c("dim1", "dim2") %in% names(umap_result)))
+stopifnot(attr(umap_result, "method") == "umap")
+cat("UMAP complete:", nrow(umap_result), "cells\n")
+```
+
+### Plot dimensionality reduction
+
+`sw_plot_dimred()` creates a scatter plot colored by any column.
+
+```{r}
+#| label: plot-dimred
+#| fig-width: 10
+#| fig-height: 4
+#| eval: !expr requireNamespace("ggplot2", quietly = TRUE)
+# Add cluster labels for visualization
+pca_result$cluster <- factor(assignments)
+
+p_batch <- sw_plot_dimred(pca_result, color_by = "batch",
+                           title = "PCA colored by batch")
+stopifnot(inherits(p_batch, "gg"))
+
+p_cluster <- sw_plot_dimred(pca_result, color_by = "cluster",
+                             title = "PCA colored by cluster")
+stopifnot(inherits(p_cluster, "gg"))
+
+cat("Created 2 dimred plots\n")
+print(p_batch)
+```
+
+## Unmixing quality diagnostics
+
+These functions assess the quality of spectral unmixing by examining
+spillover spreading and per-channel statistics. They can be applied
+post-hoc to any unmixed data.
+
+### Spillover spreading matrix (SSM)
+
+`sw_spillover_spreading_matrix()` quantifies cross-talk between
+fluorophores based on reference spectra. Here we create synthetic
+reference spectra to demonstrate.
+
+```{r}
+#| label: ssm
+# Create synthetic reference spectra (6 fluorophores, 10 detectors)
+# Each fluorophore peaks in a different detector with some cross-talk
+spectra <- matrix(0, nrow = 6, ncol = 10,
+                  dimnames = list(
+                    c("BV421", "BV510", "BV605", "BV711", "PE", "APC"),
+                    paste0("Det", 1:10)
+                  ))
+# Each row: primary peak + minor cross-talk
+spectra[1, ] <- c(1.0, 0.3, 0.05, 0, 0, 0, 0, 0, 0, 0)
+spectra[2, ] <- c(0.1, 0.8, 0.4, 0.1, 0, 0, 0, 0, 0, 0)
+spectra[3, ] <- c(0, 0.05, 0.2, 1.0, 0.3, 0.05, 0, 0, 0, 0)
+spectra[4, ] <- c(0, 0, 0, 0.1, 0.3, 1.0, 0.4, 0.1, 0, 0)
+spectra[5, ] <- c(0, 0, 0, 0, 0, 0.1, 0.3, 1.0, 0.3, 0)
+spectra[6, ] <- c(0, 0, 0, 0, 0, 0, 0, 0.1, 0.4, 1.0)
+
+ssm <- sw_spillover_spreading_matrix(spectra)
+stopifnot(inherits(ssm, "sw_ssm"))
+stopifnot(is.matrix(ssm$matrix))
+stopifnot(nrow(ssm$matrix) == 6)
+stopifnot(all(diag(ssm$matrix) == 0))  # No self-spreading
+stopifnot(all(ssm$matrix >= 0))
+stopifnot(all(ssm$matrix <= 1 + 1e-10))
+
+cat("SSM summary:\n")
+print(ssm$summary)
+```
+
+### SSM with empirical data
+
+When an unmixed flowFrame is provided, the SSM combines spectra-based
+and empirical (correlation-based) estimates.
+
+```{r}
+#| label: ssm-empirical
+# Use marker names matching the spectra rownames
+mat_unmixed <- matrix(
+  abs(rnorm(600, 5000, 2000)),
+  ncol = 6,
+  dimnames = list(NULL, c("BV421", "BV510", "BV605", "BV711", "PE", "APC"))
+)
+ff_unmixed <- flowCore::flowFrame(mat_unmixed)
+
+ssm_emp <- sw_spillover_spreading_matrix(spectra, unmixed_ff = ff_unmixed)
+stopifnot(inherits(ssm_emp, "sw_ssm"))
+cat("Empirical SSM computed (combined spectra + data)\n")
+```
+
+### Plot SSM heatmap
+
+```{r}
+#| label: plot-ssm
+ssm_pdf <- tempfile(fileext = ".pdf")
+sw_plot_ssm(ssm, plot_file = ssm_pdf)
+stopifnot(file.exists(ssm_pdf))
+cat("SSM heatmap saved to:", ssm_pdf, "\n")
+```
+
+### Unmixing quality per channel
+
+`sw_unmixing_quality()` computes mean, SD, CV, and percentage of negative
+values per channel — flagging channels with high CV.
+
+```{r}
+#| label: unmixing-quality
+quality <- sw_unmixing_quality(
+  ff_unmixed,
+  channels = c("BV421", "BV510", "BV605", "BV711", "PE", "APC"),
+  cv_threshold = 0.5
+)
+
+stopifnot(is.data.frame(quality))
+stopifnot(all(c("channel", "mean", "sd", "cv", "pct_negative", "flagged") %in%
+              names(quality)))
+stopifnot(nrow(quality) == 6)
+cat("Per-channel quality:\n")
+print(quality)
+```
+
+## Clean up
+
+```{r}
+#| label: cleanup
+unlink(heatmap_file)
+unlink(ssm_pdf)
+cat("Tutorial Part 4 complete. All functions verified.\n")
+```
+
+## Functions covered
+
+| Function | Module |
+|----------|--------|
+| `sw_cluster()` | cluster |
+| `sw_get_cluster_assignments()` | cluster |
+| `sw_cluster_mfis()` | cluster |
+| `sw_plot_clusters()` | cluster |
+| `sw_predict_clusters()` | cluster |
+| `sw_run_dimred()` | dimred |
+| `sw_plot_dimred()` | dimred |
+| `sw_spillover_spreading_matrix()` | unmix_diagnostics |
+| `sw_plot_ssm()` | unmix_diagnostics |
+| `sw_unmixing_quality()` | unmix_diagnostics |
+
+**Previous:** [Part 3 — Batch Correction](tutorial-03-batch-correction.qmd)\
+**Next:** [Part 5 — Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)

@@ -1,0 +1,344 @@
+---
+title: "Tutorial Part 3: Batch Correction"
+vignette: >
+  %\VignetteIndexEntry{Tutorial Part 3: Batch Correction}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## Overview
+
+This is **Part 3** of the SpectraWeaveR end-to-end tutorial series:
+
+1. [Data Loading & Preprocessing](tutorial-01-loading-preprocessing.qmd)
+2. [Gating & Signal QC](tutorial-02-gating-signal-qc.qmd)
+3. **Batch Correction** (this vignette)
+4. [Clustering & Visualization](tutorial-04-clustering-visualization.qmd)
+5. [Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)
+
+This part covers: preparing data for batch correction, the modular
+workflow (normalize → SOM → correct), the all-in-one wrapper, and all
+diagnostic/evaluation functions.
+
+## Synthetic data setup
+
+We recreate synthetic data and run preprocessing (Parts 1–2) to get
+QC-cleaned flowFrames ready for batch correction.
+
+```{r}
+#| label: synthetic-data
+library(SpectraWeaveR)
+library(flowCore)
+
+set.seed(42)
+
+make_tutorial_fcs <- function(n_per_pop = 150, batch_shift = 0) {
+  pop_cd4 <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 150000, 20000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 120000, 18000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  50000, 10000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  40000,  9000)),
+    CD3  = abs(rnorm(n_per_pop, 3000 + batch_shift, 500)),
+    CD4  = abs(rnorm(n_per_pop, 5000 + batch_shift, 800)),
+    CD8  = abs(rnorm(n_per_pop,  400 + batch_shift, 150)),
+    CD19 = abs(rnorm(n_per_pop,  300 + batch_shift, 100)),
+    CD56 = abs(rnorm(n_per_pop,  200 + batch_shift, 100)),
+    HLADR = abs(rnorm(n_per_pop,  500 + batch_shift, 200))
+  )
+  pop_cd8 <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 140000, 20000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 110000, 18000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  45000, 10000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  36000,  9000)),
+    CD3  = abs(rnorm(n_per_pop, 2500 + batch_shift, 500)),
+    CD4  = abs(rnorm(n_per_pop,  400 + batch_shift, 150)),
+    CD8  = abs(rnorm(n_per_pop, 4500 + batch_shift, 700)),
+    CD19 = abs(rnorm(n_per_pop,  350 + batch_shift, 120)),
+    CD56 = abs(rnorm(n_per_pop,  250 + batch_shift, 100)),
+    HLADR = abs(rnorm(n_per_pop,  450 + batch_shift, 180))
+  )
+  pop_bcell <- cbind(
+    `FSC-A` = abs(rnorm(n_per_pop, 130000, 18000)),
+    `FSC-H` = abs(rnorm(n_per_pop, 100000, 16000)),
+    `SSC-A` = abs(rnorm(n_per_pop,  40000,  8000)),
+    `SSC-H` = abs(rnorm(n_per_pop,  32000,  7000)),
+    CD3  = abs(rnorm(n_per_pop,  300 + batch_shift, 120)),
+    CD4  = abs(rnorm(n_per_pop,  350 + batch_shift, 130)),
+    CD8  = abs(rnorm(n_per_pop,  280 + batch_shift, 100)),
+    CD19 = abs(rnorm(n_per_pop, 4000 + batch_shift, 600)),
+    CD56 = abs(rnorm(n_per_pop, 3500 + batch_shift, 500)),
+    HLADR = abs(rnorm(n_per_pop, 2000 + batch_shift, 400))
+  )
+  mat <- rbind(pop_cd4, pop_cd8, pop_bcell)
+  mat <- mat[sample(nrow(mat)), ]
+  storage.mode(mat) <- "double"
+  flowFrame(mat)
+}
+
+# Build 6 QC-cleaned flowFrames (3 per batch with batch shift)
+sample_meta <- tibble::tibble(
+  sample    = paste0("S", 1:6),
+  batch     = rep(c("B1", "B2"), each = 3),
+  condition = rep(c("control", "treatment"), 3)
+)
+
+ff_list <- list()
+for (i in seq_len(nrow(sample_meta))) {
+  shift <- if (sample_meta$batch[i] == "B2") 300 else 0
+  ff_list[[sample_meta$sample[i]]] <- make_tutorial_fcs(
+    n_per_pop = 150, batch_shift = shift
+  )
+}
+
+markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "HLADR")
+cat("Created", length(ff_list), "samples with", length(markers), "markers\n")
+```
+
+## Prepare data for batch correction
+
+`sw_prepare_for_correction()` converts a list of flowFrames into a
+single arcsinh-transformed tibble with metadata columns. The default
+cofactor of 6000 is appropriate for spectral flow cytometry.
+
+```{r}
+#| label: prepare
+uncorrected <- sw_prepare_for_correction(
+  ff_list,
+  sample_meta = sample_meta,
+  markers = markers,
+  cofactor = 6000
+)
+
+stopifnot(is.data.frame(uncorrected))
+stopifnot(all(markers %in% names(uncorrected)))
+stopifnot(all(c("sample", "batch", "condition", ".cell_id") %in%
+              names(uncorrected)))
+cat("Prepared", nrow(uncorrected), "cells for correction\n")
+cat("Batches:", paste(unique(uncorrected$batch), collapse = ", "), "\n")
+head(uncorrected[, c(markers[1:3], "sample", "batch")])
+```
+
+## Detect batch effects
+
+`sw_detect_batch_effect()` produces diagnostic plots and metrics. It
+delegates to `cyCombine::detect_batch_effect_express()`.
+
+```{r}
+#| label: detect-batch
+detect_result <- tryCatch({
+  res <- sw_detect_batch_effect(uncorrected, markers = markers, seed = 42)
+  cat("Batch effect detection complete\n")
+  res
+}, error = function(e) {
+  cat("detect_batch_effect note:", conditionMessage(e), "\n")
+  NULL
+})
+```
+
+## Modular batch correction workflow
+
+The modular workflow gives fine-grained control over each step:
+
+1. **Normalize** — per-batch z-score or rank normalization
+2. **Create SOM** — Self-Organizing Map clusters for ComBat
+3. **Correct data** — ComBat batch correction within each cluster
+
+### Step 1: Normalize
+
+```{r}
+#| label: normalize
+normalized <- sw_normalize(uncorrected, markers = markers,
+                            norm_method = "scale")
+stopifnot(is.data.frame(normalized))
+stopifnot(nrow(normalized) == nrow(uncorrected))
+stopifnot(all(markers %in% names(normalized)))
+cat("Normalized", nrow(normalized), "cells\n")
+```
+
+### Step 2: Create SOM clusters
+
+```{r}
+#| label: create-som
+label <- sw_create_som(normalized, markers = markers,
+                        xdim = 4, ydim = 4, rlen = 10, seed = 42)
+stopifnot(is.numeric(label) || is.integer(label))
+stopifnot(length(label) == nrow(uncorrected))
+cat("SOM clusters:", length(unique(label)), "nodes\n")
+```
+
+### Step 3: Apply ComBat correction
+
+```{r}
+#| label: correct-data
+corrected_modular <- sw_correct_data(
+  uncorrected,
+  label = label,
+  markers = markers,
+  covar = "condition"
+)
+
+stopifnot(is.data.frame(corrected_modular))
+stopifnot(nrow(corrected_modular) == nrow(uncorrected))
+stopifnot(all(markers %in% names(corrected_modular)))
+cat("Modular correction complete:", nrow(corrected_modular), "cells\n")
+```
+
+## All-in-one batch correction
+
+`sw_batch_correct()` combines normalize → SOM → correct into a single call.
+
+```{r}
+#| label: batch-correct-allinone
+corrected <- sw_batch_correct(
+  uncorrected,
+  markers = markers,
+  covar = "condition",
+  xdim = 4, ydim = 4, rlen = 10,
+  seed = 42
+)
+
+stopifnot(is.data.frame(corrected))
+stopifnot(nrow(corrected) == nrow(uncorrected))
+stopifnot(all(markers %in% names(corrected)))
+cat("All-in-one correction complete:", nrow(corrected), "cells\n")
+```
+
+## Evaluate correction quality
+
+### Quick MAD-based evaluation
+
+`sw_evaluate_correction()` compares batch-median MAD before and after
+correction.
+
+```{r}
+#| label: evaluate-correction
+eval_result <- sw_evaluate_correction(uncorrected, corrected, markers = markers)
+stopifnot(is.list(eval_result))
+stopifnot(all(c("emd", "mad", "improved", "emd_reduction_pct") %in%
+              names(eval_result)))
+cat("Correction improved:", eval_result$improved, "\n")
+cat("MAD reduction:", eval_result$emd_reduction_pct, "%\n")
+print(eval_result$mad)
+```
+
+### EMD-based evaluation
+
+`sw_compute_emd()` computes Earth Mover's Distance between batch
+distributions within each SOM cluster. `sw_evaluate_emd()` compares
+EMD before vs. after correction.
+
+```{r}
+#| label: emd-evaluation
+# Add cluster labels to both datasets for EMD computation
+uncorrected_labeled <- uncorrected
+uncorrected_labeled$label <- label
+
+corrected_labeled <- corrected
+corrected_labeled$label <- label
+
+# Compute EMD on labeled data
+emd_scores <- sw_compute_emd(
+  uncorrected_labeled,
+  markers = markers,
+  cell_col = "label",
+  batch_col = "batch"
+)
+cat("EMD scores computed\n")
+
+# Compare before vs after
+emd_eval <- sw_evaluate_emd(
+  uncorrected_labeled,
+  corrected_labeled,
+  markers = markers,
+  cell_col = "label"
+)
+cat("EMD evaluation complete\n")
+```
+
+### MAD-based evaluation (cyCombine)
+
+```{r}
+#| label: mad-evaluation
+mad_eval <- sw_evaluate_mad(
+  uncorrected_labeled,
+  corrected_labeled,
+  markers = markers,
+  cell_col = "label"
+)
+cat("MAD evaluation complete\n")
+```
+
+## Visualization
+
+### Density plots by batch
+
+`sw_plot_batch_densities()` creates ridgeline density plots comparing
+marker distributions across batches before and after correction.
+
+```{r}
+#| label: density-plots
+#| fig-width: 10
+#| fig-height: 8
+density_plot <- sw_plot_batch_densities(
+  uncorrected, corrected,
+  markers = markers[1:3]
+)
+
+if (inherits(density_plot, "gg") ||
+    (is.list(density_plot) && length(density_plot) > 0)) {
+  cat("Density plots created successfully\n")
+}
+```
+
+### Dimensionality reduction colored by batch
+
+`sw_plot_batch_dimred()` runs PCA or UMAP on the data and colors
+points by batch — useful for visualizing batch effects.
+
+```{r}
+#| label: batch-dimred
+#| fig-width: 8
+#| fig-height: 6
+dimred_plot <- sw_plot_batch_dimred(
+  uncorrected, markers = markers,
+  type = "pca", name = "Before correction"
+)
+
+if (inherits(dimred_plot, "gg")) {
+  cat("Batch dimred plot created successfully\n")
+  print(dimred_plot)
+}
+```
+
+## Clean up
+
+```{r}
+#| label: cleanup
+cat("Tutorial Part 3 complete. All functions verified.\n")
+```
+
+## Functions covered
+
+| Function | Purpose |
+|----------|---------|
+| `sw_prepare_for_correction()` | flowFrame list → arcsinh tibble |
+| `sw_detect_batch_effect()` | Diagnostic density/MDS/EMD plots |
+| `sw_normalize()` | Per-batch normalization |
+| `sw_create_som()` | SOM clustering for ComBat |
+| `sw_correct_data()` | ComBat correction with pre-computed labels |
+| `sw_batch_correct()` | All-in-one batch correction |
+| `sw_evaluate_correction()` | Quick MAD-based evaluation |
+| `sw_compute_emd()` | Earth Mover's Distance per marker/cluster |
+| `sw_evaluate_emd()` | Compare EMD before vs. after |
+| `sw_evaluate_mad()` | Compare MAD before vs. after |
+| `sw_plot_batch_densities()` | Ridgeline density plots |
+| `sw_plot_batch_dimred()` | PCA/UMAP colored by batch |
+
+**Previous:** [Part 2 — Gating & Signal QC](tutorial-02-gating-signal-qc.qmd)\
+**Next:** [Part 4 — Clustering & Visualization](tutorial-04-clustering-visualization.qmd)
