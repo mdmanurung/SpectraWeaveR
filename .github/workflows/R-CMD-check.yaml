@@ -45,9 +45,11 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::rcmdcheck
+          dependencies: '"hard"'
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
-          build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
+          build_args: 'c("--no-manual","--no-build-vignettes")'
+          args: 'c("--no-manual", "--as-cran", "--ignore-vignettes")'
