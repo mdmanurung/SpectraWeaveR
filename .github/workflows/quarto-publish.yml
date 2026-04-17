@@ -48,7 +48,7 @@ jobs:
 
       - name: Install SpectraWeaveR
         run: |
-          Rscript -e 'devtools::install(".", dependencies = FALSE, upgrade = "never")'
+          Rscript -e 'devtools::install(".", dependencies = FALSE, upgrade = FALSE)'
 
       - name: Render Quarto website
         uses: quarto-dev/quarto-actions/render@v2
