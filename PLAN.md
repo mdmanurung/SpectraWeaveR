@@ -97,7 +97,7 @@ S7/R7-based step-and-pipeline framework ported/inspired by CytoPipeline.
 - [x] `sw_pipeline_step_names/length/show` — pipeline introspection
 - [x] `sw_pipeline_run(pipeline, input, trace)` — execute full pipeline
 - [x] `sw_plot_pipeline(pipeline, style)` — text-based flowchart
-- [x] 8 convenience step constructors (`sw_step_read_fcs`, `sw_step_remove_margins`, etc.)
+- [x] 10 convenience step constructors (`sw_step_read_fcs`, `sw_step_remove_margins`, … `sw_step_annotate`, `sw_step_differential`)
 
 ### `R/transforms.R` — Scale transformation utilities (258 lines)
 Ported from CytoPipeline (UCLouvain-CBIO).
@@ -177,17 +177,22 @@ Tests use synthetic in-memory data (no real FCS files required). External depend
 ## Phase 7: Remaining Work
 
 ### Phase 2 Features — HIGH Priority
-- [ ] **Automated cell type annotation** (`R/annotate.R`)
-  - `sw_annotate_clusters()` — match cluster MFI profiles against reference marker-to-celltype matrix (cosine similarity or Euclidean)
-  - `sw_annotate_manual()` — accept user-supplied named vector of cluster → cell type mappings
-  - `sw_plot_annotation()` — visualize annotated clusters on UMAP/heatmap
-  - Built-in reference profiles for common PBMC populations (CD4 T, CD8 T, B, NK, monocyte, DC)
+- [x] **Automated cell type annotation** (`R/annotate.R`)
+  - [x] `sw_annotate_clusters()` — cosine-similarity scoring of cluster MFI profiles against reference
+  - [x] `sw_annotate_manual()` — accept user-supplied named vector of cluster → cell type mappings
+  - [x] `sw_plot_annotation()` — heatmap or UMAP visualization of annotations
+  - [x] Built-in reference profiles for 35 PBMC populations (`inst/extdata/pbmc_reference_matrix.csv` + `pbmc_reference_mask.csv`)
+  - [x] `sw_load_reference()` — load built-in or custom reference CSV pair
+  - [x] `sw_step_annotate()` — composable pipeline step constructor
   - Leverages: `sw_cluster_mfis()` (already implemented), base R distance calculations
-- [ ] **Differential abundance & expression analysis** (`R/differential.R`)
-  - `sw_differential_abundance()` — test cluster proportion differences between conditions (GLM or Wilcoxon)
-  - `sw_differential_expression()` — test per-cluster marker expression differences (limma or Wilcoxon on per-sample medians)
-  - `sw_plot_volcano()` / `sw_plot_boxplots()` — standard visualization
-  - Leverages: edgeR/diffcyt (new Suggests) or base R `glm()` for dependency-light approach
+- [x] **Differential abundance & expression analysis** (`R/differential.R`)
+  - [x] `sw_differential_abundance()` — edgeR QLF or voom test of cluster proportions between conditions
+  - [x] `sw_differential_expression()` — limma per-cluster marker expression differences (per-sample medians)
+  - [x] `sw_plot_volcano()` — volcano plot for DE results
+  - [x] `sw_plot_boxplots()` — violin+boxplot per marker per group
+  - [x] `sw_plot_abundance()` — bar or box chart of cluster proportions
+  - [x] `sw_step_differential()` — composable pipeline step constructor
+  - New Suggests: `edgeR (>= 3.36.0)`, `limma (>= 3.50.0)`, `diffcyt (>= 1.3.0)`
 
 ### Phase 2 Features — MEDIUM Priority
 - [ ] **Data export/interoperability** (`R/export.R`)

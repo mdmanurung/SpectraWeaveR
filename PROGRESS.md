@@ -191,15 +191,46 @@
 
 ---
 
+## Session 11 — 2026-04-07 (Cell Type Annotation & Differential Analysis)
+
+### Completed
+
+- [x] Created `inst/extdata/pbmc_reference_matrix.csv` — built-in PBMC reference matrix (35 populations × 30 markers, values 0–3)
+- [x] Created `inst/extdata/pbmc_reference_mask.csv` — binary marker relevance mask for informative markers per population
+- [x] Created `R/annotate.R` (~430 lines) — cell type annotation module:
+  - `sw_load_reference(name)` — load built-in or custom CSV reference pair
+  - `sw_annotate_clusters(x, reference, markers, min_score, ...)` — cosine-similarity scoring of cluster MFI profiles vs reference; returns annotation tibble with top-1 and top-2 matches
+  - `sw_annotate_manual(x, annotation_map)` — user-supplied cluster → cell type mapping
+  - `sw_plot_annotation(annotation, cluster_result, dimred, type)` — heatmap or UMAP plot
+  - Internal helpers: `.check_annotation_input()`, `.cosine_sim()`, `.score_cluster()`
+- [x] Created `R/differential.R` (~520 lines) — differential abundance & expression module:
+  - `sw_differential_abundance(x, meta, group_col, method, ...)` — edgeR QLF or voom test of cluster proportions; returns class `sw_da_result`
+  - `sw_differential_expression(corrected, meta, group_col, ...)` — per-cluster limma on per-sample medians; returns long-format class `sw_de_result`
+  - `sw_plot_volcano(de_result, cluster, fdr_threshold, fc_threshold, label_top)` — volcano plot
+  - `sw_plot_boxplots(corrected, markers, group_col, ...)` — violin + boxplot per marker per group
+  - `sw_plot_abundance(da_result, type, ...)` — bar or column chart of cluster proportions
+  - Internal helpers: `.check_diffcyt_deps()`, `.check_limma()`, `.validate_meta_da()`, `.build_count_matrix()`, `.compute_cluster_medians()`
+- [x] Updated `R/composable_pipeline.R`:
+  - Added `annotate` and `differential` entries to `.SW_STEP_DEFAULT_TYPES`
+  - Added `sw_step_annotate()` convenience constructor (wraps `sw_annotate_clusters`)
+  - Added `sw_step_differential()` convenience constructor (wraps `sw_differential_expression`)
+- [x] Updated `NAMESPACE` — added 11 new exports (total: 85)
+- [x] Updated `DESCRIPTION` Suggests — added `edgeR (>= 3.36.0)`, `limma (>= 3.50.0)`, `diffcyt (>= 1.3.0)`
+- [x] Created `tests/testthat/test-annotate.R` (~260 lines) — 34 tests for annotation module
+- [x] Created `tests/testthat/test-differential.R` (~300 lines) — 36 tests for differential module
+- [x] Updated `PLAN.md` Phase 7 — marked annotation + differential HIGH priority items as `[x]` completed
+
+---
+
 ## Summary Statistics
 
 | Category | Count |
 |----------|-------|
-| R source files | 12 |
-| R source lines | ~5,800 |
-| Exported functions | 74 |
-| Test files | 12 |
-| Test lines | ~3,600 |
+| R source files | 14 |
+| R source lines | ~6,750 |
+| Exported functions | 85 |
+| Test files | 14 |
+| Test lines | ~4,160 |
 | Documentation pages (.qmd) | 15 |
 | Vignettes | 2 |
 | CI/CD workflows | 1 |
@@ -219,23 +250,23 @@
 | Area | Status | Details |
 |------|--------|---------|
 | Core pipeline (5 steps) | ✅ | unmix → gate → QC → batch correct → cluster |
-| Composable pipeline (S7) | ✅ | Step/Pipeline classes, 8 convenience constructors |
+| Composable pipeline (S7) | ✅ | Step/Pipeline classes, 10 convenience constructors |
 | Scale transforms | ✅ | Logicle + linear quantile (ported from CytoPipeline) |
 | Gating utilities | ✅ | Singlet gate, doublet removal, debris, margins |
 | LLM assistant | ✅ | ellmer-based interactive pipeline builder |
 | Bug fixes (4) | ✅ | Margin channels, pipeline gating, EMD, cofactor |
-| Integration tests | ✅ | All 12 modules now have integration tests |
+| Integration tests | ✅ | All 14 modules now have integration tests |
 | Dimensionality reduction | ✅ | UMAP + PCA with auto-subsampling |
 | Gating templates (5) | ✅ | lymphocyte, myeloid, NK, Treg, full PBMC |
 | SSM diagnostics | ✅ | Spillover spreading matrix + per-channel QC |
 | Documentation site | ✅ | Quarto website, 2 vignettes, 11 reference pages |
+| Cell type annotation | ✅ | Cosine similarity vs 35-population PBMC reference |
+| Differential analysis | ✅ | edgeR/voom DA + limma DE with volcano/boxplot/abundance plots |
 
 ## What Still Needs To Be Done
 
 | Area | Priority | Effort | Details |
 |------|----------|--------|---------|
-| **Cell type annotation** | HIGH | Medium | Auto-annotate clusters from MFI profiles vs reference |
-| **Differential analysis** | HIGH | Medium | Abundance + expression testing between conditions |
 | **Data export** | MEDIUM | Low-Medium | CSV, H5AD, FCS, Seurat, SCE interop |
 | **QC report generation** | MEDIUM | Medium | Automated HTML pipeline summary reports |
 | **Panel design helper** | MEDIUM | High | Spectral overlap checking, cofactor suggestion |
@@ -243,5 +274,6 @@
 | **Batch monitoring** | LOW | Medium | Levy-Jennings charts, drift detection |
 | **Reference docs** | MEDIUM | Low | .qmd pages for dimred + unmix_diagnostics |
 | **Composable pipeline vignette** | MEDIUM | Low | Tutorial for S7 pipeline framework |
+| **Annotation vignette** | MEDIUM | Low | Tutorial for cluster annotation + DA/DE workflow |
 | **R CMD check** | HIGH | Low | Requires R environment to run |
 | **man/ pages** | HIGH | Low | `devtools::document()` needed |
