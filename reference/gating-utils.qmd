@@ -6,14 +6,14 @@ Gating and event filtering utilities ported from
 [CytoPipeline](https://uclouvain-cbio.github.io/CytoPipeline/) and
 CytoPipelineUtils (UCLouvain-CBIO).
 
-## `sw_singlets_gate` {#sw_singlets_gate}
+## `sw_gate_singlets` {#sw_gate_singlets}
 
 Create a singlets gate.
 
 ### Usage
 
 ```r
-sw_singlets_gate(
+sw_gate_singlets(
   ff,
   filter_id = "Singlets",
   channel1 = "FSC-A",
@@ -47,14 +47,14 @@ A `flowCore::polygonGate` object.
 
 ---
 
-## `sw_remove_doublets` {#sw_remove_doublets}
+## `sw_filter_doublets` {#sw_filter_doublets}
 
 Remove doublets using CytoPipeline algorithm.
 
 ### Usage
 
 ```r
-sw_remove_doublets(
+sw_filter_doublets(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
@@ -76,7 +76,7 @@ sw_remove_doublets(
 ### Details
 
 Removes doublet events using the parallelogram singlet gate from
-`sw_singlets_gate()`. Can apply gates on multiple channel pairs and combine
+`sw_gate_singlets()`. Can apply gates on multiple channel pairs and combine
 them.
 
 ### Value
@@ -85,14 +85,14 @@ A `flowFrame` with doublets removed.
 
 ---
 
-## `sw_remove_doublets_peacoqc` {#sw_remove_doublets_peacoqc}
+## `sw_filter_doublets_peacoqc` {#sw_filter_doublets_peacoqc}
 
 Remove doublets using PeacoQC.
 
 ### Usage
 
 ```r
-sw_remove_doublets_peacoqc(
+sw_filter_doublets_peacoqc(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
@@ -124,14 +124,14 @@ A `flowFrame` with doublets removed.
 
 ---
 
-## `sw_remove_debris_gate` {#sw_remove_debris_gate}
+## `sw_filter_debris` {#sw_filter_debris}
 
 Remove debris using a manual polygon gate.
 
 ### Usage
 
 ```r
-sw_remove_debris_gate(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A",
+sw_filter_debris(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A",
                       gate_data)
 ```
 
@@ -155,14 +155,14 @@ A `flowFrame` with debris events removed.
 
 ---
 
-## `sw_remove_margins_peacoqc` {#sw_remove_margins_peacoqc}
+## `sw_filter_margins_peacoqc` {#sw_filter_margins_peacoqc}
 
 Remove margin events using PeacoQC.
 
 ### Usage
 
 ```r
-sw_remove_margins_peacoqc(x, channel_specifications = NULL, ...)
+sw_filter_margins_peacoqc(x, channel_specifications = NULL, ...)
 ```
 
 ### Arguments

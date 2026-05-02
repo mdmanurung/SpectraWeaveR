@@ -5,14 +5,14 @@ title: "Pipeline"
 End-to-end pipeline orchestrator that runs all analysis steps in validated
 order.
 
-## `run_pipeline` {#run_pipeline}
+## `sw_pipeline_run_all` {#sw_pipeline_run_all}
 
 Run the full SpectraWeaveR pipeline.
 
 ### Usage
 
 ```r
-run_pipeline(
+sw_pipeline_run_all(
   fcs_dir,
   sample_meta,
   markers,
@@ -79,7 +79,7 @@ A named list with components:
 | `unmix_result` | Unmixing results (if `unmix_from_raw = TRUE`) |
 | `flowset` | Loaded `flowSet` |
 | `gating_set` | `GatingSet` (if gating was applied) |
-| `qc_results` | QC output from `sw_signal_qc_batch()` |
+| `qc_results` | QC output from `sw_qc_batch()` |
 | `uncorrected` | Uncorrected expression tibble |
 | `corrected` | Batch-corrected expression tibble |
 | `correction_eval` | Correction evaluation metrics |

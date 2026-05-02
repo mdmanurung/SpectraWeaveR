@@ -12,14 +12,14 @@ package (listed in `Suggests`). Install it with `install.packages("S7")`.
 
 ## Core classes
 
-### `sw_step` {#sw_step}
+### `sw_pipeline_step` {#sw_pipeline_step}
 
 Create a processing step.
 
 #### Usage
 
 ```r
-sw_step(name, FUN, ARGS = list())
+sw_pipeline_step(name, FUN, ARGS = list())
 ```
 
 #### Arguments
@@ -41,14 +41,14 @@ A `ProcessingStep` S7 object.
 
 ---
 
-### `execute_step` {#execute_step}
+### `sw_pipeline_step_run` {#sw_pipeline_step_run}
 
 Execute a single processing step.
 
 #### Usage
 
 ```r
-execute_step(step, input)
+sw_pipeline_step_run(step, input)
 ```
 
 #### Arguments
@@ -301,84 +301,84 @@ with columns `step_number`, `name`, `n_args`.
 Convenience constructors that create `ProcessingStep` objects wrapping
 SpectraWeaveR functions.
 
-### `sw_step_read_fcs` {#sw_step_read_fcs}
+### `sw_pipeline_step_read_fcs` {#sw_pipeline_step_read_fcs}
 
 ```r
-sw_step_read_fcs(...)
+sw_pipeline_step_read_fcs(...)
 ```
 
-Creates a step wrapping `sw_read_fcs()`. Additional arguments are passed via
+Creates a step wrapping `sw_io_read_fcs()`. Additional arguments are passed via
 `ARGS`.
 
 ---
 
-### `sw_step_remove_margins` {#sw_step_remove_margins}
+### `sw_pipeline_step_filter_margins` {#sw_pipeline_step_filter_margins}
 
 ```r
-sw_step_remove_margins(...)
+sw_pipeline_step_filter_margins(...)
 ```
 
-Creates a step wrapping `sw_remove_margins()`.
+Creates a step wrapping `sw_filter_margins()`.
 
 ---
 
-### `sw_step_signal_qc` {#sw_step_signal_qc}
+### `sw_pipeline_step_qc` {#sw_pipeline_step_qc}
 
 ```r
-sw_step_signal_qc(...)
+sw_pipeline_step_qc(...)
 ```
 
-Creates a step wrapping `sw_signal_qc()`.
+Creates a step wrapping `sw_qc_run()`.
 
 ---
 
-### `sw_step_batch_correct` {#sw_step_batch_correct}
+### `sw_pipeline_step_correct` {#sw_pipeline_step_correct}
 
 ```r
-sw_step_batch_correct(...)
+sw_pipeline_step_correct(...)
 ```
 
-Creates a step wrapping `sw_batch_correct()`.
+Creates a step wrapping `sw_correct_run()`.
 
 ---
 
-### `sw_step_normalize` {#sw_step_normalize}
+### `sw_pipeline_step_normalize` {#sw_pipeline_step_normalize}
 
 ```r
-sw_step_normalize(...)
+sw_pipeline_step_normalize(...)
 ```
 
-Creates a step wrapping `sw_normalize()`.
+Creates a step wrapping `sw_correct_normalize()`.
 
 ---
 
-### `sw_step_create_som` {#sw_step_create_som}
+### `sw_pipeline_step_som` {#sw_pipeline_step_som}
 
 ```r
-sw_step_create_som(...)
+sw_pipeline_step_som(...)
 ```
 
-Creates a step wrapping `sw_create_som()`.
+Creates a step wrapping `sw_correct_som()`.
 
 ---
 
-### `sw_step_correct_data` {#sw_step_correct_data}
+### `sw_pipeline_step_correct_apply` {#sw_pipeline_step_correct_apply}
 
 ```r
-sw_step_correct_data(...)
+sw_pipeline_step_correct_apply(...)
 ```
 
-Creates a step wrapping `sw_correct_data()`.
+Creates a step wrapping `sw_correct_apply()`.
 
 ---
 
-### `sw_step_cluster` {#sw_step_cluster}
+### `sw_pipeline_step_cluster` {#sw_pipeline_step_cluster}
 
 ```r
-sw_step_cluster(...)
+sw_pipeline_step_cluster(...)
 ```
 
-Creates a step wrapping `sw_cluster()`.
+Creates a step wrapping `sw_cluster_run()`.
 
 ---
 
@@ -390,8 +390,8 @@ library(SpectraWeaveR)
 
 # Build a custom pipeline
 pipe <- sw_pipeline("my-qc-pipeline")
-pipe <- sw_pipeline_add(pipe, sw_step_remove_margins())
-pipe <- sw_pipeline_add(pipe, sw_step_signal_qc())
+pipe <- sw_pipeline_add(pipe, sw_pipeline_step_filter_margins())
+pipe <- sw_pipeline_add(pipe, sw_pipeline_step_qc())
 
 # Inspect it
 sw_pipeline_show(pipe)

@@ -42,7 +42,7 @@
 }
 
 # ---------------------------------------------------------------------------
-# .build_count_matrix (tested indirectly through sw_differential_abundance)
+# .build_count_matrix (tested indirectly through sw_diff_abundance)
 # ---------------------------------------------------------------------------
 
 test_that(".compute_cluster_medians computes correct medians", {
@@ -78,69 +78,69 @@ test_that(".compute_cluster_medians returns NA for samples below min_cells", {
 })
 
 # ---------------------------------------------------------------------------
-# sw_differential_abundance — validation
+# sw_diff_abundance — validation
 # ---------------------------------------------------------------------------
 
-test_that("sw_differential_abundance rejects non-data.frame x", {
+test_that("sw_diff_abundance rejects non-data.frame x", {
   expect_error(
-    sw_differential_abundance("bad", .make_meta(), group_col = "condition"),
+    sw_diff_abundance("bad", .make_meta(), group_col = "condition"),
     "data.frame or tibble"
   )
 })
 
-test_that("sw_differential_abundance rejects x without cluster column", {
+test_that("sw_diff_abundance rejects x without cluster column", {
   x <- tibble::tibble(sample = "S1", CD3 = 1)
   expect_error(
-    sw_differential_abundance(x, .make_meta(), group_col = "condition"),
+    sw_diff_abundance(x, .make_meta(), group_col = "condition"),
     "'cluster' column"
   )
 })
 
-test_that("sw_differential_abundance rejects x without sample column", {
+test_that("sw_diff_abundance rejects x without sample column", {
   x <- tibble::tibble(cluster = 1L, CD3 = 1)
   expect_error(
-    sw_differential_abundance(x, .make_meta(), group_col = "condition"),
+    sw_diff_abundance(x, .make_meta(), group_col = "condition"),
     "'sample' column"
   )
 })
 
-test_that("sw_differential_abundance rejects meta missing group_col", {
+test_that("sw_diff_abundance rejects meta missing group_col", {
   x    <- .make_corrected()
   meta <- data.frame(sample = paste0("S", 1:6), stringsAsFactors = FALSE)
   expect_error(
-    sw_differential_abundance(x, meta, group_col = "condition"),
+    sw_diff_abundance(x, meta, group_col = "condition"),
     "missing required column"
   )
 })
 
-test_that("sw_differential_abundance rejects invalid min_prop", {
+test_that("sw_diff_abundance rejects invalid min_prop", {
   x <- .make_corrected()
   expect_error(
-    sw_differential_abundance(x, .make_meta(), group_col = "condition",
+    sw_diff_abundance(x, .make_meta(), group_col = "condition",
                                min_prop = 1.5),
     "min_prop"
   )
 })
 
-test_that("sw_differential_abundance rejects invalid method", {
+test_that("sw_diff_abundance rejects invalid method", {
   x <- .make_corrected()
   expect_error(
-    sw_differential_abundance(x, .make_meta(), group_col = "condition",
+    sw_diff_abundance(x, .make_meta(), group_col = "condition",
                                method = "bad"),
     "should be one of"
   )
 })
 
 # ---------------------------------------------------------------------------
-# sw_differential_abundance — integration (requires edgeR)
+# sw_diff_abundance — integration (requires edgeR)
 # ---------------------------------------------------------------------------
 
-test_that("sw_differential_abundance edgeR returns correct output structure", {
+test_that("sw_diff_abundance edgeR returns correct output structure", {
   skip_if_not_installed("edgeR")
 
   x    <- .make_corrected()
   meta <- .make_meta()
-  result <- sw_differential_abundance(x, meta, group_col = "condition",
+  result <- sw_diff_abundance(x, meta, group_col = "condition",
                                        method = "edgeR", min_prop = 0)
 
   expect_s3_class(result, "tbl_df")
@@ -151,13 +151,13 @@ test_that("sw_differential_abundance edgeR returns correct output structure", {
   expect_equal(attr(result, "groups"), c("ctrl", "trt"))
 })
 
-test_that("sw_differential_abundance voom returns correct output structure", {
+test_that("sw_diff_abundance voom returns correct output structure", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")
 
   x    <- .make_corrected()
   meta <- .make_meta()
-  result <- sw_differential_abundance(x, meta, group_col = "condition",
+  result <- sw_diff_abundance(x, meta, group_col = "condition",
                                        method = "voom", min_prop = 0)
 
   expect_s3_class(result, "tbl_df")
@@ -166,96 +166,96 @@ test_that("sw_differential_abundance voom returns correct output structure", {
   expect_equal(nrow(result), 2L)
 })
 
-test_that("sw_differential_abundance min_prop filters clusters", {
+test_that("sw_diff_abundance min_prop filters clusters", {
   skip_if_not_installed("edgeR")
 
   x    <- .make_corrected()
   meta <- .make_meta()
   # Set min_prop so high that all clusters are excluded
   expect_error(
-    sw_differential_abundance(x, meta, group_col = "condition",
+    sw_diff_abundance(x, meta, group_col = "condition",
                                min_prop = 0.99),
     "No clusters pass"
   )
 })
 
-test_that("sw_differential_abundance adj_pvalue is BH corrected", {
+test_that("sw_diff_abundance adj_pvalue is BH corrected", {
   skip_if_not_installed("edgeR")
 
   x    <- .make_corrected()
   meta <- .make_meta()
-  result <- sw_differential_abundance(x, meta, group_col = "condition",
+  result <- sw_diff_abundance(x, meta, group_col = "condition",
                                        method = "edgeR", min_prop = 0)
   # BH is monotone: adj_pvalue >= pvalue
   expect_true(all(result$adj_pvalue >= result$pvalue - 1e-10))
 })
 
 # ---------------------------------------------------------------------------
-# sw_differential_expression — validation
+# sw_diff_expression — validation
 # ---------------------------------------------------------------------------
 
-test_that("sw_differential_expression rejects non-data.frame corrected", {
+test_that("sw_diff_expression rejects non-data.frame corrected", {
   expect_error(
-    sw_differential_expression("bad", .make_meta(), group_col = "condition"),
+    sw_diff_expression("bad", .make_meta(), group_col = "condition"),
     "data.frame or tibble"
   )
 })
 
-test_that("sw_differential_expression rejects corrected without cluster col", {
+test_that("sw_diff_expression rejects corrected without cluster col", {
   x <- tibble::tibble(sample = "S1", CD3 = 1)
   expect_error(
-    sw_differential_expression(x, .make_meta(), group_col = "condition"),
+    sw_diff_expression(x, .make_meta(), group_col = "condition"),
     "'cluster' column"
   )
 })
 
-test_that("sw_differential_expression rejects corrected without sample col", {
+test_that("sw_diff_expression rejects corrected without sample col", {
   x <- tibble::tibble(cluster = 1L, CD3 = 1)
   expect_error(
-    sw_differential_expression(x, .make_meta(), group_col = "condition"),
+    sw_diff_expression(x, .make_meta(), group_col = "condition"),
     "'sample' column"
   )
 })
 
-test_that("sw_differential_expression rejects meta missing group_col", {
+test_that("sw_diff_expression rejects meta missing group_col", {
   x    <- .make_corrected()
   meta <- data.frame(sample = paste0("S", 1:6), stringsAsFactors = FALSE)
   expect_error(
-    sw_differential_expression(x, meta, group_col = "condition"),
+    sw_diff_expression(x, meta, group_col = "condition"),
     "missing required column"
   )
 })
 
-test_that("sw_differential_expression rejects markers not in corrected", {
+test_that("sw_diff_expression rejects markers not in corrected", {
   x    <- .make_corrected()
   meta <- .make_meta()
   expect_error(
-    sw_differential_expression(x, meta, group_col = "condition",
+    sw_diff_expression(x, meta, group_col = "condition",
                                 markers = c("CD3", "NOT_REAL")),
     "Markers not found"
   )
 })
 
-test_that("sw_differential_expression rejects invalid min_cells", {
+test_that("sw_diff_expression rejects invalid min_cells", {
   x    <- .make_corrected()
   meta <- .make_meta()
   expect_error(
-    sw_differential_expression(x, meta, group_col = "condition",
+    sw_diff_expression(x, meta, group_col = "condition",
                                 min_cells = 0L),
     "min_cells"
   )
 })
 
 # ---------------------------------------------------------------------------
-# sw_differential_expression — integration (requires limma)
+# sw_diff_expression — integration (requires limma)
 # ---------------------------------------------------------------------------
 
-test_that("sw_differential_expression returns long tibble with correct columns", {
+test_that("sw_diff_expression returns long tibble with correct columns", {
   skip_if_not_installed("limma")
 
   x    <- .make_corrected(n_per_group = 20)
   meta <- .make_meta()
-  result <- sw_differential_expression(
+  result <- sw_diff_expression(
     x, meta, group_col = "condition",
     markers   = c("CD3", "CD4", "CD8a"),
     min_cells = 5L
@@ -269,19 +269,19 @@ test_that("sw_differential_expression returns long tibble with correct columns",
   expect_true(all(result$adj_pvalue >= 0 & result$adj_pvalue <= 1))
 })
 
-test_that("sw_differential_expression adj_pvalue exists as BH-corrected col", {
+test_that("sw_diff_expression adj_pvalue exists as BH-corrected col", {
   skip_if_not_installed("limma")
 
   x    <- .make_corrected(n_per_group = 20)
   meta <- .make_meta()
-  result <- sw_differential_expression(
+  result <- sw_diff_expression(
     x, meta, group_col = "condition",
     markers = c("CD3", "CD4", "CD8a"), min_cells = 5L
   )
   expect_true("adj_pvalue" %in% names(result))
 })
 
-test_that("sw_differential_expression detects known group difference in CD4", {
+test_that("sw_diff_expression detects known group difference in CD4", {
   skip_if_not_installed("limma")
 
   # Use a larger effect size to ensure significance
@@ -306,7 +306,7 @@ test_that("sw_differential_expression detects known group difference in CD4", {
   meta   <- data.frame(sample = paste0("S", 1:6),
                         condition = rep(c("ctrl", "trt"), each = 3),
                         stringsAsFactors = FALSE)
-  result <- sw_differential_expression(
+  result <- sw_diff_expression(
     tibble::as_tibble(df), meta,
     group_col = "condition",
     markers   = "CD4",
@@ -316,25 +316,25 @@ test_that("sw_differential_expression detects known group difference in CD4", {
   expect_true(result$logFC[result$marker == "CD4"] > 0)
 })
 
-test_that("sw_differential_expression min_cells filter removes sparse pairs", {
+test_that("sw_diff_expression min_cells filter removes sparse pairs", {
   skip_if_not_installed("limma")
 
   x    <- .make_corrected(n_per_group = 5)
   meta <- .make_meta()
   # With min_cells = 100, no sample will contribute enough cells
   expect_error(
-    sw_differential_expression(x, meta, group_col = "condition",
+    sw_diff_expression(x, meta, group_col = "condition",
                                 markers = c("CD3", "CD4"), min_cells = 100L),
     "enough samples"
   )
 })
 
-test_that("sw_differential_expression groups attribute is correct", {
+test_that("sw_diff_expression groups attribute is correct", {
   skip_if_not_installed("limma")
 
   x    <- .make_corrected(n_per_group = 20)
   meta <- .make_meta()
-  result <- sw_differential_expression(
+  result <- sw_diff_expression(
     x, meta, group_col = "condition",
     markers = c("CD3", "CD4"), min_cells = 5L
   )
@@ -346,7 +346,7 @@ test_that("sw_differential_expression groups attribute is correct", {
 # ---------------------------------------------------------------------------
 
 test_that("sw_plot_volcano rejects non-data.frame de_result", {
-  expect_error(sw_plot_volcano("bad"), "sw_differential_expression")
+  expect_error(sw_plot_volcano("bad"), "sw_diff_expression")
 })
 
 test_that("sw_plot_volcano rejects de_result missing required columns", {
@@ -436,7 +436,7 @@ test_that("sw_plot_boxplots cluster filter works", {
 # ---------------------------------------------------------------------------
 
 test_that("sw_plot_abundance rejects non-data.frame da_result", {
-  expect_error(sw_plot_abundance("bad"), "sw_differential_abundance")
+  expect_error(sw_plot_abundance("bad"), "sw_diff_abundance")
 })
 
 test_that("sw_plot_abundance rejects da_result missing required columns", {

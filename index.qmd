@@ -11,12 +11,12 @@ unmixing through clustering and visualization.
 
 | Step | Function | Package |
 |------|----------|---------|
-| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix()`, `sw_load_unmixed()` | AutoSpectral / flowCore |
-| 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace |
-| 3. Signal QC | `sw_signal_qc()`, `sw_signal_qc_batch()` | PeacoQC |
-| 4. Batch correction | `sw_batch_correct()`, `sw_prepare_for_correction()` | cyCombine |
-| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | kohonen / FastPG |
-| End-to-end | `run_pipeline()` | all of the above |
+| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix_run()`, `sw_io_load_unmixed()` | AutoSpectral / flowCore |
+| 2. Gating | `sw_gate_run()`, `sw_gate_template()` | openCyto / flowWorkspace |
+| 3. Signal QC | `sw_qc_run()`, `sw_qc_batch()` | PeacoQC |
+| 4. Batch correction | `sw_correct_run()`, `sw_correct_prepare()` | cyCombine |
+| 5. Clustering | `sw_cluster_run()`, `sw_plot_clusters()` | kohonen / FastPG |
+| End-to-end | `sw_pipeline_run_all()` | all of the above |
 
 ## Quick start
 
@@ -40,7 +40,7 @@ markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14", "CD16",
 lineage_markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14")
 
 # Run the full pipeline
-results <- run_pipeline(
+results <- sw_pipeline_run_all(
   fcs_dir         = "path/to/unmixed_fcs/",
   sample_meta     = sample_meta,
   markers         = markers,
@@ -63,27 +63,27 @@ results$corrected            # batch-corrected expression data
 library(SpectraWeaveR)
 
 # 1. Load unmixed FCS files
-fs <- sw_load_unmixed("path/to/unmixed_fcs/")
+fs <- sw_io_load_unmixed("path/to/unmixed_fcs/")
 
 # 2. Remove margin events (before transformation!)
-ff_list <- lapply(seq_along(fs), function(i) sw_remove_margins(fs[[i]]))
+ff_list <- lapply(seq_along(fs), function(i) sw_filter_margins(fs[[i]]))
 names(ff_list) <- flowCore::sampleNames(fs)
 
 # 3. Signal QC
-qc_results <- sw_signal_qc_batch(ff_list)
+qc_results <- sw_qc_batch(ff_list)
 qc_summary <- sw_qc_summary(qc_results, threshold = 30)
 ff_clean <- qc_results$cleaned
 
 # 4. Batch correction
-uncorrected <- sw_prepare_for_correction(
+uncorrected <- sw_correct_prepare(
   ff_clean, sample_meta, markers, cofactor = 6000
 )
-corrected <- sw_batch_correct(uncorrected, markers, covar = "condition")
+corrected <- sw_correct_run(uncorrected, markers, covar = "condition")
 
 # 5. Clustering
-result <- sw_cluster(corrected, lineage_markers, n_metaclusters = 20)
-assignments <- sw_get_cluster_assignments(result)
-mfis <- sw_cluster_mfis(result)
+result <- sw_cluster_run(corrected, lineage_markers, n_metaclusters = 20)
+assignments <- sw_cluster_assignments(result)
+mfis <- sw_cluster_mfi(result)
 sw_plot_clusters(result, "clusters.pdf")
 ```
 
@@ -93,8 +93,8 @@ sw_plot_clusters(result, "clusters.pdf")
   fluorescence intensities (~4×10⁶) exceed flowCore's default range cutoffs.
 - **arcsinh cofactor = 6000** is used for spectral flow cytometry
   (not 5 as in CyTOF).
-- Format conversion utilities (`sw_flowframe_to_tibble()`,
-  `sw_tibble_to_flowframe()`) bridge the incompatible data structures required
+- Format conversion utilities (`sw_io_ff_to_tibble()`,
+  `sw_io_tibble_to_ff()`) bridge the incompatible data structures required
   by each tool.
 
 ## Learn more

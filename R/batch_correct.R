@@ -3,14 +3,14 @@
 #' @description
 #' Functions for preparing data and performing batch correction using the
 #' cyCombine package, which applies ComBat batch correction on SOM clusters.
-#' Supports both an all-in-one workflow (\code{\link{sw_batch_correct}}) and a
-#' modular workflow (\code{\link{sw_normalize}} \eqn{\to}
-#' \code{\link{sw_create_som}} \eqn{\to} \code{\link{sw_correct_data}}).
+#' Supports both an all-in-one workflow (\code{\link{sw_correct_run}}) and a
+#' modular workflow (\code{\link{sw_correct_normalize}} \eqn{\to}
+#' \code{\link{sw_correct_som}} \eqn{\to} \code{\link{sw_correct_apply}}).
 #'
 #' Diagnostic and evaluation helpers are provided for batch-effect detection
-#' (\code{\link{sw_detect_batch_effect}}), quality metrics
-#' (\code{\link{sw_compute_emd}}, \code{\link{sw_evaluate_emd}},
-#' \code{\link{sw_evaluate_mad}}), and visualization
+#' (\code{\link{sw_correct_detect_batch}}), quality metrics
+#' (\code{\link{sw_correct_emd}}, \code{\link{sw_correct_evaluate_emd}},
+#' \code{\link{sw_correct_evaluate_mad}}), and visualization
 #' (\code{\link{sw_plot_batch_densities}}, \code{\link{sw_plot_batch_dimred}}).
 #'
 #' @name batch_correct
@@ -71,13 +71,13 @@ NULL
 #'   ff_list <- list(S1 = flowCore::flowFrame(mat1),
 #'                   S2 = flowCore::flowFrame(mat2))
 #'   meta <- data.frame(sample = c("S1", "S2"), batch = c("B1", "B2"))
-#'   result <- sw_prepare_for_correction(ff_list, meta,
+#'   result <- sw_correct_prepare(ff_list, meta,
 #'                                       markers = c("CD3", "CD4"))
 #'   head(result)
 #' }
 #'
 #' @export
-sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
+sw_correct_prepare <- function(ff_list, sample_meta, markers,
                                       cofactor = 6000) {
   if (!requireNamespace("flowCore", quietly = TRUE)) { # nocov
     stop("Package 'flowCore' is required.", call. = FALSE) # nocov
@@ -169,11 +169,11 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
 #' All-in-one wrapper for \code{cyCombine::batch_correct()} that normalises,
 #' clusters with a Self-Organising Map, and applies ComBat-based batch
 #' correction.  For finer control use the modular functions
-#' \code{\link{sw_normalize}}, \code{\link{sw_create_som}}, and
-#' \code{\link{sw_correct_data}}.
+#' \code{\link{sw_correct_normalize}}, \code{\link{sw_correct_som}}, and
+#' \code{\link{sw_correct_apply}}.
 #'
 #' @param uncorrected A \code{tibble} as produced by
-#'   \code{\link{sw_prepare_for_correction}}.
+#'   \code{\link{sw_correct_prepare}}.
 #' @param markers Character vector of marker column names to correct.
 #' @param covar Character scalar naming the covariate column (typically
 #'   \code{"condition"} or \code{NULL}).
@@ -199,11 +199,11 @@ sw_prepare_for_correction <- function(ff_list, sample_meta, markers,
 #'   batch = rep(c("B1", "B2"), each = 100),
 #'   sample = rep(c("S1", "S2"), each = 100)
 #' )
-#' corrected <- sw_batch_correct(uncorrected, markers = c("CD3", "CD4"))
+#' corrected <- sw_correct_run(uncorrected, markers = c("CD3", "CD4"))
 #' }
 #'
 #' @export
-sw_batch_correct <- function(uncorrected, markers, covar = NULL,
+sw_correct_run <- function(uncorrected, markers, covar = NULL,
                              label = NULL,
                              xdim = 8, ydim = 8, rlen = 10,
                              norm_method = "scale",
@@ -235,8 +235,8 @@ sw_batch_correct <- function(uncorrected, markers, covar = NULL,
 #' Evaluate Batch Correction Quality
 #'
 #' Quick evaluation of batch correction quality using per-marker MAD of batch
-#' medians.  For richer diagnostics see \code{\link{sw_evaluate_emd}} and
-#' \code{\link{sw_evaluate_mad}}, which delegate to cyCombine's cluster-aware
+#' medians.  For richer diagnostics see \code{\link{sw_correct_evaluate_emd}} and
+#' \code{\link{sw_correct_evaluate_mad}}, which delegate to cyCombine's cluster-aware
 #' EMD and MAD computations.
 #'
 #' @param uncorrected A \code{tibble} with pre-correction data.
@@ -264,11 +264,11 @@ sw_batch_correct <- function(uncorrected, markers, covar = NULL,
 #'   CD3 = c(rnorm(50, 2), rnorm(50, 2.1)),
 #'   batch = rep(c("B1", "B2"), each = 50)
 #' )
-#' result <- sw_evaluate_correction(uncorrected, corrected, markers = "CD3")
+#' result <- sw_correct_evaluate_quick(uncorrected, corrected, markers = "CD3")
 #' result$improved
 #'
 #' @export
-sw_evaluate_correction <- function(uncorrected, corrected, markers) {
+sw_correct_evaluate_quick <- function(uncorrected, corrected, markers) {
   if (!is.data.frame(uncorrected) || !is.data.frame(corrected)) {
     stop("'uncorrected' and 'corrected' must be data.frames.", call. = FALSE)
   }
@@ -384,7 +384,7 @@ sw_evaluate_correction <- function(uncorrected, corrected, markers) {
 #' SOM clustering.
 #'
 #' @param df A \code{tibble} with marker columns and a \code{batch} column,
-#'   typically produced by \code{\link{sw_prepare_for_correction}}.
+#'   typically produced by \code{\link{sw_correct_prepare}}.
 #' @param markers Character vector of marker column names to normalise.
 #' @param norm_method Normalisation method.  One of \code{"scale"} (z-score,
 #'   default for single-study data), \code{"rank"} (rank-based, recommended
@@ -392,13 +392,13 @@ sw_evaluate_correction <- function(uncorrected, corrected, markers) {
 #' @param ... Additional arguments passed to \code{cyCombine::normalize()}.
 #'
 #' @return A \code{tibble} with normalised marker values, suitable for
-#'   \code{\link{sw_create_som}}.
+#'   \code{\link{sw_correct_som}}.
 #'
-#' @seealso \code{\link{sw_create_som}}, \code{\link{sw_correct_data}},
-#'   \code{\link{sw_batch_correct}}
+#' @seealso \code{\link{sw_correct_som}}, \code{\link{sw_correct_apply}},
+#'   \code{\link{sw_correct_run}}
 #'
 #' @export
-sw_normalize <- function(df, markers, norm_method = "scale", ...) {
+sw_correct_normalize <- function(df, markers, norm_method = "scale", ...) {
   .check_cycombine()
   .validate_batch_df(df, markers)
 
@@ -416,11 +416,11 @@ sw_normalize <- function(df, markers, norm_method = "scale", ...) {
 #' Create Self-Organising Map for Batch Correction
 #'
 #' Clusters cells using a Self-Organising Map (SOM).  The resulting labels are
-#' passed to \code{\link{sw_correct_data}} so that ComBat is applied within
+#' passed to \code{\link{sw_correct_apply}} so that ComBat is applied within
 #' each cluster.
 #'
 #' @param df A \code{tibble} of normalised marker values, typically produced
-#'   by \code{\link{sw_normalize}}.
+#'   by \code{\link{sw_correct_normalize}}.
 #' @param markers Character vector of marker column names used for clustering.
 #' @param xdim Integer; SOM grid x-dimension (default: 8).
 #' @param ydim Integer; SOM grid y-dimension (default: 8).
@@ -430,11 +430,11 @@ sw_normalize <- function(df, markers, norm_method = "scale", ...) {
 #'
 #' @return An integer vector of cluster labels, one per row in \code{df}.
 #'
-#' @seealso \code{\link{sw_normalize}}, \code{\link{sw_correct_data}},
-#'   \code{\link{sw_batch_correct}}
+#' @seealso \code{\link{sw_correct_normalize}}, \code{\link{sw_correct_apply}},
+#'   \code{\link{sw_correct_run}}
 #'
 #' @export
-sw_create_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
+sw_correct_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
                           seed = 42, ...) {
   .check_cycombine()
 
@@ -466,14 +466,14 @@ sw_create_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
 #'
 #' Runs ComBat batch correction within each cluster defined by the supplied
 #' labels.  This is the final step of the modular workflow
-#' (\code{\link{sw_normalize}} \eqn{\to} \code{\link{sw_create_som}} \eqn{\to}
-#' \code{sw_correct_data}).
+#' (\code{\link{sw_correct_normalize}} \eqn{\to} \code{\link{sw_correct_som}} \eqn{\to}
+#' \code{sw_correct_apply}).
 #'
 #' @param df A \code{tibble} with the **original** (un-normalised) marker
 #'   values.  Normalisation is only used for clustering; the correction itself
 #'   operates on the original scale.
 #' @param label Integer vector of cluster labels (from
-#'   \code{\link{sw_create_som}} or any external clustering).
+#'   \code{\link{sw_correct_som}} or any external clustering).
 #' @param markers Character vector of marker column names to correct.
 #' @param covar Character scalar naming the biological covariate column to
 #'   preserve (e.g. \code{"condition"}), or \code{NULL}.
@@ -482,11 +482,11 @@ sw_create_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
 #'
 #' @return A \code{tibble} with batch-corrected marker values.
 #'
-#' @seealso \code{\link{sw_normalize}}, \code{\link{sw_create_som}},
-#'   \code{\link{sw_batch_correct}}
+#' @seealso \code{\link{sw_correct_normalize}}, \code{\link{sw_correct_som}},
+#'   \code{\link{sw_correct_run}}
 #'
 #' @export
-sw_correct_data <- function(df, label, markers, covar = NULL,
+sw_correct_apply <- function(df, label, markers, covar = NULL,
                             parametric = TRUE, ...) {
   .check_cycombine()
   .validate_batch_df(df, markers)
@@ -536,11 +536,11 @@ sw_correct_data <- function(df, label, markers, covar = NULL,
 #' @return A list of \code{ggplot} objects (when \code{out_dir = NULL}), or
 #'   \code{NULL} invisibly after saving to \code{out_dir}.
 #'
-#' @seealso \code{\link{sw_evaluate_emd}}, \code{\link{sw_evaluate_mad}},
+#' @seealso \code{\link{sw_correct_evaluate_emd}}, \code{\link{sw_correct_evaluate_mad}},
 #'   \code{\link{sw_plot_batch_densities}}
 #'
 #' @export
-sw_detect_batch_effect <- function(df, markers, out_dir = NULL,
+sw_correct_detect_batch <- function(df, markers, out_dir = NULL,
                                    downsample = NULL, seed = 42, ...) {
   .check_cycombine()
   .validate_batch_df(df, markers)
@@ -566,7 +566,7 @@ sw_detect_batch_effect <- function(df, markers, out_dir = NULL,
 #'
 #' Computes Earth Mover's Distance (EMD) between batch distributions for each
 #' marker within each SOM cluster.  The data must contain a \code{label}
-#' column (cluster assignments); use \code{\link{sw_create_som}} to create
+#' column (cluster assignments); use \code{\link{sw_correct_som}} to create
 #' one if needed.
 #'
 #' @param df A \code{tibble} with marker columns, \code{batch}, and
@@ -580,10 +580,10 @@ sw_detect_batch_effect <- function(df, markers, out_dir = NULL,
 #' @return A named list of EMD matrices (per cluster, per marker), as returned
 #'   by \code{cyCombine::compute_emd()}.
 #'
-#' @seealso \code{\link{sw_evaluate_emd}}, \code{\link{sw_evaluate_mad}}
+#' @seealso \code{\link{sw_correct_evaluate_emd}}, \code{\link{sw_correct_evaluate_mad}}
 #'
 #' @export
-sw_compute_emd <- function(df, markers, cell_col = "label",
+sw_correct_emd <- function(df, markers, cell_col = "label",
                            batch_col = "batch", binSize = 0.1, ...) {
   .check_cycombine()
 
@@ -597,7 +597,7 @@ sw_compute_emd <- function(df, markers, cell_col = "label",
 
   if (!cell_col %in% names(df)) {
     stop("Column '", cell_col, "' not found in data. ",
-         "Run sw_create_som() first to add cluster labels.", call. = FALSE)
+         "Run sw_correct_som() first to add cluster labels.", call. = FALSE)
   }
 
   if (!batch_col %in% names(df)) {
@@ -646,11 +646,11 @@ sw_compute_emd <- function(df, markers, cell_col = "label",
 #'       values}
 #'   }
 #'
-#' @seealso \code{\link{sw_compute_emd}}, \code{\link{sw_evaluate_mad}},
-#'   \code{\link{sw_evaluate_correction}}
+#' @seealso \code{\link{sw_correct_emd}}, \code{\link{sw_correct_evaluate_mad}},
+#'   \code{\link{sw_correct_evaluate_quick}}
 #'
 #' @export
-sw_evaluate_emd <- function(uncorrected, corrected, markers,
+sw_correct_evaluate_emd <- function(uncorrected, corrected, markers,
                             cell_col = "label", batch_col = "batch",
                             binSize = 0.1, ...) {
   .check_cycombine()
@@ -713,10 +713,10 @@ sw_evaluate_emd <- function(uncorrected, corrected, markers,
 #'     \item{\code{mad}}{A \code{tibble} with per-marker MAD values}
 #'   }
 #'
-#' @seealso \code{\link{sw_evaluate_emd}}, \code{\link{sw_evaluate_correction}}
+#' @seealso \code{\link{sw_correct_evaluate_emd}}, \code{\link{sw_correct_evaluate_quick}}
 #'
 #' @export
-sw_evaluate_mad <- function(uncorrected, corrected, markers,
+sw_correct_evaluate_mad <- function(uncorrected, corrected, markers,
                             cell_col = "label", batch_col = "batch", ...) {
   .check_cycombine()
 
@@ -774,7 +774,7 @@ sw_evaluate_mad <- function(uncorrected, corrected, markers,
 #'   invisibly when \code{filename} is given.
 #'
 #' @seealso \code{\link{sw_plot_batch_dimred}},
-#'   \code{\link{sw_detect_batch_effect}}
+#'   \code{\link{sw_correct_detect_batch}}
 #'
 #' @export
 sw_plot_batch_densities <- function(uncorrected, corrected, markers,
@@ -827,7 +827,7 @@ sw_plot_batch_densities <- function(uncorrected, corrected, markers,
 #' @return A \code{ggplot} object.
 #'
 #' @seealso \code{\link{sw_plot_batch_densities}},
-#'   \code{\link{sw_detect_batch_effect}}
+#'   \code{\link{sw_correct_detect_batch}}
 #'
 #' @export
 sw_plot_batch_dimred <- function(df, markers, type = "umap",

@@ -7,14 +7,14 @@ plus diagnostic evaluation and visualisation.
 
 ## All-in-one workflow
 
-### `sw_prepare_for_correction` {#sw_prepare_for_correction}
+### `sw_correct_prepare` {#sw_correct_prepare}
 
 Prepare data for batch correction.
 
 #### Usage
 
 ```r
-sw_prepare_for_correction(ff_list, sample_meta, markers, cofactor = 6000)
+sw_correct_prepare(ff_list, sample_meta, markers, cofactor = 6000)
 ```
 
 #### Arguments
@@ -38,14 +38,14 @@ metadata columns (`sample`, `batch`, `condition`).
 
 ---
 
-### `sw_batch_correct` {#sw_batch_correct}
+### `sw_correct_run` {#sw_correct_run}
 
 All-in-one batch correction.
 
 #### Usage
 
 ```r
-sw_batch_correct(uncorrected, markers, covar = NULL, label = NULL,
+sw_correct_run(uncorrected, markers, covar = NULL, label = NULL,
                  xdim = 8, ydim = 8, rlen = 10, norm_method = "scale",
                  seed = 42, ...)
 ```
@@ -76,14 +76,14 @@ A `tibble` with batch-corrected marker values.
 
 ---
 
-### `sw_evaluate_correction` {#sw_evaluate_correction}
+### `sw_correct_evaluate_quick` {#sw_correct_evaluate_quick}
 
 Quick evaluation of batch correction quality.
 
 #### Usage
 
 ```r
-sw_evaluate_correction(uncorrected, corrected, markers)
+sw_correct_evaluate_quick(uncorrected, corrected, markers)
 ```
 
 #### Arguments
@@ -97,7 +97,7 @@ sw_evaluate_correction(uncorrected, corrected, markers)
 #### Details
 
 Computes per-marker MAD of batch medians before and after correction. For
-richer diagnostics, see `sw_evaluate_emd()` and `sw_evaluate_mad()`.
+richer diagnostics, see `sw_correct_evaluate_emd()` and `sw_correct_evaluate_mad()`.
 
 #### Value
 
@@ -109,14 +109,14 @@ A named list: `emd`, `mad`, `improved` (logical), `emd_reduction_pct`.
 
 The modular workflow provides finer control: normalise → cluster → correct.
 
-### `sw_normalize` {#sw_normalize}
+### `sw_correct_normalize` {#sw_correct_normalize}
 
 Normalise data for batch correction.
 
 #### Usage
 
 ```r
-sw_normalize(df, markers, norm_method = "scale", ...)
+sw_correct_normalize(df, markers, norm_method = "scale", ...)
 ```
 
 #### Arguments
@@ -139,14 +139,14 @@ A `tibble` with normalised marker values.
 
 ---
 
-### `sw_create_som` {#sw_create_som}
+### `sw_correct_som` {#sw_correct_som}
 
 Create a Self-Organising Map for batch correction.
 
 #### Usage
 
 ```r
-sw_create_som(df, markers, xdim = 8, ydim = 8, rlen = 10, seed = 42, ...)
+sw_correct_som(df, markers, xdim = 8, ydim = 8, rlen = 10, seed = 42, ...)
 ```
 
 #### Arguments
@@ -164,7 +164,7 @@ sw_create_som(df, markers, xdim = 8, ydim = 8, rlen = 10, seed = 42, ...)
 #### Details
 
 Clusters cells using a Self-Organising Map. The resulting labels are passed
-to `sw_correct_data()` so that ComBat is applied within each cluster. Second
+to `sw_correct_apply()` so that ComBat is applied within each cluster. Second
 step of the modular workflow.
 
 #### Value
@@ -173,14 +173,14 @@ An integer vector of cluster labels, one per row in `df`.
 
 ---
 
-### `sw_correct_data` {#sw_correct_data}
+### `sw_correct_apply` {#sw_correct_apply}
 
 Apply ComBat batch correction with pre-computed labels.
 
 #### Usage
 
 ```r
-sw_correct_data(df, label, markers, covar = NULL, parametric = TRUE, ...)
+sw_correct_apply(df, label, markers, covar = NULL, parametric = TRUE, ...)
 ```
 
 #### Arguments
@@ -188,7 +188,7 @@ sw_correct_data(df, label, markers, covar = NULL, parametric = TRUE, ...)
 | Argument | Description |
 |----------|-------------|
 | `df` | A `data.frame`/`tibble` with a `batch` column and marker columns. |
-| `label` | Integer vector of cluster labels (from `sw_create_som()`). |
+| `label` | Integer vector of cluster labels (from `sw_correct_som()`). |
 | `markers` | Character vector of marker column names. |
 | `covar` | Optional covariate column name(s). |
 | `parametric` | Logical; use parametric ComBat (default: `TRUE`). |
@@ -207,14 +207,14 @@ A `tibble` with batch-corrected marker values.
 
 ## Batch effect detection and evaluation
 
-### `sw_detect_batch_effect` {#sw_detect_batch_effect}
+### `sw_correct_detect_batch` {#sw_correct_detect_batch}
 
 Detect batch effects.
 
 #### Usage
 
 ```r
-sw_detect_batch_effect(df, markers, out_dir = NULL, downsample = NULL,
+sw_correct_detect_batch(df, markers, out_dir = NULL, downsample = NULL,
                        seed = 42, ...)
 ```
 
@@ -241,14 +241,14 @@ saving to `out_dir`.
 
 ---
 
-### `sw_compute_emd` {#sw_compute_emd}
+### `sw_correct_emd` {#sw_correct_emd}
 
 Compute Earth Mover's Distance.
 
 #### Usage
 
 ```r
-sw_compute_emd(df, markers, cell_col = "label", batch_col = "batch",
+sw_correct_emd(df, markers, cell_col = "label", batch_col = "batch",
                binSize = 0.1, ...)
 ```
 
@@ -274,14 +274,14 @@ A named list of EMD matrices (per cluster, per marker).
 
 ---
 
-### `sw_evaluate_emd` {#sw_evaluate_emd}
+### `sw_correct_evaluate_emd` {#sw_correct_evaluate_emd}
 
 Evaluate batch correction with EMD.
 
 #### Usage
 
 ```r
-sw_evaluate_emd(uncorrected, corrected, markers, cell_col = "label",
+sw_correct_evaluate_emd(uncorrected, corrected, markers, cell_col = "label",
                 batch_col = "batch", binSize = 0.1, ...)
 ```
 
@@ -308,14 +308,14 @@ A named list: `violin`, `scatter`, `reduction`, `emd`.
 
 ---
 
-### `sw_evaluate_mad` {#sw_evaluate_mad}
+### `sw_correct_evaluate_mad` {#sw_correct_evaluate_mad}
 
 Evaluate batch correction with MAD.
 
 #### Usage
 
 ```r
-sw_evaluate_mad(uncorrected, corrected, markers, cell_col = "label",
+sw_correct_evaluate_mad(uncorrected, corrected, markers, cell_col = "label",
                 batch_col = "batch", ...)
 ```
 

@@ -69,8 +69,8 @@ same shape as the sequential backend.
 \examples{
 \dontrun{
 pip <- sw_pipeline("transform", steps = list(
-  sw_step("double", function(x) x * 2),
-  sw_step("add_one", function(x) x + 1)
+  sw_pipeline_step("double", function(x) x * 2),
+  sw_pipeline_step("add_one", function(x) x + 1)
 ))
 result <- sw_pipeline_run(pip, input = 5)
 # result$result == 11 (5 * 2 + 1)

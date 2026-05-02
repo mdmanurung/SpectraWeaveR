@@ -68,13 +68,13 @@ cat("Corrected data:", nrow(corrected), "cells,",
 
 ## Clustering with kohonen SOM
 
-`sw_cluster()` performs Self-Organizing Map (SOM) clustering followed by
+`sw_cluster_run()` performs Self-Organizing Map (SOM) clustering followed by
 hierarchical metaclustering. It also supports FastPG graph-based
 clustering when that package is available.
 
 ```{r}
 #| label: cluster
-cluster_result <- sw_cluster(
+cluster_result <- sw_cluster_run(
   corrected,
   lineage_markers = lineage_markers,
   method = "som",
@@ -95,7 +95,7 @@ cat("Clustering complete:", cluster_result$n_clusters, "metaclusters\n")
 
 ```{r}
 #| label: get-assignments
-assignments <- sw_get_cluster_assignments(cluster_result)
+assignments <- sw_cluster_assignments(cluster_result)
 stopifnot(is.integer(assignments))
 stopifnot(length(assignments) == nrow(corrected))
 cat("Cluster distribution:\n")
@@ -106,7 +106,7 @@ print(table(assignments))
 
 ```{r}
 #| label: cluster-mfis
-mfis <- sw_cluster_mfis(cluster_result)
+mfis <- sw_cluster_mfi(cluster_result)
 stopifnot(is.data.frame(mfis))
 stopifnot("cluster" %in% names(mfis))
 stopifnot(nrow(mfis) == cluster_result$n_clusters)
@@ -131,7 +131,7 @@ cat("File size:", file.size(heatmap_file), "bytes\n")
 
 ### Predict clusters for new data
 
-`sw_predict_clusters()` maps new cells onto the trained SOM and assigns
+`sw_cluster_predict()` maps new cells onto the trained SOM and assigns
 them to metaclusters.
 
 ```{r}
@@ -143,7 +143,7 @@ new_data <- tibble::tibble(
   CD56 = rnorm(50, 0.05, 0.1)
 )
 
-predicted <- sw_predict_clusters(cluster_result, newdata = new_data)
+predicted <- sw_cluster_predict(cluster_result, newdata = new_data)
 stopifnot(inherits(predicted, "sw_cluster_result"))
 stopifnot(length(predicted$assignments) == 50)
 cat("Predicted clusters for 50 new cells:\n")
@@ -154,13 +154,13 @@ print(table(predicted$assignments))
 
 ### PCA
 
-`sw_run_dimred()` computes a 2D embedding. PCA is always available
+`sw_dimred_run()` computes a 2D embedding. PCA is always available
 (no extra dependencies). The result includes a `variance_explained`
 attribute.
 
 ```{r}
 #| label: dimred-pca
-pca_result <- sw_run_dimred(
+pca_result <- sw_dimred_run(
   corrected, markers = markers,
   method = "pca", seed = 42
 )
@@ -182,7 +182,7 @@ UMAP requires the `uwot` package.
 ```{r}
 #| label: dimred-umap
 #| eval: !expr requireNamespace("uwot", quietly = TRUE)
-umap_result <- sw_run_dimred(
+umap_result <- sw_dimred_run(
   corrected, markers = markers,
   method = "umap", n_neighbors = 15, min_dist = 0.2, seed = 42
 )
@@ -225,7 +225,7 @@ post-hoc to any unmixed data.
 
 ### Spillover spreading matrix (SSM)
 
-`sw_spillover_spreading_matrix()` quantifies cross-talk between
+`sw_unmix_spillover_matrix()` quantifies cross-talk between
 fluorophores based on reference spectra. Here we create synthetic
 reference spectra to demonstrate.
 
@@ -246,7 +246,7 @@ spectra[4, ] <- c(0, 0, 0, 0.1, 0.3, 1.0, 0.4, 0.1, 0, 0)
 spectra[5, ] <- c(0, 0, 0, 0, 0, 0.1, 0.3, 1.0, 0.3, 0)
 spectra[6, ] <- c(0, 0, 0, 0, 0, 0, 0, 0.1, 0.4, 1.0)
 
-ssm <- sw_spillover_spreading_matrix(spectra)
+ssm <- sw_unmix_spillover_matrix(spectra)
 stopifnot(inherits(ssm, "sw_ssm"))
 stopifnot(is.matrix(ssm$matrix))
 stopifnot(nrow(ssm$matrix) == 6)
@@ -273,7 +273,7 @@ mat_unmixed <- matrix(
 )
 ff_unmixed <- flowCore::flowFrame(mat_unmixed)
 
-ssm_emp <- sw_spillover_spreading_matrix(spectra, unmixed_ff = ff_unmixed)
+ssm_emp <- sw_unmix_spillover_matrix(spectra, unmixed_ff = ff_unmixed)
 stopifnot(inherits(ssm_emp, "sw_ssm"))
 cat("Empirical SSM computed (combined spectra + data)\n")
 ```
@@ -283,19 +283,19 @@ cat("Empirical SSM computed (combined spectra + data)\n")
 ```{r}
 #| label: plot-ssm
 ssm_pdf <- tempfile(fileext = ".pdf")
-sw_plot_ssm(ssm, plot_file = ssm_pdf)
+sw_plot_spillover_matrix(ssm, plot_file = ssm_pdf)
 stopifnot(file.exists(ssm_pdf))
 cat("SSM heatmap saved to:", ssm_pdf, "\n")
 ```
 
 ### Unmixing quality per channel
 
-`sw_unmixing_quality()` computes mean, SD, CV, and percentage of negative
+`sw_unmix_quality()` computes mean, SD, CV, and percentage of negative
 values per channel — flagging channels with high CV.
 
 ```{r}
 #| label: unmixing-quality
-quality <- sw_unmixing_quality(
+quality <- sw_unmix_quality(
   ff_unmixed,
   channels = c("BV421", "BV510", "BV605", "BV711", "PE", "APC"),
   cv_threshold = 0.5
@@ -322,16 +322,16 @@ cat("Tutorial Part 4 complete. All functions verified.\n")
 
 | Function | Module |
 |----------|--------|
-| `sw_cluster()` | cluster |
-| `sw_get_cluster_assignments()` | cluster |
-| `sw_cluster_mfis()` | cluster |
+| `sw_cluster_run()` | cluster |
+| `sw_cluster_assignments()` | cluster |
+| `sw_cluster_mfi()` | cluster |
 | `sw_plot_clusters()` | cluster |
-| `sw_predict_clusters()` | cluster |
-| `sw_run_dimred()` | dimred |
+| `sw_cluster_predict()` | cluster |
+| `sw_dimred_run()` | dimred |
 | `sw_plot_dimred()` | dimred |
-| `sw_spillover_spreading_matrix()` | unmix_diagnostics |
-| `sw_plot_ssm()` | unmix_diagnostics |
-| `sw_unmixing_quality()` | unmix_diagnostics |
+| `sw_unmix_spillover_matrix()` | unmix_diagnostics |
+| `sw_plot_spillover_matrix()` | unmix_diagnostics |
+| `sw_unmix_quality()` | unmix_diagnostics |
 
 **Previous:** [Part 3 — Batch Correction](tutorial-03-batch-correction.qmd)\
 **Next:** [Part 5 — Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)

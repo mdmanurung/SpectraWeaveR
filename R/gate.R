@@ -25,7 +25,7 @@ NULL
 #' Templates use marker names in the \code{dims} column (e.g., \code{"CD3"},
 #' \code{"CD4"}) except for scatter channels (\code{FSC-A}, \code{SSC-A}).
 #' Ensure marker names are set on your \code{flowFrame}/\code{flowSet}
-#' via \code{\link{sw_set_marker_names}} before gating.
+#' via \code{\link{sw_channel_set_markers}} before gating.
 #'
 #' Available templates:
 #' \describe{
@@ -42,16 +42,16 @@ NULL
 #' }
 #'
 #' Users should review and customize the template for their specific panel
-#' before applying it with \code{\link{sw_gate}}.
+#' before applying it with \code{\link{sw_gate_run}}.
 #'
 #' @examples
 #' tmp <- tempfile(fileext = ".csv")
-#' sw_build_gating_template(tmp, template_type = "lymphocyte")
+#' sw_gate_template(tmp, template_type = "lymphocyte")
 #' head(read.csv(tmp))
 #' unlink(tmp)
 #'
 #' @export
-sw_build_gating_template <- function(output_file, template_type = "lymphocyte") {
+sw_gate_template <- function(output_file, template_type = "lymphocyte") {
   if (!is.character(output_file) || length(output_file) != 1) {
     stop("'output_file' must be a single file path.", call. = FALSE)
   }
@@ -170,7 +170,7 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
 #'
 #' @param fcs_files Character vector of FCS file paths.
 #' @param gating_template Character path to a CSV gating template file
-#'   (see \code{\link{sw_build_gating_template}}).
+#'   (see \code{\link{sw_gate_template}}).
 #' @param transform_channels Character vector of channel names to transform.
 #'   If \code{NULL}, no transformation is applied.
 #' @param transform_func Transformation function to apply (default:
@@ -186,12 +186,12 @@ sw_build_gating_template <- function(output_file, template_type = "lymphocyte") 
 #' \dontrun{
 #' # Build template and apply
 #' tmpl <- tempfile(fileext = ".csv")
-#' sw_build_gating_template(tmpl, "lymphocyte")
-#' gs <- sw_gate(c("sample1.fcs", "sample2.fcs"), gating_template = tmpl)
+#' sw_gate_template(tmpl, "lymphocyte")
+#' gs <- sw_gate_run(c("sample1.fcs", "sample2.fcs"), gating_template = tmpl)
 #' }
 #'
 #' @export
-sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
+sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
                     transform_func = NULL, cofactor = 6000, ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
@@ -213,7 +213,7 @@ sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
 
   # Load FCS data
   message("Loading FCS files...")
-  fs <- sw_read_fcs(fcs_files)
+  fs <- sw_io_read_fcs(fcs_files)
 
   # Convert to GatingSet
   message("Creating GatingSet...")
@@ -264,12 +264,12 @@ sw_gate <- function(fcs_files, gating_template, transform_channels = NULL,
 #'
 #' @examples
 #' \dontrun{
-#' ff_list <- sw_extract_gated(gs, node = "/singlets/lymphocytes")
+#' ff_list <- sw_gate_extract(gs, node = "/singlets/lymphocytes")
 #' length(ff_list)
 #' }
 #'
 #' @export
-sw_extract_gated <- function(gs, node) {
+sw_gate_extract <- function(gs, node) {
   if (!requireNamespace("flowWorkspace", quietly = TRUE)) {
     stop("Package 'flowWorkspace' is required.", call. = FALSE)
   }

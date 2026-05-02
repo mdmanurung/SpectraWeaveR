@@ -4,14 +4,14 @@ title: "Clustering"
 
 Clustering with kohonen SOM or FastPG.
 
-## `sw_cluster` {#sw_cluster}
+## `sw_cluster_run` {#sw_cluster_run}
 
 Cluster cells using a self-organizing map (kohonen) or graph-based clustering (FastPG).
 
 ### Usage
 
 ```r
-sw_cluster(corrected, lineage_markers, method = c("som", "fastpg"),
+sw_cluster_run(corrected, lineage_markers, method = c("som", "fastpg"),
            xdim = 10, ydim = 10, n_metaclusters = 20, seed = 42, ...)
 ```
 
@@ -41,21 +41,21 @@ An `sw_cluster_result` S3 object containing the trained model and cluster assign
 
 ---
 
-## `sw_get_cluster_assignments` {#sw_get_cluster_assignments}
+## `sw_cluster_assignments` {#sw_cluster_assignments}
 
 Get cluster assignments.
 
 ### Usage
 
 ```r
-sw_get_cluster_assignments(cluster_result)
+sw_cluster_assignments(cluster_result)
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `cluster_result` | An `sw_cluster_result` object from `sw_cluster()`. |
+| `cluster_result` | An `sw_cluster_result` object from `sw_cluster_run()`. |
 
 ### Details
 
@@ -67,21 +67,21 @@ An integer vector of cluster assignments, one per cell.
 
 ---
 
-## `sw_cluster_mfis` {#sw_cluster_mfis}
+## `sw_cluster_mfi` {#sw_cluster_mfi}
 
 Compute median fluorescence intensities per cluster.
 
 ### Usage
 
 ```r
-sw_cluster_mfis(cluster_result)
+sw_cluster_mfi(cluster_result)
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `cluster_result` | An `sw_cluster_result` object from `sw_cluster()`. |
+| `cluster_result` | An `sw_cluster_result` object from `sw_cluster_run()`. |
 
 ### Details
 
@@ -108,7 +108,7 @@ sw_plot_clusters(cluster_result, plot_file = "clusters.pdf")
 
 | Argument | Description |
 |----------|-------------|
-| `cluster_result` | An `sw_cluster_result` object from `sw_cluster()`. |
+| `cluster_result` | An `sw_cluster_result` object from `sw_cluster_run()`. |
 | `plot_file` | Output file path (default: `"clusters.pdf"`). |
 
 ### Details
@@ -122,21 +122,21 @@ The file path (invisibly).
 
 ---
 
-## `sw_predict_clusters` {#sw_predict_clusters}
+## `sw_cluster_predict` {#sw_cluster_predict}
 
 Predict clusters for new data using a trained model.
 
 ### Usage
 
 ```r
-sw_predict_clusters(cluster_result, new_data)
+sw_cluster_predict(cluster_result, new_data)
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `cluster_result` | A trained `sw_cluster_result` object from `sw_cluster()`. |
+| `cluster_result` | A trained `sw_cluster_result` object from `sw_cluster_run()`. |
 | `new_data` | A `data.frame`, `tibble`, or matrix of new expression data. |
 
 ### Details

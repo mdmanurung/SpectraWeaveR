@@ -7,7 +7,7 @@
 sw_qc_summary(qc_results, threshold = 30)
 }
 \arguments{
-\item{qc_results}{The output from \code{\link{sw_signal_qc_batch}}.}
+\item{qc_results}{The output from \code{\link{sw_qc_batch}}.}
 
 \item{threshold}{Numeric; percentage threshold for flagging samples
 (default: 30). Samples with removal rate exceeding this value are flagged.}

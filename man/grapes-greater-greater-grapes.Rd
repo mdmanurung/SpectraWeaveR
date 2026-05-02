@@ -3,7 +3,7 @@
 \name{grapes-greater-greater-grapes}
 \alias{grapes-greater-greater-grapes}
 \alias{\%>>\%}
-\title{Compose Pipeline Steps with \code{\%>>\%}}
+\title{Compose Pipeline Steps with \verb{\\\%>>\\\%}}
 \usage{
 lhs \%>>\% rhs
 }
@@ -41,8 +41,8 @@ left-associative, so \code{a \%>>\% b \%>>\% c} reads as
 }
 \examples{
 \dontrun{
-pip <- sw_step("double", function(x) x * 2) \%>>\%
-       sw_step("plus1",  function(x) x + 1)
+pip <- sw_pipeline_step("double", function(x) x * 2) \\%>>\\%
+       sw_pipeline_step("plus1",  function(x) x + 1)
 sw_pipeline_run(pip, input = 5)  # 11
 }
 

@@ -76,7 +76,7 @@ NULL
 #'   sample = c("S1", "S2"),
 #'   batch = c("B1", "B2")
 #' )
-#' result <- run_pipeline(
+#' result <- sw_pipeline_run_all(
 #'   fcs_dir = "path/to/fcs",
 #'   sample_meta = meta,
 #'   markers = c("CD3", "CD4", "CD8"),
@@ -86,7 +86,7 @@ NULL
 #' }
 #'
 #' @export
-run_pipeline <- function(fcs_dir,
+sw_pipeline_run_all <- function(fcs_dir,
                          sample_meta,
                          markers,
                          lineage_markers,
@@ -173,7 +173,7 @@ run_pipeline <- function(fcs_dir,
 
   # --- Step 1: Load unmixed FCS files ---
   message("\n=== Step 1/6: Loading unmixed FCS files ===")
-  fs <- sw_load_unmixed(fcs_dir)
+  fs <- sw_io_load_unmixed(fcs_dir)
   results$flowset <- fs
 
   # --- Step 2: Remove margin events ---
@@ -182,7 +182,7 @@ run_pipeline <- function(fcs_dir,
   for (i in seq_along(fs)) {
     sn <- flowCore::sampleNames(fs)[i]
     message("  Processing: ", sn)
-    ff_list[[sn]] <- sw_remove_margins(fs[[i]])
+    ff_list[[sn]] <- sw_filter_margins(fs[[i]])
   }
 
   # --- Step 3: Gating (optional) ---
@@ -203,7 +203,7 @@ run_pipeline <- function(fcs_dir,
     results$gating_set <- gs
 
     # Extract gated populations
-    ff_list <- sw_extract_gated(gs, gate_node)
+    ff_list <- sw_gate_extract(gs, gate_node)
     message("Extracted gated populations from node: ", gate_node)
   } else {
     message("\n=== Step 3/6: Gating skipped (no template provided) ===")
@@ -213,7 +213,7 @@ run_pipeline <- function(fcs_dir,
   # --- Step 4: Signal QC ---
   message("\n=== Step 4/6: Signal quality control (PeacoQC) ===")
   qc_output_dir <- file.path(output_dir, "QC")
-  qc_batch_result <- sw_signal_qc_batch(ff_list,
+  qc_batch_result <- sw_qc_batch(ff_list,
                                          output_dir = qc_output_dir)
   results$qc_results <- qc_batch_result
 
@@ -232,7 +232,7 @@ run_pipeline <- function(fcs_dir,
                                                 "condition")),
                                   drop = FALSE]
 
-  uncorrected <- sw_prepare_for_correction(
+  uncorrected <- sw_correct_prepare(
     ff_list_clean,
     sample_meta = correction_meta,
     markers = markers,
@@ -242,7 +242,7 @@ run_pipeline <- function(fcs_dir,
 
   covar <- if ("condition" %in% names(sample_meta)) "condition" else NULL
 
-  corrected <- sw_batch_correct(
+  corrected <- sw_correct_run(
     uncorrected,
     markers = markers,
     covar = covar,
@@ -251,14 +251,14 @@ run_pipeline <- function(fcs_dir,
   results$corrected <- corrected
 
   # Evaluate correction
-  eval_result <- sw_evaluate_correction(uncorrected, corrected,
+  eval_result <- sw_correct_evaluate_quick(uncorrected, corrected,
                                          markers = markers)
   results$correction_eval <- eval_result
 
   # --- Step 6: Clustering ---
   message("\n=== Step 6/6: Clustering ===")
 
-  cluster_result <- sw_cluster(
+  cluster_result <- sw_cluster_run(
     corrected,
     lineage_markers = lineage_markers,
     n_metaclusters = n_metaclusters,
@@ -266,8 +266,8 @@ run_pipeline <- function(fcs_dir,
   )
   results$cluster_result <- cluster_result
 
-  results$cluster_assignments <- sw_get_cluster_assignments(cluster_result)
-  results$cluster_mfis <- sw_cluster_mfis(cluster_result)
+  results$cluster_assignments <- sw_cluster_assignments(cluster_result)
+  results$cluster_mfis <- sw_cluster_mfi(cluster_result)
 
   # Save cluster plots
   plot_file <- file.path(output_dir, "cluster_heatmap.pdf")

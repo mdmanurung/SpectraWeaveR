@@ -45,7 +45,7 @@ NULL
 #' @return A \code{flowCore::polygonGate} object.
 #'
 #' @export
-sw_singlets_gate <- function(ff,
+sw_gate_singlets <- function(ff,
                              filter_id = "Singlets",
                              channel1 = "FSC-A",
                              channel2 = "FSC-H",
@@ -127,7 +127,7 @@ sw_singlets_gate <- function(ff,
 #' Remove Doublets Using CytoPipeline Algorithm
 #'
 #' Removes doublet events using the parallelogram singlet gate from
-#' \code{\link{sw_singlets_gate}}. Can apply gates on multiple channel pairs
+#' \code{\link{sw_gate_singlets}}. Can apply gates on multiple channel pairs
 #' (e.g., FSC-A/FSC-H and SSC-A/SSC-H) and combine them.
 #'
 #' Ported from CytoPipeline (UCLouvain-CBIO).
@@ -146,7 +146,7 @@ sw_singlets_gate <- function(ff,
 #' @return A \code{flowFrame} with doublets removed.
 #'
 #' @export
-sw_remove_doublets <- function(ff,
+sw_filter_doublets <- function(ff,
                                area_channels = c("FSC-A", "SSC-A"),
                                height_channels = c("FSC-H", "SSC-H"),
                                nmads = rep(4, length(area_channels)),
@@ -173,7 +173,7 @@ sw_remove_doublets <- function(ff,
   }
 
   for (i in seq_len(n_filters)) {
-    current_gate <- sw_singlets_gate(
+    current_gate <- sw_gate_singlets(
       ff,
       filter_id = paste0("Singlets_", area_channels[i]),
       channel1 = area_channels[i],
@@ -218,7 +218,7 @@ sw_remove_doublets <- function(ff,
 #' @return A \code{flowFrame} with doublets removed.
 #'
 #' @export
-sw_remove_doublets_peacoqc <- function(ff,
+sw_filter_doublets_peacoqc <- function(ff,
                                        area_channels = c("FSC-A", "SSC-A"),
                                        height_channels = c("FSC-H", "SSC-H"),
                                        nmads = rep(4, length(area_channels)),
@@ -299,11 +299,11 @@ sw_remove_doublets_peacoqc <- function(ff,
 #'   73615, 110174, 213000, 201000, 126000,  # FSC-A x-coords
 #'   47679, 260500, 260500, 113000, 35000     # SSC-A y-coords
 #' )
-#' ff_clean <- sw_remove_debris_gate(ff, gate_data = gate_coords)
+#' ff_clean <- sw_filter_debris(ff, gate_data = gate_coords)
 #' }
 #'
 #' @export
-sw_remove_debris_gate <- function(ff,
+sw_filter_debris <- function(ff,
                                   fsc_channel = "FSC-A",
                                   ssc_channel = "SSC-A",
                                   gate_data) {
@@ -375,7 +375,7 @@ sw_remove_debris_gate <- function(ff,
 #' @return A \code{flowFrame} or \code{flowSet} with margin events removed.
 #'
 #' @export
-sw_remove_margins_peacoqc <- function(x, channel_specifications = NULL, ...) {
+sw_filter_margins_peacoqc <- function(x, channel_specifications = NULL, ...) {
   if (!requireNamespace("PeacoQC", quietly = TRUE)) {
     stop("Package 'PeacoQC' is required. Install it from Bioconductor.",
          call. = FALSE)
@@ -395,11 +395,11 @@ sw_remove_margins_peacoqc <- function(x, channel_specifications = NULL, ...) {
   }
 
   process_one <- function(ff, channel_specifications) {
-    channels_for_margins <- flowCore::colnames(ff)[sw_are_signal_cols(ff)]
+    channels_for_margins <- flowCore::colnames(ff)[sw_channel_is_signal(ff)]
 
     markers_for_margins <- flowCore::pData(
       flowCore::parameters(ff)
-    )$desc[sw_are_signal_cols(ff)]
+    )$desc[sw_channel_is_signal(ff)]
 
     pqc_specs <- channel_specifications
 
@@ -427,7 +427,7 @@ sw_remove_margins_peacoqc <- function(x, channel_specifications = NULL, ...) {
 
       # Apply default fluo specs to unlisted fluor channels
       if (!is.null(default_fluo)) {
-        fluor_chs <- flowCore::colnames(ff)[sw_are_fluor_cols(ff)]
+        fluor_chs <- flowCore::colnames(ff)[sw_channel_is_fluor(ff)]
         for (ch in fluor_chs) {
           if (!(ch %in% spec_names)) {
             pqc_specs[[ch]] <- default_fluo

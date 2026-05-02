@@ -15,27 +15,27 @@ SpectraWeaveR orchestrates five established Bioconductor/GitHub packages into a 
 
 | Step | Function | Package |
 |------|----------|---------|
-| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix()`, `sw_load_unmixed()` | AutoSpectral / flowCore |
-| 2. Gating | `sw_gate()`, `sw_build_gating_template()` | openCyto / flowWorkspace |
-| 3. Signal QC | `sw_signal_qc()`, `sw_signal_qc_batch()` | PeacoQC |
-| 4. Batch correction | `sw_batch_correct()`, `sw_prepare_for_correction()` | cyCombine |
-| 5. Clustering | `sw_cluster()`, `sw_plot_clusters()` | kohonen / FastPG |
-| End-to-end | `run_pipeline()` | all of the above |
+| 1. Unmixing | `sw_unmix_pipeline()`, `sw_unmix_run()`, `sw_io_load_unmixed()` | AutoSpectral / flowCore |
+| 2. Gating | `sw_gate_run()`, `sw_gate_template()` | openCyto / flowWorkspace |
+| 3. Signal QC | `sw_qc_run()`, `sw_qc_batch()` | PeacoQC |
+| 4. Batch correction | `sw_correct_run()`, `sw_correct_prepare()` | cyCombine |
+| 5. Clustering | `sw_cluster_run()`, `sw_plot_clusters()` | kohonen / FastPG |
+| End-to-end | `sw_pipeline_run_all()` | all of the above |
 
 ### Extended Features
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
-| Batch diagnostics | `sw_detect_batch_effect()`, `sw_evaluate_emd()`, `sw_evaluate_mad()` | Batch effect detection and correction evaluation |
+| Batch diagnostics | `sw_correct_detect_batch()`, `sw_correct_evaluate_emd()`, `sw_correct_evaluate_mad()` | Batch effect detection and correction evaluation |
 | Batch visualization | `sw_plot_batch_densities()`, `sw_plot_batch_dimred()` | Density and dimensionality reduction plots |
-| Modular batch correction | `sw_normalize()` → `sw_create_som()` → `sw_correct_data()` | Fine-grained batch correction control |
-| Scale transforms | `sw_estimate_scale_transforms()`, `sw_apply_scale_transforms()` | Logicle / linear transforms (CytoPipeline) |
-| Gating utilities | `sw_singlets_gate()`, `sw_remove_doublets()`, `sw_remove_debris_gate()` | Standalone preprocessing gates (CytoPipeline) |
-| Channel classification | `sw_are_signal_cols()`, `sw_are_fluor_cols()` | Channel type detection |
-| Aggregation | `sw_aggregate_and_sample()` | Pool and subsample events |
-| Audit trail | `sw_collect_events_retained()` | Track events across pipeline steps |
-| Composable pipeline | `sw_step()`, `sw_pipeline()`, `sw_pipeline_run()` | S7-based step/pipeline framework |
-| LLM assistant | `sw_assistant()`, `sw_quick_pipeline()` | LLM-powered pipeline builder (ellmer) |
+| Modular batch correction | `sw_correct_normalize()` → `sw_correct_som()` → `sw_correct_apply()` | Fine-grained batch correction control |
+| Scale transforms | `sw_transform_estimate()`, `sw_transform_apply()` | Logicle / linear transforms (CytoPipeline) |
+| Gating utilities | `sw_gate_singlets()`, `sw_filter_doublets()`, `sw_filter_debris()` | Standalone preprocessing gates (CytoPipeline) |
+| Channel classification | `sw_channel_is_signal()`, `sw_channel_is_fluor()` | Channel type detection |
+| Aggregation | `sw_io_subsample()` | Pool and subsample events |
+| Audit trail | `sw_io_event_audit()` | Track events across pipeline steps |
+| Composable pipeline | `sw_pipeline_step()`, `sw_pipeline()`, `sw_pipeline_run()` | S7-based step/pipeline framework |
+| LLM assistant | `sw_assistant()`, `sw_pipeline_quick()` | LLM-powered pipeline builder (ellmer) |
 
 ## Installation
 
@@ -114,7 +114,7 @@ markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14", "CD16",
 lineage_markers <- c("CD3", "CD4", "CD8", "CD19", "CD56", "CD14")
 
 # Run the full pipeline
-results <- run_pipeline(
+results <- sw_pipeline_run_all(
   fcs_dir         = "path/to/unmixed_fcs/",
   sample_meta     = sample_meta,
   markers         = markers,
@@ -136,27 +136,27 @@ results$corrected            # batch-corrected expression data
 library(SpectraWeaveR)
 
 # 1. Load unmixed FCS files
-fs <- sw_load_unmixed("path/to/unmixed_fcs/")
+fs <- sw_io_load_unmixed("path/to/unmixed_fcs/")
 
 # 2. Remove margin events (before transformation!)
-ff_list <- lapply(seq_along(fs), function(i) sw_remove_margins(fs[[i]]))
+ff_list <- lapply(seq_along(fs), function(i) sw_filter_margins(fs[[i]]))
 names(ff_list) <- flowCore::sampleNames(fs)
 
 # 3. Signal QC
-qc_results <- sw_signal_qc_batch(ff_list)
+qc_results <- sw_qc_batch(ff_list)
 qc_summary <- sw_qc_summary(qc_results, threshold = 30)
 ff_clean <- qc_results$cleaned
 
 # 4. Batch correction
-uncorrected <- sw_prepare_for_correction(
+uncorrected <- sw_correct_prepare(
   ff_clean, sample_meta, markers, cofactor = 6000
 )
-corrected <- sw_batch_correct(uncorrected, markers, covar = "condition")
+corrected <- sw_correct_run(uncorrected, markers, covar = "condition")
 
 # 5. Clustering
-result <- sw_cluster(corrected, lineage_markers, n_metaclusters = 20)
-assignments <- sw_get_cluster_assignments(result)
-mfis <- sw_cluster_mfis(result)
+result <- sw_cluster_run(corrected, lineage_markers, n_metaclusters = 20)
+assignments <- sw_cluster_assignments(result)
+mfis <- sw_cluster_mfi(result)
 sw_plot_clusters(result, "clusters.pdf")
 ```
 
@@ -167,8 +167,8 @@ library(SpectraWeaveR)
 
 # Build a custom pipeline with S7 steps
 pip <- sw_pipeline("my_analysis", steps = list(
-  sw_step("qc", sw_signal_qc, list(IT_limit = 0.55, MAD = 6)),
-  sw_step("transform", function(qc) qc$FinalFF)
+  sw_pipeline_step("qc", sw_qc_run, list(IT_limit = 0.55, MAD = 6)),
+  sw_pipeline_step("transform", function(qc) qc$FinalFF)
 ))
 
 # Run it
@@ -197,14 +197,14 @@ sw_assistant(provider = "anthropic")
 sw_assistant(provider = "ollama", model = "llama3")
 
 # One-shot code generation from a description
-code <- sw_quick_pipeline(
+code <- sw_pipeline_quick(
   "I have 30 Aurora 5L FCS files in /data/fcs/, metadata in /data/meta.csv
    with columns filename, patient_id, batch, treatment. Markers: CD3, CD4,
    CD8, CD19, CD56. Cluster on CD3, CD4, CD8."
 )
 
 # Generate code from a config list (no LLM needed)
-sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+sw_pipeline_generate_code(config, output = "file", path = "my_pipeline.R")
 ```
 
 Install the optional dependency:
@@ -228,11 +228,11 @@ result <- sw_unmix_pipeline(
 )
 
 # Or step by step:
-setup    <- sw_autospectral_setup("controls/", cytometer = "aurora")
-controls <- sw_prepare_controls(setup)
-af       <- sw_extract_af_spectra("unstained.fcs", setup, controls$spectra)
-variants <- sw_extract_spectral_variants(setup, controls$spectra, af)
-unmixed  <- sw_unmix("samples/", controls$spectra, setup,
+setup    <- sw_unmix_setup("controls/", cytometer = "aurora")
+controls <- sw_unmix_prepare(setup)
+af       <- sw_unmix_extract_af("unstained.fcs", setup, controls$spectra)
+variants <- sw_unmix_extract_variants(setup, controls$spectra, af)
+unmixed  <- sw_unmix_run("samples/", controls$spectra, setup,
                      controls$flow_control, af_spectra = af,
                      spectra_variants = variants)
 ```
@@ -244,7 +244,7 @@ unmixed  <- sw_unmix("samples/", controls$spectra, setup,
 - **RemoveMargins before transformation** — margin removal operates on raw signal intensities.
 - **kohonen SOM** (not FlowSOM) for clustering — simpler dependency chain with hierarchical metaclustering via ward.D2.
 - **AutoSpectral in Suggests** — unmixing is optional; users can start from pre-unmixed files.
-- Format conversion utilities (`sw_flowframe_to_tibble()`, `sw_tibble_to_flowframe()`) bridge the incompatible data structures required by each tool.
+- Format conversion utilities (`sw_io_ff_to_tibble()`, `sw_io_tibble_to_ff()`) bridge the incompatible data structures required by each tool.
 
 ## Documentation
 

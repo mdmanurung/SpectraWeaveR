@@ -136,7 +136,7 @@ Helps configure the AutoSpectral unmixing workflow from raw spectral data.
 For scripts that need LLM-generated code without interactive conversation:
 
 ```{r}
-code <- sw_quick_pipeline(
+code <- sw_pipeline_quick(
   description = "I have 40-color Aurora 5L data, 30 samples across 3 batches,
     FCS files in /data/fcs/, metadata in /data/meta.csv with columns:
     filename, patient_id, batch_number, treatment_group.
@@ -168,13 +168,13 @@ config <- list(
 )
 
 # Print to console
-sw_generate_pipeline_code(config)
+sw_pipeline_generate_code(config)
 
 # Save to file
-sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+sw_pipeline_generate_code(config, output = "file", path = "my_pipeline.R")
 
 # Composable pipeline style
-sw_generate_pipeline_code(config, style = "composable")
+sw_pipeline_generate_code(config, style = "composable")
 ```
 
 ## Using Different Providers
@@ -224,7 +224,7 @@ config <- chat$chat_structured(
 )
 
 # Generate code from the extracted config
-sw_generate_pipeline_code(config)
+sw_pipeline_generate_code(config)
 ```
 
 ## R Environment Introspection (btw)
@@ -270,7 +270,7 @@ install.packages(c("mcptools", "btw"))
 
 ```bash
 claude mcp add -s user spectraweaver -- \
-  Rscript -e "SpectraWeaveR::sw_mcp_server()"
+  Rscript -e "SpectraWeaveR::sw_assistant_mcp()"
 ```
 
 ### VS Code (`.vscode/mcp.json`)
@@ -280,7 +280,7 @@ claude mcp add -s user spectraweaver -- \
   "mcpServers": {
     "spectraweaver": {
       "command": "Rscript",
-      "args": ["-e", "SpectraWeaveR::sw_mcp_server()"]
+      "args": ["-e", "SpectraWeaveR::sw_assistant_mcp()"]
     }
   }
 }

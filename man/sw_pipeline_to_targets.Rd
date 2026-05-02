@@ -2,7 +2,7 @@
 % Please edit documentation in R/targets_backend.R
 \name{sw_pipeline_to_targets}
 \alias{sw_pipeline_to_targets}
-\title{Write a \code{_targets.R} Script for a Composable Pipeline}
+\title{Write a \verb{_targets.R} Script for a Composable Pipeline}
 \usage{
 sw_pipeline_to_targets(
   pipeline,
@@ -17,34 +17,40 @@ sw_pipeline_to_targets(
 
 \item{input}{The initial input data threaded into the first step.}
 
-\item{script}{Path to the \code{_targets.R} script to write. Default:
+\item{script}{Path to the \verb{_targets.R} script to write. Default:
 \code{"_targets.R"} in the current working directory.}
 
 \item{store}{Path to the \code{targets} data store. The script writes its
-per-step RDS definitions into \code{<store>/.sw_defs/}. Default:
-\code{"_targets"}.}
+per-step RDS definitions into \verb{<store>/.sw_defs/}. Default: \code{"_targets"}.}
 
-\item{overwrite}{Logical; if \code{FALSE} (the default) and \code{script}
-already exists, the function aborts. Set to \code{TRUE} to allow
-overwriting.}
+\item{overwrite}{Logical; if \code{FALSE} (the default) and \code{script} already
+exists, the function aborts. Set to \code{TRUE} to allow overwriting.}
 }
 \value{
-Invisibly, a list with \code{script}, \code{input_rds},
-\code{step_rds}, and \code{sym_map} (the original-to-sanitised step name
-map).
+Invisibly, a list with \code{script}, \code{input_rds}, \code{step_rds}, and
+\code{sym_map} (the original-to-sanitised step name map).
 }
 \description{
-Translates a \code{\link{sw_pipeline}} into a \code{_targets.R} script and
+Translates a \code{\link[=sw_pipeline]{sw_pipeline()}} into a \verb{_targets.R} script and
 the supporting RDS files that the script reads. Nothing is executed; this
 is purely a side-effect function.
 }
 \details{
-Each \code{\link{sw_step}} becomes a single \code{targets::tar_target()}
-whose body calls \code{\link{execute_step}} on the deserialised step
-definition. Step definitions are tracked via \code{format = "file"} targets
-so that mutating one step's \code{ARGS} invalidates only that step and its
-downstream descendants.
+Each \code{\link[=sw_pipeline_step]{sw_pipeline_step()}} becomes a single \code{targets::tar_target()} whose
+body calls \code{\link[=sw_pipeline_step_run]{sw_pipeline_step_run()}} on the deserialised step definition. Step
+definitions are tracked via \code{format = "file"} targets so that mutating one
+step's \code{ARGS} invalidates only that step and its downstream descendants.
+}
+\examples{
+\dontrun{
+pip <- sw_pipeline("my_pipeline", steps = list(
+  sw_pipeline_step("double", function(x) x * 2),
+  sw_pipeline_step("add_one", function(x) x + 1)
+))
+sw_pipeline_to_targets(pip, input = 5, script = tempfile())
+}
+
 }
 \seealso{
-\code{\link{sw_pipeline_run_targets}} for one-shot generate-and-run.
+\code{\link[=sw_pipeline_run_targets]{sw_pipeline_run_targets()}} for one-shot generate-and-run.
 }

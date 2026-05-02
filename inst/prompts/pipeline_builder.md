@@ -64,7 +64,7 @@ Follow this general sequence (adapt as needed):
 ## Output Format
 
 When generating pipeline code:
-- Use `run_pipeline()` for standard workflows where all steps are needed.
+- Use `sw_pipeline_run_all()` for standard workflows where all steps are needed.
 - Use the composable `sw_pipeline()` approach for custom workflows with non-standard steps.
 - Include `library(SpectraWeaveR)` at the top.
 - Add comments explaining each configuration choice.

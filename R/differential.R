@@ -2,8 +2,8 @@
 #'
 #' @description
 #' Functions for testing differential cluster abundance
-#' (\code{\link{sw_differential_abundance}}) and differential marker
-#' expression (\code{\link{sw_differential_expression}}) between experimental
+#' (\code{\link{sw_diff_abundance}}) and differential marker
+#' expression (\code{\link{sw_diff_expression}}) between experimental
 #' conditions in spectral flow cytometry data.
 #'
 #' Differential abundance uses a negative-binomial GLM (\code{"edgeR"}) or a
@@ -127,7 +127,7 @@ NULL
 }
 
 # ---------------------------------------------------------------------------
-# sw_differential_abundance
+# sw_diff_abundance
 # ---------------------------------------------------------------------------
 
 #' Differential Cluster Abundance Analysis
@@ -139,10 +139,10 @@ NULL
 #'
 #' @param x A \code{data.frame}/\code{tibble} with at least a
 #'   \code{"cluster"} column and a column named by \code{sample_col}.
-#'   Typically the corrected tibble from \code{\link{sw_batch_correct}} or
-#'   \code{\link{sw_correct_data}} with cluster assignments attached (e.g.,
+#'   Typically the corrected tibble from \code{\link{sw_correct_run}} or
+#'   \code{\link{sw_correct_apply}} with cluster assignments attached (e.g.,
 #'   via \code{dplyr::mutate(corrected,
-#'   cluster = sw_get_cluster_assignments(result))}).
+#'   cluster = sw_cluster_assignments(result))}).
 #' @param meta A sample-level \code{data.frame}/\code{tibble} with columns
 #'   \code{sample_col} and \code{group_col}.  One row per sample.
 #' @param group_col Character; name of the column in \code{meta} that holds
@@ -174,24 +174,24 @@ NULL
 #'   Attributes: \code{groups} (character[2]), \code{group_col} (character),
 #'   \code{fdr_threshold} (numeric).
 #'
-#' @seealso \code{\link{sw_differential_expression}},
+#' @seealso \code{\link{sw_diff_expression}},
 #'   \code{\link{sw_plot_abundance}}
 #'
 #' @examples
 #' \dontrun{
-#' # corrected: tibble from sw_batch_correct() with cluster column added
+#' # corrected: tibble from sw_correct_run() with cluster column added
 #' corrected_cl <- dplyr::mutate(
 #'   corrected,
-#'   cluster = sw_get_cluster_assignments(cluster_result)
+#'   cluster = sw_cluster_assignments(cluster_result)
 #' )
 #' meta <- data.frame(sample = unique(corrected_cl$sample),
 #'                    condition = c("ctrl","ctrl","trt","trt","ctrl","trt"))
-#' da <- sw_differential_abundance(corrected_cl, meta, group_col = "condition")
+#' da <- sw_diff_abundance(corrected_cl, meta, group_col = "condition")
 #' da[da$adj_pvalue < 0.05, ]
 #' }
 #'
 #' @export
-sw_differential_abundance <- function(x, meta, group_col,
+sw_diff_abundance <- function(x, meta, group_col,
                                        sample_col    = "sample",
                                        method        = c("edgeR", "voom"),
                                        min_prop      = 0.01,
@@ -316,7 +316,7 @@ sw_differential_abundance <- function(x, meta, group_col,
 }
 
 # ---------------------------------------------------------------------------
-# sw_differential_expression
+# sw_diff_expression
 # ---------------------------------------------------------------------------
 
 #' Differential Marker Expression Analysis
@@ -334,7 +334,7 @@ sw_differential_abundance <- function(x, meta, group_col,
 #' @param corrected A \code{data.frame}/\code{tibble} containing per-cell
 #'   marker expressions, a cluster identifier column (\code{cluster_col}),
 #'   and a sample identifier column (\code{sample_col}).  Typically the output
-#'   of \code{\link{sw_batch_correct}} or \code{\link{sw_correct_data}} with
+#'   of \code{\link{sw_correct_run}} or \code{\link{sw_correct_apply}} with
 #'   cluster assignments added.
 #' @param meta A sample-level \code{data.frame}/\code{tibble} with columns
 #'   \code{sample_col} and \code{group_col}.
@@ -367,25 +367,25 @@ sw_differential_abundance <- function(x, meta, group_col,
 #'   Attributes: \code{groups} (character[2]), \code{group_col} (character),
 #'   \code{fdr_threshold} (numeric).
 #'
-#' @seealso \code{\link{sw_differential_abundance}},
+#' @seealso \code{\link{sw_diff_abundance}},
 #'   \code{\link{sw_plot_volcano}}, \code{\link{sw_plot_boxplots}}
 #'
 #' @examples
 #' \dontrun{
 #' corrected_cl <- dplyr::mutate(
 #'   corrected,
-#'   cluster = sw_get_cluster_assignments(cluster_result)
+#'   cluster = sw_cluster_assignments(cluster_result)
 #' )
 #' meta <- data.frame(sample = unique(corrected_cl$sample),
 #'                    condition = c("ctrl","ctrl","trt","trt","ctrl","trt"))
-#' de <- sw_differential_expression(corrected_cl, meta,
+#' de <- sw_diff_expression(corrected_cl, meta,
 #'                                   group_col = "condition",
 #'                                   markers   = lineage_markers)
 #' de[de$adj_pvalue < 0.05, ]
 #' }
 #'
 #' @export
-sw_differential_expression <- function(corrected, meta, group_col,
+sw_diff_expression <- function(corrected, meta, group_col,
                                         sample_col  = "sample",
                                         cluster_col = "cluster",
                                         markers     = NULL,
@@ -541,12 +541,12 @@ sw_differential_expression <- function(corrected, meta, group_col,
 
 #' Volcano Plot for Differential Expression
 #'
-#' Visualizes the results of \code{\link{sw_differential_expression}} as a
+#' Visualizes the results of \code{\link{sw_diff_expression}} as a
 #' volcano plot (log2 fold-change on the x-axis, \eqn{-\log_{10}} adjusted
 #' p-value on the y-axis).  Significant markers are coloured; top hits are
 #' labelled.  When multiple clusters are present the plot is faceted.
 #'
-#' @param de_result Output of \code{\link{sw_differential_expression}}: a
+#' @param de_result Output of \code{\link{sw_diff_expression}}: a
 #'   \code{data.frame}/\code{tibble} with columns \code{cluster},
 #'   \code{marker}, \code{logFC}, and \code{adj_pvalue}.
 #' @param cluster Character or integer vector of cluster identifier(s) to
@@ -560,12 +560,12 @@ sw_differential_expression <- function(corrected, meta, group_col,
 #'
 #' @return A \pkg{ggplot2} object.
 #'
-#' @seealso \code{\link{sw_differential_expression}},
+#' @seealso \code{\link{sw_diff_expression}},
 #'   \code{\link{sw_plot_boxplots}}
 #'
 #' @examples
 #' \dontrun{
-#' de <- sw_differential_expression(corrected_cl, meta,
+#' de <- sw_diff_expression(corrected_cl, meta,
 #'                                   group_col = "condition")
 #' sw_plot_volcano(de)
 #' # Single cluster only:
@@ -579,7 +579,7 @@ sw_plot_volcano <- function(de_result, cluster = NULL,
                              label_top     = 10L) {
   if (!is.data.frame(de_result)) {
     stop(
-      "'de_result' must be the output of sw_differential_expression().",
+      "'de_result' must be the output of sw_diff_expression().",
       call. = FALSE
     )
   }
@@ -697,7 +697,7 @@ sw_plot_volcano <- function(de_result, cluster = NULL,
 #'
 #' Produces violin + boxplots for one or more markers, faceted by marker and
 #' coloured by experimental group.  Useful for visualising expression
-#' differences identified by \code{\link{sw_differential_expression}}.
+#' differences identified by \code{\link{sw_diff_expression}}.
 #'
 #' @param corrected A \code{data.frame}/\code{tibble} with per-cell marker
 #'   expressions, a group column, and optionally a cluster column.
@@ -713,7 +713,7 @@ sw_plot_volcano <- function(de_result, cluster = NULL,
 #'
 #' @return A \pkg{ggplot2} object.
 #'
-#' @seealso \code{\link{sw_differential_expression}},
+#' @seealso \code{\link{sw_diff_expression}},
 #'   \code{\link{sw_plot_volcano}}
 #'
 #' @examples
@@ -809,11 +809,11 @@ sw_plot_boxplots <- function(corrected, markers, group_col,
 
 #' Bar Chart of Differential Cluster Abundance
 #'
-#' Visualizes the output of \code{\link{sw_differential_abundance}} as either
+#' Visualizes the output of \code{\link{sw_diff_abundance}} as either
 #' a grouped bar chart of mean cluster proportions or a small-multiples box
 #' plot (one panel per cluster) showing mean proportions by group.
 #'
-#' @param da_result Output of \code{\link{sw_differential_abundance}}: a
+#' @param da_result Output of \code{\link{sw_diff_abundance}}: a
 #'   \code{data.frame}/\code{tibble} with columns \code{cluster},
 #'   \code{mean_prop_A}, and \code{mean_prop_B}.
 #' @param type Character; \code{"bar"} (default) for a grouped bar chart or
@@ -822,11 +822,11 @@ sw_plot_boxplots <- function(corrected, markers, group_col,
 #'
 #' @return A \pkg{ggplot2} object.
 #'
-#' @seealso \code{\link{sw_differential_abundance}}
+#' @seealso \code{\link{sw_diff_abundance}}
 #'
 #' @examples
 #' \dontrun{
-#' da <- sw_differential_abundance(corrected_cl, meta, group_col = "condition")
+#' da <- sw_diff_abundance(corrected_cl, meta, group_col = "condition")
 #' sw_plot_abundance(da)
 #' sw_plot_abundance(da, type = "box")
 #' }
@@ -837,7 +837,7 @@ sw_plot_abundance <- function(da_result, type = c("bar", "box"), ...) {
 
   if (!is.data.frame(da_result)) {
     stop(
-      "'da_result' must be the output of sw_differential_abundance().",
+      "'da_result' must be the output of sw_diff_abundance().",
       call. = FALSE
     )
   }

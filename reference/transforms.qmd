@@ -5,14 +5,14 @@ title: "Transforms"
 Scale transformation utilities ported from
 [CytoPipeline](https://uclouvain-cbio.github.io/CytoPipeline/) (UCLouvain-CBIO).
 
-## `sw_estimate_scale_transforms` {#sw_estimate_scale_transforms}
+## `sw_transform_estimate` {#sw_transform_estimate}
 
 Estimate scale transformations.
 
 ### Usage
 
 ```r
-sw_estimate_scale_transforms(
+sw_transform_estimate(
   ff,
   fluo_method = c("estimateLogicle", "none"),
   scatter_method = c("none", "linearQuantile"),
@@ -48,14 +48,14 @@ A `flowCore::transformList` object.
 
 ---
 
-## `sw_apply_scale_transforms` {#sw_apply_scale_transforms}
+## `sw_transform_apply` {#sw_transform_apply}
 
 Apply scale transformations.
 
 ### Usage
 
 ```r
-sw_apply_scale_transforms(x, trans_list)
+sw_transform_apply(x, trans_list)
 ```
 
 ### Arguments
@@ -63,7 +63,7 @@ sw_apply_scale_transforms(x, trans_list)
 | Argument | Description |
 |----------|-------------|
 | `x` | A `flowFrame` or `flowSet`. |
-| `trans_list` | A `flowCore::transformList` (from `sw_estimate_scale_transforms()`). |
+| `trans_list` | A `flowCore::transformList` (from `sw_transform_estimate()`). |
 
 ### Details
 

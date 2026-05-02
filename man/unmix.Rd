@@ -9,15 +9,15 @@ and for loading pre-unmixed FCS files (e.g., from SpectroFlo).
 
 The AutoSpectral workflow is streamlined into five steps plus an orchestrator:
 \enumerate{
-\item \code{\link{sw_autospectral_setup}} — initialize parameters and
+\item \code{\link{sw_unmix_setup}} — initialize parameters and
 control file
-\item \code{\link{sw_prepare_controls}} — gate, clean, and extract
+\item \code{\link{sw_unmix_prepare}} — gate, clean, and extract
 fluorophore spectra
-\item \code{\link{sw_extract_af_spectra}} — per-cell autofluorescence
+\item \code{\link{sw_unmix_extract_af}} — per-cell autofluorescence
 extraction from unstained samples
-\item \code{\link{sw_extract_spectral_variants}} — fluorophore emission
+\item \code{\link{sw_unmix_extract_variants}} — fluorophore emission
 variability mapping
-\item \code{\link{sw_unmix}} — unmix fully-stained sample FCS files
+\item \code{\link{sw_unmix_run}} — unmix fully-stained sample FCS files
 \item \code{\link{sw_unmix_pipeline}} — one-call end-to-end orchestrator
 }
 }

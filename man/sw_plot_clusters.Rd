@@ -8,7 +8,7 @@ sw_plot_clusters(cluster_result, plot_file = "cluster_heatmap.pdf")
 }
 \arguments{
 \item{cluster_result}{An \code{sw_cluster_result} object (output from
-\code{\link{sw_cluster}}).}
+\code{\link{sw_cluster_run}}).}
 
 \item{plot_file}{Character path for the output PDF file
 (default: \code{"cluster_heatmap.pdf"}).}

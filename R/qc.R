@@ -42,13 +42,13 @@ NULL
 #'   mat <- matrix(abs(rnorm(2000, 50000, 15000)), ncol = 4,
 #'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A", "PE-A")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   result <- sw_signal_qc(ff, channels = c("BV421-A", "PE-A"))
+#'   result <- sw_qc_run(ff, channels = c("BV421-A", "PE-A"))
 #'   cat("Removed:", result$n_removed, "events\n")
 #' }
 #' }
 #'
 #' @export
-sw_signal_qc <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
+sw_qc_run <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
                          output_dir = NULL, ...) {
   if (!requireNamespace("PeacoQC", quietly = TRUE)) {
     stop("Package 'PeacoQC' is required for signal QC. ",
@@ -74,7 +74,7 @@ sw_signal_qc <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
 
   # Determine channels to evaluate
   if (is.null(channels)) {
-    channels <- sw_get_fluor_channels(ff)
+    channels <- sw_channel_get_fluor(ff)
   }
 
   n_before <- nrow(ff)
@@ -122,11 +122,11 @@ sw_signal_qc <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
 
 #' Batch Signal Quality Control
 #'
-#' Applies \code{\link{sw_signal_qc}} to a list of \code{flowFrame} objects
+#' Applies \code{\link{sw_qc_run}} to a list of \code{flowFrame} objects
 #' and returns cleaned frames plus summary statistics.
 #'
 #' @param ff_list A named list of \code{flowFrame} objects.
-#' @param ... Additional arguments passed to \code{\link{sw_signal_qc}}.
+#' @param ... Additional arguments passed to \code{\link{sw_qc_run}}.
 #'
 #' @return A list with components:
 #'   \describe{
@@ -135,7 +135,7 @@ sw_signal_qc <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
 #'   }
 #'
 #' @export
-sw_signal_qc_batch <- function(ff_list, ...) {
+sw_qc_batch <- function(ff_list, ...) {
   if (!is.list(ff_list) || length(ff_list) == 0) {
     stop("'ff_list' must be a non-empty list of flowFrame objects.",
          call. = FALSE)
@@ -152,7 +152,7 @@ sw_signal_qc_batch <- function(ff_list, ...) {
 
   for (sn in sample_names) {
     message("Running QC on: ", sn)
-    qc_result <- sw_signal_qc(ff_list[[sn]], ...)
+    qc_result <- sw_qc_run(ff_list[[sn]], ...)
 
     cleaned[[sn]] <- qc_result$FinalFF
 
@@ -178,7 +178,7 @@ sw_signal_qc_batch <- function(ff_list, ...) {
 #' Tabulates cells removed per sample and flags samples with high removal
 #' rates (>30% by default).
 #'
-#' @param qc_results The output from \code{\link{sw_signal_qc_batch}}.
+#' @param qc_results The output from \code{\link{sw_qc_batch}}.
 #' @param threshold Numeric; percentage threshold for flagging samples
 #'   (default: 30). Samples with removal rate exceeding this value are flagged.
 #'
@@ -188,7 +188,7 @@ sw_signal_qc_batch <- function(ff_list, ...) {
 #' @export
 sw_qc_summary <- function(qc_results, threshold = 30) {
   if (!is.list(qc_results) || !"summary" %in% names(qc_results)) {
-    stop("'qc_results' must be the output from sw_signal_qc_batch().",
+    stop("'qc_results' must be the output from sw_qc_batch().",
          call. = FALSE)
   }
 

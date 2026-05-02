@@ -96,14 +96,14 @@ NULL
 #'   CD3 = c(rnorm(100, 1), rnorm(100, 5)),
 #'   CD4 = c(rnorm(100, 2), rnorm(100, 6))
 #' )
-#' result <- sw_cluster(df, lineage_markers = c("CD3", "CD4"),
+#' result <- sw_cluster_run(df, lineage_markers = c("CD3", "CD4"),
 #'                      method = "som", xdim = 5, ydim = 5,
 #'                      n_metaclusters = 5)
-#' table(sw_get_cluster_assignments(result))
+#' table(sw_cluster_assignments(result))
 #' }
 #'
 #' @export
-sw_cluster <- function(corrected, lineage_markers,
+sw_cluster_run <- function(corrected, lineage_markers,
                        method = c("som", "fastpg"),
                        xdim = 10, ydim = 10, rlen = 10,
                        n_metaclusters = 20,
@@ -226,12 +226,12 @@ sw_cluster <- function(corrected, lineage_markers,
 #' Extracts per-cell cluster assignments from a clustering result.
 #'
 #' @param cluster_result An \code{sw_cluster_result} object (output from
-#'   \code{\link{sw_cluster}}).
+#'   \code{\link{sw_cluster_run}}).
 #'
 #' @return An integer vector of cluster assignments, one per cell.
 #'
 #' @export
-sw_get_cluster_assignments <- function(cluster_result) {
+sw_cluster_assignments <- function(cluster_result) {
   if (!inherits(cluster_result, "sw_cluster_result")) {
     stop("'cluster_result' must be an sw_cluster_result object.",
          call. = FALSE)
@@ -245,13 +245,13 @@ sw_get_cluster_assignments <- function(cluster_result) {
 #' Calculates the median expression of each marker within each cluster.
 #'
 #' @param cluster_result An \code{sw_cluster_result} object (output from
-#'   \code{\link{sw_cluster}}).
+#'   \code{\link{sw_cluster_run}}).
 #'
 #' @return A \code{tibble} with one row per cluster and one column per
 #'   marker, plus a \code{cluster} column.
 #'
 #' @export
-sw_cluster_mfis <- function(cluster_result) {
+sw_cluster_mfi <- function(cluster_result) {
   if (!inherits(cluster_result, "sw_cluster_result")) {
     stop("'cluster_result' must be an sw_cluster_result object.",
          call. = FALSE)
@@ -287,7 +287,7 @@ sw_cluster_mfis <- function(cluster_result) {
 #' falls back to \code{\link[stats]{heatmap}}.
 #'
 #' @param cluster_result An \code{sw_cluster_result} object (output from
-#'   \code{\link{sw_cluster}}).
+#'   \code{\link{sw_cluster_run}}).
 #' @param plot_file Character path for the output PDF file
 #'   (default: \code{"cluster_heatmap.pdf"}).
 #'
@@ -311,7 +311,7 @@ sw_plot_clusters <- function(cluster_result,
     dir.create(out_dir, recursive = TRUE)
   }
 
-  mfi <- sw_cluster_mfis(cluster_result)
+  mfi <- sw_cluster_mfi(cluster_result)
   mat_plot <- as.matrix(mfi[, setdiff(names(mfi), "cluster")])
   rownames(mat_plot) <- paste0("C", mfi$cluster)
 
@@ -346,7 +346,7 @@ sw_plot_clusters <- function(cluster_result,
 #' performed with \code{method = "som"}.
 #'
 #' @param cluster_result An \code{sw_cluster_result} object (output from
-#'   \code{\link{sw_cluster}} with \code{method = "som"}).
+#'   \code{\link{sw_cluster_run}} with \code{method = "som"}).
 #' @param newdata A \code{tibble}, \code{data.frame}, or numeric matrix
 #'   containing the new expression data. Must include all lineage markers
 #'   used in the original clustering.
@@ -355,7 +355,7 @@ sw_plot_clusters <- function(cluster_result,
 #'   the existing SOM and metacluster assignments.
 #'
 #' @export
-sw_predict_clusters <- function(cluster_result, newdata) {
+sw_cluster_predict <- function(cluster_result, newdata) {
   if (!inherits(cluster_result, "sw_cluster_result")) {
     stop("'cluster_result' must be an sw_cluster_result object.",
          call. = FALSE)

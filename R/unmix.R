@@ -6,15 +6,15 @@
 #'
 #' The AutoSpectral workflow is streamlined into five steps plus an orchestrator:
 #' \enumerate{
-#'   \item \code{\link{sw_autospectral_setup}} — initialize parameters and
+#'   \item \code{\link{sw_unmix_setup}} — initialize parameters and
 #'     control file
-#'   \item \code{\link{sw_prepare_controls}} — gate, clean, and extract
+#'   \item \code{\link{sw_unmix_prepare}} — gate, clean, and extract
 #'     fluorophore spectra
-#'   \item \code{\link{sw_extract_af_spectra}} — per-cell autofluorescence
+#'   \item \code{\link{sw_unmix_extract_af}} — per-cell autofluorescence
 #'     extraction from unstained samples
-#'   \item \code{\link{sw_extract_spectral_variants}} — fluorophore emission
+#'   \item \code{\link{sw_unmix_extract_variants}} — fluorophore emission
 #'     variability mapping
-#'   \item \code{\link{sw_unmix}} — unmix fully-stained sample FCS files
+#'   \item \code{\link{sw_unmix_run}} — unmix fully-stained sample FCS files
 #'   \item \code{\link{sw_unmix_pipeline}} — one-call end-to-end orchestrator
 #' }
 #'
@@ -64,7 +64,7 @@ NULL
 }
 
 # ============================================================================
-# Function 1: sw_autospectral_setup
+# Function 1: sw_unmix_setup
 # ============================================================================
 
 #' Initialize AutoSpectral Parameters and Control File
@@ -98,15 +98,15 @@ NULL
 #' This is Step 1 of the SpectraWeaveR unmixing workflow. If
 #' \code{control_file = NULL}, a draft CSV is created and a message instructs
 #' the user to review and edit it before proceeding to
-#' \code{\link{sw_prepare_controls}}.
+#' \code{\link{sw_unmix_prepare}}.
 #'
 #' @examples
 #' \dontrun{
-#' setup <- sw_autospectral_setup("path/to/controls", cytometer = "aurora")
+#' setup <- sw_unmix_setup("path/to/controls", cytometer = "aurora")
 #' }
 #'
 #' @export
-sw_autospectral_setup <- function(control_dir,
+sw_unmix_setup <- function(control_dir,
                                   cytometer = "aurora",
                                   control_file = NULL,
                                   output_dir = "SpectraWeaveR_unmix",
@@ -178,7 +178,7 @@ sw_autospectral_setup <- function(control_dir,
     message("\n*** IMPORTANT ***")
     message("A draft control file has been created at: ", control_file)
     message("Please review and edit it before proceeding to ",
-            "sw_prepare_controls().")
+            "sw_unmix_prepare().")
     message("See AutoSpectral documentation for control file details:")
     message("  https://drcytometer.github.io/AutoSpectral/articles/",
             "02_Control_File_example.html")
@@ -200,7 +200,7 @@ sw_autospectral_setup <- function(control_dir,
 }
 
 # ============================================================================
-# Function 2: sw_prepare_controls
+# Function 2: sw_unmix_prepare
 # ============================================================================
 
 #' Prepare Controls: Gate, Clean, and Extract Fluorophore Spectra
@@ -211,7 +211,7 @@ sw_autospectral_setup <- function(control_dir,
 #' linear modeling.
 #'
 #' @param setup An \code{sw_setup} object from
-#'   \code{\link{sw_autospectral_setup}}.
+#'   \code{\link{sw_unmix_setup}}.
 #' @param gating_system Character; the gating algorithm to use.
 #'   \code{"landmarks"} (default) or \code{"density"}.
 #' @param gate_list Optional named list of pre-defined gates (created via
@@ -244,7 +244,7 @@ sw_autospectral_setup <- function(control_dir,
 #' \code{AutoSpectral::get.fluorophore.spectra()} into a single call.
 #'
 #' @export
-sw_prepare_controls <- function(setup,
+sw_unmix_prepare <- function(setup,
                                 gating_system = c("landmarks", "density"),
                                 gate_list = NULL,
                                 clean = TRUE,
@@ -253,7 +253,7 @@ sw_prepare_controls <- function(setup,
                                 threads = NULL) {
   # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
-    stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
+    stop("'setup' must be an sw_setup object from sw_unmix_setup().",
          call. = FALSE)
   }
 
@@ -331,7 +331,7 @@ sw_prepare_controls <- function(setup,
 }
 
 # ============================================================================
-# Function 3: sw_extract_af_spectra
+# Function 3: sw_unmix_extract_af
 # ============================================================================
 
 #' Extract Per-Cell Autofluorescence Spectra
@@ -345,9 +345,9 @@ sw_prepare_controls <- function(setup,
 #'   \code{list(spleen = "spleen_unstained.fcs",
 #'              lung = "lung_unstained.fcs")}).
 #' @param setup An \code{sw_setup} object from
-#'   \code{\link{sw_autospectral_setup}}.
+#'   \code{\link{sw_unmix_setup}}.
 #' @param spectra A fluorophore spectral matrix (from
-#'   \code{\link{sw_prepare_controls}}).
+#'   \code{\link{sw_unmix_prepare}}).
 #' @param refine Logical; whether to perform a second-pass refinement
 #'   targeting high-error cells. Default: \code{TRUE}. Recommended for
 #'   tissue samples with complex autofluorescence.
@@ -375,7 +375,7 @@ sw_prepare_controls <- function(setup,
 #' faster processing.
 #'
 #' @export
-sw_extract_af_spectra <- function(unstained_fcs,
+sw_unmix_extract_af <- function(unstained_fcs,
                                   setup,
                                   spectra,
                                   refine = TRUE,
@@ -384,7 +384,7 @@ sw_extract_af_spectra <- function(unstained_fcs,
                                   threads = NULL) {
   # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
-    stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
+    stop("'setup' must be an sw_setup object from sw_unmix_setup().",
          call. = FALSE)
   }
 
@@ -490,7 +490,7 @@ sw_extract_af_spectra <- function(unstained_fcs,
 }
 
 # ============================================================================
-# Function 4: sw_extract_spectral_variants
+# Function 4: sw_unmix_extract_variants
 # ============================================================================
 
 #' Extract Spectral Variants for Per-Cell Fluorophore Optimization
@@ -501,11 +501,11 @@ sw_extract_af_spectra <- function(unstained_fcs,
 #' spread.
 #'
 #' @param setup An \code{sw_setup} object from
-#'   \code{\link{sw_autospectral_setup}}.
+#'   \code{\link{sw_unmix_setup}}.
 #' @param spectra A fluorophore spectral matrix (from
-#'   \code{\link{sw_prepare_controls}}).
+#'   \code{\link{sw_unmix_prepare}}).
 #' @param af_spectra A matrix of AF spectra matching the control cell type
-#'   (from \code{\link{sw_extract_af_spectra}}).
+#'   (from \code{\link{sw_unmix_extract_af}}).
 #' @param refine Logical; whether to perform a second pass on high-error
 #'   cells. Default: \code{TRUE}.
 #' @param som_dim Integer; SOM grid dimension. Default: \code{10} (up to
@@ -533,7 +533,7 @@ sw_extract_af_spectra <- function(unstained_fcs,
 #' Results are saved as an RDS file in the output directory for reuse.
 #'
 #' @export
-sw_extract_spectral_variants <- function(setup,
+sw_unmix_extract_variants <- function(setup,
                                          spectra,
                                          af_spectra,
                                          refine = TRUE,
@@ -543,7 +543,7 @@ sw_extract_spectral_variants <- function(setup,
                                          threads = NULL) {
   # Validate inputs before checking dependency
   if (!inherits(setup, "sw_setup")) {
-    stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
+    stop("'setup' must be an sw_setup object from sw_unmix_setup().",
          call. = FALSE)
   }
   if (!is.matrix(spectra)) {
@@ -600,7 +600,7 @@ sw_extract_spectral_variants <- function(setup,
 }
 
 # ============================================================================
-# Function 5: sw_unmix (rewritten)
+# Function 5: sw_unmix_run (rewritten)
 # ============================================================================
 
 #' Unmix Spectral Flow Cytometry Data
@@ -612,19 +612,19 @@ sw_extract_spectral_variants <- function(setup,
 #' @param input Character path to a single FCS file, a character vector of
 #'   FCS file paths, or a directory containing FCS files.
 #' @param spectra A fluorophore spectral matrix (from
-#'   \code{\link{sw_prepare_controls}}).
+#'   \code{\link{sw_unmix_prepare}}).
 #' @param setup An \code{sw_setup} object from
-#'   \code{\link{sw_autospectral_setup}}.
+#'   \code{\link{sw_unmix_setup}}.
 #' @param flow_control The \code{flow.control} list from
-#'   \code{\link{sw_prepare_controls}}.
+#'   \code{\link{sw_unmix_prepare}}.
 #' @param method Character; unmixing algorithm. One of
 #'   \code{"AutoSpectral"} (default), \code{"OLS"}, \code{"WLS"},
 #'   \code{"Poisson"}, or \code{"Automatic"}.
 #' @param af_spectra A matrix of AF spectra (from
-#'   \code{\link{sw_extract_af_spectra}}). Required for
+#'   \code{\link{sw_unmix_extract_af}}). Required for
 #'   \code{method = "AutoSpectral"}.
 #' @param spectra_variants A spectral variants list (from
-#'   \code{\link{sw_extract_spectral_variants}}). Optional; enables per-cell
+#'   \code{\link{sw_unmix_extract_variants}}). Optional; enables per-cell
 #'   fluorophore optimization.
 #' @param speed Character; precision-speed trade-off for per-cell fluorophore
 #'   optimization. \code{"fast"} (1 variant/cell, default), \code{"medium"}
@@ -663,7 +663,7 @@ sw_extract_spectral_variants <- function(setup,
 #' faster processing.
 #'
 #' @export
-sw_unmix <- function(input,
+sw_unmix_run <- function(input,
                      spectra,
                      setup,
                      flow_control,
@@ -687,12 +687,12 @@ sw_unmix <- function(input,
          call. = FALSE)
   }
   if (!inherits(setup, "sw_setup")) {
-    stop("'setup' must be an sw_setup object from sw_autospectral_setup().",
+    stop("'setup' must be an sw_setup object from sw_unmix_setup().",
          call. = FALSE)
   }
   if (!is.list(flow_control)) {
     stop("'flow_control' must be the flow.control list from ",
-         "sw_prepare_controls().", call. = FALSE)
+         "sw_unmix_prepare().", call. = FALSE)
   }
   if (!is.logical(parallel) || length(parallel) != 1) {
     stop("'parallel' must be TRUE or FALSE.", call. = FALSE)
@@ -716,7 +716,7 @@ sw_unmix <- function(input,
   # Validate method-specific requirements
   if (method == "AutoSpectral" && is.null(af_spectra)) {
     stop("'af_spectra' is required for method = 'AutoSpectral'. ",
-         "Use sw_extract_af_spectra() to obtain it, or choose ",
+         "Use sw_unmix_extract_af() to obtain it, or choose ",
          "method = 'OLS' or 'WLS'.", call. = FALSE)
   }
 
@@ -724,7 +724,7 @@ sw_unmix <- function(input,
 
   if (method == "AutoSpectral" && is.null(spectra_variants)) {
     message("Note: Providing 'spectra_variants' via ",
-            "sw_extract_spectral_variants() may improve unmixing quality.")
+            "sw_unmix_extract_variants() may improve unmixing quality.")
   }
 
   # Warn if AutoSpectralRcpp is not available
@@ -834,7 +834,7 @@ sw_unmix <- function(input,
 #' @param sample_input Character path to fully-stained FCS file(s) or a
 #'   directory.
 #' @param unstained_fcs Character path to unstained FCS file(s), or a named
-#'   list for tissue-specific AF (see \code{\link{sw_extract_af_spectra}}).
+#'   list for tissue-specific AF (see \code{\link{sw_unmix_extract_af}}).
 #'   Required when \code{method = "AutoSpectral"}.
 #' @param cytometer Character; cytometer type. Default: \code{"aurora"}.
 #' @param control_file Character path to an existing control CSV, or
@@ -866,13 +866,13 @@ sw_unmix <- function(input,
 #'     \item{\code{spectra_variants}}{The spectral variants (if
 #'       extracted).}
 #'     \item{\code{unmixed}}{The unmixing result from
-#'       \code{\link{sw_unmix}}.}
+#'       \code{\link{sw_unmix_run}}.}
 #'   }
 #'
 #' @details
-#' This convenience function calls \code{\link{sw_autospectral_setup}},
-#' \code{\link{sw_prepare_controls}}, \code{\link{sw_extract_af_spectra}},
-#' \code{\link{sw_extract_spectral_variants}}, and \code{\link{sw_unmix}}
+#' This convenience function calls \code{\link{sw_unmix_setup}},
+#' \code{\link{sw_unmix_prepare}}, \code{\link{sw_unmix_extract_af}},
+#' \code{\link{sw_unmix_extract_variants}}, and \code{\link{sw_unmix_run}}
 #' in sequence. Steps 3--4 are skipped when \code{method} is \code{"OLS"}
 #' or \code{"WLS"} (no per-cell optimization needed).
 #'
@@ -883,9 +883,9 @@ sw_unmix <- function(input,
 #' spectral variants are derived from single-stain controls (which come from
 #' one tissue type), and the pipeline cannot automatically match sample
 #' files to tissue types. For tissue-specific unmixing with matched AF
-#' spectra, call \code{\link{sw_unmix}} separately for each tissue group,
+#' spectra, call \code{\link{sw_unmix_run}} separately for each tissue group,
 #' passing the corresponding AF spectra from the named list returned by
-#' \code{\link{sw_extract_af_spectra}}.
+#' \code{\link{sw_unmix_extract_af}}.
 #'
 #' @export
 sw_unmix_pipeline <- function(control_dir,
@@ -945,7 +945,7 @@ sw_unmix_pipeline <- function(control_dir,
   message("\n", strrep("=", 60))
   message("Step 1/5: AutoSpectral Setup")
   message(strrep("=", 60))
-  setup <- sw_autospectral_setup(
+  setup <- sw_unmix_setup(
     control_dir = control_dir,
     cytometer = cytometer,
     control_file = control_file,
@@ -958,7 +958,7 @@ sw_unmix_pipeline <- function(control_dir,
   message("\n", strrep("=", 60))
   message("Step 2/5: Prepare Controls")
   message(strrep("=", 60))
-  controls <- sw_prepare_controls(
+  controls <- sw_unmix_prepare(
     setup = setup,
     gating_system = gating_system,
     parallel = parallel,
@@ -976,7 +976,7 @@ sw_unmix_pipeline <- function(control_dir,
     message("\n", strrep("=", 60))
     message("Step 3/5: Extract AF Spectra")
     message(strrep("=", 60))
-    af_spectra <- sw_extract_af_spectra(
+    af_spectra <- sw_unmix_extract_af(
       unstained_fcs = unstained_fcs,
       setup = setup,
       spectra = controls$spectra,
@@ -1001,7 +1001,7 @@ sw_unmix_pipeline <- function(control_dir,
       af_spectra
     }
 
-    spectra_variants <- sw_extract_spectral_variants(
+    spectra_variants <- sw_unmix_extract_variants(
       setup = setup,
       spectra = controls$spectra,
       af_spectra = af_for_variants,
@@ -1025,17 +1025,17 @@ sw_unmix_pipeline <- function(control_dir,
   message(strrep("=", 60))
 
   # For multi-tissue AF with AutoSpectral method, use first tissue's AF.
-  # For tissue-specific unmixing, call sw_unmix() separately per tissue.
+  # For tissue-specific unmixing, call sw_unmix_run() separately per tissue.
   unmix_af <- if (is.list(af_spectra) && !is.matrix(af_spectra)) {
     message("Note: Multiple tissue AF spectra provided. Using '",
             names(af_spectra)[1], "' for unmixing. ",
-            "For tissue-specific AF, call sw_unmix() separately per tissue.")
+            "For tissue-specific AF, call sw_unmix_run() separately per tissue.")
     af_spectra[[1]]
   } else {
     af_spectra
   }
 
-  unmixed <- sw_unmix(
+  unmixed <- sw_unmix_run(
     input = sample_input,
     spectra = controls$spectra,
     setup = setup,
@@ -1066,18 +1066,18 @@ sw_unmix_pipeline <- function(control_dir,
 #' @param fcs_dir Character path to the directory containing unmixed FCS files.
 #' @param pattern Regular expression pattern to match FCS file names
 #'   (default: \code{"\\.fcs$"}).
-#' @param ... Additional arguments passed to \code{\link{sw_read_fcs}}.
+#' @param ... Additional arguments passed to \code{\link{sw_io_read_fcs}}.
 #'
 #' @return A \code{flowSet} containing all matched FCS files.
 #'
 #' @examples
 #' \dontrun{
-#' fs <- sw_load_unmixed("path/to/unmixed_fcs/")
+#' fs <- sw_io_load_unmixed("path/to/unmixed_fcs/")
 #' flowCore::sampleNames(fs)
 #' }
 #'
 #' @export
-sw_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
+sw_io_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -1100,7 +1100,7 @@ sw_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
 
   message("Loading ", length(fcs_files), " unmixed FCS files from: ", fcs_dir)
 
-  fs <- sw_read_fcs(fcs_files, ...)
+  fs <- sw_io_read_fcs(fcs_files, ...)
 
   message("Loaded flowSet with ", length(fs), " samples, ",
           ncol(fs[[1]]), " channels each")
@@ -1133,12 +1133,12 @@ sw_load_unmixed <- function(fcs_dir, pattern = "\\.fcs$", ...) {
 #'   mat <- matrix(abs(rnorm(500, 50000, 15000)), ncol = 5,
 #'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   ff_clean <- sw_remove_margins(ff)
+#'   ff_clean <- sw_filter_margins(ff)
 #' }
 #' }
 #'
 #' @export
-sw_remove_margins <- function(ff, channel_specs = NULL) {
+sw_filter_margins <- function(ff, channel_specs = NULL) {
   if (!requireNamespace("PeacoQC", quietly = TRUE)) {
     stop("Package 'PeacoQC' is required for margin removal. ",
          "Install it from Bioconductor.", call. = FALSE)
@@ -1156,7 +1156,7 @@ sw_remove_margins <- function(ff, channel_specs = NULL) {
 
   if (is.null(channel_specs)) {
     # Use signal channels only (exclude Time, Original_ID, etc.)
-    signal_idx <- which(sw_are_signal_cols(ff))
+    signal_idx <- which(sw_channel_is_signal(ff))
     if (length(signal_idx) == 0) {
       signal_idx <- seq_len(ncol(ff))
     }

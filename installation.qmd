@@ -63,7 +63,7 @@ remotes::install_github("DrCytometer/AutoSpectralRcpp")
 ### S7 (composable pipeline framework)
 
 The composable pipeline uses [S7](https://rconsortium.github.io/S7/) classes.
-Install it if you want to use `sw_step()`, `sw_pipeline()`, and related
+Install it if you want to use `sw_pipeline_step()`, `sw_pipeline()`, and related
 functions:
 ```{r}
 #| eval: false
@@ -87,7 +87,7 @@ install.packages("pheatmap")
 ### FastPG (graph-based clustering)
 
 An alternative clustering backend. Install if you want to use
-`sw_cluster(..., method = "fastpg")`:
+`sw_cluster_run(..., method = "fastpg")`:
 ```{r}
 #| eval: false
 remotes::install_github("sararselitsky/FastPG")

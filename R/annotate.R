@@ -3,7 +3,7 @@
 #' @description
 #' Functions for annotating cell clusters from spectral flow cytometry data.
 #' Supports automated annotation via cosine similarity against a built-in
-#' PBMC reference panel (\code{\link{sw_annotate_clusters}}), manual
+#' PBMC reference panel (\code{\link{sw_annotate_run}}), manual
 #' annotation via a user-supplied cluster-to-label mapping
 #' (\code{\link{sw_annotate_manual}}), and annotation visualization
 #' (\code{\link{sw_plot_annotation}}).
@@ -26,8 +26,8 @@ NULL
 #' Validate and normalise annotation input
 #'
 #' Accepts either an \code{sw_cluster_result} object (from
-#' \code{\link{sw_cluster}}) or a data.frame/tibble produced by
-#' \code{\link{sw_cluster_mfis}}.  Returns a tibble with a \code{cluster}
+#' \code{\link{sw_cluster_run}}) or a data.frame/tibble produced by
+#' \code{\link{sw_cluster_mfi}}.  Returns a tibble with a \code{cluster}
 #' column and numeric marker columns.
 #'
 #' @param x Input object.
@@ -35,12 +35,12 @@ NULL
 #' @noRd
 .check_annotation_input <- function(x) {
   if (inherits(x, "sw_cluster_result")) {
-    return(sw_cluster_mfis(x))
+    return(sw_cluster_mfi(x))
   }
   if (!is.data.frame(x)) {
     stop(
       "'x' must be an 'sw_cluster_result' object or a data.frame/tibble ",
-      "from sw_cluster_mfis().",
+      "from sw_cluster_mfi().",
       call. = FALSE
     )
   }
@@ -114,7 +114,7 @@ NULL
 }
 
 # ---------------------------------------------------------------------------
-# sw_load_reference
+# sw_annotate_load_ref
 # ---------------------------------------------------------------------------
 
 #' Load a Built-in Cell Type Reference Panel
@@ -146,12 +146,12 @@ NULL
 #' \code{list(matrix = my_mat, mask = my_mask)}.
 #'
 #' @examples
-#' ref <- sw_load_reference("pbmc")
+#' ref <- sw_annotate_load_ref("pbmc")
 #' dim(ref$matrix)   # 35 populations × 30 markers
 #' rownames(ref$matrix)[1:5]
 #'
 #' @export
-sw_load_reference <- function(name = "pbmc") {
+sw_annotate_load_ref <- function(name = "pbmc") {
   if (!is.character(name) || length(name) != 1L || nchar(name) == 0L) {
     stop("'name' must be a single non-empty character string.", call. = FALSE)
   }
@@ -184,7 +184,7 @@ sw_load_reference <- function(name = "pbmc") {
 }
 
 # ---------------------------------------------------------------------------
-# sw_annotate_clusters
+# sw_annotate_run
 # ---------------------------------------------------------------------------
 
 #' Automatically Annotate Clusters by Cell Type
@@ -196,11 +196,11 @@ sw_load_reference <- function(name = "pbmc") {
 #' argument.
 #'
 #' @param x An \code{sw_cluster_result} object (returned by
-#'   \code{\link{sw_cluster}}) or a \code{data.frame}/\code{tibble} with a
+#'   \code{\link{sw_cluster_run}}) or a \code{data.frame}/\code{tibble} with a
 #'   \code{cluster} column and numeric marker columns (e.g., the output of
-#'   \code{\link{sw_cluster_mfis}}).
+#'   \code{\link{sw_cluster_mfi}}).
 #' @param reference A named list with elements \code{matrix} and \code{mask}
-#'   (as returned by \code{\link{sw_load_reference}}).  If \code{NULL}
+#'   (as returned by \code{\link{sw_annotate_load_ref}}).  If \code{NULL}
 #'   (default) the built-in PBMC reference is loaded automatically.
 #' @param markers Character vector of marker names to use for annotation.
 #'   If \code{NULL} (default) all numeric columns in \code{x} that are also
@@ -226,7 +226,7 @@ sw_load_reference <- function(name = "pbmc") {
 #' @details
 #' The annotation algorithm:
 #' \enumerate{
-#'   \item Extract the MFI tibble (via \code{\link{sw_cluster_mfis}} when
+#'   \item Extract the MFI tibble (via \code{\link{sw_cluster_mfi}} when
 #'     \code{x} is an \code{sw_cluster_result}).
 #'   \item Identify the intersection of available marker names and reference
 #'     column names.
@@ -239,42 +239,42 @@ sw_load_reference <- function(name = "pbmc") {
 #' }
 #'
 #' @seealso \code{\link{sw_annotate_manual}}, \code{\link{sw_plot_annotation}},
-#'   \code{\link{sw_cluster_mfis}}, \code{\link{sw_load_reference}}
+#'   \code{\link{sw_cluster_mfi}}, \code{\link{sw_annotate_load_ref}}
 #'
 #' @examples
 #' \dontrun{
 #' # After clustering:
-#' result <- sw_cluster(corrected, lineage_markers = markers)
+#' result <- sw_cluster_run(corrected, lineage_markers = markers)
 #'
 #' # Auto-annotate using built-in PBMC reference
-#' annotation <- sw_annotate_clusters(result)
+#' annotation <- sw_annotate_run(result)
 #' head(annotation)
 #'
 #' # Use only specific markers for annotation
-#' annotation <- sw_annotate_clusters(result, markers = c("CD3", "CD4", "CD8a"))
+#' annotation <- sw_annotate_run(result, markers = c("CD3", "CD4", "CD8a"))
 #'
 #' # Use a custom reference
 #' my_ref <- list(
 #'   matrix = my_matrix,  # populations × markers, values 0–3
 #'   mask   = my_mask     # populations × markers, values 0/1
 #' )
-#' annotation <- sw_annotate_clusters(result, reference = my_ref)
+#' annotation <- sw_annotate_run(result, reference = my_ref)
 #' }
 #'
 #' @export
-sw_annotate_clusters <- function(x, reference = NULL, markers = NULL,
+sw_annotate_run <- function(x, reference = NULL, markers = NULL,
                                   min_score = 0.3, ...) {
 
   mfi_df <- .check_annotation_input(x)
 
   if (is.null(reference)) {
-    reference <- sw_load_reference("pbmc")
+    reference <- sw_annotate_load_ref("pbmc")
   }
 
   if (!is.list(reference) || !all(c("matrix", "mask") %in% names(reference))) {
     stop(
       "'reference' must be a list with 'matrix' and 'mask' elements ",
-      "(as returned by sw_load_reference()).",
+      "(as returned by sw_annotate_load_ref()).",
       call. = FALSE
     )
   }
@@ -384,7 +384,7 @@ sw_annotate_clusters <- function(x, reference = NULL, markers = NULL,
 #' cell type labels.
 #'
 #' @param x An \code{sw_cluster_result} object or a \code{data.frame}/
-#'   \code{tibble} from \code{\link{sw_cluster_mfis}} (must have a
+#'   \code{tibble} from \code{\link{sw_cluster_mfi}} (must have a
 #'   \code{cluster} column).
 #' @param annotation_map A named character vector where names are cluster
 #'   identifiers (coerced to character) and values are cell type labels.
@@ -395,12 +395,12 @@ sw_annotate_clusters <- function(x, reference = NULL, markers = NULL,
 #'   \code{cluster}.  Clusters absent from \code{annotation_map} receive
 #'   \code{NA} and a warning is issued.
 #'
-#' @seealso \code{\link{sw_annotate_clusters}}, \code{\link{sw_plot_annotation}}
+#' @seealso \code{\link{sw_annotate_run}}, \code{\link{sw_plot_annotation}}
 #'
 #' @examples
 #' \dontrun{
-#' result <- sw_cluster(corrected, lineage_markers = markers)
-#' mfis   <- sw_cluster_mfis(result)
+#' result <- sw_cluster_run(corrected, lineage_markers = markers)
+#' mfis   <- sw_cluster_mfi(result)
 #'
 #' annotation <- sw_annotate_manual(mfis, c(
 #'   "1"  = "CD4+ T cell",
@@ -461,12 +461,12 @@ sw_annotate_manual <- function(x, annotation_map) {
 #'
 #' @param annotation A \code{data.frame}/\code{tibble} containing at least
 #'   a \code{cluster} column (and a \code{cell_type} column for UMAP plots).
-#'   Typically the output of \code{\link{sw_annotate_clusters}} or
+#'   Typically the output of \code{\link{sw_annotate_run}} or
 #'   \code{\link{sw_annotate_manual}}.
 #' @param cluster_result An \code{sw_cluster_result} object.  Required when
 #'   \code{type = "heatmap"} and \code{annotation} does not already contain
 #'   marker MFI columns.
-#' @param dimred A \code{tibble} from \code{\link{sw_run_dimred}} with columns
+#' @param dimred A \code{tibble} from \code{\link{sw_dimred_run}} with columns
 #'   \code{dim1}, \code{dim2}, and \code{cluster}.  Required when
 #'   \code{type = "umap"}.
 #' @param type Character; plot type.  One of \code{"heatmap"} (default) or
@@ -476,18 +476,18 @@ sw_annotate_manual <- function(x, annotation_map) {
 #'   (for heatmap, when \pkg{pheatmap} is installed; otherwise a
 #'   \pkg{ggplot2} tile plot).
 #'
-#' @seealso \code{\link{sw_annotate_clusters}}, \code{\link{sw_run_dimred}}
+#' @seealso \code{\link{sw_annotate_run}}, \code{\link{sw_dimred_run}}
 #'
 #' @examples
 #' \dontrun{
-#' annotation <- sw_annotate_clusters(result)
+#' annotation <- sw_annotate_run(result)
 #'
 #' # Heatmap
 #' sw_plot_annotation(annotation, cluster_result = result)
 #'
 #' # UMAP overlay (requires prior dimensionality reduction with cluster column)
-#' dr <- sw_run_dimred(dplyr::mutate(corrected,
-#'                     cluster = sw_get_cluster_assignments(result)),
+#' dr <- sw_dimred_run(dplyr::mutate(corrected,
+#'                     cluster = sw_cluster_assignments(result)),
 #'                     markers = lineage_markers)
 #' sw_plot_annotation(annotation, dimred = dr, type = "umap")
 #' }
@@ -521,7 +521,7 @@ sw_plot_annotation <- function(annotation,
     if (is.null(dimred)) {
       stop(
         "'dimred' must be provided for type = 'umap'. ",
-        "Run sw_run_dimred() first and pass the result.",
+        "Run sw_dimred_run() first and pass the result.",
         call. = FALSE
       )
     }
@@ -529,7 +529,7 @@ sw_plot_annotation <- function(annotation,
         !all(c("dim1", "dim2") %in% names(dimred))) {
       stop(
         "'dimred' must be a tibble with 'dim1' and 'dim2' columns ",
-        "(output of sw_run_dimred()).",
+        "(output of sw_dimred_run()).",
         call. = FALSE
       )
     }
@@ -587,7 +587,7 @@ sw_plot_annotation <- function(annotation,
       stop("'cluster_result' must be an 'sw_cluster_result' object.",
            call. = FALSE)
     }
-    mfi_df      <- sw_cluster_mfis(cluster_result)
+    mfi_df      <- sw_cluster_mfi(cluster_result)
     marker_cols <- setdiff(names(mfi_df), "cluster")
   } else {
     mfi_df <- annotation[, c("cluster", marker_cols), drop = FALSE]

@@ -39,5 +39,5 @@ visualise batch effects or the success of correction.  Delegates to
 }
 \seealso{
 \code{\link{sw_plot_batch_densities}},
-\code{\link{sw_detect_batch_effect}}
+\code{\link{sw_correct_detect_batch}}
 }

@@ -25,7 +25,7 @@ NULL
 #' @param reference_spectra A numeric matrix of reference spectra with
 #'   fluorophore names as row names and detector names as column names.
 #'   Each row is the emission spectrum of one fluorophore (as returned by
-#'   \code{\link{sw_prepare_controls}()$spectra}).
+#'   \code{\link{sw_unmix_prepare}()$spectra}).
 #' @param unmixed_ff An optional \code{flowFrame} of unmixed data.  When
 #'   provided, empirical spreading is estimated from the data and combined
 #'   with the spectra-based estimate.  When \code{NULL} (default), only the
@@ -52,8 +52,8 @@ NULL
 #' (orthogonal spectra, no spreading) to 1 (identical spectra, maximum
 #' spreading).
 #'
-#' @seealso \code{\link{sw_plot_ssm}}, \code{\link{sw_unmixing_quality}},
-#'   \code{\link{sw_prepare_controls}}
+#' @seealso \code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_quality}},
+#'   \code{\link{sw_unmix_prepare}}
 #'
 #' @examples
 #' # Create toy reference spectra (3 fluorophores, 5 detectors)
@@ -63,11 +63,11 @@ NULL
 #'                   nrow = 3, byrow = TRUE,
 #'                   dimnames = list(c("BV421", "PE", "APC"),
 #'                                   paste0("Det", 1:5)))
-#' ssm <- sw_spillover_spreading_matrix(spectra)
+#' ssm <- sw_unmix_spillover_matrix(spectra)
 #' ssm$summary
 #'
 #' @export
-sw_spillover_spreading_matrix <- function(reference_spectra,
+sw_unmix_spillover_matrix <- function(reference_spectra,
                                           unmixed_ff = NULL) {
   # --- Validate reference_spectra ---
   if (!is.matrix(reference_spectra) || !is.numeric(reference_spectra)) {
@@ -167,20 +167,20 @@ sw_spillover_spreading_matrix <- function(reference_spectra,
 #' \code{stats::heatmap()}.
 #'
 #' @param ssm An object of class \code{"sw_ssm"} as returned by
-#'   \code{\link{sw_spillover_spreading_matrix}}.
+#'   \code{\link{sw_unmix_spillover_matrix}}.
 #' @param plot_file Optional file path to save the plot as PDF.
 #' @param ... Additional arguments passed to the underlying heatmap
 #'   function.
 #'
 #' @return Invisible \code{NULL}; called for its side effect (plot).
 #'
-#' @seealso \code{\link{sw_spillover_spreading_matrix}}
+#' @seealso \code{\link{sw_unmix_spillover_matrix}}
 #'
 #' @export
-sw_plot_ssm <- function(ssm, plot_file = NULL, ...) {
+sw_plot_spillover_matrix <- function(ssm, plot_file = NULL, ...) {
   if (!inherits(ssm, "sw_ssm")) {
     stop("'ssm' must be an object of class 'sw_ssm' ",
-         "(from sw_spillover_spreading_matrix).", call. = FALSE)
+         "(from sw_unmix_spillover_matrix).", call. = FALSE)
   }
 
   mat <- ssm$matrix
@@ -235,7 +235,7 @@ sw_plot_ssm <- function(ssm, plot_file = NULL, ...) {
 #' @return A \code{tibble} with columns: \code{channel}, \code{mean},
 #'   \code{sd}, \code{cv}, \code{pct_negative}, and \code{flagged}.
 #'
-#' @seealso \code{\link{sw_spillover_spreading_matrix}}
+#' @seealso \code{\link{sw_unmix_spillover_matrix}}
 #'
 #' @examples
 #' \dontrun{
@@ -243,13 +243,13 @@ sw_plot_ssm <- function(ssm, plot_file = NULL, ...) {
 #'   mat <- matrix(abs(rnorm(300, 5000, 2000)), ncol = 3,
 #'                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   quality <- sw_unmixing_quality(ff, channels = c("CD3", "CD4", "CD8"))
+#'   quality <- sw_unmix_quality(ff, channels = c("CD3", "CD4", "CD8"))
 #'   quality
 #' }
 #' }
 #'
 #' @export
-sw_unmixing_quality <- function(unmixed_ff, channels = NULL,
+sw_unmix_quality <- function(unmixed_ff, channels = NULL,
                                 cv_threshold = 0.5) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
@@ -266,7 +266,7 @@ sw_unmixing_quality <- function(unmixed_ff, channels = NULL,
   expr_mat <- flowCore::exprs(unmixed_ff)
 
   if (is.null(channels)) {
-    fluor_mask <- sw_are_fluor_cols(unmixed_ff)
+    fluor_mask <- sw_channel_is_fluor(unmixed_ff)
     channels <- flowCore::colnames(unmixed_ff)[fluor_mask]
   }
 

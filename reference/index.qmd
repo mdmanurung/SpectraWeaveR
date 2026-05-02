@@ -10,16 +10,16 @@ Core format conversion, FCS I/O, and channel classification helpers.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_read_fcs()`](utils.qmd#sw_read_fcs) | Read FCS files with Aurora-safe defaults |
-| [`sw_flowframe_to_tibble()`](utils.qmd#sw_flowframe_to_tibble) | Convert flowFrame to tibble |
-| [`sw_tibble_to_flowframe()`](utils.qmd#sw_tibble_to_flowframe) | Convert tibble to flowFrame |
-| [`sw_exprs_to_tibble()`](utils.qmd#sw_exprs_to_tibble) | Convert expression matrix to tibble |
-| [`sw_get_fluor_channels()`](utils.qmd#sw_get_fluor_channels) | Get fluorescent channel names |
-| [`sw_set_marker_names()`](utils.qmd#sw_set_marker_names) | Set marker names on a flowFrame |
-| [`sw_are_signal_cols()`](utils.qmd#sw_are_signal_cols) | Identify signal columns |
-| [`sw_are_fluor_cols()`](utils.qmd#sw_are_fluor_cols) | Identify fluorochrome columns |
-| [`sw_aggregate_and_sample()`](utils.qmd#sw_aggregate_and_sample) | Aggregate and subsample flow frames |
-| [`sw_collect_events_retained()`](utils.qmd#sw_collect_events_retained) | Collect events retained at each step |
+| [`sw_io_read_fcs()`](utils.qmd#sw_io_read_fcs) | Read FCS files with Aurora-safe defaults |
+| [`sw_io_ff_to_tibble()`](utils.qmd#sw_io_ff_to_tibble) | Convert flowFrame to tibble |
+| [`sw_io_tibble_to_ff()`](utils.qmd#sw_io_tibble_to_ff) | Convert tibble to flowFrame |
+| [`sw_io_exprs_to_tibble()`](utils.qmd#sw_io_exprs_to_tibble) | Convert expression matrix to tibble |
+| [`sw_channel_get_fluor()`](utils.qmd#sw_channel_get_fluor) | Get fluorescent channel names |
+| [`sw_channel_set_markers()`](utils.qmd#sw_channel_set_markers) | Set marker names on a flowFrame |
+| [`sw_channel_is_signal()`](utils.qmd#sw_channel_is_signal) | Identify signal columns |
+| [`sw_channel_is_fluor()`](utils.qmd#sw_channel_is_fluor) | Identify fluorochrome columns |
+| [`sw_io_subsample()`](utils.qmd#sw_io_subsample) | Aggregate and subsample flow frames |
+| [`sw_io_event_audit()`](utils.qmd#sw_io_event_audit) | Collect events retained at each step |
 
 ## Spectral unmixing
 
@@ -28,14 +28,14 @@ control to a one-call orchestrator.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_autospectral_setup()`](unmix.qmd#sw_autospectral_setup) | Initialize AutoSpectral parameters |
-| [`sw_prepare_controls()`](unmix.qmd#sw_prepare_controls) | Gate, clean, and extract fluorophore spectra |
-| [`sw_extract_af_spectra()`](unmix.qmd#sw_extract_af_spectra) | Extract per-cell autofluorescence spectra |
-| [`sw_extract_spectral_variants()`](unmix.qmd#sw_extract_spectral_variants) | Extract spectral variants |
-| [`sw_unmix()`](unmix.qmd#sw_unmix) | Unmix spectral flow cytometry data |
+| [`sw_unmix_setup()`](unmix.qmd#sw_unmix_setup) | Initialize AutoSpectral parameters |
+| [`sw_unmix_prepare()`](unmix.qmd#sw_unmix_prepare) | Gate, clean, and extract fluorophore spectra |
+| [`sw_unmix_extract_af()`](unmix.qmd#sw_unmix_extract_af) | Extract per-cell autofluorescence spectra |
+| [`sw_unmix_extract_variants()`](unmix.qmd#sw_unmix_extract_variants) | Extract spectral variants |
+| [`sw_unmix_run()`](unmix.qmd#sw_unmix_run) | Unmix spectral flow cytometry data |
 | [`sw_unmix_pipeline()`](unmix.qmd#sw_unmix_pipeline) | End-to-end unmixing pipeline |
-| [`sw_load_unmixed()`](unmix.qmd#sw_load_unmixed) | Load pre-unmixed FCS files |
-| [`sw_remove_margins()`](unmix.qmd#sw_remove_margins) | Remove margin events |
+| [`sw_io_load_unmixed()`](unmix.qmd#sw_io_load_unmixed) | Load pre-unmixed FCS files |
+| [`sw_filter_margins()`](unmix.qmd#sw_filter_margins) | Remove margin events |
 
 ## Gating
 
@@ -43,9 +43,9 @@ Automated gating with the openCyto framework.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_build_gating_template()`](gate.qmd#sw_build_gating_template) | Build a gating template CSV |
-| [`sw_gate()`](gate.qmd#sw_gate) | Apply automated gating |
-| [`sw_extract_gated()`](gate.qmd#sw_extract_gated) | Extract gated populations |
+| [`sw_gate_template()`](gate.qmd#sw_gate_template) | Build a gating template CSV |
+| [`sw_gate_run()`](gate.qmd#sw_gate_run) | Apply automated gating |
+| [`sw_gate_extract()`](gate.qmd#sw_gate_extract) | Extract gated populations |
 
 ## Signal QC
 
@@ -53,8 +53,8 @@ Signal quality control with PeacoQC.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_signal_qc()`](qc.qmd#sw_signal_qc) | Signal QC on a single flowFrame |
-| [`sw_signal_qc_batch()`](qc.qmd#sw_signal_qc_batch) | Batch signal QC |
+| [`sw_qc_run()`](qc.qmd#sw_qc_run) | Signal QC on a single flowFrame |
+| [`sw_qc_batch()`](qc.qmd#sw_qc_batch) | Batch signal QC |
 | [`sw_qc_summary()`](qc.qmd#sw_qc_summary) | QC summary report |
 
 ## Batch correction
@@ -64,16 +64,16 @@ plus diagnostic evaluation and visualisation.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_prepare_for_correction()`](batch-correct.qmd#sw_prepare_for_correction) | Prepare data for batch correction |
-| [`sw_batch_correct()`](batch-correct.qmd#sw_batch_correct) | All-in-one batch correction |
-| [`sw_normalize()`](batch-correct.qmd#sw_normalize) | Normalise data (modular step 1) |
-| [`sw_create_som()`](batch-correct.qmd#sw_create_som) | Create SOM clusters (modular step 2) |
-| [`sw_correct_data()`](batch-correct.qmd#sw_correct_data) | Apply ComBat correction (modular step 3) |
-| [`sw_evaluate_correction()`](batch-correct.qmd#sw_evaluate_correction) | Quick evaluation of correction quality |
-| [`sw_detect_batch_effect()`](batch-correct.qmd#sw_detect_batch_effect) | Detect batch effects |
-| [`sw_compute_emd()`](batch-correct.qmd#sw_compute_emd) | Compute Earth Mover's Distance |
-| [`sw_evaluate_emd()`](batch-correct.qmd#sw_evaluate_emd) | Evaluate correction with EMD |
-| [`sw_evaluate_mad()`](batch-correct.qmd#sw_evaluate_mad) | Evaluate correction with MAD |
+| [`sw_correct_prepare()`](batch-correct.qmd#sw_correct_prepare) | Prepare data for batch correction |
+| [`sw_correct_run()`](batch-correct.qmd#sw_correct_run) | All-in-one batch correction |
+| [`sw_correct_normalize()`](batch-correct.qmd#sw_correct_normalize) | Normalise data (modular step 1) |
+| [`sw_correct_som()`](batch-correct.qmd#sw_correct_som) | Create SOM clusters (modular step 2) |
+| [`sw_correct_apply()`](batch-correct.qmd#sw_correct_apply) | Apply ComBat correction (modular step 3) |
+| [`sw_correct_evaluate_quick()`](batch-correct.qmd#sw_correct_evaluate_quick) | Quick evaluation of correction quality |
+| [`sw_correct_detect_batch()`](batch-correct.qmd#sw_correct_detect_batch) | Detect batch effects |
+| [`sw_correct_emd()`](batch-correct.qmd#sw_correct_emd) | Compute Earth Mover's Distance |
+| [`sw_correct_evaluate_emd()`](batch-correct.qmd#sw_correct_evaluate_emd) | Evaluate correction with EMD |
+| [`sw_correct_evaluate_mad()`](batch-correct.qmd#sw_correct_evaluate_mad) | Evaluate correction with MAD |
 | [`sw_plot_batch_densities()`](batch-correct.qmd#sw_plot_batch_densities) | Plot marker density by batch |
 | [`sw_plot_batch_dimred()`](batch-correct.qmd#sw_plot_batch_dimred) | Plot dimensionality reduction by batch |
 
@@ -83,11 +83,11 @@ Clustering with kohonen SOM or FastPG.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_cluster()`](cluster.qmd#sw_cluster) | Cluster cells using kohonen SOM or FastPG |
-| [`sw_get_cluster_assignments()`](cluster.qmd#sw_get_cluster_assignments) | Get cluster assignments |
-| [`sw_cluster_mfis()`](cluster.qmd#sw_cluster_mfis) | Compute MFIs per cluster |
+| [`sw_cluster_run()`](cluster.qmd#sw_cluster_run) | Cluster cells using kohonen SOM or FastPG |
+| [`sw_cluster_assignments()`](cluster.qmd#sw_cluster_assignments) | Get cluster assignments |
+| [`sw_cluster_mfi()`](cluster.qmd#sw_cluster_mfi) | Compute MFIs per cluster |
 | [`sw_plot_clusters()`](cluster.qmd#sw_plot_clusters) | Plot cluster heatmap |
-| [`sw_predict_clusters()`](cluster.qmd#sw_predict_clusters) | Predict clusters for new data |
+| [`sw_cluster_predict()`](cluster.qmd#sw_cluster_predict) | Predict clusters for new data |
 
 ## Pipeline
 
@@ -95,7 +95,7 @@ End-to-end pipeline orchestrator.
 
 | Function | Description |
 |----------|-------------|
-| [`run_pipeline()`](pipeline.qmd#run_pipeline) | Run the full SpectraWeaveR pipeline |
+| [`sw_pipeline_run_all()`](pipeline.qmd#sw_pipeline_run_all) | Run the full SpectraWeaveR pipeline |
 
 ## Composable pipeline
 
@@ -103,8 +103,8 @@ R7/S7-based composable pipeline framework for building custom workflows.
 
 | Function | Description |
 |----------|-------------|
-| [`sw_step()`](composable-pipeline.qmd#sw_step) | Create a processing step |
-| [`execute_step()`](composable-pipeline.qmd#execute_step) | Execute a processing step |
+| [`sw_pipeline_step()`](composable-pipeline.qmd#sw_pipeline_step) | Create a processing step |
+| [`sw_pipeline_step_run()`](composable-pipeline.qmd#sw_pipeline_step_run) | Execute a processing step |
 | [`sw_pipeline()`](composable-pipeline.qmd#sw_pipeline) | Create a pipeline |
 | [`sw_pipeline_add()`](composable-pipeline.qmd#sw_pipeline_add) | Add a step to a pipeline |
 | [`sw_pipeline_remove()`](composable-pipeline.qmd#sw_pipeline_remove) | Remove a step from a pipeline |
@@ -115,14 +115,14 @@ R7/S7-based composable pipeline framework for building custom workflows.
 | [`sw_pipeline_concat()`](composable-pipeline.qmd#sw_pipeline_concat) | Concatenate two pipelines |
 | [`sw_pipeline_show()`](composable-pipeline.qmd#sw_pipeline_show) | Print pipeline summary |
 | [`sw_plot_pipeline()`](composable-pipeline.qmd#sw_plot_pipeline) | Plot pipeline flowchart |
-| [`sw_step_read_fcs()`](composable-pipeline.qmd#sw_step_read_fcs) | Step: read FCS files |
-| [`sw_step_remove_margins()`](composable-pipeline.qmd#sw_step_remove_margins) | Step: remove margin events |
-| [`sw_step_signal_qc()`](composable-pipeline.qmd#sw_step_signal_qc) | Step: signal QC |
-| [`sw_step_batch_correct()`](composable-pipeline.qmd#sw_step_batch_correct) | Step: batch correction |
-| [`sw_step_normalize()`](composable-pipeline.qmd#sw_step_normalize) | Step: normalisation |
-| [`sw_step_create_som()`](composable-pipeline.qmd#sw_step_create_som) | Step: SOM clustering |
-| [`sw_step_correct_data()`](composable-pipeline.qmd#sw_step_correct_data) | Step: ComBat correction |
-| [`sw_step_cluster()`](composable-pipeline.qmd#sw_step_cluster) | Step: clustering |
+| [`sw_pipeline_step_read_fcs()`](composable-pipeline.qmd#sw_pipeline_step_read_fcs) | Step: read FCS files |
+| [`sw_pipeline_step_filter_margins()`](composable-pipeline.qmd#sw_pipeline_step_filter_margins) | Step: remove margin events |
+| [`sw_pipeline_step_qc()`](composable-pipeline.qmd#sw_pipeline_step_qc) | Step: signal QC |
+| [`sw_pipeline_step_correct()`](composable-pipeline.qmd#sw_pipeline_step_correct) | Step: batch correction |
+| [`sw_pipeline_step_normalize()`](composable-pipeline.qmd#sw_pipeline_step_normalize) | Step: normalisation |
+| [`sw_pipeline_step_som()`](composable-pipeline.qmd#sw_pipeline_step_som) | Step: SOM clustering |
+| [`sw_pipeline_step_correct_apply()`](composable-pipeline.qmd#sw_pipeline_step_correct_apply) | Step: ComBat correction |
+| [`sw_pipeline_step_cluster()`](composable-pipeline.qmd#sw_pipeline_step_cluster) | Step: clustering |
 
 ## Transforms
 
@@ -130,8 +130,8 @@ Scale transformation utilities (ported from CytoPipeline).
 
 | Function | Description |
 |----------|-------------|
-| [`sw_estimate_scale_transforms()`](transforms.qmd#sw_estimate_scale_transforms) | Estimate scale transformations |
-| [`sw_apply_scale_transforms()`](transforms.qmd#sw_apply_scale_transforms) | Apply scale transformations |
+| [`sw_transform_estimate()`](transforms.qmd#sw_transform_estimate) | Estimate scale transformations |
+| [`sw_transform_apply()`](transforms.qmd#sw_transform_apply) | Apply scale transformations |
 
 ## Gating utilities
 
@@ -139,8 +139,8 @@ Gating and event filtering helpers (ported from CytoPipeline).
 
 | Function | Description |
 |----------|-------------|
-| [`sw_singlets_gate()`](gating-utils.qmd#sw_singlets_gate) | Create a singlets gate |
-| [`sw_remove_doublets()`](gating-utils.qmd#sw_remove_doublets) | Remove doublets (CytoPipeline) |
-| [`sw_remove_doublets_peacoqc()`](gating-utils.qmd#sw_remove_doublets_peacoqc) | Remove doublets (PeacoQC) |
-| [`sw_remove_debris_gate()`](gating-utils.qmd#sw_remove_debris_gate) | Remove debris with polygon gate |
-| [`sw_remove_margins_peacoqc()`](gating-utils.qmd#sw_remove_margins_peacoqc) | Remove margin events (PeacoQC) |
+| [`sw_gate_singlets()`](gating-utils.qmd#sw_gate_singlets) | Create a singlets gate |
+| [`sw_filter_doublets()`](gating-utils.qmd#sw_filter_doublets) | Remove doublets (CytoPipeline) |
+| [`sw_filter_doublets_peacoqc()`](gating-utils.qmd#sw_filter_doublets_peacoqc) | Remove doublets (PeacoQC) |
+| [`sw_filter_debris()`](gating-utils.qmd#sw_filter_debris) | Remove debris with polygon gate |
+| [`sw_filter_margins_peacoqc()`](gating-utils.qmd#sw_filter_margins_peacoqc) | Remove margin events (PeacoQC) |

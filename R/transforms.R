@@ -47,12 +47,12 @@ NULL
 #'   mat <- matrix(abs(rnorm(500, 50000, 15000)), ncol = 5,
 #'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   trans <- sw_estimate_scale_transforms(ff, fluo_method = "estimateLogicle")
+#'   trans <- sw_transform_estimate(ff, fluo_method = "estimateLogicle")
 #' }
 #' }
 #'
 #' @export
-sw_estimate_scale_transforms <- function(
+sw_transform_estimate <- function(
     ff,
     fluo_method = c("estimateLogicle", "none"),
     scatter_method = c("none", "linearQuantile"),
@@ -79,7 +79,7 @@ sw_estimate_scale_transforms <- function(
     if (verbose) {
       message("Estimating logicle transformations for fluorochrome channels...")
     }
-    fluoCols <- flowCore::colnames(ff)[sw_are_fluor_cols(ff)]
+    fluoCols <- flowCore::colnames(ff)[sw_channel_is_fluor(ff)]
     if (length(fluoCols) > 0) {
       transList <- flowCore::estimateLogicle(ff, fluoCols, ...)
     }
@@ -109,7 +109,7 @@ sw_estimate_scale_transforms <- function(
   if (!is.null(specific_scatter_channels) &&
       fluo_method == "estimateLogicle") {
     scatter_channels <- flowCore::colnames(ff)[
-      !sw_are_fluor_cols(ff) & sw_are_signal_cols(ff)
+      !sw_channel_is_fluor(ff) & sw_channel_is_signal(ff)
     ]
     effective <- intersect(specific_scatter_channels, scatter_channels)
 
@@ -158,13 +158,13 @@ sw_estimate_scale_transforms <- function(
   ref_info <- flowCore::getChannelMarker(ff, reference_channel)
   reference_channel <- ref_info$name
 
-  fluoCols <- flowCore::colnames(ff)[sw_are_fluor_cols(ff)]
+  fluoCols <- flowCore::colnames(ff)[sw_channel_is_fluor(ff)]
   if (!(reference_channel %in% fluoCols)) {
     stop("'scatter_ref_marker' must be a fluorochrome channel.", call. = FALSE)
   }
 
   scatter_channels <- flowCore::colnames(ff)[
-    !sw_are_fluor_cols(ff) & sw_are_signal_cols(ff)
+    !sw_channel_is_fluor(ff) & sw_channel_is_signal(ff)
   ]
   if (length(scatter_channels) == 0) {
     if (verbose) message("No scatter channels found to scale.")
@@ -245,18 +245,18 @@ sw_estimate_scale_transforms <- function(
 #'
 #' @param x A \code{flowCore::flowFrame} or \code{flowCore::flowSet}.
 #' @param trans_list A \code{flowCore::transformList} object, typically
-#'   obtained from \code{\link{sw_estimate_scale_transforms}}.
+#'   obtained from \code{\link{sw_transform_estimate}}.
 #'
 #' @return The transformed \code{flowFrame} or \code{flowSet}.
 #'
 #' @examples
 #' \dontrun{
-#' trans <- sw_estimate_scale_transforms(ff, fluo_method = "estimateLogicle")
-#' ff_transformed <- sw_apply_scale_transforms(ff, trans)
+#' trans <- sw_transform_estimate(ff, fluo_method = "estimateLogicle")
+#' ff_transformed <- sw_transform_apply(ff, trans)
 #' }
 #'
 #' @export
-sw_apply_scale_transforms <- function(x, trans_list) {
+sw_transform_apply <- function(x, trans_list) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }

@@ -1,9 +1,9 @@
 # tests/testthat/test-pipeline.R
 # Unit tests for R/pipeline.R — End-to-end pipeline orchestrator
 
-test_that("run_pipeline rejects non-existent directory", {
+test_that("sw_pipeline_run_all rejects non-existent directory", {
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = "/nonexistent/dir",
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
       markers = "CD3",
@@ -13,10 +13,10 @@ test_that("run_pipeline rejects non-existent directory", {
   )
 })
 
-test_that("run_pipeline rejects non-data.frame sample_meta", {
+test_that("sw_pipeline_run_all rejects non-data.frame sample_meta", {
   tmp_dir <- tempdir()
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = tmp_dir,
       sample_meta = "not_a_df",
       markers = "CD3",
@@ -26,10 +26,10 @@ test_that("run_pipeline rejects non-data.frame sample_meta", {
   )
 })
 
-test_that("run_pipeline rejects missing sample_meta columns", {
+test_that("sw_pipeline_run_all rejects missing sample_meta columns", {
   tmp_dir <- tempdir()
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(sample = "S1"),
       markers = "CD3",
@@ -39,10 +39,10 @@ test_that("run_pipeline rejects missing sample_meta columns", {
   )
 })
 
-test_that("run_pipeline rejects empty markers", {
+test_that("sw_pipeline_run_all rejects empty markers", {
   tmp_dir <- tempdir()
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -53,10 +53,10 @@ test_that("run_pipeline rejects empty markers", {
   )
 })
 
-test_that("run_pipeline rejects lineage_markers not in markers", {
+test_that("sw_pipeline_run_all rejects lineage_markers not in markers", {
   tmp_dir <- tempdir()
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -67,9 +67,9 @@ test_that("run_pipeline rejects lineage_markers not in markers", {
   )
 })
 
-test_that("run_pipeline rejects non-character fcs_dir", {
+test_that("sw_pipeline_run_all rejects non-character fcs_dir", {
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = 42,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -80,10 +80,10 @@ test_that("run_pipeline rejects non-character fcs_dir", {
   )
 })
 
-test_that("run_pipeline rejects duplicate sample names in metadata", {
+test_that("sw_pipeline_run_all rejects duplicate sample names in metadata", {
   tmp_dir <- tempdir()
   expect_error(
-    run_pipeline(
+    sw_pipeline_run_all(
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(
         file = c("a.fcs", "b.fcs"),
@@ -97,8 +97,8 @@ test_that("run_pipeline rejects duplicate sample names in metadata", {
   )
 })
 
-test_that("run_pipeline function signature has expected parameters", {
-  params <- names(formals(run_pipeline))
+test_that("sw_pipeline_run_all function signature has expected parameters", {
+  params <- names(formals(sw_pipeline_run_all))
   expect_true(all(c("fcs_dir", "sample_meta", "markers", "lineage_markers",
                      "gating_template", "gate_node", "output_dir", "cofactor",
                      "n_metaclusters", "seed") %in% params))
@@ -108,7 +108,7 @@ test_that("run_pipeline function signature has expected parameters", {
 # Integration test — full pipeline execution with synthetic data
 # =========================================================================
 
-test_that("run_pipeline executes end-to-end with synthetic FCS", {
+test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
   skip_if_not_installed("flowCore")
   skip_if_not_installed("PeacoQC")
   skip_if_not_installed("cyCombine")
@@ -150,7 +150,7 @@ test_that("run_pipeline executes end-to-end with synthetic FCS", {
     batch = c("B1", "B2")
   )
 
-  result <- run_pipeline(
+  result <- sw_pipeline_run_all(
     fcs_dir = tmp_dir,
     sample_meta = sample_meta,
     markers = c("CD3", "CD4", "CD8"),

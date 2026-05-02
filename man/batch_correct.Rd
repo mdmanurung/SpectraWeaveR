@@ -6,14 +6,14 @@
 \description{
 Functions for preparing data and performing batch correction using the
 cyCombine package, which applies ComBat batch correction on SOM clusters.
-Supports both an all-in-one workflow (\code{\link{sw_batch_correct}}) and a
-modular workflow (\code{\link{sw_normalize}} \eqn{\to}
-\code{\link{sw_create_som}} \eqn{\to} \code{\link{sw_correct_data}}).
+Supports both an all-in-one workflow (\code{\link{sw_correct_run}}) and a
+modular workflow (\code{\link{sw_correct_normalize}} \eqn{\to}
+\code{\link{sw_correct_som}} \eqn{\to} \code{\link{sw_correct_apply}}).
 
 Diagnostic and evaluation helpers are provided for batch-effect detection
-(\code{\link{sw_detect_batch_effect}}), quality metrics
-(\code{\link{sw_compute_emd}}, \code{\link{sw_evaluate_emd}},
-\code{\link{sw_evaluate_mad}}), and visualization
+(\code{\link{sw_correct_detect_batch}}), quality metrics
+(\code{\link{sw_correct_emd}}, \code{\link{sw_correct_evaluate_emd}},
+\code{\link{sw_correct_evaluate_mad}}), and visualization
 (\code{\link{sw_plot_batch_densities}}, \code{\link{sw_plot_batch_dimred}}).
 }
 \keyword{internal}

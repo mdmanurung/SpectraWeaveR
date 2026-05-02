@@ -24,12 +24,12 @@ Constructs a \code{Pipeline} object — an ordered collection of
 \dontrun{
 # Create an empty pipeline and add steps later
 pip <- sw_pipeline("my_analysis")
-pip <- sw_pipeline_add(pip, sw_step("load", sw_read_fcs))
+pip <- sw_pipeline_add(pip, sw_pipeline_step("load", sw_io_read_fcs))
 
 # Create a pipeline with steps
 pip <- sw_pipeline("qc_pipeline", steps = list(
-  sw_step("qc", sw_signal_qc, list(IT_limit = 0.55)),
-  sw_step("filter", my_custom_filter)
+  sw_pipeline_step("qc", sw_qc_run, list(IT_limit = 0.55)),
+  sw_pipeline_step("filter", my_custom_filter)
 ))
 }
 

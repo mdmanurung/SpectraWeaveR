@@ -4,14 +4,14 @@ title: "Gating"
 
 Automated gating with the openCyto framework.
 
-## `sw_build_gating_template` {#sw_build_gating_template}
+## `sw_gate_template` {#sw_gate_template}
 
 Build a gating template CSV.
 
 ### Usage
 
 ```r
-sw_build_gating_template(output_file, template_type = "lymphocyte")
+sw_gate_template(output_file, template_type = "lymphocyte")
 ```
 
 ### Arguments
@@ -34,14 +34,14 @@ The file path (invisibly).
 
 ---
 
-## `sw_gate` {#sw_gate}
+## `sw_gate_run` {#sw_gate_run}
 
 Apply automated gating.
 
 ### Usage
 
 ```r
-sw_gate(fcs_files, gating_template, transform_channels = NULL,
+sw_gate_run(fcs_files, gating_template, transform_channels = NULL,
         transform_func = NULL, ...)
 ```
 
@@ -66,14 +66,14 @@ A `GatingSet` object with gates applied.
 
 ---
 
-## `sw_extract_gated` {#sw_extract_gated}
+## `sw_gate_extract` {#sw_gate_extract}
 
 Extract gated populations.
 
 ### Usage
 
 ```r
-sw_extract_gated(gs, node)
+sw_gate_extract(gs, node)
 ```
 
 ### Arguments

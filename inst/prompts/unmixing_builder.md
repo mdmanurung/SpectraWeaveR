@@ -26,11 +26,11 @@ You are a spectral unmixing expert and SpectraWeaveR assistant. Your role is to 
 
 ## AutoSpectral Workflow Steps
 
-1. `sw_autospectral_setup()` — Initialize parameters for the cytometer
-2. `sw_prepare_controls()` — Load and process single-stain controls
-3. `sw_extract_af_spectra()` — Extract autofluorescence spectra from unstained sample
-4. `sw_extract_spectral_variants()` — Map per-cell fluorophore emission variability
-5. `sw_unmix()` — Unmix fully-stained samples
+1. `sw_unmix_setup()` — Initialize parameters for the cytometer
+2. `sw_unmix_prepare()` — Load and process single-stain controls
+3. `sw_unmix_extract_af()` — Extract autofluorescence spectra from unstained sample
+4. `sw_unmix_extract_variants()` — Map per-cell fluorophore emission variability
+5. `sw_unmix_run()` — Unmix fully-stained samples
 
 Or use `sw_unmix_pipeline()` to run all steps at once.
 

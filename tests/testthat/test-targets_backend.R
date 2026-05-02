@@ -38,8 +38,8 @@ test_that("sw_pipeline_to_targets writes script and definition RDS files", {
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times2", .swt_times2),
-    sw_step("plus1",  .swt_plus1)
+    sw_pipeline_step("times2", .swt_times2),
+    sw_pipeline_step("plus1",  .swt_plus1)
   ))
 
   info <- sw_pipeline_to_targets(pip, input = 5)
@@ -58,7 +58,7 @@ test_that("sw_pipeline_to_targets refuses to overwrite by default", {
   skip_targets_unavailable()
   local_targets_dir()
 
-  pip <- sw_pipeline("toy", steps = list(sw_step("id", identity)))
+  pip <- sw_pipeline("toy", steps = list(sw_pipeline_step("id", identity)))
   sw_pipeline_to_targets(pip, input = 1)
 
   expect_error(
@@ -92,9 +92,9 @@ test_that("targets backend produces the same result as the sequential backend", 
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times2", .swt_times2),
-    sw_step("plus1",  .swt_plus1),
-    sw_step("sqrtit", .swt_sqrt)
+    sw_pipeline_step("times2", .swt_times2),
+    sw_pipeline_step("plus1",  .swt_plus1),
+    sw_pipeline_step("sqrtit", .swt_sqrt)
   ))
 
   seq_res <- sw_pipeline_run(pip, input = 8, trace = FALSE)
@@ -119,9 +119,9 @@ test_that("changing one step's ARGS only invalidates that step and its downstrea
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times2", .swt_times2),
-    sw_step("plus1",  .swt_plus1),
-    sw_step("sqrtit", .swt_sqrt)
+    sw_pipeline_step("times2", .swt_times2),
+    sw_pipeline_step("plus1",  .swt_plus1),
+    sw_pipeline_step("sqrtit", .swt_sqrt)
   ))
 
   sw_pipeline_run_targets(pip, input = 8,
@@ -135,7 +135,7 @@ test_that("changing one step's ARGS only invalidates that step and its downstrea
   # Replace the middle step with a different function.
   pip2 <- sw_pipeline_replace(
     pip, "plus1",
-    sw_step("plus1", .swt_plus10)
+    sw_pipeline_step("plus1", .swt_plus10)
   )
 
   res2 <- sw_pipeline_run_targets(pip2, input = 8,
@@ -161,8 +161,8 @@ test_that("sw_pipeline_run(backend = 'targets') delegates correctly", {
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times2", .swt_times2),
-    sw_step("plus1",  .swt_plus1)
+    sw_pipeline_step("times2", .swt_times2),
+    sw_pipeline_step("plus1",  .swt_plus1)
   ))
 
   res <- sw_pipeline_run(
@@ -186,8 +186,8 @@ test_that("a failing step surfaces a wrapped error from the targets backend", {
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times2", .swt_times2),
-    sw_step("boom",   .swt_boom)
+    sw_pipeline_step("times2", .swt_times2),
+    sw_pipeline_step("boom",   .swt_boom)
   ))
 
   expect_error(
@@ -206,7 +206,7 @@ test_that("step names that collide with reserved internal targets are rejected",
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("sw_input", .swt_times2)
+    sw_pipeline_step("sw_input", .swt_times2)
   ))
 
   expect_error(
@@ -220,8 +220,8 @@ test_that("step names with spaces are sanitised but kept as intermediates keys",
   local_targets_dir()
 
   pip <- sw_pipeline("toy", steps = list(
-    sw_step("times 2", .swt_times2),
-    sw_step("plus 1",  .swt_plus1)
+    sw_pipeline_step("times 2", .swt_times2),
+    sw_pipeline_step("plus 1",  .swt_plus1)
   ))
 
   res <- sw_pipeline_run_targets(pip, input = 5,
@@ -242,8 +242,8 @@ test_that("typed ProcessingStep round-trips through targets backend + type check
   # Use a typed pipeline — the new input_type property must survive the
   # saveRDS/readRDS round-trip that the targets backend performs for each
   # step definition.
-  pip <- sw_step("double", .swt_times2, input_type = "numeric") %>>%
-         sw_step("plus1",  .swt_plus1,  input_type = "numeric")
+  pip <- sw_pipeline_step("double", .swt_times2, input_type = "numeric") %>>%
+         sw_pipeline_step("plus1",  .swt_plus1,  input_type = "numeric")
 
   # Happy path: numeric input passes type check in child session.
   res <- sw_pipeline_run_targets(pip, input = 8,

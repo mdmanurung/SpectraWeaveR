@@ -4,14 +4,14 @@ title: "Utilities"
 
 Core format conversion, FCS I/O, and channel classification functions.
 
-## `sw_read_fcs` {#sw_read_fcs}
+## `sw_io_read_fcs` {#sw_io_read_fcs}
 
 Read FCS files with Aurora-safe defaults.
 
 ### Usage
 
 ```r
-sw_read_fcs(files, ...)
+sw_io_read_fcs(files, ...)
 ```
 
 ### Arguments
@@ -34,14 +34,14 @@ A `flowFrame` (single file) or `flowSet` (multiple files).
 
 ---
 
-## `sw_flowframe_to_tibble` {#sw_flowframe_to_tibble}
+## `sw_io_ff_to_tibble` {#sw_io_ff_to_tibble}
 
 Convert a flowFrame to a tibble.
 
 ### Usage
 
 ```r
-sw_flowframe_to_tibble(ff, sample = NULL, batch = NULL, condition = NULL)
+sw_io_ff_to_tibble(ff, sample = NULL, batch = NULL, condition = NULL)
 ```
 
 ### Arguments
@@ -65,14 +65,14 @@ columns if specified.
 
 ---
 
-## `sw_tibble_to_flowframe` {#sw_tibble_to_flowframe}
+## `sw_io_tibble_to_ff` {#sw_io_tibble_to_ff}
 
 Convert a tibble to a flowFrame.
 
 ### Usage
 
 ```r
-sw_tibble_to_flowframe(df, markers = NULL)
+sw_io_tibble_to_ff(df, markers = NULL)
 ```
 
 ### Arguments
@@ -94,14 +94,14 @@ A `flowCore::flowFrame`.
 
 ---
 
-## `sw_exprs_to_tibble` {#sw_exprs_to_tibble}
+## `sw_io_exprs_to_tibble` {#sw_io_exprs_to_tibble}
 
 Convert an expression matrix to a tibble.
 
 ### Usage
 
 ```r
-sw_exprs_to_tibble(mat, colnames = NULL, sample = NULL, batch = NULL,
+sw_io_exprs_to_tibble(mat, colnames = NULL, sample = NULL, batch = NULL,
                    condition = NULL)
 ```
 
@@ -127,14 +127,14 @@ A `tibble`.
 
 ---
 
-## `sw_get_fluor_channels` {#sw_get_fluor_channels}
+## `sw_channel_get_fluor` {#sw_channel_get_fluor}
 
 Get fluorescent channel names.
 
 ### Usage
 
 ```r
-sw_get_fluor_channels(ff_or_fs)
+sw_channel_get_fluor(ff_or_fs)
 ```
 
 ### Arguments
@@ -154,14 +154,14 @@ Character vector of fluorescent channel names.
 
 ---
 
-## `sw_set_marker_names` {#sw_set_marker_names}
+## `sw_channel_set_markers` {#sw_channel_set_markers}
 
 Set marker names on a flowFrame.
 
 ### Usage
 
 ```r
-sw_set_marker_names(ff, marker_map)
+sw_channel_set_markers(ff, marker_map)
 ```
 
 ### Arguments
@@ -182,14 +182,14 @@ The modified `flowFrame` with updated marker names.
 
 ---
 
-## `sw_are_signal_cols` {#sw_are_signal_cols}
+## `sw_channel_is_signal` {#sw_channel_is_signal}
 
 Identify signal columns.
 
 ### Usage
 
 ```r
-sw_are_signal_cols(
+sw_channel_is_signal(
   x,
   exclude_patterns = c("Time", "Original_ID", "File", "SampleID")
 )
@@ -214,14 +214,14 @@ A named logical vector with length equal to `ncol(x)`.
 
 ---
 
-## `sw_are_fluor_cols` {#sw_are_fluor_cols}
+## `sw_channel_is_fluor` {#sw_channel_is_fluor}
 
 Identify fluorochrome columns.
 
 ### Usage
 
 ```r
-sw_are_fluor_cols(
+sw_channel_is_fluor(
   x,
   exclude_patterns = c("FSC", "SSC", "Time", "Original_ID", "File", "SampleID")
 )
@@ -246,14 +246,14 @@ A named logical vector with length equal to `ncol(x)`.
 
 ---
 
-## `sw_aggregate_and_sample` {#sw_aggregate_and_sample}
+## `sw_io_subsample` {#sw_io_subsample}
 
 Aggregate and subsample multiple flow frames.
 
 ### Usage
 
 ```r
-sw_aggregate_and_sample(
+sw_io_subsample(
   fs,
   n_total_events,
   setup = c("forceNEvent", "forceBalance"),
@@ -285,14 +285,14 @@ A single `flowCore::flowFrame` with aggregated events.
 
 ---
 
-## `sw_collect_events_retained` {#sw_collect_events_retained}
+## `sw_io_event_audit` {#sw_io_event_audit}
 
 Collect events retained at each pipeline step.
 
 ### Usage
 
 ```r
-sw_collect_events_retained(intermediates)
+sw_io_event_audit(intermediates)
 ```
 
 ### Arguments

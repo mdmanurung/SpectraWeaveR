@@ -2,44 +2,44 @@
 # Unit and integration tests for R/dimred.R — Dimensionality reduction
 
 # =========================================================================
-# sw_run_dimred — input validation
+# sw_dimred_run — input validation
 # =========================================================================
 
-test_that("sw_run_dimred rejects non-data.frame input", {
-  expect_error(sw_run_dimred("not_df", markers = "CD3"),
+test_that("sw_dimred_run rejects non-data.frame input", {
+  expect_error(sw_dimred_run("not_df", markers = "CD3"),
                "data.frame")
 })
 
-test_that("sw_run_dimred rejects empty markers", {
+test_that("sw_dimred_run rejects empty markers", {
   df <- tibble::tibble(CD3 = 1:10)
-  expect_error(sw_run_dimred(df, markers = character(0)),
+  expect_error(sw_dimred_run(df, markers = character(0)),
                "non-empty character vector")
 })
 
-test_that("sw_run_dimred rejects missing markers", {
+test_that("sw_dimred_run rejects missing markers", {
   df <- tibble::tibble(CD3 = 1:10)
-  expect_error(sw_run_dimred(df, markers = c("CD3", "CD99")),
+  expect_error(sw_dimred_run(df, markers = c("CD3", "CD99")),
                "not found")
 })
 
-test_that("sw_run_dimred rejects invalid method", {
+test_that("sw_dimred_run rejects invalid method", {
   df <- tibble::tibble(CD3 = 1:10, CD4 = 1:10)
-  expect_error(sw_run_dimred(df, markers = c("CD3", "CD4"),
+  expect_error(sw_dimred_run(df, markers = c("CD3", "CD4"),
                              method = "invalid"),
                "arg")
 })
 
-test_that("sw_run_dimred rejects invalid n_dims", {
+test_that("sw_dimred_run rejects invalid n_dims", {
   df <- tibble::tibble(CD3 = 1:10, CD4 = 1:10)
-  expect_error(sw_run_dimred(df, markers = c("CD3", "CD4"), n_dims = 0),
+  expect_error(sw_dimred_run(df, markers = c("CD3", "CD4"), n_dims = 0),
                "positive integer")
 })
 
 # =========================================================================
-# sw_run_dimred — PCA integration
+# sw_dimred_run — PCA integration
 # =========================================================================
 
-test_that("sw_run_dimred PCA runs on synthetic data", {
+test_that("sw_dimred_run PCA runs on synthetic data", {
   set.seed(42)
   df <- tibble::tibble(
     CD3 = c(rnorm(100, 1), rnorm(100, 5)),
@@ -48,7 +48,7 @@ test_that("sw_run_dimred PCA runs on synthetic data", {
     batch = rep(c("B1", "B2"), each = 100)
   )
 
-  result <- sw_run_dimred(df, markers = c("CD3", "CD4", "CD8"),
+  result <- sw_dimred_run(df, markers = c("CD3", "CD4", "CD8"),
                           method = "pca", seed = 42)
 
   expect_s3_class(result, "tbl_df")
@@ -60,23 +60,23 @@ test_that("sw_run_dimred PCA runs on synthetic data", {
   expect_equal(length(attr(result, "variance_explained")), 2)
 })
 
-test_that("sw_run_dimred PCA subsamples large data", {
+test_that("sw_dimred_run PCA subsamples large data", {
   set.seed(42)
   df <- tibble::tibble(
     CD3 = rnorm(500),
     CD4 = rnorm(500)
   )
 
-  result <- sw_run_dimred(df, markers = c("CD3", "CD4"),
+  result <- sw_dimred_run(df, markers = c("CD3", "CD4"),
                           method = "pca", max_cells = 100, seed = 42)
   expect_equal(nrow(result), 100)
 })
 
 # =========================================================================
-# sw_run_dimred — UMAP integration
+# sw_dimred_run — UMAP integration
 # =========================================================================
 
-test_that("sw_run_dimred UMAP runs on synthetic data", {
+test_that("sw_dimred_run UMAP runs on synthetic data", {
   skip_if_not_installed("uwot")
 
   set.seed(42)
@@ -87,7 +87,7 @@ test_that("sw_run_dimred UMAP runs on synthetic data", {
     cluster = rep(c(1L, 2L), each = 100)
   )
 
-  result <- sw_run_dimred(df, markers = c("CD3", "CD4", "CD8"),
+  result <- sw_dimred_run(df, markers = c("CD3", "CD4", "CD8"),
                           method = "umap", seed = 42)
 
   expect_s3_class(result, "tbl_df")

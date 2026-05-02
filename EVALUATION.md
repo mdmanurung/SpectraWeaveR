@@ -14,8 +14,8 @@
 - **Excellent input validation** (~256 stop/warning calls across 11 files). Every exported function validates argument types, ranges, and column existence upfront. Consistent `call. = FALSE` pattern avoids confusing internal call stack pollution in error messages.
 - **Well-organized code**: Clear `sw_*` prefix naming convention for all 80+ exported functions, internal helpers prefixed with `.` (e.g., `.check_cycombine()`, `.extract_marker_matrix()`), modular file structure grouping functions logically.
 - **Comprehensive roxygen documentation**: All exported functions have `@param`, `@return`, `@details` sections with cross-references via `\code{\link{...}}`.
-- **Dual-path workflows**: Both monolithic functions (`run_pipeline()`, `sw_batch_correct()`) and modular step-by-step alternatives, plus S7 composable pipeline framework for advanced users.
-- **Modern R practices**: S7/R7 classes for composable pipeline, tibble-based data flow, proper `on.exit()` cleanup, explicit `.Random.seed` save/restore in `sw_aggregate_and_sample()`.
+- **Dual-path workflows**: Both monolithic functions (`sw_pipeline_run_all()`, `sw_correct_run()`) and modular step-by-step alternatives, plus S7 composable pipeline framework for advanced users.
+- **Modern R practices**: S7/R7 classes for composable pipeline, tibble-based data flow, proper `on.exit()` cleanup, explicit `.Random.seed` save/restore in `sw_io_subsample()`.
 - **Robust dependency management**: `requireNamespace(..., quietly = TRUE)` checks with helpful installation instructions for all optional packages (AutoSpectral, FastPG, S7, ellmer).
 - **Reproducibility**: Explicit `set.seed()` calls with configurable seed parameters throughout batch correction and clustering.
 
@@ -23,10 +23,10 @@
 
 | Issue | File:Line | Severity | Details |
 |-------|-----------|----------|---------|
-| **Margin removal uses ALL channels** | `unmix.R:1136-1139` | **Medium** | When `channel_specs = NULL`, passes `seq_len(ncol(ff))` to `PeacoQC::RemoveMargins()`, which includes Time, Original_ID, and scatter channels. Should filter to signal-only channels via `sw_are_signal_cols()`. |
-| **Pipeline gating bypasses margin removal** | `pipeline.R:173-176` | **Medium** | When gating is enabled, `sw_gate()` re-reads FCS files from disk instead of using the already margin-removed `ff_list`. This means margin removal in Step 2 is effectively discarded. |
-| **EMD evaluation returns empty tibble** | `batch_correct.R:306` | **Low** | `sw_evaluate_correction()` always returns `emd = tibble::tibble()` — incomplete implementation. MAD-based evaluation works correctly, but the EMD component is a stub. |
-| **Hardcoded cofactor in gating** | `gate.R:132` | **Low** | Cofactor 6000 is hardcoded inside `sw_gate()` function body rather than exposed as a function parameter. Users cannot override without providing a custom `transform_func`. |
+| **Margin removal uses ALL channels** | `unmix.R:1136-1139` | **Medium** | When `channel_specs = NULL`, passes `seq_len(ncol(ff))` to `PeacoQC::RemoveMargins()`, which includes Time, Original_ID, and scatter channels. Should filter to signal-only channels via `sw_channel_is_signal()`. |
+| **Pipeline gating bypasses margin removal** | `pipeline.R:173-176` | **Medium** | When gating is enabled, `sw_gate_run()` re-reads FCS files from disk instead of using the already margin-removed `ff_list`. This means margin removal in Step 2 is effectively discarded. |
+| **EMD evaluation returns empty tibble** | `batch_correct.R:306` | **Low** | `sw_correct_evaluate_quick()` always returns `emd = tibble::tibble()` — incomplete implementation. MAD-based evaluation works correctly, but the EMD component is a stub. |
+| **Hardcoded cofactor in gating** | `gate.R:132` | **Low** | Cofactor 6000 is hardcoded inside `sw_gate_run()` function body rather than exposed as a function parameter. Users cannot override without providing a custom `transform_func`. |
 | **PDF device error risk** | `cluster.R:306-320` | **Low** | If `grDevices::pdf()` fails (e.g., write-protected directory), the `dev.off()` call in the `finally` block could error on the wrong graphics device. |
 
 ### Test Suite Assessment
@@ -47,10 +47,10 @@
 | pipeline | A | F (structural/input only) | **D** |
 
 **Critical test gaps**:
-- `run_pipeline()` has zero integration testing — only validates input arguments.
-- `sw_signal_qc()` never executes PeacoQC; only checks parameter ranges.
-- `sw_gate()` never applies gates to a flowSet; only validates template CSV structure.
-- `sw_estimate_scale_transforms()` / `sw_apply_scale_transforms()` never execute transformations.
+- `sw_pipeline_run_all()` has zero integration testing — only validates input arguments.
+- `sw_qc_run()` never executes PeacoQC; only checks parameter ranges.
+- `sw_gate_run()` never applies gates to a flowSet; only validates template CSV structure.
+- `sw_transform_estimate()` / `sw_transform_apply()` never execute transformations.
 
 ---
 
@@ -86,11 +86,11 @@ Key validations:
 
 ### Bioinformatics Concerns
 
-1. **QC on untransformed data when gating skipped**: If no gating template is provided in `run_pipeline()`, `sw_signal_qc()` receives untransformed data. PeacoQC still works on raw intensities, but this should be documented explicitly so users understand the behavior.
+1. **QC on untransformed data when gating skipped**: If no gating template is provided in `sw_pipeline_run_all()`, `sw_qc_run()` receives untransformed data. PeacoQC still works on raw intensities, but this should be documented explicitly so users understand the behavior.
 
-2. **Only "lymphocyte" gating template**: `sw_build_gating_template()` generates a single template type (nonDebris -> singlets -> lymphocytes via flowClust). Spectral panels frequently target myeloid, dendritic, or innate immune populations that need different gating hierarchies.
+2. **Only "lymphocyte" gating template**: `sw_gate_template()` generates a single template type (nonDebris -> singlets -> lymphocytes via flowClust). Spectral panels frequently target myeloid, dendritic, or innate immune populations that need different gating hierarchies.
 
-3. **Pipeline gating re-reads from disk** (see bug above): When gating is enabled, the margin-removed flowFrames from Step 2 are discarded because `sw_gate()` reads fresh FCS files. This means margin removal is bypassed for gated data — a bioinformatics concern since saturated events could persist through gating into downstream analysis.
+3. **Pipeline gating re-reads from disk** (see bug above): When gating is enabled, the margin-removed flowFrames from Step 2 are discarded because `sw_gate_run()` reads fresh FCS files. This means margin removal is bypassed for gated data — a bioinformatics concern since saturated events could persist through gating into downstream analysis.
 
 ---
 
@@ -100,7 +100,7 @@ Key validations:
 
 #### 1. Unmixing Quality Diagnostics
 - **New file**: `R/unmix_diagnostics.R`
-- **Functions**: `sw_unmixing_quality()`, `sw_spillover_spreading_matrix()`, `sw_plot_ssm()`
+- **Functions**: `sw_unmix_quality()`, `sw_unmix_spillover_matrix()`, `sw_plot_spillover_matrix()`
 - **Rationale**: The spillover spreading matrix (SSM) is the standard metric for evaluating spectral unmixing quality (Nguyen et al. 2013). With 40+ color panels, fluorochrome choice directly impacts data quality, yet the package provides no way to assess unmixing performance. This would calculate per-channel spreading coefficients from single-stain controls and visualize them as a heatmap, enabling users to identify problematic fluorochrome combinations.
 - **Leverages**: flowCore expression matrices, custom SSM calculation
 - **Complexity**: Medium
@@ -114,14 +114,14 @@ Key validations:
 
 #### 3. Differential Abundance and Expression Analysis
 - **New file**: `R/differential.R`
-- **Functions**: `sw_differential_abundance()`, `sw_differential_expression()`, `sw_plot_volcano()`, `sw_plot_boxplots()`
+- **Functions**: `sw_diff_abundance()`, `sw_diff_expression()`, `sw_plot_volcano()`, `sw_plot_boxplots()`
 - **Rationale**: After clustering, the natural next question is "which populations differ between conditions?" This is the most common downstream analysis in spectral flow cytometry and currently requires leaving the package entirely. GLM-based abundance testing and per-cluster median expression comparison would complete the analysis workflow.
 - **Leverages**: edgeR/diffcyt for GLM-based abundance testing, limma for expression, or simpler Wilcoxon/KS tests
 - **Complexity**: Medium-High
 
 #### 4. Automated Cell Type Annotation
 - **New file**: `R/annotate.R`
-- **Functions**: `sw_annotate_clusters()`, `sw_plot_annotation()`, `sw_marker_expression_summary()`
+- **Functions**: `sw_annotate_run()`, `sw_plot_annotation()`, `sw_marker_expression_summary()`
 - **Rationale**: Manually annotating 20+ metaclusters by inspecting MFI heatmaps is tedious and error-prone. Reference-based annotation using known marker expression profiles (e.g., CD3+CD4+ = T helper cells) would dramatically improve usability. Particularly valuable for spectral panels where 40+ markers enable fine-grained phenotyping that's hard to do manually.
 - **Leverages**: Marker-based scoring with positive/negative thresholds per lineage, or integration with scGate-style reference profiles
 - **Complexity**: Medium-High
@@ -150,9 +150,9 @@ Key validations:
 - **Complexity**: High (requires reference spectra database)
 
 #### 8. Complete EMD Implementation
-- **Functions**: Fix `sw_evaluate_correction()` to compute actual Earth Mover's Distance values; add `sw_plot_emd_heatmap()`
+- **Functions**: Fix `sw_correct_evaluate_quick()` to compute actual Earth Mover's Distance values; add `sw_plot_emd_heatmap()`
 - **Rationale**: EMD is the gold-standard metric for batch effect quantification in cytometry. The current stub returns an empty tibble. Completing this would provide proper before/after batch correction comparison alongside the existing MAD metrics.
-- **Leverages**: Already partially implemented via `sw_compute_emd()` / cyCombine's `evaluate_emd()`
+- **Leverages**: Already partially implemented via `sw_correct_emd()` / cyCombine's `evaluate_emd()`
 - **Complexity**: Low
 
 ### LOW Priority (Novel Features)
@@ -168,7 +168,7 @@ Key validations:
 - **Complexity**: Medium
 
 #### 11. Additional Gating Templates
-- **Functions**: Extend `sw_build_gating_template()` with types: `"myeloid"`, `"dendritic"`, `"nk_cell"`, `"treg"`, `"full_immune"`
+- **Functions**: Extend `sw_gate_template()` with types: `"myeloid"`, `"dendritic"`, `"nk_cell"`, `"treg"`, `"full_immune"`
 - **Rationale**: The single "lymphocyte" template limits usability. Pre-built templates for common immunophenotyping panels would help users get started faster and reduce gating errors.
 - **Complexity**: Low per template (but requires domain expertise for each)
 

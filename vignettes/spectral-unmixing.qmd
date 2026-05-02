@@ -34,11 +34,11 @@ example dataset from the
 
 | Function | Purpose | AutoSpectral functions wrapped |
 |---|---|---|
-| `sw_autospectral_setup()` | Initialize parameters, create/validate control file | `get.autospectral.param()`, `create.control.file()`, `check.control.file()` |
-| `sw_prepare_controls()` | Gate, clean, extract fluorophore spectra | `define.flow.control()`, `clean.controls()`, `get.fluorophore.spectra()` |
-| `sw_extract_af_spectra()` | Per-cell autofluorescence extraction | `get.af.spectra()` |
-| `sw_extract_spectral_variants()` | Map fluorophore emission variability | `get.spectral.variants()` |
-| `sw_unmix()` | Unmix fully-stained samples | `unmix.fcs()`, `unmix.folder()` |
+| `sw_unmix_setup()` | Initialize parameters, create/validate control file | `get.autospectral.param()`, `create.control.file()`, `check.control.file()` |
+| `sw_unmix_prepare()` | Gate, clean, extract fluorophore spectra | `define.flow.control()`, `clean.controls()`, `get.fluorophore.spectra()` |
+| `sw_unmix_extract_af()` | Per-cell autofluorescence extraction | `get.af.spectra()` |
+| `sw_unmix_extract_variants()` | Map fluorophore emission variability | `get.spectral.variants()` |
+| `sw_unmix_run()` | Unmix fully-stained samples | `unmix.fcs()`, `unmix.folder()` |
 | `sw_unmix_pipeline()` | One-call end-to-end orchestrator | All of the above |
 
 ## Prerequisites
@@ -94,7 +94,7 @@ base_dir <- "~/AutoSpectral_data"
 
 ## Step-by-step workflow
 
-### Step 1: Setup — `sw_autospectral_setup()`
+### Step 1: Setup — `sw_unmix_setup()`
 
 Initialize AutoSpectral parameters for your cytometer and create (or
 validate) the control definition CSV file.
@@ -107,7 +107,7 @@ library(SpectraWeaveR)
 control_dir <- file.path(base_dir, "Raw", "Set1", "Reference Group")
 
 # Initialize setup for the Cytek Aurora
-setup <- sw_autospectral_setup(
+setup <- sw_unmix_setup(
   control_dir = control_dir,
   cytometer    = "aurora",
   output_dir   = "unmix_output"
@@ -125,7 +125,7 @@ The example dataset includes a pre-filled control file. To use it:
 #| label: step1-existing-csv
 control_file <- file.path(base_dir, "fcs_control_file.csv")
 
-setup <- sw_autospectral_setup(
+setup <- sw_unmix_setup(
   control_dir  = control_dir,
   cytometer    = "aurora",
   control_file = control_file,
@@ -140,14 +140,14 @@ directory. Pass it to all subsequent functions.
 **Supported cytometers:** `"aurora"` (default), `"auroraNL"`, `"id7000"`,
 `"s8"`, `"a8"`, `"a5se"`, `"opteon"`, `"mosaic"`, `"xenith"`.
 
-### Step 2: Prepare controls — `sw_prepare_controls()`
+### Step 2: Prepare controls — `sw_unmix_prepare()`
 
 Load the control FCS files, apply automated gating, clean the controls,
 and extract the fluorophore spectral signatures.
 
 ```{r}
 #| label: step2-controls
-controls <- sw_prepare_controls(
+controls <- sw_unmix_prepare(
   setup         = setup,
   gating_system = "landmarks",  # or "density"
   clean         = TRUE,         # remove AF intrusions, universal negatives
@@ -174,13 +174,13 @@ my_gates <- AutoSpectral::define.gate.landmarks(
   control_dir, setup$control_file, setup$asp
 )
 
-controls <- sw_prepare_controls(
+controls <- sw_unmix_prepare(
   setup     = setup,
   gate_list = my_gates  # use pre-defined gates
 )
 ```
 
-### Step 3: Extract autofluorescence spectra — `sw_extract_af_spectra()`
+### Step 3: Extract autofluorescence spectra — `sw_unmix_extract_af()`
 
 Capture per-cell autofluorescence variation from unstained samples using
 Self-Organizing Map (SOM) clustering. This is what gives AutoSpectral its
@@ -194,7 +194,7 @@ autofluorescence profiles, we extract AF spectra from each:
 #| label: step3-af-multi
 unstained_dir <- file.path(base_dir, "Raw", "Set1", "Unstained")
 
-af_spectra <- sw_extract_af_spectra(
+af_spectra <- sw_unmix_extract_af(
   unstained_fcs = list(
     spleen = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
     lung   = file.path(unstained_dir, "D2 Lung_Set1.fcs"),
@@ -215,7 +215,7 @@ instead of a list:
 
 ```{r}
 #| label: step3-af-single
-af_spectra_single <- sw_extract_af_spectra(
+af_spectra_single <- sw_unmix_extract_af(
   unstained_fcs = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
   setup         = setup,
   spectra       = controls$spectra,
@@ -227,7 +227,7 @@ dim(af_spectra_single)
 #> [1] 100  64   # 100 AF clusters across 64 detectors
 ```
 
-### Step 4: Extract spectral variants — `sw_extract_spectral_variants()`
+### Step 4: Extract spectral variants — `sw_unmix_extract_variants()`
 
 Map fluorophore emission variability from single-stain controls. This
 captures spectral variation (e.g., tandem dye degradation) that enables
@@ -242,7 +242,7 @@ were prepared from.
 
 ```{r}
 #| label: step4-variants
-variants <- sw_extract_spectral_variants(
+variants <- sw_unmix_extract_variants(
   setup      = setup,
   spectra    = controls$spectra,
   af_spectra = af_spectra$spleen,  # match AF to control tissue
@@ -258,7 +258,7 @@ variants <- sw_extract_spectral_variants(
 # - variants$delta.norms  : pre-computed delta norms
 ```
 
-### Step 5: Unmix samples — `sw_unmix()`
+### Step 5: Unmix samples — `sw_unmix_run()`
 
 Perform spectral unmixing on your fully-stained experimental FCS files.
 For multi-tissue experiments, unmix each tissue separately with its
@@ -269,7 +269,7 @@ matched AF spectra.
 stained_dir <- file.path(base_dir, "Raw", "Set1", "Stained")
 
 # Unmix spleen samples with spleen AF
-spleen_result <- sw_unmix(
+spleen_result <- sw_unmix_run(
   input            = file.path(stained_dir, "D4 Spleen_Set1.fcs"),
   spectra          = controls$spectra,
   setup            = setup,
@@ -282,7 +282,7 @@ spleen_result <- sw_unmix(
 )
 
 # Unmix lung samples with lung AF
-lung_result <- sw_unmix(
+lung_result <- sw_unmix_run(
   input            = file.path(stained_dir, "D5 Lung_Set1.fcs"),
   spectra          = controls$spectra,
   setup            = setup,
@@ -295,7 +295,7 @@ lung_result <- sw_unmix(
 )
 
 # Unmix liver samples with liver AF
-liver_result <- sw_unmix(
+liver_result <- sw_unmix_run(
   input            = file.path(stained_dir, "D6 Liver_Set1.fcs"),
   spectra          = controls$spectra,
   setup            = setup,
@@ -317,13 +317,13 @@ The `input` parameter is flexible:
 ```{r}
 #| label: step5-input-types
 # A directory — unmixes all FCS files in it
-result <- sw_unmix(input = stained_dir, ...)
+result <- sw_unmix_run(input = stained_dir, ...)
 
 # A single file
-result <- sw_unmix(input = file.path(stained_dir, "D4 Spleen_Set1.fcs"), ...)
+result <- sw_unmix_run(input = file.path(stained_dir, "D4 Spleen_Set1.fcs"), ...)
 
 # Multiple specific files
-result <- sw_unmix(
+result <- sw_unmix_run(
   input = c(
     file.path(stained_dir, "D4 Spleen_Set1.fcs"),
     file.path(stained_dir, "D5 Lung_Set1.fcs")
@@ -375,11 +375,11 @@ result$unmixed$output_files
 
 The pipeline:
 
-1. Calls `sw_autospectral_setup()` (Step 1)
-2. Calls `sw_prepare_controls()` (Step 2)
-3. Calls `sw_extract_af_spectra()` (Step 3) — skipped for OLS/WLS
-4. Calls `sw_extract_spectral_variants()` (Step 4) — skipped for OLS/WLS
-5. Calls `sw_unmix()` (Step 5)
+1. Calls `sw_unmix_setup()` (Step 1)
+2. Calls `sw_unmix_prepare()` (Step 2)
+3. Calls `sw_unmix_extract_af()` (Step 3) — skipped for OLS/WLS
+4. Calls `sw_unmix_extract_variants()` (Step 4) — skipped for OLS/WLS
+5. Calls `sw_unmix_run()` (Step 5)
 
 ### Simpler unmixing with OLS/WLS
 
@@ -407,26 +407,26 @@ the SpectraWeaveR pipeline (gating → QC → batch correction → clustering):
 ```{r}
 #| label: downstream
 # Load the unmixed files
-fs <- sw_load_unmixed(result$unmixed$output_dir)
+fs <- sw_io_load_unmixed(result$unmixed$output_dir)
 
 # Remove margin events (must be done BEFORE transformation)
 ff_list <- lapply(seq_along(fs), function(i) {
-  sw_remove_margins(fs[[i]])
+  sw_filter_margins(fs[[i]])
 })
 names(ff_list) <- flowCore::sampleNames(fs)
 
 # Continue with the rest of the pipeline...
-# sw_signal_qc_batch(ff_list, ...)
-# sw_batch_correct(...)
-# sw_cluster(...)
+# sw_qc_batch(ff_list, ...)
+# sw_correct_run(...)
+# sw_cluster_run(...)
 ```
 
-Or use `run_pipeline()` with `unmix_from_raw = TRUE` to run everything
+Or use `sw_pipeline_run_all()` with `unmix_from_raw = TRUE` to run everything
 from raw spectral data through to clustering in a single call:
 
 ```{r}
 #| label: full-pipeline
-results <- run_pipeline(
+results <- sw_pipeline_run_all(
   fcs_dir         = file.path(base_dir, "Raw", "Set1", "Stained"),
   sample_meta     = sample_meta,
   markers         = markers,
@@ -453,16 +453,16 @@ and matching it during unmixing.
 control_dir <- file.path(base_dir, "Raw", "Set1", "Reference Group")
 control_file <- file.path(base_dir, "fcs_control_file.csv")
 
-setup <- sw_autospectral_setup(
+setup <- sw_unmix_setup(
   control_dir  = control_dir,
   cytometer    = "aurora",
   control_file = control_file
 )
-controls <- sw_prepare_controls(setup)
+controls <- sw_unmix_prepare(setup)
 
 # Step 3: Extract tissue-specific AF from each unstained sample
 unstained_dir <- file.path(base_dir, "Raw", "Set1", "Unstained")
-af_spectra <- sw_extract_af_spectra(
+af_spectra <- sw_unmix_extract_af(
   unstained_fcs = list(
     spleen = file.path(unstained_dir, "D1 Spleen_Set1.fcs"),
     lung   = file.path(unstained_dir, "D2 Lung_Set1.fcs"),
@@ -474,7 +474,7 @@ af_spectra <- sw_extract_af_spectra(
 )
 
 # Step 4: Extract variants using spleen AF (controls are from spleen)
-variants <- sw_extract_spectral_variants(
+variants <- sw_unmix_extract_variants(
   setup      = setup,
   spectra    = controls$spectra,
   af_spectra = af_spectra$spleen
@@ -483,7 +483,7 @@ variants <- sw_extract_spectral_variants(
 # Step 5: Unmix each tissue with its matched AF spectra
 stained_dir <- file.path(base_dir, "Raw", "Set1", "Stained")
 
-spleen_result <- sw_unmix(
+spleen_result <- sw_unmix_run(
   input        = file.path(stained_dir, "D4 Spleen_Set1.fcs"),
   spectra      = controls$spectra,
   setup        = setup,
@@ -492,7 +492,7 @@ spleen_result <- sw_unmix(
   spectra_variants = variants
 )
 
-lung_result <- sw_unmix(
+lung_result <- sw_unmix_run(
   input        = file.path(stained_dir, "D5 Lung_Set1.fcs"),
   spectra      = controls$spectra,
   setup        = setup,
@@ -501,7 +501,7 @@ lung_result <- sw_unmix(
   spectra_variants = variants
 )
 
-liver_result <- sw_unmix(
+liver_result <- sw_unmix_run(
   input        = file.path(stained_dir, "D6 Liver_Set1.fcs"),
   spectra      = controls$spectra,
   setup        = setup,
@@ -519,7 +519,7 @@ liver_result <- sw_unmix(
   AF extraction and unmixing.
 - Use `parallel = TRUE` and set `threads` to the number of available
   cores for large experiments.
-- The `speed` parameter in `sw_unmix()` controls the precision-speed
+- The `speed` parameter in `sw_unmix_run()` controls the precision-speed
   trade-off: `"fast"` tests 1 variant per cell, `"medium"` tests 3, and
   `"slow"` tests 10.
 - Adjust `chunk_size` (default `2e6`) for memory management on

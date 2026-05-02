@@ -46,7 +46,7 @@ The assistant:
 1. Asks about your experiment (cytometer, samples, batches)
 2. Inspects your FCS files and metadata using registered tools
 3. Helps select markers and configure pipeline parameters
-4. Generates runnable R code using `run_pipeline()` or `sw_pipeline()`
+4. Generates runnable R code using `sw_pipeline_run_all()` or `sw_pipeline()`
 
 **Privacy**: File paths, directory listings, and column names are sent to the
 LLM provider. No cell expression data is transmitted. Use `provider = "ollama"`
@@ -140,16 +140,16 @@ sw_assistant_unmixing(
 
 ---
 
-## `sw_generate_pipeline_code` {#sw_generate_pipeline_code}
+## `sw_pipeline_generate_code` {#sw_pipeline_generate_code}
 
 Generate runnable R code from a pipeline configuration.
 
 ### Usage
 
 ```r
-sw_generate_pipeline_code(
+sw_pipeline_generate_code(
   config,
-  style = c("run_pipeline", "composable"),
+  style = c("sw_pipeline_run_all", "composable"),
   output = c("console", "string", "file"),
   path = NULL
 )
@@ -160,7 +160,7 @@ sw_generate_pipeline_code(
 | Argument | Description |
 |----------|-------------|
 | `config` | Named list with pipeline configuration (see below). |
-| `style` | `"run_pipeline"` (default) or `"composable"` for `sw_pipeline()` style. |
+| `style` | `"sw_pipeline_run_all"` (default) or `"composable"` for `sw_pipeline()` style. |
 | `output` | `"console"` (print), `"string"` (return), or `"file"` (write to `path`). |
 | `path` | File path when `output = "file"`. |
 
@@ -201,28 +201,28 @@ config <- list(
 )
 
 # Print to console
-sw_generate_pipeline_code(config)
+sw_pipeline_generate_code(config)
 
 # Get as string
-code <- sw_generate_pipeline_code(config, output = "string")
+code <- sw_pipeline_generate_code(config, output = "string")
 
 # Composable style
-sw_generate_pipeline_code(config, style = "composable")
+sw_pipeline_generate_code(config, style = "composable")
 
 # Save to file
-sw_generate_pipeline_code(config, output = "file", path = "my_pipeline.R")
+sw_pipeline_generate_code(config, output = "file", path = "my_pipeline.R")
 ```
 
 ---
 
-## `sw_quick_pipeline` {#sw_quick_pipeline}
+## `sw_pipeline_quick` {#sw_pipeline_quick}
 
 Generate pipeline code from a natural language description (one-shot).
 
 ### Usage
 
 ```r
-sw_quick_pipeline(description, provider = "openai", model = NULL, ...)
+sw_pipeline_quick(description, provider = "openai", model = NULL, ...)
 ```
 
 ### Arguments
@@ -237,7 +237,7 @@ sw_quick_pipeline(description, provider = "openai", model = NULL, ...)
 ### Examples
 
 ```r
-code <- sw_quick_pipeline(
+code <- sw_pipeline_quick(
   description = "I have 20 Aurora 5L FCS files in /data/fcs/,
     metadata in /data/meta.csv with columns filename, patient_id,
     batch_number, treatment. Markers: CD3, CD4, CD8, CD19, CD56.
@@ -275,12 +275,12 @@ config <- chat$chat_structured(
   "Extract the pipeline configuration from our conversation.",
   type = config_type
 )
-sw_generate_pipeline_code(config)
+sw_pipeline_generate_code(config)
 ```
 
 ---
 
-## `sw_mcp_server` {#sw_mcp_server}
+## `sw_assistant_mcp` {#sw_assistant_mcp}
 
 Start an MCP server exposing SpectraWeaveR tools to external AI
 applications (Claude Code, VS Code Copilot, Cursor).
@@ -288,7 +288,7 @@ applications (Claude Code, VS Code Copilot, Cursor).
 ### Usage
 
 ```r
-sw_mcp_server(include_btw = TRUE, sensitivity = c("standard", "strict"))
+sw_assistant_mcp(include_btw = TRUE, sensitivity = c("standard", "strict"))
 ```
 
 ### Arguments
@@ -304,7 +304,7 @@ sw_mcp_server(include_btw = TRUE, sensitivity = c("standard", "strict"))
 
 ```bash
 claude mcp add -s user spectraweaver -- \
-  Rscript -e "SpectraWeaveR::sw_mcp_server()"
+  Rscript -e "SpectraWeaveR::sw_assistant_mcp()"
 ```
 
 **VS Code (`.vscode/mcp.json`):**
@@ -314,7 +314,7 @@ claude mcp add -s user spectraweaver -- \
   "mcpServers": {
     "spectraweaver": {
       "command": "Rscript",
-      "args": ["-e", "SpectraWeaveR::sw_mcp_server()"]
+      "args": ["-e", "SpectraWeaveR::sw_assistant_mcp()"]
     }
   }
 }

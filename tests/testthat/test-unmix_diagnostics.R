@@ -2,35 +2,35 @@
 # Unit and integration tests for R/unmix_diagnostics.R
 
 # =========================================================================
-# sw_spillover_spreading_matrix — input validation
+# sw_unmix_spillover_matrix — input validation
 # =========================================================================
 
-test_that("sw_spillover_spreading_matrix rejects non-matrix input", {
+test_that("sw_unmix_spillover_matrix rejects non-matrix input", {
   expect_error(
-    sw_spillover_spreading_matrix(data.frame(a = 1:3, b = 4:6)),
+    sw_unmix_spillover_matrix(data.frame(a = 1:3, b = 4:6)),
     "numeric matrix"
   )
 })
 
-test_that("sw_spillover_spreading_matrix rejects matrix without row names", {
+test_that("sw_unmix_spillover_matrix rejects matrix without row names", {
   mat <- matrix(rnorm(12), nrow = 3, ncol = 4)
   expect_error(
-    sw_spillover_spreading_matrix(mat),
+    sw_unmix_spillover_matrix(mat),
     "row names"
   )
 })
 
-test_that("sw_spillover_spreading_matrix rejects single-row matrix", {
+test_that("sw_unmix_spillover_matrix rejects single-row matrix", {
   mat <- matrix(rnorm(4), nrow = 1,
                 dimnames = list("BV421", paste0("D", 1:4)))
   expect_error(
-    sw_spillover_spreading_matrix(mat),
+    sw_unmix_spillover_matrix(mat),
     "at least 2 rows"
   )
 })
 
 # =========================================================================
-# sw_spillover_spreading_matrix — integration
+# sw_unmix_spillover_matrix — integration
 # =========================================================================
 
 test_that("SSM computation produces correct structure", {
@@ -46,7 +46,7 @@ test_that("SSM computation produces correct structure", {
                     paste0("D", 1:6))
   )
 
-  result <- sw_spillover_spreading_matrix(spectra)
+  result <- sw_unmix_spillover_matrix(spectra)
 
   expect_s3_class(result, "sw_ssm")
   expect_true(is.matrix(result$matrix))
@@ -76,7 +76,7 @@ test_that("Orthogonal spectra produce zero spreading", {
   rownames(spectra) <- c("F1", "F2", "F3", "F4")
   colnames(spectra) <- paste0("D", 1:4)
 
-  result <- sw_spillover_spreading_matrix(spectra)
+  result <- sw_unmix_spillover_matrix(spectra)
 
   # All off-diagonal should be 0
   expect_true(all(result$matrix == 0))
@@ -90,7 +90,7 @@ test_that("Identical spectra produce maximum spreading", {
                     nrow = 2, byrow = TRUE,
                     dimnames = list(c("F1", "F2"), paste0("D", 1:3)))
 
-  result <- sw_spillover_spreading_matrix(spectra)
+  result <- sw_unmix_spillover_matrix(spectra)
 
   # SSM[1,2] and SSM[2,1] should be ~1
   expect_equal(result$matrix[1, 2], 1.0, tolerance = 1e-10)
@@ -120,21 +120,21 @@ test_that("SSM with unmixed flowFrame incorporates empirical data", {
   )
   ff <- flowCore::flowFrame(mat)
 
-  result <- sw_spillover_spreading_matrix(spectra, unmixed_ff = ff)
+  result <- sw_unmix_spillover_matrix(spectra, unmixed_ff = ff)
   expect_s3_class(result, "sw_ssm")
   expect_equal(nrow(result$matrix), 3)
 })
 
 # =========================================================================
-# sw_plot_ssm — input validation
+# sw_plot_spillover_matrix — input validation
 # =========================================================================
 
-test_that("sw_plot_ssm rejects non-sw_ssm input", {
-  expect_error(sw_plot_ssm(list(matrix = diag(3))),
+test_that("sw_plot_spillover_matrix rejects non-sw_ssm input", {
+  expect_error(sw_plot_spillover_matrix(list(matrix = diag(3))),
                "sw_ssm")
 })
 
-test_that("sw_plot_ssm runs without error", {
+test_that("sw_plot_spillover_matrix runs without error", {
   spectra <- matrix(
     c(1.0, 0.1, 0.0,
       0.1, 1.0, 0.3,
@@ -142,46 +142,46 @@ test_that("sw_plot_ssm runs without error", {
     nrow = 3, byrow = TRUE,
     dimnames = list(c("F1", "F2", "F3"), paste0("D", 1:3))
   )
-  ssm <- sw_spillover_spreading_matrix(spectra)
+  ssm <- sw_unmix_spillover_matrix(spectra)
 
   # Plot to temp PDF
   tmp_pdf <- tempfile(fileext = ".pdf")
   on.exit(unlink(tmp_pdf))
 
-  expect_silent(sw_plot_ssm(ssm, plot_file = tmp_pdf))
+  expect_silent(sw_plot_spillover_matrix(ssm, plot_file = tmp_pdf))
   expect_true(file.exists(tmp_pdf))
 })
 
 # =========================================================================
-# sw_unmixing_quality — input validation
+# sw_unmix_quality — input validation
 # =========================================================================
 
-test_that("sw_unmixing_quality rejects non-flowFrame", {
+test_that("sw_unmix_quality rejects non-flowFrame", {
   skip_if_not_installed("flowCore")
-  expect_error(sw_unmixing_quality(data.frame(x = 1)), "flowFrame")
+  expect_error(sw_unmix_quality(data.frame(x = 1)), "flowFrame")
 })
 
-test_that("sw_unmixing_quality rejects invalid cv_threshold", {
-  skip_if_not_installed("flowCore")
-  mat <- matrix(rnorm(200), ncol = 2,
-                dimnames = list(NULL, c("BV421-A", "PE-A")))
-  ff <- flowCore::flowFrame(mat)
-  expect_error(sw_unmixing_quality(ff, cv_threshold = -1), "positive number")
-})
-
-test_that("sw_unmixing_quality rejects missing channels", {
+test_that("sw_unmix_quality rejects invalid cv_threshold", {
   skip_if_not_installed("flowCore")
   mat <- matrix(rnorm(200), ncol = 2,
                 dimnames = list(NULL, c("BV421-A", "PE-A")))
   ff <- flowCore::flowFrame(mat)
-  expect_error(sw_unmixing_quality(ff, channels = "MISSING"), "not found")
+  expect_error(sw_unmix_quality(ff, cv_threshold = -1), "positive number")
+})
+
+test_that("sw_unmix_quality rejects missing channels", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(200), ncol = 2,
+                dimnames = list(NULL, c("BV421-A", "PE-A")))
+  ff <- flowCore::flowFrame(mat)
+  expect_error(sw_unmix_quality(ff, channels = "MISSING"), "not found")
 })
 
 # =========================================================================
-# sw_unmixing_quality — integration
+# sw_unmix_quality — integration
 # =========================================================================
 
-test_that("sw_unmixing_quality computes per-channel metrics", {
+test_that("sw_unmix_quality computes per-channel metrics", {
   skip_if_not_installed("flowCore")
 
   set.seed(42)
@@ -195,7 +195,7 @@ test_that("sw_unmixing_quality computes per-channel metrics", {
   )
   ff <- flowCore::flowFrame(mat)
 
-  result <- sw_unmixing_quality(ff, channels = c("BV421-A", "PE-A"),
+  result <- sw_unmix_quality(ff, channels = c("BV421-A", "PE-A"),
                                 cv_threshold = 0.5)
 
   expect_s3_class(result, "tbl_df")

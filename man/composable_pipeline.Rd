@@ -57,7 +57,7 @@ provide a full audit trail.
 \item \strong{singletsGate()}: Standalone singlet gate via parallelogram
 method. Lightweight alternative to full openCyto gating.
 \item \strong{Channel classification (areSignalCols/areFluoCols)}:
-SpectraWeaveR's sw_get_fluor_channels uses regex; CytoPipeline's
+SpectraWeaveR's sw_channel_get_fluor uses regex; CytoPipeline's
 approach inspects flowFrame metadata for more robust detection.
 \item \strong{Pipeline visualization (plotCytoPipelineProcessingQueue)}:
 Render a flowchart of processing steps. Would be valuable for

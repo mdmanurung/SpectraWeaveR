@@ -3,7 +3,7 @@
 #' @description
 #' Optional execution backend that runs a [`sw_pipeline()`][sw_pipeline] through
 #' the [`targets`](https://docs.ropensci.org/targets/) package. Each
-#' [`sw_step()`][sw_step] in the pipeline is translated to a single
+#' [`sw_pipeline_step()`][sw_pipeline_step] in the pipeline is translated to a single
 #' `targets::tar_target()` so that:
 #' \itemize{
 #'   \item reruns automatically skip steps whose definitions have not changed,
@@ -133,7 +133,7 @@ NULL
               sym, q(def_path)),
       sprintf("  targets::tar_target(%s_def, readRDS(%s_def_path)),",
               sym, sym),
-      sprintf("  targets::tar_target(%s, SpectraWeaveR::execute_step(%s_def, %s))%s",
+      sprintf("  targets::tar_target(%s, SpectraWeaveR::sw_pipeline_step_run(%s_def, %s))%s",
               sym, sym, prev_sym, sep),
       ""
     )
@@ -161,8 +161,8 @@ NULL
 #' the supporting RDS files that the script reads. Nothing is executed; this
 #' is purely a side-effect function.
 #'
-#' Each [`sw_step()`][sw_step] becomes a single `targets::tar_target()` whose
-#' body calls [`execute_step()`] on the deserialised step definition. Step
+#' Each [`sw_pipeline_step()`][sw_pipeline_step] becomes a single `targets::tar_target()` whose
+#' body calls [`sw_pipeline_step_run()`] on the deserialised step definition. Step
 #' definitions are tracked via `format = "file"` targets so that mutating one
 #' step's `ARGS` invalidates only that step and its downstream descendants.
 #'
@@ -183,8 +183,8 @@ NULL
 #' @examples
 #' \dontrun{
 #' pip <- sw_pipeline("my_pipeline", steps = list(
-#'   sw_step("double", function(x) x * 2),
-#'   sw_step("add_one", function(x) x + 1)
+#'   sw_pipeline_step("double", function(x) x * 2),
+#'   sw_pipeline_step("add_one", function(x) x + 1)
 #' ))
 #' sw_pipeline_to_targets(pip, input = 5, script = tempfile())
 #' }

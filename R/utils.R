@@ -52,7 +52,7 @@ NULL
 #' @return A \code{flowFrame} (single file) or \code{flowSet} (multiple files).
 #'
 #' @export
-sw_read_fcs <- function(files, ...) {
+sw_io_read_fcs <- function(files, ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required. Install it from Bioconductor.",
          call. = FALSE)
@@ -97,12 +97,12 @@ sw_read_fcs <- function(files, ...) {
 #'   mat <- matrix(rnorm(30), ncol = 3,
 #'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   df <- sw_flowframe_to_tibble(ff, sample = "S1", batch = "B1")
+#'   df <- sw_io_ff_to_tibble(ff, sample = "S1", batch = "B1")
 #'   head(df)
 #' }
 #'
 #' @export
-sw_flowframe_to_tibble <- function(ff, sample = NULL, batch = NULL,
+sw_io_ff_to_tibble <- function(ff, sample = NULL, batch = NULL,
                                    condition = NULL) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
@@ -137,12 +137,12 @@ sw_flowframe_to_tibble <- function(ff, sample = NULL, batch = NULL,
 #' @examples
 #' if (requireNamespace("flowCore", quietly = TRUE)) {
 #'   df <- data.frame(CD3 = rnorm(10), CD4 = rnorm(10), label = letters[1:10])
-#'   ff <- sw_tibble_to_flowframe(df, markers = c("CD3", "CD4"))
+#'   ff <- sw_io_tibble_to_ff(df, markers = c("CD3", "CD4"))
 #'   flowCore::colnames(ff)
 #' }
 #'
 #' @export
-sw_tibble_to_flowframe <- function(df, markers = NULL) {
+sw_io_tibble_to_ff <- function(df, markers = NULL) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -180,10 +180,10 @@ sw_tibble_to_flowframe <- function(df, markers = NULL) {
 #'
 #' @examples
 #' mat <- matrix(rnorm(20), ncol = 2, dimnames = list(NULL, c("CD3", "CD4")))
-#' sw_exprs_to_tibble(mat, sample = "S1", batch = "B1")
+#' sw_io_exprs_to_tibble(mat, sample = "S1", batch = "B1")
 #'
 #' @export
-sw_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
+sw_io_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
                                batch = NULL, condition = NULL) {
   if (!is.matrix(mat) && !is.data.frame(mat)) {
     stop("'mat' must be a matrix or data.frame.", call. = FALSE)
@@ -215,7 +215,7 @@ sw_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
 #' @return Character vector of fluorescent channel names.
 #'
 #' @export
-sw_get_fluor_channels <- function(ff_or_fs) {
+sw_channel_get_fluor <- function(ff_or_fs) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -250,7 +250,7 @@ sw_get_fluor_channels <- function(ff_or_fs) {
 #' @return The modified \code{flowFrame} with updated marker names.
 #'
 #' @export
-sw_set_marker_names <- function(ff, marker_map) {
+sw_channel_set_markers <- function(ff, marker_map) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -304,11 +304,11 @@ sw_set_marker_names <- function(ff, marker_map) {
 #'   mat <- matrix(rnorm(40), ncol = 4,
 #'                 dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "Time")))
 #'   ff <- flowCore::flowFrame(mat)
-#'   sw_are_signal_cols(ff)
+#'   sw_channel_is_signal(ff)
 #' }
 #'
 #' @export
-sw_are_signal_cols <- function(x,
+sw_channel_is_signal <- function(x,
                                exclude_patterns = c(
                                  "Time", "Original_ID",
                                  "File", "SampleID"
@@ -339,7 +339,7 @@ sw_are_signal_cols <- function(x,
 #' Returns a logical vector indicating which columns of a \code{flowFrame}
 #' or \code{flowSet} represent fluorochrome channels (excludes scatter
 #' channels, time, and metadata in addition to the patterns excluded by
-#' \code{\link{sw_are_signal_cols}}).
+#' \code{\link{sw_channel_is_signal}}).
 #'
 #' Ported from CytoPipeline (UCLouvain-CBIO).
 #'
@@ -351,13 +351,13 @@ sw_are_signal_cols <- function(x,
 #' @return A named logical vector with length equal to \code{ncol(x)}.
 #'
 #' @export
-sw_are_fluor_cols <- function(x,
+sw_channel_is_fluor <- function(x,
                               exclude_patterns = c(
                                 "FSC", "SSC",
                                 "Time", "Original_ID",
                                 "File", "SampleID"
                               )) {
-  sw_are_signal_cols(x, exclude_patterns = exclude_patterns)
+  sw_channel_is_signal(x, exclude_patterns = exclude_patterns)
 }
 
 # ---------------------------------------------------------------------------
@@ -392,7 +392,7 @@ sw_are_fluor_cols <- function(x,
 #' @return A single \code{flowCore::flowFrame} with aggregated events.
 #'
 #' @export
-sw_aggregate_and_sample <- function(fs,
+sw_io_subsample <- function(fs,
                                     n_total_events,
                                     setup = c("forceNEvent", "forceBalance"),
                                     seed = NULL,
@@ -571,10 +571,10 @@ sw_aggregate_and_sample <- function(fs,
 #'   after_qc = 8500,
 #'   after_gating = data.frame(x = rnorm(6000))
 #' )
-#' sw_collect_events_retained(intermediates)
+#' sw_io_event_audit(intermediates)
 #'
 #' @export
-sw_collect_events_retained <- function(intermediates) {
+sw_io_event_audit <- function(intermediates) {
   if (!is.list(intermediates) || length(intermediates) == 0) {
     stop("'intermediates' must be a non-empty named list.", call. = FALSE)
   }

@@ -4,14 +4,14 @@ title: "Signal QC"
 
 Signal quality control with PeacoQC.
 
-## `sw_signal_qc` {#sw_signal_qc}
+## `sw_qc_run` {#sw_qc_run}
 
 Signal quality control on a single flowFrame.
 
 ### Usage
 
 ```r
-sw_signal_qc(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
+sw_qc_run(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
              output_dir = NULL, ...)
 ```
 
@@ -39,14 +39,14 @@ vector), `n_removed`, `pct_removed`.
 
 ---
 
-## `sw_signal_qc_batch` {#sw_signal_qc_batch}
+## `sw_qc_batch` {#sw_qc_batch}
 
 Batch signal quality control.
 
 ### Usage
 
 ```r
-sw_signal_qc_batch(ff_list, ...)
+sw_qc_batch(ff_list, ...)
 ```
 
 ### Arguments
@@ -54,11 +54,11 @@ sw_signal_qc_batch(ff_list, ...)
 | Argument | Description |
 |----------|-------------|
 | `ff_list` | A named list of `flowFrame` objects. |
-| `...` | Additional arguments passed to `sw_signal_qc()`. |
+| `...` | Additional arguments passed to `sw_qc_run()`. |
 
 ### Details
 
-Applies `sw_signal_qc()` to each flowFrame in the list and returns cleaned
+Applies `sw_qc_run()` to each flowFrame in the list and returns cleaned
 frames plus summary statistics.
 
 ### Value
@@ -82,7 +82,7 @@ sw_qc_summary(qc_results, threshold = 30)
 
 | Argument | Description |
 |----------|-------------|
-| `qc_results` | Output from `sw_signal_qc_batch()`. |
+| `qc_results` | Output from `sw_qc_batch()`. |
 | `threshold` | Percentage threshold for flagging high-removal samples (default: 30). |
 
 ### Details

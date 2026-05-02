@@ -5,14 +5,14 @@ title: "Spectral Unmixing"
 AutoSpectral-based spectral unmixing workflow — six step-by-step functions plus
 a one-call orchestrator.
 
-## `sw_autospectral_setup` {#sw_autospectral_setup}
+## `sw_unmix_setup` {#sw_unmix_setup}
 
 Initialize AutoSpectral parameters and control file.
 
 ### Usage
 
 ```r
-sw_autospectral_setup(
+sw_unmix_setup(
   control_dir,
   cytometer = "aurora",
   control_file = NULL,
@@ -44,14 +44,14 @@ parameters), `control_file`, `control_dir`.
 
 ---
 
-## `sw_prepare_controls` {#sw_prepare_controls}
+## `sw_unmix_prepare` {#sw_unmix_prepare}
 
 Gate, clean, and extract fluorophore spectra from single-stain controls.
 
 ### Usage
 
 ```r
-sw_prepare_controls(
+sw_unmix_prepare(
   setup,
   gating_system = c("landmarks", "density"),
   gate_list = NULL,
@@ -66,7 +66,7 @@ sw_prepare_controls(
 
 | Argument | Description |
 |----------|-------------|
-| `setup` | An `sw_setup` object from `sw_autospectral_setup()`. |
+| `setup` | An `sw_setup` object from `sw_unmix_setup()`. |
 | `gating_system` | Gating method: `"landmarks"` or `"density"`. |
 | `gate_list` | Optional pre-defined gates (e.g., from `AutoSpectral::define.gate.landmarks()`). |
 | `clean` | Logical; whether to clean controls (AF intrusions, universal negatives). |
@@ -87,14 +87,14 @@ A named list (class `sw_controls`) with components: `flow_control`, `spectra`,
 
 ---
 
-## `sw_extract_af_spectra` {#sw_extract_af_spectra}
+## `sw_unmix_extract_af` {#sw_unmix_extract_af}
 
 Extract per-cell autofluorescence spectra from unstained samples.
 
 ### Usage
 
 ```r
-sw_extract_af_spectra(
+sw_unmix_extract_af(
   unstained_fcs,
   setup,
   spectra,
@@ -111,7 +111,7 @@ sw_extract_af_spectra(
 |----------|-------------|
 | `unstained_fcs` | Path to a single unstained FCS file, or a named list of paths for multi-tissue experiments. |
 | `setup` | An `sw_setup` object. |
-| `spectra` | Fluorophore spectra matrix from `sw_prepare_controls()`. |
+| `spectra` | Fluorophore spectra matrix from `sw_unmix_prepare()`. |
 | `refine` | Logical; whether to perform second-pass refinement. |
 | `som_dim` | SOM grid dimension (creates `som_dim²` clusters). |
 | `parallel` | Logical; enable parallel processing. |
@@ -131,14 +131,14 @@ columns). If a named list: a named list of such matrices.
 
 ---
 
-## `sw_extract_spectral_variants` {#sw_extract_spectral_variants}
+## `sw_unmix_extract_variants` {#sw_unmix_extract_variants}
 
 Map fluorophore emission variability from single-stain controls.
 
 ### Usage
 
 ```r
-sw_extract_spectral_variants(
+sw_unmix_extract_variants(
   setup,
   spectra,
   af_spectra,
@@ -177,14 +177,14 @@ A list (class `sw_variants`) containing: `thresholds`, `variants`,
 
 ---
 
-## `sw_unmix` {#sw_unmix}
+## `sw_unmix_run` {#sw_unmix_run}
 
 Unmix spectral flow cytometry data.
 
 ### Usage
 
 ```r
-sw_unmix(
+sw_unmix_run(
   input,
   spectra,
   setup,
@@ -208,7 +208,7 @@ sw_unmix(
 | `input` | Path to an FCS file, a vector of file paths, or a directory path. |
 | `spectra` | Fluorophore spectra matrix. |
 | `setup` | An `sw_setup` object. |
-| `flow_control` | Flow control object from `sw_prepare_controls()`. |
+| `flow_control` | Flow control object from `sw_unmix_prepare()`. |
 | `method` | Unmixing method. |
 | `af_spectra` | AF spectra matrix (required for AutoSpectral/Automatic). |
 | `spectra_variants` | An `sw_variants` object (optional but recommended). |
@@ -289,14 +289,14 @@ A named list with all intermediate results: `setup`, `flow_control`,
 
 ---
 
-## `sw_load_unmixed` {#sw_load_unmixed}
+## `sw_io_load_unmixed` {#sw_io_load_unmixed}
 
 Load pre-unmixed FCS files.
 
 ### Usage
 
 ```r
-sw_load_unmixed(fcs_dir, pattern = "\\.fcs$", ...)
+sw_io_load_unmixed(fcs_dir, pattern = "\\.fcs$", ...)
 ```
 
 ### Arguments
@@ -318,14 +318,14 @@ A `flowSet` containing all matched FCS files.
 
 ---
 
-## `sw_remove_margins` {#sw_remove_margins}
+## `sw_filter_margins` {#sw_filter_margins}
 
 Remove margin events.
 
 ### Usage
 
 ```r
-sw_remove_margins(ff, channel_specs = NULL)
+sw_filter_margins(ff, channel_specs = NULL)
 ```
 
 ### Arguments

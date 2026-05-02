@@ -1,43 +1,43 @@
 # tests/testthat/test-qc.R
 # Unit tests for R/qc.R — Signal quality control (PeacoQC)
 
-test_that("sw_signal_qc rejects non-flowFrame input", {
+test_that("sw_qc_run rejects non-flowFrame input", {
   skip_if_not_installed("flowCore")
 
-  expect_error(sw_signal_qc(data.frame(x = 1)),
+  expect_error(sw_qc_run(data.frame(x = 1)),
                "flowFrame")
 })
 
-test_that("sw_signal_qc validates IT_limit range", {
+test_that("sw_qc_run validates IT_limit range", {
   skip_if_not_installed("flowCore")
 
   mat <- matrix(rnorm(100), ncol = 2,
                 dimnames = list(NULL, c("BV421-A", "PE-A")))
   ff <- flowCore::flowFrame(mat)
 
-  expect_error(sw_signal_qc(ff, IT_limit = 0), "between 0 and 1")
-  expect_error(sw_signal_qc(ff, IT_limit = 1), "between 0 and 1")
-  expect_error(sw_signal_qc(ff, IT_limit = -0.5), "between 0 and 1")
+  expect_error(sw_qc_run(ff, IT_limit = 0), "between 0 and 1")
+  expect_error(sw_qc_run(ff, IT_limit = 1), "between 0 and 1")
+  expect_error(sw_qc_run(ff, IT_limit = -0.5), "between 0 and 1")
 })
 
-test_that("sw_signal_qc validates MAD", {
+test_that("sw_qc_run validates MAD", {
   skip_if_not_installed("flowCore")
 
   mat <- matrix(rnorm(100), ncol = 2,
                 dimnames = list(NULL, c("BV421-A", "PE-A")))
   ff <- flowCore::flowFrame(mat)
 
-  expect_error(sw_signal_qc(ff, MAD = 0), "positive number")
-  expect_error(sw_signal_qc(ff, MAD = -1), "positive number")
+  expect_error(sw_qc_run(ff, MAD = 0), "positive number")
+  expect_error(sw_qc_run(ff, MAD = -1), "positive number")
 })
 
-test_that("sw_signal_qc_batch rejects empty list", {
-  expect_error(sw_signal_qc_batch(list()),
+test_that("sw_qc_batch rejects empty list", {
+  expect_error(sw_qc_batch(list()),
                "non-empty list")
 })
 
-test_that("sw_signal_qc_batch rejects non-list input", {
-  expect_error(sw_signal_qc_batch("not_a_list"),
+test_that("sw_qc_batch rejects non-list input", {
+  expect_error(sw_qc_batch("not_a_list"),
                "non-empty list")
 })
 
@@ -78,15 +78,15 @@ test_that("sw_qc_summary returns no warnings when all below threshold", {
 })
 
 test_that("sw_qc_summary rejects invalid input", {
-  expect_error(sw_qc_summary(list()), "output from sw_signal_qc_batch")
-  expect_error(sw_qc_summary("not_a_list"), "output from sw_signal_qc_batch")
+  expect_error(sw_qc_summary(list()), "output from sw_qc_batch")
+  expect_error(sw_qc_summary("not_a_list"), "output from sw_qc_batch")
 })
 
 # =========================================================================
 # Integration tests — actual PeacoQC execution
 # =========================================================================
 
-test_that("sw_signal_qc runs on synthetic flowFrame", {
+test_that("sw_qc_run runs on synthetic flowFrame", {
   skip_if_not_installed("PeacoQC")
   skip_if_not_installed("flowCore")
 
@@ -107,7 +107,7 @@ test_that("sw_signal_qc runs on synthetic flowFrame", {
   )
   ff <- flowCore::flowFrame(mat)
 
-  result <- sw_signal_qc(ff, channels = c("BV421-A", "PE-A"))
+  result <- sw_qc_run(ff, channels = c("BV421-A", "PE-A"))
 
   expect_true(methods::is(result$FinalFF, "flowFrame"))
   expect_true(is.logical(result$GoodCells))
@@ -117,7 +117,7 @@ test_that("sw_signal_qc runs on synthetic flowFrame", {
   expect_equal(nrow(result$FinalFF), sum(result$GoodCells))
 })
 
-test_that("sw_signal_qc_batch processes multiple samples", {
+test_that("sw_qc_batch processes multiple samples", {
   skip_if_not_installed("PeacoQC")
   skip_if_not_installed("flowCore")
 
@@ -132,7 +132,7 @@ test_that("sw_signal_qc_batch processes multiple samples", {
   }
 
   ff_list <- list(S1 = make_ff(), S2 = make_ff())
-  result <- sw_signal_qc_batch(ff_list, channels = c("BV421-A", "PE-A"))
+  result <- sw_qc_batch(ff_list, channels = c("BV421-A", "PE-A"))
 
   expect_true(is.list(result))
   expect_true("cleaned" %in% names(result))

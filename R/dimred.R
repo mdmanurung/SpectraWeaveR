@@ -10,7 +10,7 @@
 NULL
 
 # ---------------------------------------------------------------------------
-# sw_run_dimred
+# sw_dimred_run
 # ---------------------------------------------------------------------------
 
 #' Run Dimensionality Reduction
@@ -52,14 +52,14 @@ NULL
 #' \dontrun{
 #' df <- data.frame(CD3 = rnorm(200), CD4 = rnorm(200), batch = "B1")
 #' # PCA (no extra dependency)
-#' result <- sw_run_dimred(df, markers = c("CD3", "CD4"), method = "pca")
+#' result <- sw_dimred_run(df, markers = c("CD3", "CD4"), method = "pca")
 #' head(result)
 #' # UMAP (requires uwot)
-#' result <- sw_run_dimred(df, markers = c("CD3", "CD4"), method = "umap")
+#' result <- sw_dimred_run(df, markers = c("CD3", "CD4"), method = "umap")
 #' }
 #'
 #' @export
-sw_run_dimred <- function(df, markers,
+sw_dimred_run <- function(df, markers,
                           method = c("umap", "pca"),
                           n_dims = 2L,
                           n_neighbors = 15L,
@@ -161,7 +161,7 @@ sw_run_dimred <- function(df, markers,
 #' categorical columns use discrete colours.
 #'
 #' @param dimred_result A \code{tibble} returned by
-#'   \code{\link{sw_run_dimred}}, containing \code{dim1} and \code{dim2}
+#'   \code{\link{sw_dimred_run}}, containing \code{dim1} and \code{dim2}
 #'   columns.
 #' @param color_by Character; name of the column to map to point colour.
 #'   Can be a marker name, \code{"cluster"}, \code{"batch"}, etc.
@@ -173,7 +173,7 @@ sw_run_dimred <- function(df, markers,
 #'
 #' @return A \code{ggplot2} object.
 #'
-#' @seealso \code{\link{sw_run_dimred}}
+#' @seealso \code{\link{sw_dimred_run}}
 #'
 #' @examples
 #' \dontrun{
@@ -196,7 +196,7 @@ sw_plot_dimred <- function(dimred_result, color_by = NULL,
 
   if (!all(c("dim1", "dim2") %in% names(dimred_result))) {
     stop("'dimred_result' must contain 'dim1' and 'dim2' columns. ",
-         "Use sw_run_dimred() to compute coordinates.", call. = FALSE)
+         "Use sw_dimred_run() to compute coordinates.", call. = FALSE)
   }
 
   if (!is.null(color_by) && !color_by %in% names(dimred_result)) {

@@ -39,5 +39,5 @@ batches, before and after correction.  Delegates to
 }
 \seealso{
 \code{\link{sw_plot_batch_dimred}},
-\code{\link{sw_detect_batch_effect}}
+\code{\link{sw_correct_detect_batch}}
 }

@@ -303,14 +303,14 @@ test_that(".load_prompt fails for non-existent prompt", {
 # Pipeline code generation
 # ===========================================================================
 
-test_that("sw_generate_pipeline_code requires mandatory fields", {
+test_that("sw_pipeline_generate_code requires mandatory fields", {
   expect_error(
-    sw_generate_pipeline_code(list(fcs_dir = "/data")),
+    sw_pipeline_generate_code(list(fcs_dir = "/data")),
     "Missing required config"
   )
 })
 
-test_that("sw_generate_pipeline_code generates run_pipeline code", {
+test_that("sw_pipeline_generate_code generates sw_pipeline_run_all code", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -325,17 +325,17 @@ test_that("sw_generate_pipeline_code generates run_pipeline code", {
     seed = 42
   )
 
-  code <- sw_generate_pipeline_code(config, style = "run_pipeline",
+  code <- sw_pipeline_generate_code(config, style = "sw_pipeline_run_all",
                                      output = "string")
   expect_type(code, "character")
   expect_match(code, "library\\(SpectraWeaveR\\)")
-  expect_match(code, "run_pipeline")
+  expect_match(code, "sw_pipeline_run_all")
   expect_match(code, "/data/fcs")
   expect_match(code, "CD3")
   expect_match(code, "cofactor")
 })
 
-test_that("sw_generate_pipeline_code generates composable code", {
+test_that("sw_pipeline_generate_code generates composable code", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -344,16 +344,16 @@ test_that("sw_generate_pipeline_code generates composable code", {
     cofactor = 6000
   )
 
-  code <- sw_generate_pipeline_code(config, style = "composable",
+  code <- sw_pipeline_generate_code(config, style = "composable",
                                      output = "string")
   expect_type(code, "character")
   expect_match(code, "sw_pipeline")
-  expect_match(code, "sw_remove_margins")
-  expect_match(code, "sw_signal_qc")
-  expect_match(code, "sw_cluster")
+  expect_match(code, "sw_filter_margins")
+  expect_match(code, "sw_qc_run")
+  expect_match(code, "sw_cluster_run")
 })
 
-test_that("sw_generate_pipeline_code handles column renaming", {
+test_that("sw_pipeline_generate_code handles column renaming", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -364,13 +364,13 @@ test_that("sw_generate_pipeline_code handles column renaming", {
     file_col = "filename"
   )
 
-  code <- sw_generate_pipeline_code(config, output = "string")
+  code <- sw_pipeline_generate_code(config, output = "string")
   expect_match(code, 'BatchID.*batch')
   expect_match(code, 'PatientID.*sample')
   expect_match(code, 'filename.*file')
 })
 
-test_that("sw_generate_pipeline_code handles XLSX metadata", {
+test_that("sw_pipeline_generate_code handles XLSX metadata", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.xlsx",
@@ -378,12 +378,12 @@ test_that("sw_generate_pipeline_code handles XLSX metadata", {
     lineage_markers = c("CD3")
   )
 
-  code <- sw_generate_pipeline_code(config, output = "string")
+  code <- sw_pipeline_generate_code(config, output = "string")
   expect_match(code, "readxl")
   expect_match(code, "read_excel")
 })
 
-test_that("sw_generate_pipeline_code includes unmixing when specified", {
+test_that("sw_pipeline_generate_code includes unmixing when specified", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -395,12 +395,12 @@ test_that("sw_generate_pipeline_code includes unmixing when specified", {
     cytometer = "aurora"
   )
 
-  code <- sw_generate_pipeline_code(config, output = "string")
+  code <- sw_pipeline_generate_code(config, output = "string")
   expect_match(code, "unmix_from_raw.*TRUE")
   expect_match(code, "control_dir")
 })
 
-test_that("sw_generate_pipeline_code includes gating template", {
+test_that("sw_pipeline_generate_code includes gating template", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -409,12 +409,12 @@ test_that("sw_generate_pipeline_code includes gating template", {
     gating_template = "/data/gates.csv"
   )
 
-  code <- sw_generate_pipeline_code(config, output = "string")
+  code <- sw_pipeline_generate_code(config, output = "string")
   expect_match(code, "gating_template")
   expect_match(code, "gates.csv")
 })
 
-test_that("sw_generate_pipeline_code writes to file", {
+test_that("sw_pipeline_generate_code writes to file", {
   config <- list(
     fcs_dir = "/data/fcs",
     sample_meta_path = "/data/metadata.csv",
@@ -425,13 +425,13 @@ test_that("sw_generate_pipeline_code writes to file", {
   tmp_file <- tempfile(fileext = ".R")
   on.exit(unlink(tmp_file), add = TRUE)
 
-  sw_generate_pipeline_code(config, output = "file", path = tmp_file)
+  sw_pipeline_generate_code(config, output = "file", path = tmp_file)
   expect_true(file.exists(tmp_file))
   contents <- paste(readLines(tmp_file), collapse = "\n")
   expect_match(contents, "library\\(SpectraWeaveR\\)")
 })
 
-test_that("sw_generate_pipeline_code errors when file output lacks path", {
+test_that("sw_pipeline_generate_code errors when file output lacks path", {
   config <- list(
     fcs_dir = "/data",
     sample_meta_path = "/data/m.csv",
@@ -440,7 +440,7 @@ test_that("sw_generate_pipeline_code errors when file output lacks path", {
   )
 
   expect_error(
-    sw_generate_pipeline_code(config, output = "file"),
+    sw_pipeline_generate_code(config, output = "file"),
     "path.*required"
   )
 })
@@ -464,12 +464,12 @@ test_that("sw_assistant requires ellmer", {
   expect_error(sw_assistant(), "ellmer")
 })
 
-test_that("sw_quick_pipeline validates description argument", {
+test_that("sw_pipeline_quick validates description argument", {
   skip_if(!requireNamespace("ellmer", quietly = TRUE),
           "ellmer required")
 
-  expect_error(sw_quick_pipeline(""), "non-empty")
-  expect_error(sw_quick_pipeline(42), "non-empty")
+  expect_error(sw_pipeline_quick(""), "non-empty")
+  expect_error(sw_pipeline_quick(42), "non-empty")
 })
 
 # ===========================================================================
@@ -503,15 +503,15 @@ test_that("sw_pipeline_config_type returns ellmer type object", {
 # MCP server and btw integration tests
 # ===========================================================================
 
-test_that("sw_mcp_server requires mcptools", {
+test_that("sw_assistant_mcp requires mcptools", {
   skip_if(requireNamespace("mcptools", quietly = TRUE),
           "mcptools is installed; cannot test missing-package error")
 
-  expect_error(sw_mcp_server(), "mcptools")
+  expect_error(sw_assistant_mcp(), "mcptools")
 })
 
-test_that("sw_mcp_server has include_btw parameter", {
-  params <- names(formals(sw_mcp_server))
+test_that("sw_assistant_mcp has include_btw parameter", {
+  params <- names(formals(sw_assistant_mcp))
   expect_true("include_btw" %in% params)
 })
 
@@ -658,7 +658,7 @@ test_that(".tool_read_csv_columns standard mode passes through safe data", {
 test_that("all assistant functions accept sensitivity parameter", {
   for (fn_name in c("sw_assistant", "sw_assistant_configure",
                     "sw_assistant_batch_correction", "sw_assistant_gating",
-                    "sw_assistant_unmixing", "sw_mcp_server")) {
+                    "sw_assistant_unmixing", "sw_assistant_mcp")) {
     fn <- get(fn_name, envir = asNamespace("SpectraWeaveR"))
     expect_true("sensitivity" %in% names(formals(fn)),
                 info = paste(fn_name, "missing sensitivity param"))

@@ -2,72 +2,72 @@
 # Unit tests for R/transforms.R — Scale transformation utilities
 
 # =========================================================================
-# sw_estimate_scale_transforms
+# sw_transform_estimate
 # =========================================================================
 
-test_that("sw_estimate_scale_transforms rejects non-flowFrame", {
+test_that("sw_transform_estimate rejects non-flowFrame", {
   skip_if_not_installed("flowCore")
   expect_error(
-    sw_estimate_scale_transforms("not_a_ff"),
+    sw_transform_estimate("not_a_ff"),
     "flowFrame"
   )
 })
 
-test_that("sw_estimate_scale_transforms rejects invalid fluo_method", {
+test_that("sw_transform_estimate rejects invalid fluo_method", {
   skip_if_not_installed("flowCore")
   mat <- matrix(rnorm(300), ncol = 3,
                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
   ff <- flowCore::flowFrame(mat)
   expect_error(
-    sw_estimate_scale_transforms(ff, fluo_method = "invalid"),
+    sw_transform_estimate(ff, fluo_method = "invalid"),
     "arg"
   )
 })
 
-test_that("sw_estimate_scale_transforms requires scatter_ref_marker for linearQuantile", {
+test_that("sw_transform_estimate requires scatter_ref_marker for linearQuantile", {
   skip_if_not_installed("flowCore")
   mat <- matrix(abs(rnorm(300)) + 1, ncol = 3,
                 dimnames = list(NULL, c("FSC-A", "SSC-A", "BV421-A")))
   ff <- flowCore::flowFrame(mat)
   expect_error(
-    sw_estimate_scale_transforms(ff,
+    sw_transform_estimate(ff,
                                   fluo_method = "none",
                                   scatter_method = "linearQuantile"),
     "scatter_ref_marker"
   )
 })
 
-test_that("sw_estimate_scale_transforms errors if no transforms estimated", {
+test_that("sw_transform_estimate errors if no transforms estimated", {
   skip_if_not_installed("flowCore")
   mat <- matrix(abs(rnorm(300)) + 1, ncol = 3,
                 dimnames = list(NULL, c("FSC-A", "SSC-A", "Time")))
   ff <- flowCore::flowFrame(mat)
   expect_error(
-    sw_estimate_scale_transforms(ff, fluo_method = "none",
+    sw_transform_estimate(ff, fluo_method = "none",
                                   scatter_method = "none"),
     "No transformations"
   )
 })
 
 # =========================================================================
-# sw_apply_scale_transforms
+# sw_transform_apply
 # =========================================================================
 
-test_that("sw_apply_scale_transforms rejects non-flowFrame/flowSet", {
+test_that("sw_transform_apply rejects non-flowFrame/flowSet", {
   skip_if_not_installed("flowCore")
   expect_error(
-    sw_apply_scale_transforms("not_ff", list()),
+    sw_transform_apply("not_ff", list()),
     "flowFrame or flowSet"
   )
 })
 
-test_that("sw_apply_scale_transforms rejects non-transformList", {
+test_that("sw_transform_apply rejects non-transformList", {
   skip_if_not_installed("flowCore")
   mat <- matrix(rnorm(300), ncol = 3,
                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
   ff <- flowCore::flowFrame(mat)
   expect_error(
-    sw_apply_scale_transforms(ff, "not_a_translist"),
+    sw_transform_apply(ff, "not_a_translist"),
     "transformList"
   )
 })
@@ -76,7 +76,7 @@ test_that("sw_apply_scale_transforms rejects non-transformList", {
 # Integration tests — actual transformation execution
 # =========================================================================
 
-test_that("sw_estimate_scale_transforms estimates logicle for fluor channels", {
+test_that("sw_transform_estimate estimates logicle for fluor channels", {
   skip_if_not_installed("flowCore")
 
   set.seed(42)
@@ -91,13 +91,13 @@ test_that("sw_estimate_scale_transforms estimates logicle for fluor channels", {
   )
   ff <- flowCore::flowFrame(mat)
 
-  trans <- sw_estimate_scale_transforms(ff,
+  trans <- sw_transform_estimate(ff,
                                          fluo_method = "estimateLogicle",
                                          scatter_method = "none")
   expect_true(methods::is(trans, "transformList"))
 })
 
-test_that("sw_apply_scale_transforms transforms values correctly", {
+test_that("sw_transform_apply transforms values correctly", {
   skip_if_not_installed("flowCore")
 
   set.seed(42)
@@ -111,10 +111,10 @@ test_that("sw_apply_scale_transforms transforms values correctly", {
   )
   ff <- flowCore::flowFrame(mat)
 
-  trans <- sw_estimate_scale_transforms(ff,
+  trans <- sw_transform_estimate(ff,
                                          fluo_method = "estimateLogicle",
                                          scatter_method = "none")
-  ff_t <- sw_apply_scale_transforms(ff, trans)
+  ff_t <- sw_transform_apply(ff, trans)
 
   expect_true(methods::is(ff_t, "flowFrame"))
   expect_equal(nrow(ff_t), nrow(ff))

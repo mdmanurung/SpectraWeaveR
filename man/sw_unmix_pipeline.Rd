@@ -28,7 +28,7 @@ sw_unmix_pipeline(
 directory.}
 
 \item{unstained_fcs}{Character path to unstained FCS file(s), or a named
-list for tissue-specific AF (see \code{\link{sw_extract_af_spectra}}).
+list for tissue-specific AF (see \code{\link{sw_unmix_extract_af}}).
 Required when \code{method = "AutoSpectral"}.}
 
 \item{cytometer}{Character; cytometer type. Default: \code{"aurora"}.}
@@ -72,7 +72,7 @@ A named list with all intermediate results:
 \item{\code{spectra_variants}}{The spectral variants (if
 extracted).}
 \item{\code{unmixed}}{The unmixing result from
-\code{\link{sw_unmix}}.}
+\code{\link{sw_unmix_run}}.}
 }
 }
 \description{
@@ -81,9 +81,9 @@ workflow: setup, control preparation, AF extraction, spectral variant
 mapping, and unmixing.
 }
 \details{
-This convenience function calls \code{\link{sw_autospectral_setup}},
-\code{\link{sw_prepare_controls}}, \code{\link{sw_extract_af_spectra}},
-\code{\link{sw_extract_spectral_variants}}, and \code{\link{sw_unmix}}
+This convenience function calls \code{\link{sw_unmix_setup}},
+\code{\link{sw_unmix_prepare}}, \code{\link{sw_unmix_extract_af}},
+\code{\link{sw_unmix_extract_variants}}, and \code{\link{sw_unmix_run}}
 in sequence. Steps 3--4 are skipped when \code{method} is \code{"OLS"}
 or \code{"WLS"} (no per-cell optimization needed).
 
@@ -94,7 +94,7 @@ variant extraction and for the final unmixing call. This is because
 spectral variants are derived from single-stain controls (which come from
 one tissue type), and the pipeline cannot automatically match sample
 files to tissue types. For tissue-specific unmixing with matched AF
-spectra, call \code{\link{sw_unmix}} separately for each tissue group,
+spectra, call \code{\link{sw_unmix_run}} separately for each tissue group,
 passing the corresponding AF spectra from the named list returned by
-\code{\link{sw_extract_af_spectra}}.
+\code{\link{sw_unmix_extract_af}}.
 }

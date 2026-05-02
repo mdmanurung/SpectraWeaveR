@@ -1,49 +1,49 @@
 # tests/testthat/test-cluster.R
 # Unit tests for R/cluster.R — Clustering (kohonen SOM / FastPG)
 
-test_that("sw_cluster rejects empty lineage_markers", {
-  expect_error(sw_cluster(matrix(1:10, ncol = 2), lineage_markers = character(0)),
+test_that("sw_cluster_run rejects empty lineage_markers", {
+  expect_error(sw_cluster_run(matrix(1:10, ncol = 2), lineage_markers = character(0)),
                "non-empty character vector")
 })
 
-test_that("sw_cluster rejects n_metaclusters < 2 for SOM", {
+test_that("sw_cluster_run rejects n_metaclusters < 2 for SOM", {
   df <- tibble::tibble(CD3 = rnorm(100), CD4 = rnorm(100))
-  expect_error(sw_cluster(df, lineage_markers = c("CD3", "CD4"),
+  expect_error(sw_cluster_run(df, lineage_markers = c("CD3", "CD4"),
                           method = "som", n_metaclusters = 1),
                "integer >= 2")
 })
 
-test_that("sw_cluster rejects invalid input type", {
-  expect_error(sw_cluster("not_a_df", lineage_markers = c("CD3")),
+test_that("sw_cluster_run rejects invalid input type", {
+  expect_error(sw_cluster_run("not_a_df", lineage_markers = c("CD3")),
                "matrix, data.frame, or tibble")
 })
 
-test_that("sw_cluster rejects missing markers in data.frame", {
+test_that("sw_cluster_run rejects missing markers in data.frame", {
   df <- tibble::tibble(CD3 = rnorm(50))
-  expect_error(sw_cluster(df, lineage_markers = c("CD3", "CD99")),
+  expect_error(sw_cluster_run(df, lineage_markers = c("CD3", "CD99")),
                "not found")
 })
 
-test_that("sw_cluster rejects missing markers in matrix", {
+test_that("sw_cluster_run rejects missing markers in matrix", {
   mat <- matrix(rnorm(100), ncol = 2, dimnames = list(NULL, c("CD3", "CD4")))
-  expect_error(sw_cluster(mat, lineage_markers = c("CD3", "CD99")),
+  expect_error(sw_cluster_run(mat, lineage_markers = c("CD3", "CD99")),
                "not found")
 })
 
-test_that("sw_cluster rejects invalid method", {
+test_that("sw_cluster_run rejects invalid method", {
   df <- tibble::tibble(CD3 = rnorm(50))
-  expect_error(sw_cluster(df, lineage_markers = c("CD3"),
+  expect_error(sw_cluster_run(df, lineage_markers = c("CD3"),
                           method = "invalid"),
                "should be one of")
 })
 
-test_that("sw_get_cluster_assignments rejects non-sw_cluster_result", {
-  expect_error(sw_get_cluster_assignments("not_a_result"),
+test_that("sw_cluster_assignments rejects non-sw_cluster_result", {
+  expect_error(sw_cluster_assignments("not_a_result"),
                "sw_cluster_result")
 })
 
-test_that("sw_cluster_mfis rejects non-sw_cluster_result", {
-  expect_error(sw_cluster_mfis("not_a_result"),
+test_that("sw_cluster_mfi rejects non-sw_cluster_result", {
+  expect_error(sw_cluster_mfi("not_a_result"),
                "sw_cluster_result")
 })
 
@@ -57,13 +57,13 @@ test_that("sw_plot_clusters rejects invalid plot_file", {
                "sw_cluster_result")
 })
 
-test_that("sw_predict_clusters rejects non-sw_cluster_result", {
-  expect_error(sw_predict_clusters("not_a_result", data.frame(x = 1)),
+test_that("sw_cluster_predict rejects non-sw_cluster_result", {
+  expect_error(sw_cluster_predict("not_a_result", data.frame(x = 1)),
                "sw_cluster_result")
 })
 
 # Integration test: full clustering pipeline with kohonen SOM
-test_that("sw_cluster runs end-to-end with kohonen SOM", {
+test_that("sw_cluster_run runs end-to-end with kohonen SOM", {
   skip_if_not_installed("kohonen")
 
   set.seed(123)
@@ -73,7 +73,7 @@ test_that("sw_cluster runs end-to-end with kohonen SOM", {
     CD8 = c(rnorm(100, mean = 3), rnorm(100, mean = 1))
   )
 
-  result <- sw_cluster(df, lineage_markers = c("CD3", "CD4", "CD8"),
+  result <- sw_cluster_run(df, lineage_markers = c("CD3", "CD4", "CD8"),
                        method = "som",
                        xdim = 5, ydim = 5, n_metaclusters = 5, seed = 42)
 
@@ -81,20 +81,20 @@ test_that("sw_cluster runs end-to-end with kohonen SOM", {
   expect_equal(result$method, "som")
 
   # Test cluster assignments
-  assignments <- sw_get_cluster_assignments(result)
+  assignments <- sw_cluster_assignments(result)
   expect_equal(length(assignments), 200)
   expect_true(all(assignments >= 1))
   expect_true(all(assignments <= 5))
 
   # Test MFI table
-  mfi <- sw_cluster_mfis(result)
+  mfi <- sw_cluster_mfi(result)
   expect_s3_class(mfi, "tbl_df")
   expect_true("cluster" %in% names(mfi))
   expect_true(all(c("CD3", "CD4", "CD8") %in% names(mfi)))
 })
 
 # Integration test: predict new data onto trained SOM
-test_that("sw_predict_clusters maps new data onto trained SOM", {
+test_that("sw_cluster_predict maps new data onto trained SOM", {
   skip_if_not_installed("kohonen")
 
   set.seed(123)
@@ -104,7 +104,7 @@ test_that("sw_predict_clusters maps new data onto trained SOM", {
     CD8 = c(rnorm(100, mean = 3), rnorm(100, mean = 1))
   )
 
-  result <- sw_cluster(df, lineage_markers = c("CD3", "CD4", "CD8"),
+  result <- sw_cluster_run(df, lineage_markers = c("CD3", "CD4", "CD8"),
                        method = "som",
                        xdim = 5, ydim = 5, n_metaclusters = 5, seed = 42)
 
@@ -114,7 +114,7 @@ test_that("sw_predict_clusters maps new data onto trained SOM", {
     CD8 = rnorm(50, mean = 2)
   )
 
-  mapped <- sw_predict_clusters(result, new_data)
+  mapped <- sw_cluster_predict(result, new_data)
   expect_s3_class(mapped, "sw_cluster_result")
   expect_equal(length(mapped$assignments), 50)
   expect_true(all(mapped$assignments >= 1))
@@ -122,7 +122,7 @@ test_that("sw_predict_clusters maps new data onto trained SOM", {
 })
 
 # Integration test: FastPG clustering
-test_that("sw_cluster runs end-to-end with FastPG", {
+test_that("sw_cluster_run runs end-to-end with FastPG", {
   skip_if_not_installed("FastPG")
 
   set.seed(123)
@@ -132,28 +132,28 @@ test_that("sw_cluster runs end-to-end with FastPG", {
     CD8 = c(rnorm(100, mean = 3), rnorm(100, mean = 1))
   )
 
-  result <- sw_cluster(df, lineage_markers = c("CD3", "CD4", "CD8"),
+  result <- sw_cluster_run(df, lineage_markers = c("CD3", "CD4", "CD8"),
                        method = "fastpg", k = 10, seed = 42)
 
   expect_s3_class(result, "sw_cluster_result")
   expect_equal(result$method, "fastpg")
 
-  assignments <- sw_get_cluster_assignments(result)
+  assignments <- sw_cluster_assignments(result)
   expect_equal(length(assignments), 200)
   expect_true(all(assignments >= 1))
 
-  mfi <- sw_cluster_mfis(result)
+  mfi <- sw_cluster_mfi(result)
   expect_s3_class(mfi, "tbl_df")
   expect_true("cluster" %in% names(mfi))
 })
 
-test_that("sw_predict_clusters rejects fastpg method", {
+test_that("sw_cluster_predict rejects fastpg method", {
   skip_if_not_installed("FastPG")
 
   df <- tibble::tibble(CD3 = rnorm(50), CD4 = rnorm(50))
-  result <- sw_cluster(df, lineage_markers = c("CD3", "CD4"),
+  result <- sw_cluster_run(df, lineage_markers = c("CD3", "CD4"),
                        method = "fastpg", k = 10)
 
-  expect_error(sw_predict_clusters(result, df),
+  expect_error(sw_cluster_predict(result, df),
                "only supported for method = 'som'")
 })

@@ -100,9 +100,9 @@ for (i in seq_len(nrow(sample_info))) {
 }
 
 # Load data and run margin removal (from Part 1)
-fs <- sw_load_unmixed(fcs_dir)
+fs <- sw_io_load_unmixed(fcs_dir)
 ff_list <- lapply(seq_along(fs), function(i) {
-  sw_remove_margins(fs[[i]])
+  sw_filter_margins(fs[[i]])
 })
 names(ff_list) <- sampleNames(fs)
 cat("Loaded and margin-cleaned", length(ff_list), "samples\n")
@@ -110,14 +110,14 @@ cat("Loaded and margin-cleaned", length(ff_list), "samples\n")
 
 ## Build a gating template
 
-`sw_build_gating_template()` writes a CSV gating template compatible
+`sw_gate_template()` writes a CSV gating template compatible
 with the openCyto framework. Five pre-built templates are available:
 `"lymphocyte"`, `"myeloid"`, `"nk"`, `"treg"`, `"full_pbmc"`.
 
 ```{r}
 #| label: build-template
 template_file <- file.path(tempdir(), "lymphocyte_template.csv")
-sw_build_gating_template(template_file, template_type = "lymphocyte")
+sw_gate_template(template_file, template_type = "lymphocyte")
 
 stopifnot(file.exists(template_file))
 template_df <- read.csv(template_file)
@@ -128,7 +128,7 @@ stopifnot(nrow(template_df) >= 1)
 
 ## Automated gating
 
-`sw_gate()` loads FCS files, creates a GatingSet, optionally transforms
+`sw_gate_run()` loads FCS files, creates a GatingSet, optionally transforms
 channels, and applies the gating template. Because synthetic data may not
 satisfy the density assumptions of all gating algorithms, we wrap this in
 a `tryCatch`.
@@ -138,7 +138,7 @@ a `tryCatch`.
 fcs_paths <- file.path(fcs_dir, sample_info$file[1:2])
 
 gating_result <- tryCatch({
-  gs <- sw_gate(fcs_paths, gating_template = template_file)
+  gs <- sw_gate_run(fcs_paths, gating_template = template_file)
   stopifnot(is(gs, "GatingSet"))
   cat("Gating succeeded. GatingSet with",
       length(gs), "samples\n")
@@ -155,7 +155,7 @@ gating_result <- tryCatch({
 
 ### Extract gated populations
 
-If gating succeeded, `sw_extract_gated()` extracts flowFrames from a
+If gating succeeded, `sw_gate_extract()` extracts flowFrames from a
 specific gate node.
 
 ```{r}
@@ -164,7 +164,7 @@ if (!is.null(gating_result)) {
   nodes <- flowWorkspace::gs_get_pop_paths(gating_result)
   # Use the deepest node available
   target_node <- nodes[length(nodes)]
-  gated_list <- sw_extract_gated(gating_result, node = target_node)
+  gated_list <- sw_gate_extract(gating_result, node = target_node)
   stopifnot(is.list(gated_list))
   stopifnot(length(gated_list) > 0)
   cat("Extracted", length(gated_list), "samples from node:", target_node, "\n")
@@ -172,22 +172,22 @@ if (!is.null(gating_result)) {
     stopifnot(is(gated_list[[nm]], "flowFrame"))
   }
 } else {
-  cat("Skipping sw_extract_gated() — gating did not succeed on synthetic data.\n")
+  cat("Skipping sw_gate_extract() — gating did not succeed on synthetic data.\n")
   cat("See the spectral-unmixing vignette for real-data examples.\n")
 }
 ```
 
 ## Scale transforms
 
-`sw_estimate_scale_transforms()` estimates per-channel logicle (or linear)
-scale transformations. `sw_apply_scale_transforms()` applies them.
+`sw_transform_estimate()` estimates per-channel logicle (or linear)
+scale transformations. `sw_transform_apply()` applies them.
 
 ```{r}
 #| label: scale-transforms
 ff_test <- ff_list[[1]]
 
 trans_result <- tryCatch({
-  trans_list <- sw_estimate_scale_transforms(
+  trans_list <- sw_transform_estimate(
     ff_test,
     fluo_method = "estimateLogicle",
     scatter_method = "none"
@@ -197,13 +197,13 @@ trans_result <- tryCatch({
       length(trans_list@transforms), "channels\n")
 
   # Apply the transforms
-  ff_transformed <- sw_apply_scale_transforms(ff_test, trans_list)
+  ff_transformed <- sw_transform_apply(ff_test, trans_list)
   stopifnot(is(ff_transformed, "flowFrame"))
   stopifnot(nrow(ff_transformed) == nrow(ff_test))
 
   # Verify values changed
-  orig_vals <- exprs(ff_test)[1:3, sw_get_fluor_channels(ff_test)[1]]
-  new_vals  <- exprs(ff_transformed)[1:3, sw_get_fluor_channels(ff_test)[1]]
+  orig_vals <- exprs(ff_test)[1:3, sw_channel_get_fluor(ff_test)[1]]
+  new_vals  <- exprs(ff_transformed)[1:3, sw_channel_get_fluor(ff_test)[1]]
   stopifnot(!all(orig_vals == new_vals))
   cat("Transform applied successfully — values differ from original\n")
 
@@ -226,9 +226,9 @@ caused anomalous readings.
 ```{r}
 #| label: signal-qc-single
 ff_for_qc <- ff_list[[1]]
-fluor_channels <- sw_get_fluor_channels(ff_for_qc)
+fluor_channels <- sw_channel_get_fluor(ff_for_qc)
 
-qc_result <- sw_signal_qc(
+qc_result <- sw_qc_run(
   ff_for_qc,
   channels = fluor_channels,
   IT_limit = 0.55,
@@ -248,12 +248,12 @@ cat("QC result: removed", qc_result$n_removed, "events",
 
 ### Batch QC across all samples
 
-`sw_signal_qc_batch()` applies QC to a list of flowFrames and returns
+`sw_qc_batch()` applies QC to a list of flowFrames and returns
 a summary.
 
 ```{r}
 #| label: signal-qc-batch
-qc_batch <- sw_signal_qc_batch(
+qc_batch <- sw_qc_batch(
   ff_list,
   channels = fluor_channels,
   IT_limit = 0.55,
@@ -299,7 +299,7 @@ raw_events <- sum(vapply(seq_along(fs), function(i) nrow(fs[[i]]), integer(1)))
 margin_events <- sum(vapply(ff_list, nrow, integer(1)))
 qc_events <- sum(vapply(qc_batch$cleaned, nrow, integer(1)))
 
-audit <- sw_collect_events_retained(list(
+audit <- sw_io_event_audit(list(
   raw_loaded    = raw_events,
   after_margins = margin_events,
   after_qc      = qc_events
@@ -324,13 +324,13 @@ cat("Tutorial Part 2 complete. All functions verified.\n")
 
 | Function | Module |
 |----------|--------|
-| `sw_build_gating_template()` | gate |
-| `sw_gate()` | gate |
-| `sw_extract_gated()` | gate |
-| `sw_estimate_scale_transforms()` | transforms |
-| `sw_apply_scale_transforms()` | transforms |
-| `sw_signal_qc()` | qc |
-| `sw_signal_qc_batch()` | qc |
+| `sw_gate_template()` | gate |
+| `sw_gate_run()` | gate |
+| `sw_gate_extract()` | gate |
+| `sw_transform_estimate()` | transforms |
+| `sw_transform_apply()` | transforms |
+| `sw_qc_run()` | qc |
+| `sw_qc_batch()` | qc |
 | `sw_qc_summary()` | qc |
 
 **Previous:** [Part 1 — Data Loading & Preprocessing](tutorial-01-loading-preprocessing.qmd)\

@@ -5,30 +5,30 @@
 # by skip_if_not_installed("AutoSpectral").
 
 # ============================================================================
-# sw_load_unmixed
+# sw_io_load_unmixed
 # ============================================================================
 
-test_that("sw_load_unmixed rejects non-existent directory", {
-  expect_error(sw_load_unmixed("/no/such/dir"),
+test_that("sw_io_load_unmixed rejects non-existent directory", {
+  expect_error(sw_io_load_unmixed("/no/such/dir"),
                "does not exist")
 })
 
-test_that("sw_load_unmixed rejects non-character input", {
-  expect_error(sw_load_unmixed(42),
+test_that("sw_io_load_unmixed rejects non-character input", {
+  expect_error(sw_io_load_unmixed(42),
                "single directory path")
 })
 
-test_that("sw_load_unmixed detects empty directory", {
+test_that("sw_io_load_unmixed detects empty directory", {
   tmp_dir <- tempdir()
   empty_dir <- file.path(tmp_dir, "empty_fcs_test")
   dir.create(empty_dir, showWarnings = FALSE)
   on.exit(unlink(empty_dir, recursive = TRUE))
 
-  expect_error(sw_load_unmixed(empty_dir),
+  expect_error(sw_io_load_unmixed(empty_dir),
                "No FCS files")
 })
 
-test_that("sw_load_unmixed respects pattern argument", {
+test_that("sw_io_load_unmixed respects pattern argument", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "pattern_test")
   dir.create(test_dir, showWarnings = FALSE)
@@ -36,22 +36,22 @@ test_that("sw_load_unmixed respects pattern argument", {
 
   # Create non-matching files only
   writeLines("dummy", file.path(test_dir, "file.csv"))
-  expect_error(sw_load_unmixed(test_dir, pattern = "\\.fcs$"),
+  expect_error(sw_io_load_unmixed(test_dir, pattern = "\\.fcs$"),
                "No FCS files")
 })
 
 # ============================================================================
-# sw_remove_margins
+# sw_filter_margins
 # ============================================================================
 
-test_that("sw_remove_margins rejects non-flowFrame input", {
+test_that("sw_filter_margins rejects non-flowFrame input", {
   skip_if_not_installed("flowCore")
 
-  expect_error(sw_remove_margins(data.frame(x = 1)),
+  expect_error(sw_filter_margins(data.frame(x = 1)),
                "flowFrame")
 })
 
-test_that("sw_remove_margins requires PeacoQC", {
+test_that("sw_filter_margins requires PeacoQC", {
   skip_if_not_installed("flowCore")
   skip_if(requireNamespace("PeacoQC", quietly = TRUE),
           message = "PeacoQC is installed; cannot test missing package")
@@ -60,93 +60,93 @@ test_that("sw_remove_margins requires PeacoQC", {
                 dimnames = list(NULL, c("FSC-A", "SSC-A")))
   ff <- flowCore::flowFrame(mat)
 
-  expect_error(sw_remove_margins(ff),
+  expect_error(sw_filter_margins(ff),
                "PeacoQC")
 })
 
 # ============================================================================
-# sw_autospectral_setup
+# sw_unmix_setup
 # ============================================================================
 
-test_that("sw_autospectral_setup rejects non-character control_dir", {
-  expect_error(sw_autospectral_setup(42),
+test_that("sw_unmix_setup rejects non-character control_dir", {
+  expect_error(sw_unmix_setup(42),
                "single directory path")
 })
 
-test_that("sw_autospectral_setup rejects non-existent directory", {
-  expect_error(sw_autospectral_setup("/no/such/dir"),
+test_that("sw_unmix_setup rejects non-existent directory", {
+  expect_error(sw_unmix_setup("/no/such/dir"),
                "does not exist")
 })
 
-test_that("sw_autospectral_setup rejects invalid cytometer", {
+test_that("sw_unmix_setup rejects invalid cytometer", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "cytometer_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
-  expect_error(sw_autospectral_setup(test_dir, cytometer = "invalid"),
+  expect_error(sw_unmix_setup(test_dir, cytometer = "invalid"),
                "must be one of")
 })
 
-test_that("sw_autospectral_setup rejects non-character cytometer", {
+test_that("sw_unmix_setup rejects non-character cytometer", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "cytometer_type_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
-  expect_error(sw_autospectral_setup(test_dir, cytometer = 123),
+  expect_error(sw_unmix_setup(test_dir, cytometer = 123),
                "single character string")
 })
 
-test_that("sw_autospectral_setup rejects non-existent control_file", {
+test_that("sw_unmix_setup rejects non-existent control_file", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "cf_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
   expect_error(
-    sw_autospectral_setup(test_dir, control_file = "/no/file.csv"),
+    sw_unmix_setup(test_dir, control_file = "/no/file.csv"),
     "does not exist"
   )
 })
 
-test_that("sw_autospectral_setup rejects non-character output_dir", {
+test_that("sw_unmix_setup rejects non-character output_dir", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "outdir_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
   expect_error(
-    sw_autospectral_setup(test_dir, output_dir = 42),
+    sw_unmix_setup(test_dir, output_dir = 42),
     "single directory path"
   )
 })
 
-test_that("sw_autospectral_setup rejects non-logical figures", {
+test_that("sw_unmix_setup rejects non-logical figures", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "figures_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
   expect_error(
-    sw_autospectral_setup(test_dir, figures = "yes"),
+    sw_unmix_setup(test_dir, figures = "yes"),
     "TRUE or FALSE"
   )
 })
 
-test_that("sw_autospectral_setup rejects non-character control_file type", {
+test_that("sw_unmix_setup rejects non-character control_file type", {
   tmp_dir <- tempdir()
   test_dir <- file.path(tmp_dir, "cf_type_test")
   dir.create(test_dir, showWarnings = FALSE)
   on.exit(unlink(test_dir, recursive = TRUE))
 
   expect_error(
-    sw_autospectral_setup(test_dir, control_file = 42),
+    sw_unmix_setup(test_dir, control_file = 42),
     "single file path"
   )
 })
 
-test_that("sw_autospectral_setup requires AutoSpectral", {
+test_that("sw_unmix_setup requires AutoSpectral", {
   skip_if(requireNamespace("AutoSpectral", quietly = TRUE),
           "AutoSpectral is installed; cannot test missing package")
 
@@ -156,170 +156,170 @@ test_that("sw_autospectral_setup requires AutoSpectral", {
   on.exit(unlink(test_dir, recursive = TRUE))
 
   # With valid inputs, should fail on AutoSpectral dependency
-  expect_error(sw_autospectral_setup(test_dir),
+  expect_error(sw_unmix_setup(test_dir),
                "AutoSpectral")
 })
 
 # ============================================================================
-# sw_prepare_controls
+# sw_unmix_prepare
 # ============================================================================
 
-test_that("sw_prepare_controls rejects invalid setup object", {
-  expect_error(sw_prepare_controls(list(asp = NULL)),
+test_that("sw_unmix_prepare rejects invalid setup object", {
+  expect_error(sw_unmix_prepare(list(asp = NULL)),
                "sw_setup object")
 })
 
-test_that("sw_prepare_controls rejects invalid clean argument", {
+test_that("sw_unmix_prepare rejects invalid clean argument", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
-  expect_error(sw_prepare_controls(mock_setup, clean = "yes"),
+  expect_error(sw_unmix_prepare(mock_setup, clean = "yes"),
                "TRUE or FALSE")
 })
 
-test_that("sw_prepare_controls rejects invalid af_remove argument", {
+test_that("sw_unmix_prepare rejects invalid af_remove argument", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
-  expect_error(sw_prepare_controls(mock_setup, af_remove = "yes"),
+  expect_error(sw_unmix_prepare(mock_setup, af_remove = "yes"),
                "TRUE or FALSE")
 })
 
-test_that("sw_prepare_controls rejects invalid parallel argument", {
+test_that("sw_unmix_prepare rejects invalid parallel argument", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
-  expect_error(sw_prepare_controls(mock_setup, parallel = "yes"),
+  expect_error(sw_unmix_prepare(mock_setup, parallel = "yes"),
                "TRUE or FALSE")
 })
 
-test_that("sw_prepare_controls rejects invalid threads argument", {
+test_that("sw_unmix_prepare rejects invalid threads argument", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
-  expect_error(sw_prepare_controls(mock_setup, threads = -1),
+  expect_error(sw_unmix_prepare(mock_setup, threads = -1),
                "positive integer")
 })
 
 # ============================================================================
-# sw_extract_af_spectra
+# sw_unmix_extract_af
 # ============================================================================
 
-test_that("sw_extract_af_spectra rejects invalid setup", {
+test_that("sw_unmix_extract_af rejects invalid setup", {
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = list(), spectra = matrix()),
+    sw_unmix_extract_af("file.fcs", setup = list(), spectra = matrix()),
     "sw_setup object"
   )
 })
 
-test_that("sw_extract_af_spectra rejects non-matrix spectra", {
+test_that("sw_unmix_extract_af rejects non-matrix spectra", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("file.fcs", setup = mock_setup,
                           spectra = data.frame(x = 1)),
     "matrix"
   )
 })
 
-test_that("sw_extract_af_spectra rejects invalid refine", {
+test_that("sw_unmix_extract_af rejects invalid refine", {
   mock_setup <- structure(
     list(asp = list()),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("file.fcs", setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2),
                           refine = "yes"),
     "TRUE or FALSE"
   )
 })
 
-test_that("sw_extract_af_spectra rejects invalid som_dim", {
+test_that("sw_unmix_extract_af rejects invalid som_dim", {
   mock_setup <- structure(
     list(asp = list()),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("file.fcs", setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2),
                           som_dim = 1),
     "single integer >= 2"
   )
 })
 
-test_that("sw_extract_af_spectra rejects invalid parallel", {
+test_that("sw_unmix_extract_af rejects invalid parallel", {
   mock_setup <- structure(
     list(asp = list()),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("file.fcs", setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2),
                           parallel = "yes"),
     "TRUE or FALSE"
   )
 })
 
-test_that("sw_extract_af_spectra rejects invalid threads", {
+test_that("sw_unmix_extract_af rejects invalid threads", {
   mock_setup <- structure(
     list(asp = list()),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("file.fcs", setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2),
                           threads = 0),
     "positive integer"
   )
 })
 
-test_that("sw_extract_af_spectra rejects invalid input type", {
+test_that("sw_unmix_extract_af rejects invalid input type", {
   mock_setup <- structure(
     list(asp = list()),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra(42, setup = mock_setup,
+    sw_unmix_extract_af(42, setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2)),
     "single file path or a named list"
   )
 })
 
-test_that("sw_extract_af_spectra rejects non-existent file", {
+test_that("sw_unmix_extract_af rejects non-existent file", {
   skip_if_not_installed("AutoSpectral")
   mock_setup <- structure(
     list(asp = list(figures = FALSE)),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra("/no/file.fcs", setup = mock_setup,
+    sw_unmix_extract_af("/no/file.fcs", setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2)),
     "does not exist"
   )
 })
 
-test_that("sw_extract_af_spectra rejects unnamed list", {
+test_that("sw_unmix_extract_af rejects unnamed list", {
   skip_if_not_installed("AutoSpectral")
   mock_setup <- structure(
     list(asp = list(figures = FALSE)),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_af_spectra(list("a.fcs", "b.fcs"),
+    sw_unmix_extract_af(list("a.fcs", "b.fcs"),
                           setup = mock_setup,
                           spectra = matrix(1:4, ncol = 2)),
     "non-empty names"
   )
 })
 
-test_that("sw_extract_af_spectra requires AutoSpectral", {
+test_that("sw_unmix_extract_af requires AutoSpectral", {
   skip_if(requireNamespace("AutoSpectral", quietly = TRUE),
           "AutoSpectral is installed; cannot test missing package")
 
@@ -329,18 +329,18 @@ test_that("sw_extract_af_spectra requires AutoSpectral", {
   )
   # Valid inputs — should fail on AutoSpectral dependency, not validation
   expect_error(
-    sw_extract_af_spectra("f.fcs", mock_setup, matrix(1:4, ncol = 2)),
+    sw_unmix_extract_af("f.fcs", mock_setup, matrix(1:4, ncol = 2)),
     "AutoSpectral"
   )
 })
 
 # ============================================================================
-# sw_extract_spectral_variants
+# sw_unmix_extract_variants
 # ============================================================================
 
-test_that("sw_extract_spectral_variants rejects invalid setup", {
+test_that("sw_unmix_extract_variants rejects invalid setup", {
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = list(),
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, ncol = 2)
@@ -349,13 +349,13 @@ test_that("sw_extract_spectral_variants rejects invalid setup", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects non-matrix spectra", {
+test_that("sw_unmix_extract_variants rejects non-matrix spectra", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = data.frame(x = 1),
       af_spectra = matrix(1:4, ncol = 2)
@@ -364,13 +364,13 @@ test_that("sw_extract_spectral_variants rejects non-matrix spectra", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects single-row af_spectra", {
+test_that("sw_unmix_extract_variants rejects single-row af_spectra", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:2, ncol = 2)
@@ -379,13 +379,13 @@ test_that("sw_extract_spectral_variants rejects single-row af_spectra", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects invalid refine", {
+test_that("sw_unmix_extract_variants rejects invalid refine", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, nrow = 2),
@@ -395,13 +395,13 @@ test_that("sw_extract_spectral_variants rejects invalid refine", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects invalid som_dim", {
+test_that("sw_unmix_extract_variants rejects invalid som_dim", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, nrow = 2),
@@ -411,13 +411,13 @@ test_that("sw_extract_spectral_variants rejects invalid som_dim", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects invalid n_cells", {
+test_that("sw_unmix_extract_variants rejects invalid n_cells", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, nrow = 2),
@@ -427,13 +427,13 @@ test_that("sw_extract_spectral_variants rejects invalid n_cells", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects invalid parallel", {
+test_that("sw_unmix_extract_variants rejects invalid parallel", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, nrow = 2),
@@ -443,13 +443,13 @@ test_that("sw_extract_spectral_variants rejects invalid parallel", {
   )
 })
 
-test_that("sw_extract_spectral_variants rejects invalid threads", {
+test_that("sw_unmix_extract_variants rejects invalid threads", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_extract_spectral_variants(
+    sw_unmix_extract_variants(
       setup = mock_setup,
       spectra = matrix(1:4, ncol = 2),
       af_spectra = matrix(1:4, nrow = 2),
@@ -460,109 +460,109 @@ test_that("sw_extract_spectral_variants rejects invalid threads", {
 })
 
 # ============================================================================
-# sw_unmix
+# sw_unmix_run
 # ============================================================================
 
-test_that("sw_unmix rejects empty input", {
+test_that("sw_unmix_run rejects empty input", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix(character(0), matrix(1:4, ncol = 2), mock_setup, list()),
+    sw_unmix_run(character(0), matrix(1:4, ncol = 2), mock_setup, list()),
     "non-empty character vector"
   )
 })
 
-test_that("sw_unmix rejects non-character input", {
+test_that("sw_unmix_run rejects non-character input", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix(42, matrix(1:4, ncol = 2), mock_setup, list()),
+    sw_unmix_run(42, matrix(1:4, ncol = 2), mock_setup, list()),
     "non-empty character vector"
   )
 })
 
-test_that("sw_unmix rejects non-matrix spectra", {
+test_that("sw_unmix_run rejects non-matrix spectra", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", data.frame(x = 1), mock_setup, list()),
+    sw_unmix_run("file.fcs", data.frame(x = 1), mock_setup, list()),
     "matrix"
   )
 })
 
-test_that("sw_unmix rejects invalid setup", {
+test_that("sw_unmix_run rejects invalid setup", {
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), list(), list()),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), list(), list()),
     "sw_setup object"
   )
 })
 
-test_that("sw_unmix rejects invalid flow_control", {
+test_that("sw_unmix_run rejects invalid flow_control", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), mock_setup, "not_a_list"),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), mock_setup, "not_a_list"),
     "flow.control list"
   )
 })
 
-test_that("sw_unmix rejects invalid parallel", {
+test_that("sw_unmix_run rejects invalid parallel", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
              parallel = "yes"),
     "TRUE or FALSE"
   )
 })
 
-test_that("sw_unmix rejects invalid chunk_size", {
+test_that("sw_unmix_run rejects invalid chunk_size", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
              chunk_size = -1),
     "positive number"
   )
 })
 
-test_that("sw_unmix rejects invalid file_suffix", {
+test_that("sw_unmix_run rejects invalid file_suffix", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
              file_suffix = 42),
     "single character string"
   )
 })
 
-test_that("sw_unmix requires af_spectra for AutoSpectral method", {
+test_that("sw_unmix_run requires af_spectra for AutoSpectral method", {
   mock_setup <- structure(
     list(asp = list(), control_file = "f.csv", control_dir = "."),
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
+    sw_unmix_run("file.fcs", matrix(1:4, ncol = 2), mock_setup, list(),
              method = "AutoSpectral", af_spectra = NULL),
     "af_spectra.*required"
   )
 })
 
-test_that("sw_unmix rejects non-existent files", {
+test_that("sw_unmix_run rejects non-existent files", {
   skip_if_not_installed("AutoSpectral")
   mock_setup <- structure(
     list(asp = list(unmixed.fcs.dir = tempdir()), control_file = "f.csv",
@@ -570,13 +570,13 @@ test_that("sw_unmix rejects non-existent files", {
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix("/no/such/file.fcs", matrix(1:4, ncol = 2),
+    sw_unmix_run("/no/such/file.fcs", matrix(1:4, ncol = 2),
              mock_setup, list(), method = "OLS"),
     "not found"
   )
 })
 
-test_that("sw_unmix rejects empty directory", {
+test_that("sw_unmix_run rejects empty directory", {
   skip_if_not_installed("AutoSpectral")
   tmp_dir <- tempdir()
   empty_dir <- file.path(tmp_dir, "empty_unmix_test")
@@ -589,7 +589,7 @@ test_that("sw_unmix rejects empty directory", {
     class = "sw_setup"
   )
   expect_error(
-    sw_unmix(empty_dir, matrix(1:4, ncol = 2),
+    sw_unmix_run(empty_dir, matrix(1:4, ncol = 2),
              mock_setup, list(), method = "OLS"),
     "No FCS files"
   )
@@ -688,13 +688,13 @@ test_that(".valid_cytometers returns expected set through public API", {
 
   # Verify known-bad cytometers are rejected with a helpful message
   expect_error(
-    sw_autospectral_setup(test_dir, cytometer = "not_a_cytometer"),
+    sw_unmix_setup(test_dir, cytometer = "not_a_cytometer"),
     "must be one of"
   )
 
   # Verify the error message lists all expected cytometers
   err <- tryCatch(
-    sw_autospectral_setup(test_dir, cytometer = "bad"),
+    sw_unmix_setup(test_dir, cytometer = "bad"),
     error = function(e) e$message
   )
   expect_true(grepl("aurora", err))

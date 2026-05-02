@@ -19,41 +19,41 @@ sw_pipeline_run_targets(
 
 \item{input}{The initial input data.}
 
-\item{script}{Path to the \code{_targets.R} script to (re)write. Default:
+\item{script}{Path to the \verb{_targets.R} script to (re)write. Default:
 \code{"_targets.R"} in the current working directory.}
 
 \item{store}{Path to the \code{targets} data store. Use a stable, persistent
 path to benefit from incremental reruns. Default: \code{"_targets"}.}
 
-\item{trace}{Logical; if \code{TRUE}, uses the \code{"verbose"}
-\code{targets} reporter, otherwise \code{"silent"}. Default: \code{TRUE}.}
+\item{trace}{Logical; if \code{TRUE}, uses the \code{"verbose"} \code{targets} reporter,
+otherwise \code{"silent"}. Default: \code{TRUE}.}
 
 \item{callr_function}{Optional override for \code{targets::tar_make()}'s
-\code{callr_function}. Pass \code{NULL} to run in the same R process
-(handy in tests). Default: \code{NULL}.}
+\code{callr_function}. Pass \code{NULL} to run in the same R process (handy in
+tests). Default: \code{NULL}.}
 
 \item{...}{Additional arguments forwarded to \code{targets::tar_make()}.}
 }
 \value{
-A named list with the same shape as \code{\link{sw_pipeline_run}}:
+A named list with the same shape as \code{\link[=sw_pipeline_run]{sw_pipeline_run()}}:
 \describe{
 \item{\code{result}}{The final output from the last step.}
-\item{\code{intermediates}}{Named list of intermediate results, keyed by
-the original (un-sanitised) step name.}
+\item{\code{intermediates}}{Named list of intermediate results, keyed by the
+original (un-sanitised) step name.}
 \item{\code{steps_completed}}{Integer count of steps executed.}
 }
 }
 \description{
-Generates a \code{_targets.R} script for \code{pipeline} (via
-\code{\link{sw_pipeline_to_targets}}), executes it with
-\code{targets::tar_make()}, and assembles the result into the same shape
-returned by \code{\link{sw_pipeline_run}}.
+Generates a \verb{_targets.R} script for \code{pipeline} (via
+\code{\link[=sw_pipeline_to_targets]{sw_pipeline_to_targets()}}), executes it with \code{targets::tar_make()}, and
+assembles the result into the same shape returned by
+\code{\link[=sw_pipeline_run]{sw_pipeline_run()}}.
 }
 \details{
-Reruns are incremental: if \code{store} already contains a previous run for
-this pipeline, only steps whose serialised definition has changed (and
-their downstream descendants) are recomputed.
+Reruns are incremental: if \code{store} already contains a previous run for this
+pipeline, only steps whose serialised definition has changed (and their
+downstream descendants) are recomputed.
 }
 \seealso{
-\code{\link{sw_pipeline_to_targets}}, \code{\link{sw_pipeline_run}}.
+\code{\link[=sw_pipeline_to_targets]{sw_pipeline_to_targets()}}, \code{\link[=sw_pipeline_run]{sw_pipeline_run()}}.
 }

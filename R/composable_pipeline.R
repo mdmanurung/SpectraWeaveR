@@ -51,7 +51,7 @@
 #'   \item \strong{singletsGate()}: Standalone singlet gate via parallelogram
 #'     method. Lightweight alternative to full openCyto gating.
 #'   \item \strong{Channel classification (areSignalCols/areFluoCols)}:
-#'     SpectraWeaveR's sw_get_fluor_channels uses regex; CytoPipeline's
+#'     SpectraWeaveR's sw_channel_get_fluor uses regex; CytoPipeline's
 #'     approach inspects flowFrame metadata for more robust detection.
 #'   \item \strong{Pipeline visualization (plotCytoPipelineProcessingQueue)}:
 #'     Render a flowchart of processing steps. Would be valuable for
@@ -192,21 +192,21 @@ NULL
 #' @examples
 #' \dontrun{
 #' # Wrap an existing SpectraWeaveR function
-#' step_qc <- sw_step("signal_qc", sw_signal_qc, list(IT_limit = 0.55))
+#' step_qc <- sw_pipeline_step("signal_qc", sw_qc_run, list(IT_limit = 0.55))
 #'
 #' # Wrap a custom function
-#' step_filter <- sw_step("filter_low", function(ff) ff[1:100, ], list())
+#' step_filter <- sw_pipeline_step("filter_low", function(ff) ff[1:100, ], list())
 #'
 #' # Use a function name (resolved via match.fun)
-#' step_log <- sw_step("log_transform", "log1p", list())
+#' step_log <- sw_pipeline_step("log_transform", "log1p", list())
 #'
 #' # Declare port types for run-time validation
-#' step_typed <- sw_step("double", function(x) x * 2,
+#' step_typed <- sw_pipeline_step("double", function(x) x * 2,
 #'                       input_type = "numeric", output_type = "numeric")
 #' }
 #'
 #' @export
-sw_step <- function(name, FUN, ARGS = list(),
+sw_pipeline_step <- function(name, FUN, ARGS = list(),
                     input_type  = character(0),
                     output_type = character(0)) {
   if (!is.character(name) || length(name) != 1 || nchar(name) == 0) {
@@ -259,7 +259,7 @@ sw_step <- function(name, FUN, ARGS = list(),
 #' @return The result of calling \code{step@@FUN(input, ...)}.
 #'
 #' @export
-execute_step <- function(step, input) {
+sw_pipeline_step_run <- function(step, input) {
   .check_s7()
   cls <- .get_ProcessingStep_class()
   if (!S7::S7_inherits(step, cls)) {
@@ -351,12 +351,12 @@ execute_step <- function(step, input) {
 #' \dontrun{
 #' # Create an empty pipeline and add steps later
 #' pip <- sw_pipeline("my_analysis")
-#' pip <- sw_pipeline_add(pip, sw_step("load", sw_read_fcs))
+#' pip <- sw_pipeline_add(pip, sw_pipeline_step("load", sw_io_read_fcs))
 #'
 #' # Create a pipeline with steps
 #' pip <- sw_pipeline("qc_pipeline", steps = list(
-#'   sw_step("qc", sw_signal_qc, list(IT_limit = 0.55)),
-#'   sw_step("filter", my_custom_filter)
+#'   sw_pipeline_step("qc", sw_qc_run, list(IT_limit = 0.55)),
+#'   sw_pipeline_step("filter", my_custom_filter)
 #' ))
 #' }
 #'
@@ -628,8 +628,8 @@ sw_pipeline_length <- function(pipeline) {
 #' @examples
 #' \dontrun{
 #' pip <- sw_pipeline("transform", steps = list(
-#'   sw_step("double", function(x) x * 2),
-#'   sw_step("add_one", function(x) x + 1)
+#'   sw_pipeline_step("double", function(x) x * 2),
+#'   sw_pipeline_step("add_one", function(x) x + 1)
 #' ))
 #' result <- sw_pipeline_run(pip, input = 5)
 #' # result$result == 11 (5 * 2 + 1)
@@ -737,7 +737,7 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
     }
 
     current <- tryCatch(
-      execute_step(step, current),
+      sw_pipeline_step_run(step, current),
       error = function(e) {
         stop(sprintf("Pipeline '%s' failed at step %d ('%s'): %s",
                      pipeline@name, i, step_name, conditionMessage(e)),
@@ -848,8 +848,8 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
 #'
 #' @examples
 #' \dontrun{
-#' pip <- sw_step("double", function(x) x * 2) \%>>\%
-#'        sw_step("plus1",  function(x) x + 1)
+#' pip <- sw_pipeline_step("double", function(x) x * 2) \%>>\%
+#'        sw_pipeline_step("plus1",  function(x) x + 1)
 #' sw_pipeline_run(pip, input = 5)  # 11
 #' }
 #'
@@ -992,203 +992,203 @@ sw_pipeline_show <- function(pipeline) {
 #' Create a Step for Reading FCS Files
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_read_fcs}}. Declares sensible port types by default
+#' \code{\link{sw_io_read_fcs}}. Declares sensible port types by default
 #' (input: \code{"character"}, output: \code{c("flowFrame","flowSet")});
 #' override via the \code{input_type}/\code{output_type} parameters.
 #'
-#' @param ... Additional arguments passed to \code{sw_read_fcs}.
+#' @param ... Additional arguments passed to \code{sw_io_read_fcs}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_read_fcs <- function(...,
+sw_pipeline_step_read_fcs <- function(...,
                              input_type  = .SW_STEP_DEFAULT_TYPES$read_fcs$input,
                              output_type = .SW_STEP_DEFAULT_TYPES$read_fcs$output) {
-  sw_step("read_fcs", sw_read_fcs, list(...),
+  sw_pipeline_step("read_fcs", sw_io_read_fcs, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Margin Removal
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_remove_margins}}. Defaults: input/output
+#' \code{\link{sw_filter_margins}}. Defaults: input/output
 #' \code{"flowFrame"}.
 #'
-#' @param ... Additional arguments passed to \code{sw_remove_margins}.
+#' @param ... Additional arguments passed to \code{sw_filter_margins}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_remove_margins <- function(...,
+sw_pipeline_step_filter_margins <- function(...,
                                    input_type  = .SW_STEP_DEFAULT_TYPES$remove_margins$input,
                                    output_type = .SW_STEP_DEFAULT_TYPES$remove_margins$output) {
-  sw_step("remove_margins", sw_remove_margins, list(...),
+  sw_pipeline_step("remove_margins", sw_filter_margins, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Signal QC
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_signal_qc}}. Default input \code{"flowFrame"}; output is
-#' left unspecified because \code{sw_signal_qc} returns a compound list
+#' \code{\link{sw_qc_run}}. Default input \code{"flowFrame"}; output is
+#' left unspecified because \code{sw_qc_run} returns a compound list
 #' (\code{$FinalFF}, \code{$PlotPath}, \code{$Summary}). Downstream steps
 #' that need to thread the flowFrame should declare
 #' \code{input_type = "flowFrame"} and extract \code{$FinalFF} themselves.
 #'
-#' @param ... Additional arguments passed to \code{sw_signal_qc}.
+#' @param ... Additional arguments passed to \code{sw_qc_run}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_signal_qc <- function(...,
+sw_pipeline_step_qc <- function(...,
                               input_type  = .SW_STEP_DEFAULT_TYPES$signal_qc$input,
                               output_type = .SW_STEP_DEFAULT_TYPES$signal_qc$output) {
-  sw_step("signal_qc", sw_signal_qc, list(...),
+  sw_pipeline_step("signal_qc", sw_qc_run, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Batch Correction
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_batch_correct}}. Defaults: tibble/data.frame in and out.
+#' \code{\link{sw_correct_run}}. Defaults: tibble/data.frame in and out.
 #'
-#' @param ... Additional arguments passed to \code{sw_batch_correct}.
+#' @param ... Additional arguments passed to \code{sw_correct_run}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_batch_correct <- function(...,
+sw_pipeline_step_correct <- function(...,
                                   input_type  = .SW_STEP_DEFAULT_TYPES$batch_correct$input,
                                   output_type = .SW_STEP_DEFAULT_TYPES$batch_correct$output) {
-  sw_step("batch_correct", sw_batch_correct, list(...),
+  sw_pipeline_step("batch_correct", sw_correct_run, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Data Normalisation
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_normalize}}. Defaults: tibble/data.frame in and out.
+#' \code{\link{sw_correct_normalize}}. Defaults: tibble/data.frame in and out.
 #'
-#' @param ... Additional arguments passed to \code{sw_normalize}.
+#' @param ... Additional arguments passed to \code{sw_correct_normalize}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_normalize <- function(...,
+sw_pipeline_step_normalize <- function(...,
                               input_type  = .SW_STEP_DEFAULT_TYPES$normalize$input,
                               output_type = .SW_STEP_DEFAULT_TYPES$normalize$output) {
-  sw_step("normalize", sw_normalize, list(...),
+  sw_pipeline_step("normalize", sw_correct_normalize, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for SOM Clustering
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_create_som}}. Default input: tibble/data.frame; output
+#' \code{\link{sw_correct_som}}. Default input: tibble/data.frame; output
 #' left unspecified (returns an integer vector of cluster labels).
 #'
-#' @param ... Additional arguments passed to \code{sw_create_som}.
+#' @param ... Additional arguments passed to \code{sw_correct_som}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_create_som <- function(...,
+sw_pipeline_step_som <- function(...,
                                input_type  = .SW_STEP_DEFAULT_TYPES$create_som$input,
                                output_type = .SW_STEP_DEFAULT_TYPES$create_som$output) {
-  sw_step("create_som", sw_create_som, list(...),
+  sw_pipeline_step("create_som", sw_correct_som, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for ComBat Correction
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_correct_data}}. Defaults: tibble/data.frame in and out.
+#' \code{\link{sw_correct_apply}}. Defaults: tibble/data.frame in and out.
 #'
-#' @param ... Additional arguments passed to \code{sw_correct_data}.
+#' @param ... Additional arguments passed to \code{sw_correct_apply}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_correct_data <- function(...,
+sw_pipeline_step_correct_apply <- function(...,
                                  input_type  = .SW_STEP_DEFAULT_TYPES$correct_data$input,
                                  output_type = .SW_STEP_DEFAULT_TYPES$correct_data$output) {
-  sw_step("correct_data", sw_correct_data, list(...),
+  sw_pipeline_step("correct_data", sw_correct_apply, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Clustering
 #'
 #' Convenience constructor for a \code{ProcessingStep} that wraps
-#' \code{\link{sw_cluster}}. Default input: tibble/data.frame/matrix;
+#' \code{\link{sw_cluster_run}}. Default input: tibble/data.frame/matrix;
 #' output left unspecified (returns an \code{sw_cluster_result} list).
 #'
-#' @param ... Additional arguments passed to \code{sw_cluster}.
+#' @param ... Additional arguments passed to \code{sw_cluster_run}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_cluster <- function(...,
+sw_pipeline_step_cluster <- function(...,
                             input_type  = .SW_STEP_DEFAULT_TYPES$cluster$input,
                             output_type = .SW_STEP_DEFAULT_TYPES$cluster$output) {
-  sw_step("cluster", sw_cluster, list(...),
+  sw_pipeline_step("cluster", sw_cluster_run, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Cell Type Annotation
 #'
 #' Convenience constructor for a \code{\link{ProcessingStep}} that wraps
-#' \code{\link{sw_annotate_clusters}}. Accepts either an
-#' \code{sw_cluster_result} or a MFI tibble from \code{\link{sw_cluster_mfis}}
+#' \code{\link{sw_annotate_run}}. Accepts either an
+#' \code{sw_cluster_result} or a MFI tibble from \code{\link{sw_cluster_mfi}}
 #' as input and returns an annotation tibble.
 #'
-#' @param ... Additional arguments passed to \code{sw_annotate_clusters}.
+#' @param ... Additional arguments passed to \code{sw_annotate_run}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_annotate <- function(...,
+sw_pipeline_step_annotate <- function(...,
                              input_type  = .SW_STEP_DEFAULT_TYPES$annotate$input,
                              output_type = .SW_STEP_DEFAULT_TYPES$annotate$output) {
-  sw_step("annotate", sw_annotate_clusters, list(...),
+  sw_pipeline_step("annotate", sw_annotate_run, list(...),
           input_type = input_type, output_type = output_type)
 }
 
 #' Create a Step for Differential Expression
 #'
 #' Convenience constructor for a \code{\link{ProcessingStep}} that wraps
-#' \code{\link{sw_differential_expression}}. Input should be a
+#' \code{\link{sw_diff_expression}}. Input should be a
 #' \code{data.frame}/\code{tibble} with a \code{cluster} column; output is a
 #' long-format DE result tibble.
 #'
-#' @param ... Additional arguments passed to \code{sw_differential_expression}.
+#' @param ... Additional arguments passed to \code{sw_diff_expression}.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_step_differential <- function(...,
+sw_pipeline_step_diff <- function(...,
                                   input_type  = .SW_STEP_DEFAULT_TYPES$differential$input,
                                   output_type = .SW_STEP_DEFAULT_TYPES$differential$output) {
-  sw_step("differential", sw_differential_expression, list(...),
+  sw_pipeline_step("differential", sw_diff_expression, list(...),
           input_type = input_type, output_type = output_type)
 }
 

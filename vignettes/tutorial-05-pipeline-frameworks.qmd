@@ -22,14 +22,14 @@ This is **Part 5** of the SpectraWeaveR end-to-end tutorial series:
 4. [Clustering & Visualization](tutorial-04-clustering-visualization.qmd)
 5. **Pipeline Frameworks** (this vignette)
 
-This part covers: the `run_pipeline()` end-to-end orchestrator, the
-S7-based composable pipeline framework (`sw_step`, `sw_pipeline`,
+This part covers: the `sw_pipeline_run_all()` end-to-end orchestrator, the
+S7-based composable pipeline framework (`sw_pipeline_step`, `sw_pipeline`,
 pipeline manipulation, `%>>%` operator), and the `targets` backend for
 incremental pipeline execution.
 
-## The `run_pipeline()` orchestrator
+## The `sw_pipeline_run_all()` orchestrator
 
-`run_pipeline()` executes all pipeline steps in validated order:
+`sw_pipeline_run_all()` executes all pipeline steps in validated order:
 load FCS → remove margins → (optional gating) → signal QC →
 batch correction → clustering.
 
@@ -70,7 +70,7 @@ sample_meta <- tibble::tibble(
   batch = c("B1", "B2")
 )
 
-result <- run_pipeline(
+result <- sw_pipeline_run_all(
   fcs_dir = fcs_dir,
   sample_meta = sample_meta,
   markers = c("CD3", "CD4", "CD8"),
@@ -119,25 +119,25 @@ manipulate, and execute pipelines programmatically.
 
 ### Create and execute a step
 
-`sw_step()` wraps any R function as a processing step. `execute_step()`
+`sw_pipeline_step()` wraps any R function as a processing step. `sw_pipeline_step_run()`
 runs it.
 
 ```{r}
 #| label: step-basics
 #| eval: !expr requireNamespace("S7", quietly = TRUE)
 # Custom step: double the input
-step_double <- sw_step("double", function(x) x * 2)
+step_double <- sw_pipeline_step("double", function(x) x * 2)
 stopifnot(step_double@name == "double")
 stopifnot(is.function(step_double@FUN))
 
-result <- execute_step(step_double, 5)
+result <- sw_pipeline_step_run(step_double, 5)
 stopifnot(result == 10)
-cat("execute_step(double, 5) =", result, "\n")
+cat("sw_pipeline_step_run(double, 5) =", result, "\n")
 
 # Step with arguments
-step_add <- sw_step("add_n", function(x, n) x + n, ARGS = list(n = 3))
-stopifnot(execute_step(step_add, 7) == 10)
-cat("execute_step(add_n, 7) =", execute_step(step_add, 7), "\n")
+step_add <- sw_pipeline_step("add_n", function(x, n) x + n, ARGS = list(n = 3))
+stopifnot(sw_pipeline_step_run(step_add, 7) == 10)
+cat("sw_pipeline_step_run(add_n, 7) =", sw_pipeline_step_run(step_add, 7), "\n")
 ```
 
 ### Create a pipeline
@@ -148,9 +148,9 @@ cat("execute_step(add_n, 7) =", execute_step(step_add, 7), "\n")
 #| label: pipeline-create
 #| eval: !expr requireNamespace("S7", quietly = TRUE)
 pip <- sw_pipeline("math_ops", steps = list(
-  sw_step("double", function(x) x * 2),
-  sw_step("add_one", function(x) x + 1),
-  sw_step("square", function(x) x^2)
+  sw_pipeline_step("double", function(x) x * 2),
+  sw_pipeline_step("add_one", function(x) x + 1),
+  sw_pipeline_step("square", function(x) x^2)
 ))
 
 stopifnot(pip@name == "math_ops")
@@ -200,13 +200,13 @@ Pipelines are immutable — manipulation functions return new pipelines.
 #| label: pipeline-manipulation
 #| eval: !expr requireNamespace("S7", quietly = TRUE)
 # Add a step
-pip2 <- sw_pipeline_add(pip, sw_step("negate", function(x) -x))
+pip2 <- sw_pipeline_add(pip, sw_pipeline_step("negate", function(x) -x))
 stopifnot(sw_pipeline_length(pip2) == 4)
 stopifnot("negate" %in% sw_pipeline_step_names(pip2))
 cat("After add:", paste(sw_pipeline_step_names(pip2), collapse = " -> "), "\n")
 
 # Add at a specific position
-pip3 <- sw_pipeline_add(pip, sw_step("halve", function(x) x / 2), after = 1)
+pip3 <- sw_pipeline_add(pip, sw_pipeline_step("halve", function(x) x / 2), after = 1)
 stopifnot(sw_pipeline_step_names(pip3)[2] == "halve")
 cat("After insert:", paste(sw_pipeline_step_names(pip3), collapse = " -> "), "\n")
 
@@ -219,7 +219,7 @@ cat("After remove:", paste(sw_pipeline_step_names(pip4), collapse = " -> "), "\n
 # Replace a step
 pip5 <- sw_pipeline_replace(
   pip, "add_one",
-  sw_step("add_ten", function(x) x + 10)
+  sw_pipeline_step("add_ten", function(x) x + 10)
 )
 stopifnot("add_ten" %in% sw_pipeline_step_names(pip5))
 stopifnot(!("add_one" %in% sw_pipeline_step_names(pip5)))
@@ -227,10 +227,10 @@ cat("After replace:", paste(sw_pipeline_step_names(pip5), collapse = " -> "), "\
 
 # Concatenate two pipelines
 pip_a <- sw_pipeline("part_a", steps = list(
-  sw_step("step_a", function(x) x + 100)
+  sw_pipeline_step("step_a", function(x) x + 100)
 ))
 pip_b <- sw_pipeline("part_b", steps = list(
-  sw_step("step_b", function(x) x * 2)
+  sw_pipeline_step("step_b", function(x) x * 2)
 ))
 pip_combined <- sw_pipeline_concat(pip_a, pip_b, name = "combined")
 stopifnot(sw_pipeline_length(pip_combined) == 2)
@@ -270,8 +270,8 @@ The `%>>%` operator composes steps and/or pipelines into new pipelines.
 #| label: pipe-operator
 #| eval: !expr requireNamespace("S7", quietly = TRUE)
 # Step %>>% Step
-pip_from_pipe <- sw_step("triple", function(x) x * 3) %>>%
-                 sw_step("minus_one", function(x) x - 1)
+pip_from_pipe <- sw_pipeline_step("triple", function(x) x * 3) %>>%
+                 sw_pipeline_step("minus_one", function(x) x - 1)
 
 stopifnot(sw_pipeline_length(pip_from_pipe) == 2)
 
@@ -281,7 +281,7 @@ stopifnot(pipe_result$result == 11)
 cat("%>>% result:", pipe_result$result, "(expected 11)\n")
 
 # Pipeline %>>% Step
-pip_extended <- pip_from_pipe %>>% sw_step("halve", function(x) x / 2)
+pip_extended <- pip_from_pipe %>>% sw_pipeline_step("halve", function(x) x / 2)
 ext_result <- sw_pipeline_run(pip_extended, input = 4, trace = FALSE)
 # 4 * 3 = 12, 12 - 1 = 11, 11 / 2 = 5.5
 stopifnot(ext_result$result == 5.5)
@@ -297,52 +297,52 @@ core pipeline functions with sensible input/output type declarations.
 #| label: step-constructors
 #| eval: !expr requireNamespace("S7", quietly = TRUE)
 # These constructors create ProcessingStep objects ready for pipeline use
-step_read <- sw_step_read_fcs()
+step_read <- sw_pipeline_step_read_fcs()
 stopifnot(step_read@name == "read_fcs")
-cat("sw_step_read_fcs:", step_read@name, "\n")
+cat("sw_pipeline_step_read_fcs:", step_read@name, "\n")
 
-step_margins <- sw_step_remove_margins()
+step_margins <- sw_pipeline_step_filter_margins()
 stopifnot(step_margins@name == "remove_margins")
-cat("sw_step_remove_margins:", step_margins@name, "\n")
+cat("sw_pipeline_step_filter_margins:", step_margins@name, "\n")
 
-step_qc <- sw_step_signal_qc(IT_limit = 0.55)
+step_qc <- sw_pipeline_step_qc(IT_limit = 0.55)
 stopifnot(step_qc@name == "signal_qc")
 stopifnot(length(step_qc@ARGS) > 0)
-cat("sw_step_signal_qc:", step_qc@name, "(", length(step_qc@ARGS), "args)\n")
+cat("sw_pipeline_step_qc:", step_qc@name, "(", length(step_qc@ARGS), "args)\n")
 
-step_norm <- sw_step_normalize(markers = c("CD3", "CD4"),
+step_norm <- sw_pipeline_step_normalize(markers = c("CD3", "CD4"),
                                 norm_method = "scale")
 stopifnot(step_norm@name == "normalize")
-cat("sw_step_normalize:", step_norm@name, "\n")
+cat("sw_pipeline_step_normalize:", step_norm@name, "\n")
 
-step_som <- sw_step_create_som(markers = c("CD3", "CD4"),
+step_som <- sw_pipeline_step_som(markers = c("CD3", "CD4"),
                                 xdim = 4, ydim = 4)
 stopifnot(step_som@name == "create_som")
-cat("sw_step_create_som:", step_som@name, "\n")
+cat("sw_pipeline_step_som:", step_som@name, "\n")
 
-step_correct <- sw_step_correct_data(
+step_correct <- sw_pipeline_step_correct_apply(
   label = integer(0), markers = c("CD3", "CD4")
 )
 stopifnot(step_correct@name == "correct_data")
-cat("sw_step_correct_data:", step_correct@name, "\n")
+cat("sw_pipeline_step_correct_apply:", step_correct@name, "\n")
 
-step_bc <- sw_step_batch_correct(markers = c("CD3", "CD4"))
+step_bc <- sw_pipeline_step_correct(markers = c("CD3", "CD4"))
 stopifnot(step_bc@name == "batch_correct")
-cat("sw_step_batch_correct:", step_bc@name, "\n")
+cat("sw_pipeline_step_correct:", step_bc@name, "\n")
 
-step_clust <- sw_step_cluster(
+step_clust <- sw_pipeline_step_cluster(
   lineage_markers = c("CD3", "CD4"),
   method = "som", n_metaclusters = 5
 )
 stopifnot(step_clust@name == "cluster")
-cat("sw_step_cluster:", step_clust@name, "\n")
+cat("sw_pipeline_step_cluster:", step_clust@name, "\n")
 
 cat("\nAll 8 convenience step constructors verified.\n")
 ```
 
 ## targets backend
 
-The `targets` backend converts each `sw_step()` into a
+The `targets` backend converts each `sw_pipeline_step()` into a
 `targets::tar_target()` so reruns are incremental — only steps whose
 definition changed (and their downstream descendants) are recomputed.
 
@@ -351,9 +351,9 @@ definition changed (and their downstream descendants) are recomputed.
 #| eval: !expr requireNamespace("targets", quietly = TRUE) && requireNamespace("S7", quietly = TRUE)
 # Create a simple pipeline for targets
 pip_targets <- sw_pipeline("targets_demo", steps = list(
-  sw_step("times3", function(x) x * 3),
-  sw_step("plus5",  function(x) x + 5),
-  sw_step("sqrt",   function(x) sqrt(x))
+  sw_pipeline_step("times3", function(x) x * 3),
+  sw_pipeline_step("plus5",  function(x) x + 5),
+  sw_pipeline_step("sqrt",   function(x) sqrt(x))
 ))
 
 # First: write the _targets.R script without executing
@@ -397,15 +397,15 @@ unlink(targets_dir, recursive = TRUE)
 The following modules require external dependencies or API credentials
 and are covered in their own dedicated vignettes:
 
-- **Raw spectral unmixing** (`sw_autospectral_setup`, `sw_prepare_controls`,
-  `sw_extract_af_spectra`, `sw_extract_spectral_variants`, `sw_unmix`,
+- **Raw spectral unmixing** (`sw_unmix_setup`, `sw_unmix_prepare`,
+  `sw_unmix_extract_af`, `sw_unmix_extract_variants`, `sw_unmix_run`,
   `sw_unmix_pipeline`) — requires AutoSpectral + real spectral control
   files. See the [Spectral Unmixing vignette](spectral-unmixing.qmd).
 
 - **LLM assistant** (`sw_assistant`, `sw_assistant_configure`,
   `sw_assistant_batch_correction`, `sw_assistant_gating`,
-  `sw_assistant_unmixing`, `sw_generate_pipeline_code`,
-  `sw_quick_pipeline`, `sw_mcp_server`, `sw_pipeline_config_type`) —
+  `sw_assistant_unmixing`, `sw_pipeline_generate_code`,
+  `sw_pipeline_quick`, `sw_assistant_mcp`, `sw_pipeline_config_type`) —
   requires API credentials. See the [LLM Assistant vignette](llm-assistant.qmd).
 
 ## Session info
@@ -420,9 +420,9 @@ sessionInfo()
 
 | Function | Module |
 |----------|--------|
-| `run_pipeline()` | pipeline |
-| `sw_step()` | composable_pipeline |
-| `execute_step()` | composable_pipeline |
+| `sw_pipeline_run_all()` | pipeline |
+| `sw_pipeline_step()` | composable_pipeline |
+| `sw_pipeline_step_run()` | composable_pipeline |
 | `sw_pipeline()` | composable_pipeline |
 | `sw_pipeline_length()` | composable_pipeline |
 | `sw_pipeline_step_names()` | composable_pipeline |
@@ -434,14 +434,14 @@ sessionInfo()
 | `sw_pipeline_concat()` | composable_pipeline |
 | `sw_pipeline_run()` | composable_pipeline |
 | `%>>%` | composable_pipeline |
-| `sw_step_read_fcs()` | composable_pipeline |
-| `sw_step_remove_margins()` | composable_pipeline |
-| `sw_step_signal_qc()` | composable_pipeline |
-| `sw_step_normalize()` | composable_pipeline |
-| `sw_step_create_som()` | composable_pipeline |
-| `sw_step_correct_data()` | composable_pipeline |
-| `sw_step_batch_correct()` | composable_pipeline |
-| `sw_step_cluster()` | composable_pipeline |
+| `sw_pipeline_step_read_fcs()` | composable_pipeline |
+| `sw_pipeline_step_filter_margins()` | composable_pipeline |
+| `sw_pipeline_step_qc()` | composable_pipeline |
+| `sw_pipeline_step_normalize()` | composable_pipeline |
+| `sw_pipeline_step_som()` | composable_pipeline |
+| `sw_pipeline_step_correct_apply()` | composable_pipeline |
+| `sw_pipeline_step_correct()` | composable_pipeline |
+| `sw_pipeline_step_cluster()` | composable_pipeline |
 | `sw_pipeline_to_targets()` | targets_backend |
 | `sw_pipeline_run_targets()` | targets_backend |
 
