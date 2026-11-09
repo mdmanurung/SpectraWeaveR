@@ -20,11 +20,13 @@ channel.}
 negative median an event must sit to count as hyper-negative.}
 
 \item{pairs}{\code{NULL} (no pair checks), the string \code{"all"} (every pair of
-\code{channels}), or a two-column character matrix of channel pairs.}
+\code{channels}), or a two-column character matrix of channel pairs. Each
+pair gives \code{neg_corr} once and \code{spill_corr} in both directions.}
 }
 \value{
 A tibble of class \code{sw_negative_audit} with columns \code{file}, \code{check},
-\code{channel} (a channel, or \code{"A ~ B"} for a pair), \code{value} and \code{detail}.
+\code{channel} (a channel, \code{"A ~ B"} for a pair, or \code{"A > B"} for a directed
+pair), \code{value} and \code{detail}.
 }
 \description{
 For each file and channel, fit a two-component Gaussian mixture with
@@ -49,6 +51,14 @@ mismatched controls push events there.
 events that are negative in both, and its robust z across files, for each
 pair in \code{pairs}. A tilted ("angled") negative shows here while a
 whole-file correlation can hide it.
+\item \code{spill_corr}, \code{spill_corr_z}: for each pair, in both directions, the
+Spearman correlation of the two channels inside the events that are
+positive in the first and negative in the second (\code{"A > B"}), and its
+robust z across files. Signal leaking from a bright channel into one that
+should be negative, in proportion to the bright signal, shows here: tandem
+breakdown into its parent (for example PE-Cy7 into PE) and dye-dye
+interactions (for example Spark UV 387 into RB670), as described in O.
+Burton's Colibri Cytometry posts. Pass those pairs in \code{pairs}.
 }
 }
 \details{

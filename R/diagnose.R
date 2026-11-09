@@ -292,7 +292,9 @@ sw_diagnose <- function(
   "neg_median_z",
   "neg_sd_z",
   "neg_corr",
-  "neg_corr_z"
+  "neg_corr_z",
+  "spill_corr",
+  "spill_corr_z"
 )
 # Novelty log-density: low is unusual. GMM separation: a small value means the
 # channel did not split into a negative and a positive, so it ranks first.
@@ -315,7 +317,8 @@ sw_diagnose <- function(
 #' For each module and check, list the `n` subjects (files, batches or
 #' markers) with the largest value. No cutoff is applied. Signed checks
 #' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`, `gain_z`,
-#' `gain_order_rho`, `neg_median_z`, `neg_sd_z`, `neg_corr`, `neg_corr_z`) are
+#' `gain_order_rho`, `neg_median_z`, `neg_sd_z`, `neg_corr`, `neg_corr_z`,
+#' `spill_corr`, `spill_corr_z`) are
 #' ranked by the size of the value, ignoring its sign. `gain_batch_ratio` is
 #' ranked by `abs(log(value))`. For `novelty_log_density` and `separation` the
 #' smallest values are the unusual ones, so those checks rank from the lowest

@@ -160,3 +160,18 @@ test_that("cluster stability reports k-means non-convergence instead of hiding i
   )
   expect_gt(length(attr(st, "kmeans_warnings")), 0)
 })
+
+test_that("spill_corr finds a leak from a bright channel into one that should be negative", {
+  set.seed(11)
+  files <- lapply(1:10, \(i) make_neg_file())
+  # Breakdown-like leak in f10: A-positive events push signal into B where B is negative.
+  x <- files[[10]]
+  leak <- x[, "A"] > 1.5 & x[, "B"] < 1.5
+  x[leak, "B"] <- x[leak, "B"] + 0.15 * x[leak, "A"]
+  files[[10]] <- x
+  names(files) <- paste0("f", 1:10)
+  na <- sw_negative_audit(files, c("A", "B"), 1500, seed = 1, hyper_k = 4, pairs = "all")
+  z <- na[na$check == "spill_corr_z" & na$channel == "A > B", ]
+  expect_equal(z$file[which.max(z$value)], "f10")
+  expect_setequal(unique(na$channel[na$check == "spill_corr"]), c("A > B", "B > A"))
+})

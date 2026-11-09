@@ -32,6 +32,14 @@
 #'   events that are negative in both, and its robust z across files, for each
 #'   pair in `pairs`. A tilted ("angled") negative shows here while a
 #'   whole-file correlation can hide it.
+#' * `spill_corr`, `spill_corr_z`: for each pair, in both directions, the
+#'   Spearman correlation of the two channels inside the events that are
+#'   positive in the first and negative in the second (`"A > B"`), and its
+#'   robust z across files. Signal leaking from a bright channel into one that
+#'   should be negative, in proportion to the bright signal, shows here: tandem
+#'   breakdown into its parent (for example PE-Cy7 into PE) and dye-dye
+#'   interactions (for example Spark UV 387 into RB670), as described in O.
+#'   Burton's Colibri Cytometry posts. Pass those pairs in `pairs`.
 #'
 #' @details
 #' **Scale is yours.** `data` must be on the analysis scale. The mixture is fit
@@ -55,10 +63,12 @@
 #' @param hyper_k Positive number: how many negative robust SDs below the
 #'   negative median an event must sit to count as hyper-negative.
 #' @param pairs `NULL` (no pair checks), the string `"all"` (every pair of
-#'   `channels`), or a two-column character matrix of channel pairs.
+#'   `channels`), or a two-column character matrix of channel pairs. Each
+#'   pair gives `neg_corr` once and `spill_corr` in both directions.
 #'
 #' @return A tibble of class `sw_negative_audit` with columns `file`, `check`,
-#'   `channel` (a channel, or `"A ~ B"` for a pair), `value` and `detail`.
+#'   `channel` (a channel, `"A ~ B"` for a pair, or `"A > B"` for a directed
+#'   pair), `value` and `detail`.
 #'
 #' @seealso [sw_fcs_signal_audit()], [sw_diagnose()]
 #'
@@ -134,12 +144,33 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
         } else {
           suppressWarnings(stats::cor(x[both, a], x[both, b], method = "spearman"))
         }
-        tibble::tibble(
-          file = f,
-          check = "neg_corr",
-          channel = paste(a, b, sep = " ~ "),
-          value = value,
-          detail = paste0("joint negatives=", if (anyNA(both)) NA else sum(both))
+        # Directed leak: positive in the source, negative in the target.
+        spill <- lapply(list(c(a, b), c(b, a)), function(st) {
+          src <- fits[[st[1]]]$negative
+          tgt <- fits[[st[2]]]$negative
+          keep <- !src & tgt
+          v <- if (anyNA(keep) || sum(keep) < 10) {
+            NA_real_
+          } else {
+            suppressWarnings(stats::cor(x[keep, st[1]], x[keep, st[2]], method = "spearman"))
+          }
+          tibble::tibble(
+            file = f,
+            check = "spill_corr",
+            channel = paste(st[1], st[2], sep = " > "),
+            value = v,
+            detail = paste0("events=", if (anyNA(keep)) NA else sum(keep))
+          )
+        })
+        dplyr::bind_rows(
+          tibble::tibble(
+            file = f,
+            check = "neg_corr",
+            channel = paste(a, b, sep = " ~ "),
+            value = value,
+            detail = paste0("joint negatives=", if (anyNA(both)) NA else sum(both))
+          ),
+          spill
         )
       })
       rows <- c(rows, pair_rows)
@@ -157,7 +188,8 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
     list(
       c("neg_median", "neg_median_z"),
       c("neg_sd", "neg_sd_z"),
-      c("neg_corr", "neg_corr_z")
+      c("neg_corr", "neg_corr_z"),
+      c("spill_corr", "spill_corr_z")
     ),
     function(ck) {
       d <- out[out$check == ck[[1]], ]

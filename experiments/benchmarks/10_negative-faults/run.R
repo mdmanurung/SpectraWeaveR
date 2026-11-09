@@ -3,7 +3,8 @@
 #          the negative population, and do they beat the whole-file checks (median_z, sd_z,
 #          corr_shift) on those faults? Fault classes from the Colibri blog: shifted negative
 #          (unmixing skew), widened negative (spread / AF mismatch), hyper-negative events
-#          (AF over-correction), angled negative (spillover between two channels).
+#          (AF over-correction), angled negative (spillover between two channels), and a leak
+#          from a bright channel into a negative one (tandem breakdown, dye interaction).
 # Run:     Rscript experiments/benchmarks/10_negative-faults/run.R <out_dir>
 # Inputs:  none (simulated here, analysis scale)
 # Outputs: <out_dir>/negative_long.csv    per seed, fault, size, check, view: AUROC
@@ -38,7 +39,9 @@ FAULTS <- tibble::tribble(
   "hyper_negative", 0.01, # share of negative events moved to -8 negative SDs
   "hyper_negative", 0.03,
   "angled_negative", 0.1, # slope added from channel 1 into channel 2, negatives only
-  "angled_negative", 0.3
+  "angled_negative", 0.3,
+  "spill_leak", 0.05, # share of the C1 signal leaking into C2 where C1 is positive and C2 negative
+  "spill_leak", 0.15
 )
 
 # Simulation -----------------------------------------------------------------
@@ -69,6 +72,10 @@ inject <- function(x, fault, size) {
     angled_negative = {
       both <- neg1 & neg2
       x[both, "C2"] <- x[both, "C2"] + size * x[both, "C1"]
+    },
+    spill_leak = {
+      leak <- !neg1 & neg2
+      x[leak, "C2"] <- x[leak, "C2"] + size * x[leak, "C1"]
     }
   )
   x
@@ -110,6 +117,8 @@ one_run <- function(seed, fault, size) {
     "hyper_negative_share | hit row" = hit_row(na, "hyper_negative_share", "C2", "file", "channel"),
     "neg_corr_z | hit row" = hit_row(na, "neg_corr_z", "C1 ~ C2", "file", "channel"),
     "neg_corr_z | max over pairs" = max_row(na, "neg_corr_z", "file"),
+    "spill_corr_z | hit row" = hit_row(na, "spill_corr_z", "C1 > C2", "file", "channel"),
+    "spill_corr_z | max over pairs" = max_row(na, "spill_corr_z", "file"),
     "median_z (whole file) | hit row" = hit_row(sa, "median_z", "C2", "file", "channel"),
     "sd_z (whole file) | hit row" = hit_row(sa, "sd_z", "C2", "file", "channel"),
     "corr_shift (whole file) | max over pairs" = max_row(sa, "corr_shift", "file")
