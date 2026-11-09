@@ -16,7 +16,7 @@ pkgload::load_all(".", export_all = FALSE, quiet = TRUE)
 source("experiments/benchmarks/05_cytether-synthetic/adapters.R")
 
 # Parameters (approved by the user unless marked) ---------------------------------
-MIN_CELLS <- 10 # G1: smallest reference summary; excludes about 37% of S4 summaries
+MIN_CELLS <- as.integer(Sys.getenv("SW_MIN_CELLS", "10")) # G1: approved value 10; the env override is for labelled diagnostics only
 SEED <- 1L # paired_shift draws no random numbers; recorded in the model only
 TRANSFORM <- list(name = "asinh", cofactor = 5) # nominal label: simulated data are already on one scale
 VARIANCE_FLOOR <- 1e-8 # numerical floor on variance components (heb only); sensitivity to be ablated
