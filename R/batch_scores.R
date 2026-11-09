@@ -18,6 +18,10 @@
 #'   explains (between-batch sum of squares over total). Near 0 means files
 #'   from different batches look alike; near 1 means the batch decides the
 #'   value.
+#' * `spread_ratio`: per batch, the median over its files of each file's SD,
+#'   divided by the same median over all files. 1 means the same width as the
+#'   cohort; a batch with a stretched marker or a split into two modes is above
+#'   1. Medians and pooled EMD can miss a symmetric widening.
 #' * `order_rho`: Spearman correlation between a file's marker median and its
 #'   acquisition order, within each batch. A steady drift inside a batch shows
 #'   here. Only when `order` is given and a batch has at least 4 files.
@@ -166,6 +170,17 @@ sw_batch_scores <- function(
   }
   colnames(fmed) <- markers
   rownames(fmed) <- files
+  # File SDs per marker, for the spread ratio.
+  fsd <- t(vapply(
+    drawn,
+    function(m) apply(m, 2, stats::sd),
+    numeric(length(markers))
+  ))
+  if (length(markers) == 1) {
+    fsd <- matrix(fsd, ncol = 1)
+  }
+  colnames(fsd) <- markers
+  rownames(fsd) <- files
   n_by_batch <- table(batch)[batches]
 
   rows <- list()
@@ -211,6 +226,22 @@ sw_batch_scores <- function(
       if (sst > 0) ssb / sst else NA_real_,
       length(files)
     )
+    # Spread: batch median of file SDs over the median of all file SDs. Catches a
+    # change of width or a split into modes that medians and pooled EMD miss.
+    all_sd <- stats::median(fsd[, mk])
+    for (b in batches) {
+      add(
+        "spread_ratio",
+        mk,
+        b,
+        if (all_sd > 0) {
+          stats::median(fsd[batch == b, mk]) / all_sd
+        } else {
+          NA_real_
+        },
+        n_by_batch[[b]]
+      )
+    }
     if (!is.null(order)) {
       for (b in batches) {
         idx <- batch == b

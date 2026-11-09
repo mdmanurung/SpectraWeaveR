@@ -63,6 +63,23 @@ test_that("no batch effect gives small scores", {
   res <- scores(make_batches(shift = 0))
   expect_lt(max(res$value[res$check == "pair_emd"]), 0.3)
   expect_lt(max(res$value[res$check == "median_range"]), 0.3)
+  expect_lt(max(abs(log(res$value[res$check == "spread_ratio"]))), 0.1)
+})
+
+test_that("a widened batch shows in spread_ratio for that batch and marker only", {
+  x <- make_batches(shift = 0)
+  for (i in names(x$batch)[x$batch == "b2"]) {
+    v <- x$data[[i]][, "A"]
+    x$data[[i]][, "A"] <- mean(v) + (v - mean(v)) * 1.5
+  }
+  res <- scores(x)
+  sr <- res[res$check == "spread_ratio", ]
+  a_b2 <- sr$value[sr$marker == "A" & sr$batch == "b2"]
+  expect_gt(a_b2, 1.3)
+  expect_lt(sr$value[sr$marker == "A" & sr$batch == "b1"], 1.1)
+  expect_lt(sr$value[sr$marker == "B" & sr$batch == "b2"], 1.1)
+  # The median does not move, so median_range stays small for A.
+  expect_lt(get(res, "median_range", "A"), 0.3)
 })
 
 test_that("order drift inside a batch is found, and small batches are skipped", {
