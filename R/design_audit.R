@@ -465,10 +465,13 @@ sw_design_audit <- function(
     )
   }) |>
     dplyr::bind_rows()
-  eligibility <- dplyr::bind_rows(
-    eligibility,
-    .sw_evaluate_paired_shift(anchor, n_batches, bridge)
-  )
+  ps_row <- .sw_evaluate_paired_shift(anchor, n_batches, bridge)
+  # heb v0 uses the same rule (every batch shares a reference with the anchor);
+  # a rule based on a connected reference graph is a later variant.
+  heb_row <- ps_row
+  heb_row$name <- "heb"
+  heb_row$sw_function <- "sw_corrector_fit(engine = 'heb')"
+  eligibility <- dplyr::bind_rows(eligibility, ps_row, heb_row)
 
   if (length(confounded) > 0) {
     warnings_out <- c(
