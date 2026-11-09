@@ -12,6 +12,7 @@ Outputs (in <out_dir>):
   invariance.csv          largest historical_max_delta per method (must be 0)
   primary.png             one point per seed over the mean, per method
 """
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 # Parameters --------------------------------------------------------------------
-PRIMARY_STAGES = ["S4", "S9", "S10", "S11"]  # benchmark card: stages with reference donors
+PRIMARY_STAGES = os.environ.get("SW_PRIMARY_STAGES", "S4,S9,S10,S11").split(",")  # benchmark card default; the shrinkage scenarios set their own
 ABSTAIN_STAGES = ["S3", "S5", "S12"]  # guardrail: must abstain or leave values unchanged
 N_BOOT = 10000  # resamples of seeds for the paired interval
 BOOT_SEED = 20261109  # fixed so the interval reproduces
@@ -62,6 +63,18 @@ for method in wide.columns:
     })
 summary = pd.DataFrame(rows).merge(extra, on="method", how="left").merge(flags, on="method", how="left")
 summary.sort_values("mean_primary").to_csv(out / "primary_summary.csv", index=False)
+
+# Per stage: mean over seeds with the seed-level paired difference to the reference ----------------
+stage_rows = []
+for stage, d in scores[scores.supported].groupby("stage"):
+    w = d.pivot(index="seed", columns="method", values="heldout_ref_rmse")
+    c = d.pivot(index="seed", columns="method", values="heldout_ref_rmse_common_with_ps")
+    for method in w.columns:
+        diff = (w[method] - w[ref]).dropna().to_numpy() if ref in w.columns else np.array([])
+        lo, hi = seed_boot(diff) if len(diff) > 1 else (np.nan, np.nan)
+        stage_rows.append({"stage": stage, "method": method, "rmse": w[method].mean(), "rmse_common_with_ref": c[method].mean() if method in c else np.nan,
+                           f"diff_vs_{ref}": diff.mean() if len(diff) else np.nan, "diff_ci_low": lo, "diff_ci_high": hi})
+pd.DataFrame(stage_rows).to_csv(out / "by_stage.csv", index=False)
 
 # Guardrails -------------------------------------------------------------------------
 # Abstention content: unsupported states must stay untouched (S5 Adaptive_NK, S12 future-study cells).

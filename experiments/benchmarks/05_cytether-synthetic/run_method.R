@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Purpose: correct the simulated stages S0 to S12 of one seed with one method and write the corrected matrices.
 # Run:     pixi run Rscript experiments/benchmarks/05_cytether-synthetic/run_method.R <seed_dir> <out_dir> <method>
-#          method is one of: none, naive_batch_center (unsafe stress control), paired_shift, heb (pool none), heb_pool_pop, heb_pool_all, cycombine, cytonorm (adapters.R), reversed_shift (sanity: paired_shift with the correction applied in the wrong direction)
+#          method is one of: none, naive_batch_center (unsafe stress control), paired_shift, heb (pool none), heb_flat (no study level), heb_pool_pop, heb_pool_all, cycombine, cytonorm (adapters.R), reversed_shift (sanity: paired_shift with the correction applied in the wrong direction)
 # Inputs:  <seed_dir>/<stage>/observed_X.csv.gz and cell_metadata.csv.gz (from export_observed.py; never the truth file)
 # Outputs (in <out_dir>/<method>/<stage>/):
 #   corrected_X.csv.gz   corrected matrix, same shape and row order as observed_X.csv.gz
@@ -26,7 +26,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_pool_pop", "heb_pool_all", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -110,9 +110,12 @@ correct_stage <- function(stage_dir) {
 
   xt <- as_tibble(x) |> mutate(sample_id = meta$sample_id, .before = 1)
   pop <- meta$cell_type
-  engine <- if (method == "reversed_shift") "paired_shift" else if (startsWith(method, "heb")) "heb" else method
-  heb_pool <- c(heb = "none", heb_pool_pop = "population", heb_pool_all = "all")[method]
-  hierarchy <- if (engine == "heb") distinct(meta, batch, study) else NULL
+  engine <- if (method == "reversed_shift") "paired_shift" else if (method == "heb_shared") "heb_shared" else if (startsWith(method, "heb")) "heb" else method
+  heb_pool <- c(heb = "none", heb_flat = "none", heb_pool_pop = "population", heb_pool_all = "all", heb_shared = NA)[method]
+  hierarchy <- if (engine %in% c("heb", "heb_shared")) distinct(meta, batch, study) else NULL
+  if (method == "heb_flat") {
+    hierarchy$study <- hierarchy$batch # flat arm: one random effect per batch, no study level
+  }
   model <- sw_corrector_fit(
     xt[fit_rows, ], manifest, audit,
     population = pop[fit_rows], markers = markers, transform = TRANSFORM,
@@ -153,7 +156,7 @@ correct_stage <- function(stage_dir) {
 
 # All stages ----------------------------------------------------------------------
 out_root <- file.path(args[[2]], method)
-stages <- list.files(seed_dir, pattern = "^S[0-9]+$")
+stages <- list.files(seed_dir, pattern = "^S[0-9]+b?$") # S13b is a stage too
 for (stage in stages) {
   out_dir <- file.path(out_root, stage)
   stopifnot("output dir must not exist yet" = !dir.exists(out_dir))

@@ -471,7 +471,10 @@ sw_design_audit <- function(
   heb_row <- ps_row
   heb_row$name <- "heb"
   heb_row$sw_function <- "sw_corrector_fit(engine = 'heb')"
-  eligibility <- dplyr::bind_rows(eligibility, ps_row, heb_row)
+  shared_row <- ps_row
+  shared_row$name <- "heb_shared"
+  shared_row$sw_function <- "sw_corrector_fit(engine = 'heb_shared')"
+  eligibility <- dplyr::bind_rows(eligibility, ps_row, heb_row, shared_row)
 
   if (length(confounded) > 0) {
     warnings_out <- c(
