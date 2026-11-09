@@ -119,7 +119,40 @@ So `sw_diagnose()` keeps one row per file and marker, and `sw_diagnosis_top()`
 ranks within each check and marker. There is no per-file summary score; that
 was decided on 2026-11-09.
 
+## Faults that live only in the negative population
+
+`sw_negative_audit()` finds each channel's negative population with a
+two-component Gaussian mixture and checks its centre, width, events far below
+it, and its correlation with another channel's negative. These symptoms come
+from O. Burton's Colibri Cytometry posts on unmixing errors.
+
+In simulation (`experiments/benchmarks/10_negative-faults/`, 12 of 72 files
+faulty, 5 seeds), each fault is found by its own check: a 0.3 SD shift of the
+negative by `neg_median_z` (AUROC 1.00), a x1.5 widening by `neg_sd_z` (1.00),
+3% hyper-negative events by `hyper_negative_share` (1.00), and a 0.3 slope
+between two negatives by `neg_corr_z` (1.00). The whole-file checks score 0.45
+to 0.65 on the same faults, except `sd_z` at 0.94 for hyper-negatives
+(figure: `figures/negative-faults-sim.png`).
+
+![AUROC per check for each negative-population fault, simulation. Source data:
+`figures/negative-faults-sim-source.csv`.](figures/negative-faults-sim.png)
+
+On 36 real donor files with the same faults injected
+(`experiments/integration/aurora_exvivo/06_negative_real.R`), the matching
+check scores 0.93 to 1.00 and the whole-file checks 0.43 to 0.70
+(figure: `figures/negative-faults-real.png`). A 0.3 SD shift of the negative is
+found at 0.84. These real-file numbers cover only the 10 of 40 channels whose
+mixture separation was 3 or more; read `separation` before trusting the
+negative checks on a channel.
+
+![AUROC per check for negative-population faults injected into real files.
+Source data: `figures/negative-faults-real-source.csv`.](figures/negative-faults-real.png)
+
 ## What the checks cannot see
+
+- The negative checks assume a channel splits into a negative and a positive
+  population. In the real Aurora files only 10 of 40 channels did (separation
+  of 3 or more); on the rest the "negative" is half of one population.
 
 These limits come from the benchmarks above and from benchmark v1.
 
