@@ -148,6 +148,21 @@ negative checks on a channel.
 ![AUROC per check for negative-population faults injected into real files.
 Source data: `figures/negative-faults-real-source.csv`.](figures/negative-faults-real.png)
 
+### Leaks into a negative channel
+
+Tandem breakdown and some dye interactions add signal to a channel that should
+be negative, in proportion to a bright channel. `spill_corr` (in
+`sw_negative_audit()`) is the Spearman correlation of the two channels inside
+events that are positive in the source and negative in the target; pass the
+pairs you suspect (for example a tandem and its parent) in `pairs`. On 36 real
+donor files with a leak injected that adds no net shift, `spill_corr_z` found a
+15% leak at AUROC 0.94 and a 5% leak at 0.68, while every other check stayed at
+0.49 to 0.67 (figure: `figures/spill-leak-real.png`). In simulation, a leak that
+also shifts the negative is found as well by `neg_median_z` and `corr_shift`.
+
+![AUROC for a leak from a bright channel into a negative one, real files.
+Source data: `figures/spill-leak-real-source.csv`.](figures/spill-leak-real.png)
+
 ## Is the clustering stable enough to trust the cluster checks?
 
 `sw_cluster_stability()` reruns k-means with several seeds and subsample sizes
