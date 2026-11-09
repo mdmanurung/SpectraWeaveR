@@ -4,7 +4,7 @@
 \alias{sw_diagnose}
 \title{Run the technical diagnostics and collect their numbers in one table}
 \usage{
-sw_diagnose(data, header, signal, anomaly, batch)
+sw_diagnose(data, header, signal, anomaly, batch, cluster)
 }
 \arguments{
 \item{data}{A named list of per-file numeric matrices (event data on the
@@ -21,6 +21,9 @@ analysis scale), or \code{NULL} when only \code{header} is used.}
 
 \item{batch}{\code{NULL} or a list with \code{batch}, \code{markers}, \code{n_events}, \code{seed},
 \code{order}.}
+
+\item{cluster}{\code{NULL} or a list with \code{markers}, \code{k}, \code{n_events}, \code{seed},
+\code{nstart}, \code{min_cluster_events}.}
 }
 \value{
 A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
@@ -29,7 +32,7 @@ A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
 lists the modules that ran.
 }
 \description{
-Run any of four diagnostic modules and stack what they return into one tidy
+Run any of five diagnostic modules and stack what they return into one tidy
 table (\code{module}, \code{subject}, \code{check}, \code{item}, \code{value}, \code{text}). A module runs
 only when you give it a settings list; pass \code{NULL} to skip it. Nothing is
 marked pass or fail. Use \code{\link[=sw_diagnosis_top]{sw_diagnosis_top()}} to see the files or batches
@@ -39,6 +42,7 @@ with the largest value per check.\tabular{lll}{
    \code{signal} \tab \code{\link[=sw_fcs_signal_audit]{sw_fcs_signal_audit()}} \tab \code{data} \cr
    \code{anomaly} \tab \code{\link[=sw_anomaly_features]{sw_anomaly_features()}} + \code{\link[=sw_anomaly_flag_outlier]{sw_anomaly_flag_outlier()}} (+ \code{\link[=sw_anomaly_flag_novelty]{sw_anomaly_flag_novelty()}}) \tab \code{data} \cr
    \code{batch} \tab \code{\link[=sw_batch_scores]{sw_batch_scores()}} \tab \code{data} and batch labels \cr
+   \code{cluster} \tab \code{\link[=sw_cluster_scores]{sw_cluster_scores()}} \tab \code{data} \cr
 }
 }
 \details{
@@ -51,7 +55,7 @@ kept. Add \code{novelty_reference} and \code{novelty_quantile} to also compute n
 log-densities.
 
 \strong{Modules are independent.} A fault one module misses may show in another.
-Run all four when you can.
+Run all five when you can.
 }
 \examples{
 \dontrun{

@@ -16,9 +16,10 @@ A tibble with the same columns as the diagnosis plus \code{rank}.
 }
 \description{
 For each module and check, list the \code{n} subjects (files, batches or
-markers) with the largest value. No cutoff is applied. For
-\code{novelty_log_density} the smallest values are the unusual ones, so that check
-is ranked from the lowest value.
+markers) with the largest value. No cutoff is applied. Signed checks
+(\code{median_z}, \code{sd_z}, \code{freq_z}, \code{time_trend}, \code{order_rho}) are ranked by the
+size of the value, ignoring its sign. For \code{novelty_log_density} the smallest
+values are the unusual ones, so that check is ranked from the lowest value.
 }
 \examples{
 \dontrun{

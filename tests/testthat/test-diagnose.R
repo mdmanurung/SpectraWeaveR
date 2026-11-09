@@ -30,15 +30,15 @@ test_that("every argument must be given", {
   expect_error(sw_diagnose(), "no default")
   x <- make_dx()
   expect_error(
-    sw_diagnose(x$data, NULL, NULL, NULL, NULL),
+    sw_diagnose(x$data, NULL, NULL, NULL, NULL, NULL),
     "at least one module"
   )
   expect_error(
-    sw_diagnose(NULL, NULL, signal_set, NULL, NULL),
+    sw_diagnose(NULL, NULL, signal_set, NULL, NULL, NULL),
     "`data` is needed"
   )
   expect_error(
-    sw_diagnose(x$data, "paths", NULL, NULL, NULL),
+    sw_diagnose(x$data, "paths", NULL, NULL, NULL, NULL),
     "must be NULL or a list"
   )
 })
@@ -56,7 +56,8 @@ test_that("signal and batch modules stack into one table", {
       n_events = 200,
       seed = 1,
       order = NULL
-    )
+    ),
+    cluster = NULL
   )
   expect_s3_class(dx, "sw_diagnosis")
   expect_equal(attr(dx, "modules"), c("signal", "batch"))
@@ -86,12 +87,12 @@ test_that("the anomaly module keeps forest scores, and novelty when asked", {
     sample_size = 10,
     ndim = 1
   )
-  dx <- sw_diagnose(x$data, NULL, NULL, an, NULL)
+  dx <- sw_diagnose(x$data, NULL, NULL, an, NULL, NULL)
   expect_equal(unique(dx$check), "outlier_score")
   expect_equal(nrow(dx), 15)
   an$novelty_reference <- paste0("f", c(1:2, 4:8, 10:15)) # 13 files > 9 features
   an$novelty_quantile <- 0.05
-  dx2 <- sw_diagnose(x$data, NULL, NULL, an, NULL)
+  dx2 <- sw_diagnose(x$data, NULL, NULL, an, NULL, NULL)
   expect_setequal(unique(dx2$check), c("outlier_score", "novelty_log_density"))
 })
 
@@ -115,7 +116,8 @@ test_that("the header module reads FCS headers", {
     header = list(paths = paths, keywords = "$CYT", reference = paths[1]),
     signal = NULL,
     anomaly = NULL,
-    batch = NULL
+    batch = NULL,
+    cluster = NULL
   )
   hit <- dx[dx$subject == "b.fcs" & dx$check == "keyword $CYT", ]
   expect_equal(hit$value, 1)
@@ -125,7 +127,7 @@ test_that("the header module reads FCS headers", {
 
 test_that("sw_diagnosis_top ranks per check and needs n", {
   x <- make_dx()
-  dx <- sw_diagnose(x$data, NULL, signal_set, NULL, NULL)
+  dx <- sw_diagnose(x$data, NULL, signal_set, NULL, NULL, NULL)
   expect_error(sw_diagnosis_top(dx), "n")
   expect_error(sw_diagnosis_top(data.frame(), n = 2), "must come from")
   top <- sw_diagnosis_top(dx, n = 2)
@@ -133,4 +135,37 @@ test_that("sw_diagnosis_top ranks per check and needs n", {
   sat <- top[top$check == "saturation_share" & top$item == "A", ]
   expect_equal(nrow(sat), 2)
   expect_equal(sat$subject[sat$rank == 1], "f3")
+})
+
+test_that("signed checks rank by size, so a large negative z comes first", {
+  x <- make_dx()
+  # Lower marker B of one file by 3 SD: its median_z is large and negative.
+  x$data$f7[, "B"] <- x$data$f7[, "B"] - 3
+  dx <- sw_diagnose(x$data, NULL, signal_set, NULL, NULL, NULL)
+  z <- dx[dx$check == "median_z" & dx$item == "B", ]
+  expect_lt(z$value[z$subject == "f7"], -3)
+  top <- sw_diagnosis_top(dx, n = 1)
+  expect_equal(top$subject[top$check == "median_z" & top$item == "B"], "f7")
+})
+
+test_that("the cluster module adds cluster rows with their cluster in the text", {
+  x <- make_dx()
+  dx <- sw_diagnose(
+    x$data,
+    header = NULL,
+    signal = NULL,
+    anomaly = NULL,
+    batch = NULL,
+    cluster = list(
+      markers = c("A", "B", "C"),
+      k = 3,
+      n_events = 200,
+      seed = 1,
+      nstart = 3,
+      min_cluster_events = 10
+    )
+  )
+  expect_equal(attr(dx, "modules"), "cluster")
+  expect_setequal(unique(dx$check), c("freq_z", "median_z"))
+  expect_true(all(grepl("^cluster [0-9]+; n_events=", dx$text)))
 })

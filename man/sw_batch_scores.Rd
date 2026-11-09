@@ -40,6 +40,12 @@ median is the median over its files of each file's median.
 explains (between-batch sum of squares over total). Near 0 means files
 from different batches look alike; near 1 means the batch decides the
 value.
+\item \code{spread_ratio}: per batch, the median over its files of each file's SD,
+divided by the same median over all files. 1 means the same width as the
+cohort; a batch with a stretched marker or a split into two modes is above
+\enumerate{
+\item Medians and pooled EMD can miss a symmetric widening.
+}
 \item \code{order_rho}: Spearman correlation between a file's marker median and its
 acquisition order, within each batch. A steady drift inside a batch shows
 here. Only when \code{order} is given and a batch has at least 4 files.

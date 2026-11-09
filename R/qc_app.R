@@ -31,7 +31,8 @@
   }
 }
 
-# Rows of one check, largest value first (novelty log-density: lowest first).
+# Rows of one check, largest value first. Signed checks rank by size; novelty
+# log-density ranks from the lowest (see .sw_diag_key()).
 .sw_qc_app_data <- function(diagnosis, module, check, n) {
   d <- diagnosis[
     diagnosis$module == module &
@@ -46,7 +47,11 @@
     d$subject,
     paste(d$subject, d$item, sep = " / ")
   )
-  d <- d[order(if (check == "novelty_log_density") d$value else -d$value), ]
+  # Cluster rows repeat a file and marker per cluster; the text names the cluster.
+  if (module == "cluster") {
+    d$label <- paste0(d$label, " (", sub(";.*", "", d$text), ")")
+  }
+  d <- d[order(-.sw_diag_key(d$check, d$value)), ]
   utils::head(d, n)
 }
 

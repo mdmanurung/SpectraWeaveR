@@ -58,6 +58,16 @@ level). A clog or a pressure change makes the event rate uneven. Only when
 \code{time_channel} is given.
 \item \code{max_gap}: largest gap between consecutive event times, as a multiple of
 the median gap (file level). Only when \code{time_channel} is given.
+\item \code{median_z}, \code{sd_z}: robust z-score of the file's median and of its SD in
+a channel against all files, \code{(value - median) / (1.4826 * MAD)} over
+files. A shift of one marker shows in \code{median_z}; a stretch or a split
+into two modes widens the SD and shows in \code{sd_z}. The reference is the
+cohort you pass, batch effects included, so a whole batch that differs
+shifts the reference too. \code{NA} with fewer than 3 files.
+\item \code{time_trend}: Spearman correlation of a channel with time, per channel. A
+steady drift of a marker inside one acquisition (laser, fluidics or
+detector drift) gives a value far from 0. Only when \code{time_channel} is
+given.
 \item \code{corr_shift}: largest absolute difference between the file's Spearman
 correlation of a channel pair and the median of that pair over all files
 (file level, \code{detail} names the pair). A wrong spillover or unmixing

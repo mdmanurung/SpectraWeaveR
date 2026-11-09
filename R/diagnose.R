@@ -6,7 +6,7 @@
 #' Run the technical diagnostics and collect their numbers in one table
 #'
 #' @description
-#' Run any of four diagnostic modules and stack what they return into one tidy
+#' Run any of five diagnostic modules and stack what they return into one tidy
 #' table (`module`, `subject`, `check`, `item`, `value`, `text`). A module runs
 #' only when you give it a settings list; pass `NULL` to skip it. Nothing is
 #' marked pass or fail. Use [sw_diagnosis_top()] to see the files or batches
@@ -18,6 +18,7 @@
 #' | `signal` | [sw_fcs_signal_audit()] | `data` |
 #' | `anomaly` | [sw_anomaly_features()] + [sw_anomaly_flag_outlier()] (+ [sw_anomaly_flag_novelty()]) | `data` |
 #' | `batch` | [sw_batch_scores()] | `data` and batch labels |
+#' | `cluster` | [sw_cluster_scores()] | `data` |
 #'
 #' @details
 #' **No defaults anywhere.** Each settings list holds the arguments of its
@@ -29,7 +30,7 @@
 #' log-densities.
 #'
 #' **Modules are independent.** A fault one module misses may show in another.
-#' Run all four when you can.
+#' Run all five when you can.
 #'
 #' @param data A named list of per-file numeric matrices (event data on the
 #'   analysis scale), or `NULL` when only `header` is used.
@@ -41,6 +42,8 @@
 #'   `agg_size`, `reference` (when needed), `ntrees`, `sample_size`, `ndim`.
 #' @param batch `NULL` or a list with `batch`, `markers`, `n_events`, `seed`,
 #'   `order`.
+#' @param cluster `NULL` or a list with `markers`, `k`, `n_events`, `seed`,
+#'   `nstart`, `min_cluster_events`.
 #'
 #' @return A tibble of class `sw_diagnosis` with columns `module`, `subject`
 #'   (file, batch or batch pair), `check`, `item` (channel or marker, else
@@ -63,30 +66,39 @@
 #' }
 #'
 #' @export
-sw_diagnose <- function(data, header, signal, anomaly, batch) {
+sw_diagnose <- function(data, header, signal, anomaly, batch, cluster) {
   .sw_stop_missing(c(
     data = missing(data),
     header = missing(header),
     signal = missing(signal),
     anomaly = missing(anomaly),
-    batch = missing(batch)
+    batch = missing(batch),
+    cluster = missing(cluster)
   ))
-  for (nm in c("header", "signal", "anomaly", "batch")) {
+  for (nm in c("header", "signal", "anomaly", "batch", "cluster")) {
     v <- get(nm)
     if (!is.null(v) && !is.list(v)) {
       stop("`", nm, "` must be NULL or a list of settings.", call. = FALSE)
     }
   }
   if (
-    is.null(header) && is.null(signal) && is.null(anomaly) && is.null(batch)
+    is.null(header) &&
+      is.null(signal) &&
+      is.null(anomaly) &&
+      is.null(batch) &&
+      is.null(cluster)
   ) {
     stop("Give at least one module a settings list.", call. = FALSE)
   }
   if (
-    is.null(data) && (!is.null(signal) || !is.null(anomaly) || !is.null(batch))
+    is.null(data) &&
+      (!is.null(signal) ||
+        !is.null(anomaly) ||
+        !is.null(batch) ||
+        !is.null(cluster))
   ) {
     stop(
-      "`data` is needed for the signal, anomaly and batch modules.",
+      "`data` is needed for the signal, anomaly, batch and cluster modules.",
       call. = FALSE
     )
   }
@@ -176,18 +188,43 @@ sw_diagnose <- function(data, header, signal, anomaly, batch) {
     ran <- c(ran, "batch")
   }
 
+  if (!is.null(cluster)) {
+    cl <- do.call(sw_cluster_scores, c(list(data = data), cluster))
+    parts$cluster <- tibble::tibble(
+      module = "cluster",
+      subject = cl$file,
+      check = cl$check,
+      item = cl$marker,
+      value = cl$value,
+      text = paste0("cluster ", cl$cluster, "; n_events=", cl$n_events)
+    )
+    ran <- c(ran, "cluster")
+  }
+
   out <- dplyr::bind_rows(parts)
   attr(out, "modules") <- ran
   class(out) <- c("sw_diagnosis", class(out))
   out
 }
 
+# Checks whose sign only gives a direction: the size of the deviation is what
+# ranks. Novelty log-density is the other way round: low means unusual.
+.sw_signed_checks <- c("median_z", "sd_z", "freq_z", "time_trend", "order_rho")
+.sw_diag_key <- function(check, value) {
+  ifelse(
+    check == "novelty_log_density",
+    -value,
+    ifelse(check %in% .sw_signed_checks, abs(value), value)
+  )
+}
+
 #' Largest values per check in a diagnosis
 #'
 #' For each module and check, list the `n` subjects (files, batches or
-#' markers) with the largest value. No cutoff is applied. For
-#' `novelty_log_density` the smallest values are the unusual ones, so that check
-#' is ranked from the lowest value.
+#' markers) with the largest value. No cutoff is applied. Signed checks
+#' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`) are ranked by the
+#' size of the value, ignoring its sign. For `novelty_log_density` the smallest
+#' values are the unusual ones, so that check is ranked from the lowest value.
 #'
 #' @param diagnosis An `sw_diagnosis` result.
 #' @param n Whole number, rows kept per check.
@@ -209,7 +246,7 @@ sw_diagnosis_top <- function(diagnosis, n) {
   }
   .sw_check_count(n, "n")
   d <- diagnosis[!is.na(diagnosis$value), ]
-  d$.key <- ifelse(d$check == "novelty_log_density", -d$value, d$value)
+  d$.key <- .sw_diag_key(d$check, d$value)
   # Group by module, check and item (NA item = file-level check).
   d$.group <- paste(
     d$module,
