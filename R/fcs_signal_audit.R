@@ -1,0 +1,250 @@
+# R/fcs_signal_audit.R
+# Per-file technical checks on event data: saturation, dead channels, NA/Inf,
+# negative share, event-rate stability and channel-pair correlation change.
+# Written from scratch; it only computes summaries and sets no cutoffs.
+
+#' Audit event data of each file for technical problems
+#'
+#' @description
+#' Compute a set of plain per-file numbers that expose common technical faults.
+#' The result is a long table, one row per file, check and channel. It holds
+#' numbers only: no check is marked pass or fail, because a cutoff changes
+#' which files look bad and is yours to choose.
+#'
+#' Checks (the `check` column):
+#'
+#' * `n_events`: events in the file (file level).
+#' * `nonfinite_share`: share of `NA`, `NaN` or `Inf` values per channel.
+#' * `zero_variance`: 1 when a channel is constant (a dead or disconnected
+#'   detector), else 0, per channel.
+#' * `negative_share`: share of values below 0 per channel.
+#' * `saturation_share`: share of values at or above `range_max` per channel.
+#'   Only when `range_max` is given.
+#' * `floor_share`: share of values at or below `range_min` per channel. Only
+#'   when `range_min` is given.
+#' * `rate_cv`: coefficient of variation of event counts per time bin (file
+#'   level). A clog or a pressure change makes the event rate uneven. Only when
+#'   `time_channel` is given.
+#' * `max_gap`: largest gap between consecutive event times, as a multiple of
+#'   the median gap (file level). Only when `time_channel` is given.
+#' * `corr_shift`: largest absolute difference between the file's Spearman
+#'   correlation of a channel pair and the median of that pair over all files
+#'   (file level, `detail` names the pair). A wrong spillover or unmixing
+#'   matrix changes channel-pair correlations.
+#'
+#' @details
+#' **Scale is yours.** Saturation and floor limits must be on the same scale as
+#' `data`. `negative_share` is only meaningful on a scale that keeps negative
+#' values (raw or arcsinh).
+#'
+#' **No defaults.** `range_max`, `range_min`, `time_channel` and `time_bin`
+#' each change what is reported, so each must be passed. Pass `NULL` for a
+#' check you do not want. `corr_shift` uses every row of each file; subsample
+#' first for large files.
+#'
+#' @param data A named list. Each element is a numeric matrix or data frame
+#'   with one column per channel. Names are the file ids. At least two files.
+#' @param channels Character vector of channel names to audit (not the time
+#'   channel).
+#' @param range_max `NULL`, or a single number or named numeric vector of the
+#'   instrument maximum per channel.
+#' @param range_min `NULL`, or a single number or named numeric vector of the
+#'   lowest value counted as a floor event.
+#' @param time_channel `NULL`, or the name of the time column in each file.
+#' @param time_bin Number, width of a time bin in the units of the time
+#'   channel. Needed when `time_channel` is given; otherwise pass `NULL`.
+#'
+#' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
+#'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
+#'   (text; the channel pair for `corr_shift`, else `NA`).
+#'
+#' @seealso [sw_anomaly_features()], [sw_fcs_header_audit()]
+#'
+#' @examples
+#' set.seed(1)
+#' files <- lapply(1:4, function(i) {
+#'   matrix(stats::rnorm(400), ncol = 2, dimnames = list(NULL, c("A", "B")))
+#' })
+#' names(files) <- paste0("f", 1:4)
+#' sw_fcs_signal_audit(
+#'   files,
+#'   channels = c("A", "B"),
+#'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL
+#' )
+#'
+#' @export
+sw_fcs_signal_audit <- function(
+  data,
+  channels,
+  range_max,
+  range_min,
+  time_channel,
+  time_bin
+) {
+  .sw_stop_missing(c(
+    data = missing(data),
+    channels = missing(channels),
+    range_max = missing(range_max),
+    range_min = missing(range_min),
+    time_channel = missing(time_channel),
+    time_bin = missing(time_bin)
+  ))
+  if (
+    !is.list(data) ||
+      is.null(names(data)) ||
+      anyDuplicated(names(data)) ||
+      length(data) < 2
+  ) {
+    stop("`data` must be a named list of at least two files.", call. = FALSE)
+  }
+  if (!is.character(channels) || length(channels) < 2) {
+    stop("`channels` must name at least two channels.", call. = FALSE)
+  }
+  lim_max <- .sw_audit_limit(range_max, channels, "range_max")
+  lim_min <- .sw_audit_limit(range_min, channels, "range_min")
+  if (!is.null(time_channel)) {
+    if (!is.character(time_channel) || length(time_channel) != 1) {
+      stop("`time_channel` must be one column name or NULL.", call. = FALSE)
+    }
+    if (
+      !is.numeric(time_bin) ||
+        length(time_bin) != 1 ||
+        is.na(time_bin) ||
+        time_bin <= 0
+    ) {
+      stop(
+        "`time_bin` must be a positive number when `time_channel` is given.",
+        call. = FALSE
+      )
+    }
+  }
+
+  files <- sort(names(data))
+  mats <- lapply(files, function(f) {
+    m <- as.matrix(data[[f]])
+    need <- c(channels, time_channel)
+    if (!all(need %in% colnames(m))) {
+      stop(
+        "File '",
+        f,
+        "' lacks column(s): ",
+        paste(setdiff(need, colnames(m)), collapse = ", "),
+        call. = FALSE
+      )
+    }
+    m
+  })
+  names(mats) <- files
+
+  rows <- list()
+  add <- function(file, check, channel, value, detail = NA_character_) {
+    rows[[length(rows) + 1L]] <<- tibble::tibble(
+      file = file,
+      check = check,
+      channel = channel,
+      value = value,
+      detail = detail
+    )
+  }
+  for (f in files) {
+    m <- mats[[f]]
+    add(f, "n_events", NA_character_, nrow(m))
+    for (ch in channels) {
+      v <- m[, ch]
+      finite <- is.finite(v)
+      add(f, "nonfinite_share", ch, mean(!finite))
+      vf <- v[finite]
+      add(
+        f,
+        "zero_variance",
+        ch,
+        as.numeric(length(vf) > 0 && stats::var(vf) == 0)
+      )
+      add(f, "negative_share", ch, if (length(vf)) mean(vf < 0) else NA_real_)
+      if (!is.null(lim_max)) {
+        add(
+          f,
+          "saturation_share",
+          ch,
+          if (length(vf)) mean(vf >= lim_max[[ch]]) else NA_real_
+        )
+      }
+      if (!is.null(lim_min)) {
+        add(
+          f,
+          "floor_share",
+          ch,
+          if (length(vf)) mean(vf <= lim_min[[ch]]) else NA_real_
+        )
+      }
+    }
+    if (!is.null(time_channel)) {
+      tt <- sort(m[, time_channel])
+      tt <- tt[is.finite(tt)]
+      bins <- table(floor((tt - min(tt)) / time_bin))
+      # Empty bins inside the run count as zero events.
+      full <- tabulate(
+        as.integer(names(bins)) + 1L,
+        nbins = max(as.integer(names(bins))) + 1L
+      )
+      add(
+        f,
+        "rate_cv",
+        NA_character_,
+        if (length(full) > 1) stats::sd(full) / mean(full) else NA_real_
+      )
+      gaps <- diff(tt)
+      med <- stats::median(gaps)
+      add(
+        f,
+        "max_gap",
+        NA_character_,
+        if (length(gaps) && med > 0) max(gaps) / med else NA_real_
+      )
+    }
+  }
+
+  # Channel-pair Spearman correlation against the cohort median per pair.
+  cors <- lapply(mats, function(m) {
+    suppressWarnings(stats::cor(
+      m[, channels],
+      method = "spearman",
+      use = "pairwise.complete.obs"
+    ))
+  })
+  idx <- which(upper.tri(cors[[1]]), arr.ind = TRUE)
+  pair_name <- paste(channels[idx[, 1]], channels[idx[, 2]], sep = " ~ ")
+  pair_vals <- vapply(cors, function(cm) cm[idx], numeric(nrow(idx)))
+  pair_vals <- matrix(pair_vals, nrow = nrow(idx))
+  center <- apply(pair_vals, 1, stats::median, na.rm = TRUE)
+  for (j in seq_along(files)) {
+    d <- abs(pair_vals[, j] - center)
+    if (all(is.na(d))) {
+      add(files[j], "corr_shift", NA_character_, NA_real_)
+    } else {
+      k <- which.max(d)
+      add(files[j], "corr_shift", NA_character_, d[k], pair_name[k])
+    }
+  }
+
+  out <- dplyr::bind_rows(rows)
+  class(out) <- c("sw_fcs_signal_audit", class(out))
+  out
+}
+
+# NULL, one number, or a named vector covering every channel -> named vector.
+.sw_audit_limit <- function(x, channels, name) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (!is.numeric(x) || anyNA(x)) {
+    stop("`", name, "` must be NULL or numeric without NA.", call. = FALSE)
+  }
+  if (length(x) == 1 && is.null(names(x))) {
+    return(stats::setNames(rep(x, length(channels)), channels))
+  }
+  if (!all(channels %in% names(x))) {
+    stop("`", name, "` must name every channel.", call. = FALSE)
+  }
+  x[channels]
+}
