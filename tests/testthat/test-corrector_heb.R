@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", seed = 1, ...
   )
 }
 
@@ -68,6 +68,25 @@ test_that("heb is registered and needs its required arguments", {
     ),
     "variance_floor"
   )
+})
+
+test_that("heb needs pool and pooled variance runs", {
+  s <- heb_sim()
+  expect_error(
+    sw_corrector_fit(
+      s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+      transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, seed = 1
+    ),
+    "pool"
+  )
+  eff_pop <- sw_corrector_fit(
+    s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+    transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", seed = 1
+  )$effects
+  # One population and one marker: pooling over populations changes nothing.
+  expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
 })
 
 test_that("heb effects match an lme4 REML fit on the same summaries", {

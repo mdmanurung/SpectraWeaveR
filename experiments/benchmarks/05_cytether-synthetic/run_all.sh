@@ -22,7 +22,7 @@ bench=experiments/benchmarks/05_cytether-synthetic
 mkdir -p "$run_dir/results"
 
 for method in $methods; do
-  case $method in oracle) continue ;; esac
+  case $method in oracle|anchored_oracle) continue ;; esac
   bash "$bench/run_seeds.sh" "$sim_dir" "$run_dir/results" "$method" "$@"
 done
 $py "$bench/evaluate.py" "$sim_dir" "$run_dir/results" "$run_dir/scores.csv" $methods

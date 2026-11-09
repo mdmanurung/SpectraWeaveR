@@ -51,51 +51,70 @@ NULL
   0.5 * (2 * sum(log(diag(R))) + 2 * sum(log(diag(Rx))) + sum(res * Vinv_res))
 }
 
-# One (population, marker): effect of every batch present, relative to the anchor.
-.sw_heb_one <- function(d, hier, anchor, variance_floor) {
+# Design pieces for one (population, marker): NULL when it cannot give a contrast to the anchor.
+.sw_heb_design <- function(d, hier, anchor) {
   batches <- sort(unique(d$batch))
   if (length(batches) < 2 || !anchor %in% batches) {
     return(NULL)
   }
-  studies <- sort(unique(hier$study[match(batches, hier$batch)]))
-  y <- d$value
-  donor <- factor(d$reference_id)
-  X <- stats::model.matrix(~ 0 + donor)
-  Zs <- outer(hier$study[match(d$batch, hier$batch)], studies, `==`) * 1
-  Zb <- outer(d$batch, batches, `==`) * 1
-  start <- log(rep(max(stats::var(y), 1e-6), 3) * c(0.1, 0.1, 0.5))
+  study_of <- hier$study[match(batches, hier$batch)]
+  studies <- sort(unique(study_of))
+  list(
+    d = d, batches = batches, studies = studies, study_of = study_of,
+    y = d$value,
+    X = stats::model.matrix(~ 0 + factor(d$reference_id)),
+    Zs = outer(hier$study[match(d$batch, hier$batch)], studies, `==`) * 1,
+    Zb = outer(d$batch, batches, `==`) * 1
+  )
+}
+
+# Variance components by REML. Several designs share one set of components when pooled:
+# the objective is the sum of their REML criteria.
+.sw_heb_theta <- function(designs, variance_floor) {
+  scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
+  obj <- function(lt) {
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$Zs, z$Zb), numeric(1)))
+  }
   lo <- rep(log(variance_floor), 3)
   fit <- stats::optim(
-    start, .sw_heb_reml, y = y, X = X, Zs = Zs, Zb = Zb,
+    log(rep(scale, 3) * c(0.1, 0.1, 0.5)), obj,
     method = "L-BFGS-B", lower = lo, upper = lo + 40
   )
-  th <- exp(fit$par)
-  V <- th[[1]] * tcrossprod(Zs) + th[[2]] * tcrossprod(Zb) + th[[3]] * diag(length(y))
+  exp(fit$par)
+}
+
+# BLUPs and prediction error for one design at given variance components.
+.sw_heb_blup <- function(z, th, anchor) {
+  y <- z$y
+  X <- z$X
+  V <- th[[1]] * tcrossprod(z$Zs) + th[[2]] * tcrossprod(z$Zb) + th[[3]] * diag(length(y))
   Vinv <- chol2inv(chol(V))
   XtVX <- crossprod(X, Vinv %*% X)
   P <- Vinv - Vinv %*% X %*% solve(XtVX, crossprod(X, Vinv))
-  Z <- cbind(Zs, Zb)
-  G <- diag(c(rep(th[[1]], ncol(Zs)), rep(th[[2]], ncol(Zb))))
+  Z <- cbind(z$Zs, z$Zb)
+  G <- diag(c(rep(th[[1]], ncol(z$Zs)), rep(th[[2]], ncol(z$Zb))))
   u <- G %*% crossprod(Z, P %*% y)
   pev <- G - G %*% crossprod(Z, P %*% Z) %*% G
   # beta_b = study effect + run effect; contrast against the anchor.
-  idx_s <- match(hier$study[match(batches, hier$batch)], studies)
-  L <- matrix(0, length(batches), ncol(Z))
-  L[cbind(seq_along(batches), idx_s)] <- 1
-  L[cbind(seq_along(batches), length(studies) + seq_along(batches))] <- 1
-  a <- match(anchor, batches)
-  L <- sweep(L, 2, L[a, ], `-`)
-  est <- as.vector(L %*% u)
-  se <- sqrt(pmax(rowSums((L %*% pev) * L), 0))
-  list(batch = batches, estimate = est, se = se, theta = th)
+  L <- matrix(0, length(z$batches), ncol(Z))
+  L[cbind(seq_along(z$batches), match(z$study_of, z$studies))] <- 1
+  L[cbind(seq_along(z$batches), length(z$studies) + seq_along(z$batches))] <- 1
+  L <- sweep(L, 2, L[match(anchor, z$batches), ], `-`)
+  list(
+    batch = z$batches, estimate = as.vector(L %*% u),
+    se = sqrt(pmax(rowSums((L %*% pev) * L), 0))
+  )
 }
 
-.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, ...) {
+.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
   if (missing(variance_floor) || !is.numeric(variance_floor) || variance_floor <= 0) {
     stop("heb needs variance_floor > 0 (no default).", call. = FALSE)
+  }
+  if (missing(pool) || !pool %in% c("none", "population", "all")) {
+    stop("heb needs pool = 'none', 'population' or 'all' (no default).", call. = FALSE)
   }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
@@ -111,12 +130,22 @@ NULL
     marker = anc$marker, target = anc$value, n_aliquots_anchor = anc$n_aliquots
   )
   key <- paste(s$summ$population, s$summ$marker, sep = "\r")
-  rows <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
-    d <- s$summ[ii, , drop = FALSE]
-    r <- .sw_heb_one(d, hierarchy, anchor, variance_floor)
-    if (is.null(r)) {
-      return(NULL)
-    }
+  designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
+    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor)
+  })
+  designs <- designs[!vapply(designs, is.null, logical(1))]
+  # Which designs share variance components.
+  pool_key <- switch(pool,
+    none = names(designs),
+    population = vapply(designs, function(z) z$d$marker[[1]], character(1)),
+    all = rep("all", length(designs))
+  )
+  names(pool_key) <- names(designs)
+  theta <- lapply(split(designs, pool_key), .sw_heb_theta, variance_floor = variance_floor)
+  rows <- lapply(names(designs), function(nm) {
+    z <- designs[[nm]]
+    r <- .sw_heb_blup(z, theta[[pool_key[[nm]]]], anchor)
+    d <- z$d
     n_don <- vapply(r$batch, function(b) length(unique(d$reference_id[d$batch == b])), integer(1))
     n_aliq <- vapply(r$batch, function(b) length(unique(d$aliquot[d$batch == b])), integer(1))
     tibble::tibble(

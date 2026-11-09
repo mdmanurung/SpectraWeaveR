@@ -61,7 +61,7 @@ Gates are requirements on cyTether and HEB only. Every competitor is scored on e
 
 1. Settings are fixed before any result, or tuned on training donors only. cyCombine's paper recorded "the setting with the best overall performance", which tunes on the evaluated data. We do not copy that.
 2. Each competitor runs in its documented reference mode. `cyCombine` has no stored correction model and refits, so it fails the frozen-invariance gate visibly. `CytoNorm` stores `fsom` and `clusterRes` and applies to new files. `Cytofin` saves anchor statistics, but each plate to normalize appears to need its own anchor file (function body not read).
-3. Pin commits. CytoNorm `278f352` (GPL-2+, wrap only, never copy), Cytofin `cb3e24b` (MIT), cyCombine v0.2.5 `5b5903c` (MIT), CytofRUV `mtrussart/CytofRUV` `7088af8` (GPL-3, wrap only).
+3. Pin commits. CytoNorm `278f352` (GPL-2+, wrap only, never copy), Cytofin `cb3e24b` (MIT), cyCombine head `fcd42db` (0.3.0, MIT; changed from v0.2.5 `5b5903c` because SpectraWeaveR needs cyCombine >= 0.2.7), CytofRUV `mtrussart/CytofRUV` `7088af8` (GPL-3, wrap only).
 4. Each tool runs only where its design fits. Report "not applicable" rather than a bad score.
 5. Resample reference donors and plates, never cells. Holm across the Q11 family.
 

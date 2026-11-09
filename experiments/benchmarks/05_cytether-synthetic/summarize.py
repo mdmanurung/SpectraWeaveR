@@ -6,7 +6,9 @@ Inputs:  <scores_csv> from evaluate.py
 Outputs (in <out_dir>):
   primary_by_seed.csv     heldout_ref_rmse per seed, scenario and method, plus the mean over scenarios per seed
   primary_summary.csv     per method: mean over seeds, seed SD, paired difference to <reference_method> with a seed-level bootstrap interval
-  guardrails.csv          abstention on S3, S5, S12; protected-contrast ratio to <reference_method>
+  guardrails.csv          abstention on S3, S5, S12 with a content check (unsupported cells unchanged)
+  protected_contrast.csv  per-seed ratio to <reference_method> with seed interval (proposed rule: upper bound <= 1.10)
+  coverage.csv            90% and 95% interval coverage of each engine's own effects (proposed rule: within 5 points)
   invariance.csv          largest historical_max_delta per method (must be 0)
   primary.png             one point per seed over the mean, per method
 """
@@ -34,29 +36,56 @@ out.mkdir(parents=True, exist_ok=True)
 # Primary: mean over the primary stages per seed -------------------------------------
 prim = scores[scores.stage.isin(PRIMARY_STAGES)]
 by_seed = prim.pivot_table(index=["seed", "method"], columns="stage", values="heldout_ref_rmse").reset_index()
-by_seed["mean_primary"] = by_seed[PRIMARY_STAGES].mean(axis=1)
+by_seed["mean_primary"] = by_seed[PRIMARY_STAGES].mean(axis=1, skipna=False)  # a missing stage makes the seed NaN
 by_seed.to_csv(out / "primary_by_seed.csv", index=False)
 
+def seed_boot(diff):
+    rng = np.random.default_rng(BOOT_SEED)
+    boots = [rng.choice(diff, size=len(diff), replace=True).mean() for _ in range(N_BOOT)] if len(diff) > 1 else [np.nan]
+    return np.percentile(boots, 2.5), np.percentile(boots, 97.5)
+
 wide = by_seed.pivot(index="seed", columns="method", values="mean_primary")
-rng = np.random.default_rng(BOOT_SEED)
+# Per method: share of held-out cells changed and RMSE on cells that the method and the reference both corrected.
+extra = prim.groupby(["seed", "method"]).agg(
+    share_changed=("heldout_share_changed", "mean"), common=("heldout_ref_rmse_common_with_ps", "mean")).reset_index()
+extra = extra.groupby("method").agg(share_changed=("share_changed", "mean"), rmse_common_with_ref=("common", "mean"))
+flags = scores.groupby("method").agg(
+    fits_on_heldout=("fits_on_heldout", "max"), ref_mode_ok_share=("ref_mode_ok", "mean"))
 rows = []
 for method in wide.columns:
     diff = (wide[method] - wide[ref]).dropna().to_numpy()
-    boots = [rng.choice(diff, size=len(diff), replace=True).mean() for _ in range(N_BOOT)] if len(diff) > 1 else [np.nan]
+    lo, hi = seed_boot(diff)
     rows.append({
         "method": method, "n_seeds": int(wide[method].notna().sum()),
         "mean_primary": wide[method].mean(), "sd_over_seeds": wide[method].std(),
-        f"mean_diff_vs_{ref}": diff.mean() if len(diff) else np.nan,
-        "diff_ci_low": np.percentile(boots, 2.5), "diff_ci_high": np.percentile(boots, 97.5),
+        f"mean_diff_vs_{ref}": diff.mean() if len(diff) else np.nan, "diff_ci_low": lo, "diff_ci_high": hi,
     })
-pd.DataFrame(rows).sort_values("mean_primary").to_csv(out / "primary_summary.csv", index=False)
+summary = pd.DataFrame(rows).merge(extra, on="method", how="left").merge(flags, on="method", how="left")
+summary.sort_values("mean_primary").to_csv(out / "primary_summary.csv", index=False)
 
 # Guardrails -------------------------------------------------------------------------
+# Abstention content: unsupported states must stay untouched (S5 Adaptive_NK, S12 future-study cells).
 g = scores[scores.stage.isin(ABSTAIN_STAGES)].groupby(["method", "stage"]).agg(
-    supported_share=("supported", "mean"), abstained_pairs=("abstained_pairs", "mean")).reset_index()
-pc = scores[scores.stage.isin(["S4", "S9"])].groupby(["method"]).protected_contrast_mae.mean()
-g["protected_contrast_ratio_to_ref"] = g.method.map(pc / pc.get(ref, np.nan))
+    supported_share=("supported", "mean"), abstained_pairs=("abstained_pairs", "mean"),
+    unsupported_unchanged_share=("unsupported_unchanged_share", "mean")).reset_index()
+g["content_pass"] = (g.unsupported_unchanged_share == 1.0) | g.unsupported_unchanged_share.isna() & (g.supported_share == 0)
 g.to_csv(out / "guardrails.csv", index=False)
+
+# Protected contrast: per-seed ratio to the reference over S4 and S9, seed interval, proposed rule upper bound <= 1.10 (Q7 margin).
+pcs = scores[scores.stage.isin(["S4", "S9"])].pivot_table(index="seed", columns="method", values="protected_contrast_mae")
+pc_rows = []
+for method in pcs.columns:
+    ratio = (pcs[method] / pcs[ref]).dropna().to_numpy()
+    lo, hi = seed_boot(ratio)
+    pc_rows.append({"method": method, "mean_ratio": ratio.mean(), "ci_low": lo, "ci_high": hi, "pass_proposed_upper_le_1.10": bool(hi <= 1.10)})
+pd.DataFrame(pc_rows).to_csv(out / "protected_contrast.csv", index=False)
+
+# Interval coverage of the engine's own effects on S4 and S9 (proposed rule: within 5 points of nominal; needs confirm).
+cov = scores[scores.stage.isin(["S4", "S9"]) & scores.n_effects.notna() & (scores.n_effects > 0)].groupby("method").agg(
+    n_effects=("n_effects", "sum"), cov90=("cov90", "mean"), cov95=("cov95", "mean"), effect_rmse=("effect_rmse", "mean")).reset_index()
+cov["pass_proposed_within_0.05"] = ((cov.cov90 - 0.90).abs() <= 0.05) & ((cov.cov95 - 0.95).abs() <= 0.05)
+cov.to_csv(out / "coverage.csv", index=False)
+
 inv = scores[scores.supported].groupby("method").historical_max_delta.max().reset_index()
 inv.to_csv(out / "invariance.csv", index=False)
 

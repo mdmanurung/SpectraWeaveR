@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Purpose: correct the simulated stages S0 to S12 of one seed with one method and write the corrected matrices.
 # Run:     pixi run Rscript experiments/benchmarks/05_cytether-synthetic/run_method.R <seed_dir> <out_dir> <method>
-#          method is one of: none, naive_batch_center (unsafe stress control), paired_shift, heb, cycombine, cytonorm (adapters.R), reversed_shift (sanity: paired_shift with the correction applied in the wrong direction)
+#          method is one of: none, naive_batch_center (unsafe stress control), paired_shift, heb (pool none), heb_pool_pop, heb_pool_all, cycombine, cytonorm (adapters.R), reversed_shift (sanity: paired_shift with the correction applied in the wrong direction)
 # Inputs:  <seed_dir>/<stage>/observed_X.csv.gz and cell_metadata.csv.gz (from export_observed.py; never the truth file)
 # Outputs (in <out_dir>/<method>/<stage>/):
 #   corrected_X.csv.gz   corrected matrix, same shape and row order as observed_X.csv.gz
@@ -26,7 +26,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_pool_pop", "heb_pool_all", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -50,7 +50,7 @@ correct_stage <- function(stage_dir) {
         }
       }
     }
-    return(list(x = out, supported = TRUE, abstained = 0L, reason = "first sorted batch"))
+    return(list(x = out, supported = TRUE, abstained = 0L, reason = "first sorted batch", fits_on_heldout = TRUE))
   }
 
   # Which cells may calibrate: initial, non-holdout reference cells only.
@@ -110,13 +110,15 @@ correct_stage <- function(stage_dir) {
 
   xt <- as_tibble(x) |> mutate(sample_id = meta$sample_id, .before = 1)
   pop <- meta$cell_type
-  engine <- if (method == "reversed_shift") "paired_shift" else method
+  engine <- if (method == "reversed_shift") "paired_shift" else if (startsWith(method, "heb")) "heb" else method
+  heb_pool <- c(heb = "none", heb_pool_pop = "population", heb_pool_all = "all")[method]
   hierarchy <- if (engine == "heb") distinct(meta, batch, study) else NULL
   model <- sw_corrector_fit(
     xt[fit_rows, ], manifest, audit,
     population = pop[fit_rows], markers = markers, transform = TRANSFORM,
     anchor = anchor, engine = engine, min_cells = MIN_CELLS, seed = SEED,
-    hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR
+    hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
+    pool = if (engine == "heb") unname(heb_pool) else NULL
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.
@@ -143,7 +145,10 @@ correct_stage <- function(stage_dir) {
   if (method == "reversed_shift") {
     out <- 2 * x - out # undo the correction, then apply it with the opposite sign
   }
-  list(x = out, supported = TRUE, abstained = abstained, reason = paste0("anchor=", anchor), hist_delta = historical_max_delta)
+  list(
+    x = out, supported = TRUE, abstained = abstained, reason = paste0("anchor=", anchor),
+    hist_delta = historical_max_delta, effects = res2$model$effects
+  )
 }
 
 # All stages ----------------------------------------------------------------------
@@ -160,8 +165,18 @@ for (stage in stages) {
   if (!is.null(res$x)) {
     write_csv(as_tibble(res$x), file.path(out_dir, "corrected_X.csv.gz"))
   }
+  if (!is.null(res$effects)) {
+    # Estimates and standard errors per (batch, population, marker); evaluate.py scores their coverage.
+    write_csv(res$effects, file.path(out_dir, "effects.csv.gz"))
+  }
   write_csv(
-    tibble(stage = stage, method = method, supported = res$supported, abstained_pairs = res$abstained, reason = res$reason, historical_max_delta = res$hist_delta %||% NA_real_),
+    tibble(
+      stage = stage, method = method, supported = res$supported, abstained_pairs = res$abstained,
+      reason = res$reason, historical_max_delta = res$hist_delta %||% NA_real_,
+      min_cells = MIN_CELLS, # recorded so a diagnostic with another value is visible in every status file
+      fits_on_heldout = isTRUE(res$fits_on_heldout), # TRUE: the method saw held-out reference or future cells while fitting
+      ref_mode_ok = res$ref_mode_ok %||% NA
+    ),
     file.path(out_dir, "status.csv")
   )
 }

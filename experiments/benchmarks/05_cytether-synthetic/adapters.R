@@ -51,6 +51,7 @@ run_cycombine <- function(x, meta, markers, anchor) {
   )
   list(
     x = out_all, supported = TRUE, abstained = attr(out_all, "n_na"), reason = reason,
+    fits_on_heldout = TRUE, ref_mode_ok = !is.null(ref_batch),
     hist_delta = if (is.null(out_old)) NA_real_ else max(abs(c(out_old) - c(out_all[old, , drop = FALSE])))
   )
 }
@@ -95,6 +96,18 @@ run_cytonorm <- function(x, meta, markers) {
     stopifnot("CytoNorm changed the number of cells in a sample" = nrow(ff) == length(rows))
     out[rows, ] <- flowCore::exprs(ff)[, markers, drop = FALSE]
   }
+  # Historical invariance, measured: apply the frozen model to the initial samples alone and compare.
+  old_ids <- unique(meta$sample_id[known & meta$arrival == "initial"])
+  old_rows <- known & meta$arrival == "initial"
+  normed_old <- CytoNorm::CytoNorm.normalize(
+    model, files = as_set(old_rows)[old_ids], labels = meta$batch[match(old_ids, meta$sample_id)],
+    transformList = NULL, transformList.reverse = NULL, outputDir = tmp, write = FALSE, clean = TRUE, verbose = FALSE
+  )
+  delta <- 0
+  for (i in seq_along(old_ids)) {
+    rows <- which(meta$sample_id == old_ids[[i]])
+    delta <- max(delta, abs(flowCore::exprs(normed_old[[i]])[, markers, drop = FALSE] - out[rows, , drop = FALSE]))
+  }
   list(x = out, supported = TRUE, abstained = sum(!known), reason = "train on initial non-holdout references",
-       hist_delta = 0) # applying a frozen model to old samples cannot depend on new samples
+       hist_delta = delta)
 }

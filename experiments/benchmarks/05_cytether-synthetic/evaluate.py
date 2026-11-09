@@ -23,6 +23,38 @@ from cytether_bench.evaluate import metric  # noqa: E402
 sim_dir, results_dir, out_csv = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 methods = sys.argv[4:]
 
+Z90, Z95 = 1.6449, 1.9600  # two-sided normal quantiles for 90% and 95% intervals
+
+
+def changed_cells(x, obs):
+    """Cells whose values the method changed."""
+    return np.abs(x - obs).max(axis=1) > 1e-9
+
+
+def effect_coverage(eff, obs, truth, meta, markers):
+    """Coverage of the engine's intervals for the true effect of each batch relative to the anchor.
+
+    True effect of batch b, population k, marker m: mean(obs - truth) over cells of (b, k) minus the same
+    over the anchor's cells of k. Cell noise averages out; this is the technical shift the engine estimates.
+    """
+    anchor = eff.loc[eff.support == "anchor", "batch"].iloc[0]
+    tech = pd.DataFrame(obs - truth, columns=markers)
+    tech["batch"], tech["population"] = meta.batch.to_numpy(), meta.cell_type.to_numpy()
+    shift = tech.groupby(["batch", "population"]).mean()
+    out = []
+    for r in eff[(eff.support != "anchor") & eff.se_donor.notna() & (eff.se_donor > 0)].itertuples():
+        try:
+            true = shift.loc[(r.batch, r.population), r.marker] - shift.loc[(anchor, r.population), r.marker]
+        except KeyError:
+            continue
+        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor))
+    if not out:
+        return {"n_effects": 0}
+    err, z = np.array(out).T
+    return {"n_effects": len(z), "cov90": float(np.mean(z <= Z90)), "cov95": float(np.mean(z <= Z95)),
+            "effect_rmse": float(np.sqrt(np.mean(err ** 2)))}
+
+
 rows = []
 for seed_dir in sorted(sim_dir.glob("seed_*")):
     seed = int(seed_dir.name.split("_")[1])
@@ -40,16 +72,58 @@ for seed_dir in sorted(sim_dir.glob("seed_*")):
                 row.update(metric(truth, truth, meta))
                 rows.append(row)
                 continue
+            if method == "anchored_oracle":
+                # Floor for any reference-anchored method: the truth plus the anchor batch's own technical offset,
+                # per (population, marker). Anchor by the Q8 rule on initial non-holdout reference cells.
+                calib = meta[meta.is_reference & ~meta.is_holdout_reference & (meta.arrival == "initial")]
+                if calib.empty:
+                    rows.append({"seed": seed, "stage": stage_dir.name, "method": method, "supported": False})
+                    continue
+                donors = calib.groupby("batch").donor_id.nunique().sort_index()
+                anchor = donors[donors == donors.max()].index[0]
+                obs = pd.read_csv(stage_dir / "observed_X.csv.gz").to_numpy(dtype="float64")
+                x = truth.astype("float64").copy()
+                for pop in meta.cell_type.unique():
+                    rows_a = ((meta.batch == anchor) & (meta.cell_type == pop)).to_numpy()
+                    if rows_a.sum() >= 3:
+                        x[(meta.cell_type == pop).to_numpy()] += (obs[rows_a] - truth[rows_a]).mean(axis=0)
+                row = {"seed": seed, "stage": stage_dir.name, "method": method, "supported": True, "abstained_pairs": 0,
+                       "heldout_ref_rmse": float(np.sqrt(np.mean((x[holdout] - truth[holdout]) ** 2))) if holdout.any() else np.nan}
+                row.update(metric(x, truth, meta))
+                rows.append(row)
+                continue
             res = results_dir / f"seed_{seed}" / method / stage_dir.name
             status = pd.read_csv(res / "status.csv").iloc[0]
             row = {"seed": seed, "stage": stage_dir.name, "method": method,
                    "supported": bool(status.supported), "abstained_pairs": status.abstained_pairs,
-                   "historical_max_delta": status.get("historical_max_delta", np.nan)}
+                   "historical_max_delta": status.get("historical_max_delta", np.nan),
+                   "min_cells": status.get("min_cells", np.nan),
+                   "fits_on_heldout": status.get("fits_on_heldout", False),
+                   "ref_mode_ok": status.get("ref_mode_ok", np.nan)}
             if status.supported:
                 x = pd.read_csv(res / "corrected_X.csv.gz").to_numpy(dtype="float64")
                 assert x.shape == truth.shape, f"{res}: shape {x.shape} vs truth {truth.shape}"
                 row["heldout_ref_rmse"] = float(np.sqrt(np.mean((x[holdout] - truth[holdout]) ** 2))) if holdout.any() else np.nan
                 row.update(metric(x, truth, meta))
+                obs_df = pd.read_csv(stage_dir / "observed_X.csv.gz")
+                obs = obs_df.to_numpy(dtype="float64")
+                moved = changed_cells(x, obs)
+                row["heldout_share_changed"] = float(moved[holdout].mean()) if holdout.any() else np.nan
+                # RMSE on held-out cells that this method and paired_shift both corrected: separates coverage from accuracy.
+                ps_file = results_dir / f"seed_{seed}" / "paired_shift" / stage_dir.name / "corrected_X.csv.gz"
+                if holdout.any() and ps_file.exists():
+                    both = moved & changed_cells(pd.read_csv(ps_file).to_numpy(dtype="float64"), obs) & holdout
+                    row["heldout_ref_rmse_common_with_ps"] = float(np.sqrt(np.mean((x[both] - truth[both]) ** 2))) if both.any() else np.nan
+                    row["n_common_cells"] = int(both.sum())
+                # Unsupported states must stay untouched: Adaptive_NK in S5, future-study cells in S12.
+                if stage_dir.name == "S5":
+                    cells = (meta.cell_type == "Adaptive_NK").to_numpy()
+                    row["unsupported_unchanged_share"] = float(1 - moved[cells].mean()) if cells.any() else np.nan
+                if stage_dir.name == "S12":
+                    cells = (meta.arrival == "future").to_numpy()
+                    row["unsupported_unchanged_share"] = float(1 - moved[cells].mean()) if cells.any() else np.nan
+                if (res / "effects.csv.gz").exists():
+                    row.update(effect_coverage(pd.read_csv(res / "effects.csv.gz"), obs, truth, meta, list(obs_df.columns)))
             rows.append(row)
 
 pd.DataFrame(rows).to_csv(out_csv, index=False)
