@@ -1,0 +1,86 @@
+---
+title: "Technical diagnostics"
+---
+
+Checks for technical problems in FCS files and batches. Every function returns
+numbers. None marks a file or batch as bad, and none has a default for a value
+that changes a result (a cutoff, a count of events, a seed, a scale). You choose
+those, because a different choice flags different files.
+
+## What each function covers
+
+| Problem | Function | What it reports |
+|---|---|---|
+| Header differs from a reference (voltage, instrument, channel names) | `sw_fcs_header_audit()` | one row per file and compared item, with a status |
+| Saturation, dead channel, non-finite values, negative share | `sw_fcs_signal_audit()` | share or flag per file and channel |
+| Event-rate instability, clog, gaps in time | `sw_fcs_signal_audit()` | `rate_cv`, `max_gap` |
+| Drift of a marker inside one file | `sw_fcs_signal_audit()` | `time_trend` per channel |
+| One marker shifted, stretched or split in a file | `sw_fcs_signal_audit()` | `median_z`, `sd_z` per channel |
+| Wrong spillover or unmixing (channel-pair correlation) | `sw_fcs_signal_audit()` | `corr_shift` and the pair |
+| File unlike the other files | `sw_anomaly_features()` + `sw_anomaly_flag_outlier()` | forest score per file |
+| File unlike a reference set | `sw_anomaly_features()` + `sw_anomaly_flag_novelty()` | log-density per file |
+| Batch effect per marker | `sw_batch_scores()` | pairwise EMD, median range, eta2, spread ratio, order drift |
+| Signal stability over time | `sw_qc_run()`, `sw_qc_plot()`, `sw_qc_heatmap()` | PeacoQC result, plot, heatmap |
+| All of the above in one table | `sw_diagnose()`, `sw_diagnosis_top()` | stacked table; top values per check |
+| Browse the result | `sw_qc_app()` | Shiny explorer |
+| CytoScan itself | `sw_cytoscan_run()`, `sw_cytotools_header()` | wrappers (GPL, from Suggests) |
+
+## One call
+
+```r
+dx <- sw_diagnose(
+  data = files, # named list of per-file matrices, already on your analysis scale
+  header = NULL,
+  signal = list(
+    channels = chans, range_max = 4e6, range_min = NULL,
+    time_channel = "Time", time_bin = 5
+  ),
+  anomaly = list(
+    channels = chans, features = c("quantile", "emd"), quantile_step = 0.1,
+    n_events = 500, seed = 1, scale = "arcsinh, cofactor 6000",
+    aggregate_from = "all", agg_size = 5000,
+    ntrees = 300, sample_size = 32, ndim = 1
+  ),
+  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL)
+)
+sw_diagnosis_top(dx, n = 5)
+shiny::runApp(sw_qc_app(dx, n = 15, qc_report = NULL))
+```
+
+The numbers above are illustrative. They are not recommended values.
+
+## How well each check finds a fault (simulation)
+
+The benchmark in `experiments/benchmarks/07_fault-detection/` injects one fault
+class at a time into simulated cohorts (72 files, 8 markers, 12 faulty files or
+one faulty batch of 4) and scores each check by AUROC over 10 seeds. Values below
+are from simulated data with effect sizes I chose; they say how a check ranks a
+fault of that size, not how it will do on your cohort.
+
+![Mean AUROC per injected fault and check, 10 seeds. Source data:
+`figures/fault-detection-matrix-source.csv`.](figures/fault-detection-matrix.png)
+
+- Thirteen of the 15 fault classes have a check with mean AUROC of 0.98 or
+  higher (figure: `figures/fault-detection-matrix.png`). One check per class is
+  not enough to name a cause: `median_z` and `sd_z` also respond to saturation
+  and drift.
+- A symmetric split into two modes in a single marker is the weak case:
+  best AUROC 0.67 (+/- 0.07) in a file and 0.86 (+/- 0.11, seeds from 0.57 to
+  1.0) for a batch. In this mixture the split changes the SD by about 4%, which
+  is below the file-to-file jitter.
+- With labels shuffled, every check scores 0.50 to 0.54, so the benchmark does
+  not reward noise.
+
+## What the checks cannot see
+
+These limits come from the same benchmark and from benchmark v1.
+
+- A change confined to a rare cell population (20% of events) is invisible to
+  every file-level check. It needs a cluster-level feature, which this package
+  does not have yet.
+- A batch label confounded with biology (all cases in one batch) cannot be
+  separated from a batch effect by any score here. Run `sw_design_audit()` first.
+- `median_z`, `sd_z` and the forest compare a file with the other files you pass.
+  If most files share the same fault, the cohort looks normal.
+
+---

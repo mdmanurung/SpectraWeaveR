@@ -14,8 +14,17 @@ suppressPackageStartupMessages({
 theme_set(ggpubr::theme_pubr(base_size = 8))
 
 run_dir <- commandArgs(trailingOnly = TRUE)[[1]]
-mat <- read.csv(file.path(run_dir, "detection_matrix.csv"))
 long <- read.csv(file.path(run_dir, "detection_long.csv"))
+# The matrix is recomputed from the per-seed file, so an older run whose
+# detection_matrix.csv has no interval (a summary-order bug in run.R) still plots.
+mat <- long |>
+  summarise(
+    ci95_half = 1.96 * sd(auroc, na.rm = TRUE) / sqrt(sum(!is.na(auroc))),
+    n_seeds = sum(!is.na(auroc)),
+    auroc = mean(auroc, na.rm = TRUE),
+    .by = c(level, fault, tool)
+  )
+write.csv(mat, file.path(run_dir, "detection_matrix.csv"), row.names = FALSE)
 
 # Plot frames ---------------------------------------------------------------
 fault_order <- c(

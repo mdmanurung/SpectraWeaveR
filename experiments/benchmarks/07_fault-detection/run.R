@@ -243,10 +243,14 @@ batch_level <- function(seed) {
     e2 <- sc[sc$check == "eta2", ]
     rho <- sc[sc$check == "order_rho", ] |>
       summarise(v = max(abs(value)), .by = marker)
+    # Spread: largest departure of a batch's width from the cohort's, either way.
+    sp <- sc[sc$check == "spread_ratio", ] |>
+      summarise(v = max(abs(log(value))), .by = marker)
     per_marker <- list(
       pair_emd = setNames(pe$v, pe$marker),
       median_range = setNames(mr$value, mr$marker),
       eta2 = setNames(e2$value, e2$marker),
+      spread_ratio = setNames(sp$v, sp$marker),
       order_rho = setNames(rho$v, rho$marker)
     )
     tibble(
@@ -289,9 +293,10 @@ write.csv(long, file.path(out_dir, "detection_long.csv"), row.names = FALSE)
 
 mat <- long |>
   summarise(
-    auroc = mean(auroc, na.rm = TRUE),
+    # sd and n use the per-seed values, so they come before auroc is overwritten.
     ci95_half = 1.96 * sd(auroc, na.rm = TRUE) / sqrt(sum(!is.na(auroc))),
     n_seeds = sum(!is.na(auroc)),
+    auroc = mean(auroc, na.rm = TRUE),
     .by = c(level, fault, tool)
   )
 write.csv(mat, file.path(out_dir, "detection_matrix.csv"), row.names = FALSE)

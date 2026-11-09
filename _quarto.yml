@@ -46,6 +46,8 @@ website:
             href: reference/gate.qmd
           - text: "Signal QC"
             href: reference/qc.qmd
+          - text: "Technical diagnostics"
+            href: reference/diagnostics.qmd
           - text: "Batch Correction"
             href: reference/batch-correct.qmd
           - text: "Clustering"
