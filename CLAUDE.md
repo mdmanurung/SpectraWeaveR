@@ -21,6 +21,15 @@ SpectraWeaveR/
 │   ├── batch_correct.R           # Step 4: batch correction (cyCombine), diagnostics, plots
 │   ├── batch_decide.R            # Batch decision policy and states (batchdx port)
 │   ├── batch_flag.R              # Control IQR flags (Tukey fence)
+│   ├── batch_scores.R            # Per-marker batch scores: pairwise EMD, median range, eta2, order drift
+│   ├── anomaly_features.R        # Per-file quantile + exact-EMD features; sw_emd_1d()
+│   ├── anomaly_flag.R            # Outlier (isolation forest) and novelty (GMM) flags
+│   ├── cytoscan_wrap.R           # CytoScan and CytoTools wrappers (GPL, Suggests)
+│   ├── diagnose.R                # sw_diagnose(): stacks the diagnostic modules
+│   ├── fcs_header_audit.R        # FCS header audit against a reference file
+│   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation)
+│   ├── qc_app.R                  # sw_qc_app(): Shiny explorer (layout adapted from iidx, Apache-2.0)
+│   ├── qc_plots.R                # PeacoQC plot and heatmap wrappers
 │   ├── cluster.R                 # Step 5: clustering (kohonen SOM / FastPG)
 │   ├── composable_pipeline.R     # S7 composable step and pipeline framework
 │   ├── corrector.R               # Corrector contract: fit, integrate, diagnose, save, load, compare
@@ -94,6 +103,13 @@ SpectraWeaveR/
 | Unmix figures | `sw_unmix_sample_events()`, `sw_unmix_figure_*()`, `sw_unmix_save_figures()` | ggplot2 | approved panels F1 to F4 with source data |
 | Unmix correction | `sw_unmix_correct()`, `sw_unmix_correct_signatures()`, `sw_unmix_correct_spillover()`, `sw_unmix_compare_spectra()` | AutoSpectral (wrapped) | spectra → candidate corrected spectra, change table |
 | Manifest and correctors | `sw_sample_manifest()`, `sw_corrector_*()` | cyTether design (paired shift engine) | manifest + frozen model → corrected data with per-cell-group actions |
+| FCS header audit | `sw_fcs_header_audit()`, `sw_fcs_header_summary()` | CytoTools idea (clean rewrite) | FCS paths + required keywords + reference file → long tibble of channel and keyword differences |
+| Signal audit | `sw_fcs_signal_audit()` | own code | per-file event matrices → numbers for saturation, dead channel, non-finite, event-rate and correlation shifts; no cutoffs |
+| Anomaly features and flags | `sw_anomaly_features()`, `sw_emd_1d()`, `sw_anomaly_flag_outlier()`, `sw_anomaly_flag_novelty()` | CytoScan method (clean rewrite); isotree, mclust (Suggests) | transformed per-file data → quantile + exact-EMD features → isolation-forest score or GMM log-density. Every cutoff is a required argument. |
+| Batch-effect scores | `sw_batch_scores()` | own code | per-file data + batch labels → pairwise EMD, median range, eta2, order drift per marker |
+| Diagnosis | `sw_diagnose()`, `sw_diagnosis_top()` | own code | stacks the header, signal, anomaly and batch modules into one table; no pass or fail |
+| CytoScan family wrappers | `sw_cytoscan_run()`, `sw_cytoscan_preprocess_none()`, `sw_cytotools_header()` | CytoScan, CytoTools (GPL, wrapped from Suggests) | FCS paths → CytoScan flags with the caller's preprocess function |
+| QC plots and app | `sw_qc_plot()`, `sw_qc_heatmap()`, `sw_qc_app()` | PeacoQC (wrapped); layout adapted from iidx (Apache-2.0, see NOTICE) | QC result or diagnosis → PNG, heatmap, Shiny explorer |
 
 ## Extended Modules
 
