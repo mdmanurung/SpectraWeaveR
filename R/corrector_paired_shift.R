@@ -33,6 +33,8 @@
 #'     zero. \code{se_donor} is the standard deviation of those differences
 #'     over references divided by \eqn{\sqrt{n_{donors}}}, and \code{NA} for
 #'     one reference. No cell-count variance and no variance floor are used.
+#'     The optional column \code{df} (\code{n_donors - 1}) gives the degrees
+#'     of freedom of \code{se_donor}, for t-based intervals.
 #'   \item Correction: \code{corrected = x - effect} for every cell of that
 #'     batch and population, reference or participant. Participant cells are
 #'     never used as calibration evidence.
@@ -176,6 +178,8 @@ NULL
       },
       numeric(1)
     ),
+    # Degrees of freedom of se_donor: the SD over n references has n - 1.
+    df = ifelse(lengths(g) >= 2, lengths(g) - 1, NA_real_),
     n_donors = as.integer(lengths(g)),
     n_aliquots = vapply(g, function(ii) sum(paired$n_aliquots[ii]), integer(1)),
     n_aliquots_anchor = vapply(

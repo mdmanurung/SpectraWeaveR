@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.stats import t as student_t
 
 bundle = Path(os.environ.get("SW_DATA_DIR", "/exports/para-lipg-hpc/mdmanurung/spectraweaver_testdata")) / "cytether_bundle_v1"
 sys.path.insert(0, str(bundle / "src"))
@@ -23,7 +24,7 @@ from cytether_bench.evaluate import metric  # noqa: E402
 sim_dir, results_dir, out_csv = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 methods = sys.argv[4:]
 
-Z90, Z95 = 1.6449, 1.9600  # two-sided normal quantiles for 90% and 95% intervals
+Z90, Z95 = 1.6449, 1.9600  # normal quantiles, kept only for the cov90_normal comparison column
 
 
 def changed_cells(x, obs):
@@ -42,16 +43,23 @@ def effect_coverage(eff, obs, truth, meta, markers):
     tech["batch"], tech["population"] = meta.batch.to_numpy(), meta.cell_type.to_numpy()
     shift = tech.groupby(["batch", "population"]).mean()
     out = []
-    for r in eff[(eff.support != "anchor") & eff.se_donor.notna() & (eff.se_donor > 0)].itertuples():
+    # t quantiles with the engine's own df (user decision 2026-11-09); an engine without df gets no coverage.
+    if "df" not in eff.columns:
+        return {"n_effects": 0}
+    ok = (eff.support != "anchor") & eff.se_donor.notna() & (eff.se_donor > 0) & eff.df.notna() & (eff.df > 0)
+    out = []
+    for r in eff[ok].itertuples():
         try:
             true = shift.loc[(r.batch, r.population), r.marker] - shift.loc[(anchor, r.population), r.marker]
         except KeyError:
             continue
-        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor))
+        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor, r.df))
     if not out:
         return {"n_effects": 0}
-    err, z = np.array(out).T
-    return {"n_effects": len(z), "cov90": float(np.mean(z <= Z90)), "cov95": float(np.mean(z <= Z95)),
+    err, z, df = np.array(out).T
+    return {"n_effects": len(z), "cov90": float(np.mean(z <= student_t.ppf(0.95, df))),
+            "cov95": float(np.mean(z <= student_t.ppf(0.975, df))),
+            "cov90_normal": float(np.mean(z <= Z90)), "median_df": float(np.median(df)),
             "effect_rmse": float(np.sqrt(np.mean(err ** 2)))}
 
 
