@@ -383,6 +383,130 @@ sw_relativise_apply <- function(data, model, unit, channels, low, high, input_sc
   out
 }
 
+#' Build a control map from per-batch reference controls
+#'
+#' @description
+#' Extension E1 of the relativisation workflow, for panels too large to carry a
+#' CD3 control per channel and sample (for example 40-colour spectral panels).
+#' Each batch has one control per channel: a single stain of one stable
+#' reference marker in that channel's fluorochrome, stained and acquired with
+#' the batch. The spectral unmixing single stains qualify when they all use the
+#' same marker per channel in every batch. The returned map has `unit = batch`,
+#' so [sw_relativise_apply()] then takes the batch of each file as its unit.
+#'
+#' @details
+#' **What this changes.** In Glehr et al. (2026) the reference is per sample.
+#' Here it is per batch: it removes offset and gain between batches, not
+#' between samples inside a batch. Different channels may use different
+#' reference markers, but each channel must use the same marker in every batch,
+#' otherwise the batches would be scaled to different biology. This function
+#' stops when that fails, when a batch lacks a channel another batch has, or
+#' when a batch has two controls for one channel.
+#'
+#' @param control_info A data frame with columns `batch`, `channel`, `control`
+#'   (the name in the `controls` list) and `reference_marker`.
+#'
+#' @return A data frame with columns `unit`, `channel`, `control`, ready for
+#'   [sw_relativise_split_kmeans()] and [sw_relativise_fit()].
+#'
+#' @seealso [sw_relativise_internal_map()], [sw_relativise_fit()]
+#'
+#' @examples
+#' info <- data.frame(
+#'   batch = rep(c("b1", "b2"), each = 2),
+#'   channel = rep(c("BV421-A", "PE-A"), 2),
+#'   control = c("b1_BV421", "b1_PE", "b2_BV421", "b2_PE"),
+#'   reference_marker = rep(c("CD4", "CD8"), 2)
+#' )
+#' sw_relativise_batch_map(info)
+#'
+#' @export
+sw_relativise_batch_map <- function(control_info) {
+  need <- c("batch", "channel", "control", "reference_marker")
+  if (!is.data.frame(control_info) || !all(need %in% names(control_info))) {
+    stop(
+      "`control_info` must be a data frame with columns ",
+      paste(need, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  info <- control_info[need]
+  key <- paste(info$batch, info$channel, sep = " / ")
+  if (anyDuplicated(key)) {
+    stop(
+      "More than one control for: ",
+      paste(unique(key[duplicated(key)]), collapse = ", "),
+      call. = FALSE
+    )
+  }
+  markers <- tapply(info$reference_marker, info$channel, \(v) length(unique(v)))
+  mixed <- names(markers)[markers > 1]
+  if (length(mixed) > 0) {
+    stop(
+      "These channels use different reference markers across batches: ",
+      paste(mixed, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  per_batch <- split(info$channel, info$batch)
+  all_channels <- unique(info$channel)
+  gaps <- vapply(per_batch, \(ch) paste(setdiff(all_channels, ch), collapse = ", "), "")
+  gaps <- gaps[nzchar(gaps)]
+  if (length(gaps) > 0) {
+    stop(
+      "Batches without a control for every channel: ",
+      paste(names(gaps), gaps, sep = " lacks ", collapse = "; "),
+      call. = FALSE
+    )
+  }
+  data.frame(
+    unit = as.character(info$batch),
+    channel = info$channel,
+    control = info$control,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Build a control map that uses each sample as its own reference
+#'
+#' @description
+#' Extension E2 of the relativisation workflow. The fully stained sample is
+#' its own control for the reference channel only (for example the CD3
+#' channel): reference-negative and reference-positive events are split in
+#' that channel, and only that channel is rescaled. No extra tube is needed.
+#'
+#' @details
+#' **Only the reference channel is calibrated.** In the full stain, other
+#' channels carry other markers, so their medians on reference-positive cells
+#' are biology, not an instrument scale. Pass `channels = channel` to
+#' [sw_relativise_apply()]. The negative median also depends on which cells are
+#' reference-negative in that sample (for example more monocytes), which the
+#' single-stain control in the paper avoids.
+#'
+#' @param data A named list of per-file matrices (the full stains).
+#' @param channel One channel name: the reference channel.
+#'
+#' @return A data frame with columns `unit`, `channel`, `control`, where unit
+#'   and control are the file names. Pass `data` itself as `controls`.
+#'
+#' @seealso [sw_relativise_batch_map()]
+#'
+#' @export
+sw_relativise_internal_map <- function(data, channel) {
+  if (!is.list(data) || is.null(names(data))) {
+    stop("`data` must be a named list of matrices.", call. = FALSE)
+  }
+  if (!is.character(channel) || length(channel) != 1) {
+    stop("`channel` must be one channel name.", call. = FALSE)
+  }
+  absent <- names(data)[!vapply(data, \(m) channel %in% colnames(m), logical(1))]
+  if (length(absent) > 0) {
+    stop("Files without channel ", channel, ": ", paste(absent, collapse = ", "), call. = FALSE)
+  }
+  data.frame(unit = names(data), channel = channel, control = names(data), stringsAsFactors = FALSE)
+}
+
 # Shared input check for the control list and control map.
 .sw_relativise_check_map <- function(controls, control_map) {
   if (!is.list(controls) || is.null(names(controls))) {

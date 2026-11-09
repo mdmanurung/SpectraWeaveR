@@ -133,3 +133,60 @@ test_that("diagnose flags a unit and a batch with a doubled gain", {
   expect_setequal(unique(no_extra$check), c("offset", "gain", "gain_z"))
   expect_error(sw_relativise_diagnose(model, batch = c(s1 = "b1"), order = NULL), "every unit")
 })
+
+test_that("batch map builds unit = batch and enforces one marker per channel", {
+  info <- data.frame(
+    batch = rep(c("b1", "b2"), each = 2),
+    channel = rep(c("B1", "B2"), 2),
+    control = c("b1_B1", "b1_B2", "b2_B1", "b2_B2"),
+    reference_marker = rep(c("CD4", "CD8"), 2)
+  )
+  map <- sw_relativise_batch_map(info)
+  expect_equal(map$unit, c("b1", "b1", "b2", "b2"))
+  expect_equal(names(map), c("unit", "channel", "control"))
+
+  mixed <- info
+  mixed$reference_marker[4] <- "CD3"
+  expect_error(sw_relativise_batch_map(mixed), "different reference markers")
+  expect_error(sw_relativise_batch_map(info[-4, ]), "b2 lacks B2")
+  expect_error(sw_relativise_batch_map(rbind(info, info[1, ])), "More than one control")
+  expect_error(sw_relativise_batch_map(info[1:3]), "columns")
+})
+
+test_that("internal map uses each file as its own control for one channel", {
+  set.seed(8)
+  data <- list(s1 = make_control(100, 5000), s2 = make_control(200, 9000))
+  map <- sw_relativise_internal_map(data, "B1")
+  expect_equal(map$unit, c("s1", "s2"))
+  expect_equal(map$control, c("s1", "s2"))
+  pos <- sw_relativise_split_kmeans(data, map, \(v) asinh(v / 150), seed = 1, nstart = 3)
+  model <- sw_relativise_fit(data, map, pos, min_events = 50)
+  out <- sw_relativise_apply(data, model, c(s1 = "s1", s2 = "s2"), "B1", 0, 1e4, "linear")
+  expect_equal(stats::median(out$s1[301:600, "B1"]), 1e4)
+  expect_equal(out$s1[, "B2"], data$s1[, "B2"])
+  expect_error(sw_relativise_internal_map(data, "B9"), "without channel")
+})
+
+test_that("sw_diagnose runs the relativise module without data", {
+  set.seed(9)
+  units <- paste0("s", 1:5)
+  ctrl <- lapply(c(1, 1, 1, 1, 2), \(g) make_control(100 * g, 5000 * g))
+  names(ctrl) <- units
+  map <- data.frame(unit = units, channel = "B1", control = units)
+  pos <- lapply(ctrl, \(x) rep(c(FALSE, TRUE), each = 300))
+  model <- sw_relativise_fit(ctrl, map, pos, min_events = 50)
+  dx <- sw_diagnose(
+    NULL,
+    header = NULL,
+    signal = NULL,
+    anomaly = NULL,
+    batch = NULL,
+    cluster = NULL,
+    relativise = list(model = model, batch = NULL, order = stats::setNames(1:5, units)),
+    otd = NULL
+  )
+  expect_equal(attr(dx, "modules"), "relativise")
+  expect_setequal(unique(dx$check), c("offset", "gain", "gain_z", "gain_order_rho"))
+  top <- sw_diagnosis_top(dx, n = 1)
+  expect_equal(top$subject[top$check == "gain_z"], "s5")
+})

@@ -46,6 +46,11 @@ dx <- sw_diagnose(
   cluster = list(
     markers = chans, k = 6, n_events = 500, seed = 1, nstart = 3,
     min_cluster_events = 30
+  ),
+  relativise = NULL, # or list(model = <sw_relativise_fit() result>, batch = ..., order = ...)
+  otd = list(
+    markers = chans, n_events = 1000, reference_events = 10000, blur = 0.75,
+    seed = 1, max_iter = 500, tol = 1e-5
   )
 )
 sw_diagnosis_top(dx, n = 5)

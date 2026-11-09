@@ -6,7 +6,7 @@
 #' Run the technical diagnostics and collect their numbers in one table
 #'
 #' @description
-#' Run any of five diagnostic modules and stack what they return into one tidy
+#' Run any of seven diagnostic modules and stack what they return into one tidy
 #' table (`module`, `subject`, `check`, `item`, `value`, `text`). A module runs
 #' only when you give it a settings list; pass `NULL` to skip it. Nothing is
 #' marked pass or fail. Use [sw_diagnosis_top()] to see the files or batches
@@ -19,6 +19,8 @@
 #' | `anomaly` | [sw_anomaly_features()] + [sw_anomaly_flag_outlier()] (+ [sw_anomaly_flag_novelty()]) | `data` |
 #' | `batch` | [sw_batch_scores()] | `data` and batch labels |
 #' | `cluster` | [sw_cluster_scores()] | `data` |
+#' | `relativise` | [sw_relativise_diagnose()] | a fitted relativisation model |
+#' | `otd` | [sw_otd_scores()] | `data` |
 #'
 #' @details
 #' **No defaults anywhere.** Each settings list holds the arguments of its
@@ -30,7 +32,7 @@
 #' log-densities.
 #'
 #' **Modules are independent.** A fault one module misses may show in another.
-#' Run all five when you can.
+#' Run all of them when you can.
 #'
 #' @param data A named list of per-file numeric matrices (event data on the
 #'   analysis scale), or `NULL` when only `header` is used.
@@ -44,6 +46,11 @@
 #'   `order`.
 #' @param cluster `NULL` or a list with `markers`, `k`, `n_events`, `seed`,
 #'   `nstart`, `min_cluster_events`.
+#' @param relativise `NULL` or a list with `model` (from
+#'   [sw_relativise_fit()]), `batch`, `order`. Subjects are units (samples or
+#'   batches); it does not use `data`.
+#' @param otd `NULL` or a list with `markers`, `n_events`, `reference_events`,
+#'   `blur`, `seed`, `max_iter`, `tol`.
 #'
 #' @return A tibble of class `sw_diagnosis` with columns `module`, `subject`
 #'   (file, batch or batch pair), `check`, `item` (channel or marker, else
@@ -60,34 +67,34 @@
 #'   signal = list(channels = chans, range_max = 6, range_min = NULL,
 #'                 time_channel = NULL, time_bin = NULL),
 #'   anomaly = NULL,
-#'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL)
+#'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
+#'   cluster = NULL,
+#'   relativise = NULL,
+#'   otd = NULL
 #' )
 #' sw_diagnosis_top(dx, n = 3)
 #' }
 #'
 #' @export
-sw_diagnose <- function(data, header, signal, anomaly, batch, cluster) {
+sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativise, otd) {
   .sw_stop_missing(c(
     data = missing(data),
     header = missing(header),
     signal = missing(signal),
     anomaly = missing(anomaly),
     batch = missing(batch),
-    cluster = missing(cluster)
+    cluster = missing(cluster),
+    relativise = missing(relativise),
+    otd = missing(otd)
   ))
-  for (nm in c("header", "signal", "anomaly", "batch", "cluster")) {
+  modules <- c("header", "signal", "anomaly", "batch", "cluster", "relativise", "otd")
+  for (nm in modules) {
     v <- get(nm)
     if (!is.null(v) && !is.list(v)) {
       stop("`", nm, "` must be NULL or a list of settings.", call. = FALSE)
     }
   }
-  if (
-    is.null(header) &&
-      is.null(signal) &&
-      is.null(anomaly) &&
-      is.null(batch) &&
-      is.null(cluster)
-  ) {
+  if (all(vapply(modules, \(nm) is.null(get(nm)), logical(1)))) {
     stop("Give at least one module a settings list.", call. = FALSE)
   }
   if (
@@ -95,10 +102,11 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster) {
       (!is.null(signal) ||
         !is.null(anomaly) ||
         !is.null(batch) ||
-        !is.null(cluster))
+        !is.null(cluster) ||
+        !is.null(otd))
   ) {
     stop(
-      "`data` is needed for the signal, anomaly, batch and cluster modules.",
+      "`data` is needed for the signal, anomaly, batch, cluster and otd modules.",
       call. = FALSE
     )
   }
@@ -201,6 +209,32 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster) {
     ran <- c(ran, "cluster")
   }
 
+  if (!is.null(relativise)) {
+    r <- do.call(sw_relativise_diagnose, relativise)
+    parts$relativise <- tibble::tibble(
+      module = "relativise",
+      subject = ifelse(is.na(r$unit), "all units", r$unit),
+      check = r$check,
+      item = r$channel,
+      value = r$value,
+      text = NA_character_
+    )
+    ran <- c(ran, "relativise")
+  }
+
+  if (!is.null(otd)) {
+    o <- do.call(sw_otd_scores, c(list(data = data), otd))
+    parts$otd <- tibble::tibble(
+      module = "otd",
+      subject = o$file,
+      check = "otd",
+      item = NA_character_,
+      value = o$otd,
+      text = paste0("converged=", o$converged)
+    )
+    ran <- c(ran, "otd")
+  }
+
   out <- dplyr::bind_rows(parts)
   attr(out, "modules") <- ran
   class(out) <- c("sw_diagnosis", class(out))
@@ -209,12 +243,25 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster) {
 
 # Checks whose sign only gives a direction: the size of the deviation is what
 # ranks. Novelty log-density is the other way round: low means unusual.
-.sw_signed_checks <- c("median_z", "sd_z", "freq_z", "time_trend", "order_rho")
+.sw_signed_checks <- c(
+  "median_z",
+  "sd_z",
+  "freq_z",
+  "time_trend",
+  "order_rho",
+  "gain_z",
+  "gain_order_rho"
+)
 .sw_diag_key <- function(check, value) {
+  # A gain ratio departs from 1 either way, so its log size ranks.
   ifelse(
     check == "novelty_log_density",
     -value,
-    ifelse(check %in% .sw_signed_checks, abs(value), value)
+    ifelse(
+      check %in% .sw_signed_checks,
+      abs(value),
+      ifelse(check == "gain_batch_ratio", abs(log(value)), value)
+    )
   )
 }
 

@@ -105,7 +105,9 @@ dx <- sw_diagnose(
     seed = SEED,
     nstart = CLUSTER_NSTART,
     min_cluster_events = MIN_CLUSTER_EVENTS
-  )
+  ),
+  relativise = NULL, # no reference controls in these files
+  otd = NULL
 )
 write.csv(dx, file.path(run_dir, "diagnosis.csv"), row.names = FALSE)
 write.csv(

@@ -6,6 +6,8 @@
 # Inputs:  none (simulated here, linear scale)
 # Outputs: <out_dir>/relativisation_long.csv  per seed, CD3 donor SD, data version, channel:
 #                                             largest pairwise batch EMD (arcsinh scale)
+#          <out_dir>/otd_long.csv             per seed, CD3 donor SD, version, file: OTD to
+#                                             the pooled reference (Glehr et al. score)
 #          <out_dir>/gain_recovery.csv        per seed and CD3 donor SD: correlation of the
 #                                             fitted batch gain ratio with the true gain
 #
@@ -36,6 +38,11 @@ COFACTOR <- 6000 # arcsinh cofactor for scoring and for the k-means split
 KM_NSTART <- 5
 MIN_EVENTS <- 100
 SCORE_EVENTS <- 1000 # events per file for the EMD scores
+OTD_EVENTS <- 300 # events per file for the OTD (smaller than the paper's 10,000 for speed)
+OTD_REFERENCE <- 1280 # pooled reference events (40 per file)
+OTD_BLUR <- 0.75 # paper's blur, arcsinh units
+OTD_MAX_ITER <- 500
+OTD_TOL <- 1e-5
 
 # Simulation -----------------------------------------------------------------
 true_sample <- function() {
@@ -112,12 +119,59 @@ one_run <- function(seed, cd3_sd) {
     input_scale = "linear"
   )
 
-  # Batch EMD per channel for truth, observed and relativised data.
-  emd <- bind_rows(
-    max_pair_emd(arcsinh(truth), batch, seed) |> mutate(version = "truth (no instrument)"),
-    max_pair_emd(arcsinh(observed), batch, seed) |> mutate(version = "observed"),
-    max_pair_emd(arcsinh(relativised), batch, seed) |> mutate(version = "relativised")
-  ) |>
+  # E1: one control per batch and channel from one fixed reference material (CD3 factor 1 in
+  # every batch), acquired on that batch's instrument; unit = batch.
+  batch_info <- expand.grid(batch = batches, channel = CHANNELS, stringsAsFactors = FALSE)
+  batch_info$control <- paste(batch_info$batch, batch_info$channel, sep = "_")
+  batch_info$reference_marker <- "CD3"
+  batch_controls <- lapply(seq_len(nrow(batch_info)), \(i) {
+    b <- batch_info$batch[[i]]
+    instrument(true_control(batch_info$channel[[i]], 1), offset[b, ], gain[b, ])
+  })
+  names(batch_controls) <- batch_info$control
+  batch_map <- sw_relativise_batch_map(batch_info)
+  batch_positive <- sw_relativise_split_kmeans(
+    batch_controls,
+    batch_map,
+    \(v) asinh(v / COFACTOR),
+    seed = seed,
+    nstart = KM_NSTART
+  )
+  batch_model <- sw_relativise_fit(batch_controls, batch_map, batch_positive, MIN_EVENTS)
+  per_batch <- sw_relativise_apply(
+    observed,
+    batch_model,
+    unit = batch,
+    channels = CHANNELS,
+    low = 0,
+    high = CD3_LEVEL,
+    input_scale = "linear"
+  )
+
+  # Batch EMD per channel, and the paper's OTD per file, for every version.
+  versions <- list(
+    "truth (no instrument)" = truth,
+    "observed" = observed,
+    "relativised per sample" = relativised,
+    "relativised per batch (E1)" = per_batch
+  )
+  emd <- bind_rows(lapply(names(versions), \(v) {
+    max_pair_emd(arcsinh(versions[[v]]), batch, seed) |> mutate(version = v)
+  })) |>
+    mutate(seed = seed, cd3_donor_sd = cd3_sd)
+  otd <- bind_rows(lapply(names(versions), \(v) {
+    sw_otd_scores(
+      arcsinh(versions[[v]]),
+      CHANNELS,
+      OTD_EVENTS,
+      OTD_REFERENCE,
+      OTD_BLUR,
+      seed,
+      OTD_MAX_ITER,
+      OTD_TOL
+    ) |>
+      mutate(version = v, batch = batch[file])
+  })) |>
     mutate(seed = seed, cd3_donor_sd = cd3_sd)
 
   # Does the diagnose step recover the true batch gain?
@@ -133,7 +187,7 @@ one_run <- function(seed, cd3_sd) {
     cor_log_gain = stats::cor(log(ratio$value), log(true_rel)),
     max_abs_gain_z = max(abs(dx$value[dx$check == "gain_z"]), na.rm = TRUE)
   )
-  list(emd = emd, recovery = recovery)
+  list(emd = emd, otd = otd, recovery = recovery)
 }
 
 runs <- lapply(SEEDS, \(s) lapply(CD3_DONOR_SD, \(sd) one_run(s, sd))) |>
@@ -141,7 +195,9 @@ runs <- lapply(SEEDS, \(s) lapply(CD3_DONOR_SD, \(sd) one_run(s, sd))) |>
 long <- bind_rows(lapply(runs, `[[`, "emd")) |>
   rename(channel = marker, max_pair_emd = value)
 recovery <- bind_rows(lapply(runs, `[[`, "recovery"))
+otd <- bind_rows(lapply(runs, `[[`, "otd"))
 write.csv(long, file.path(out_dir, "relativisation_long.csv"), row.names = FALSE)
+write.csv(otd, file.path(out_dir, "otd_long.csv"), row.names = FALSE)
 write.csv(recovery, file.path(out_dir, "gain_recovery.csv"), row.names = FALSE)
 writeLines(capture.output(sessionInfo()), file.path(out_dir, "session_info.txt"))
 cat("wrote", nrow(long), "rows to", out_dir, "\n")

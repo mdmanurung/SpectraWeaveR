@@ -1,7 +1,7 @@
 # Spec: CD3 (reference-population) relativisation
 
 Branch: `worktree-cytoscan-diagnostics`. Date: 2026-11-09.
-Status: core functions built from this spec; extensions (section 7) wait for approval.
+Status: core functions and extensions E1 to E4 built from this spec.
 
 ## 1. Source
 
@@ -85,11 +85,11 @@ not the biology.
 - Real data: not possible on the Aurora run folder. Its files are OMIQ-transformed (A2 unknown)
   and it has no CD3 controls.
 
-## 7. Extensions (need user approval before any code)
+## 7. Extensions (approved by the user 2026-11-09, built)
 
-| # | Extension | Why it matters | Risk |
-|---|---|---|---|
-| E1 | Per-batch controls: the spectral unmixing single stains, when all use one stable marker (for example CD4 or CD45), as the reference set | 40-colour panels cannot carry a CD3 control per channel and sample | Needs the controls stained and run with the batch; A1 for that marker |
-| E2 | Internal reference from the full stain, for the reference channel only | No extra tubes | Only the reference channel is calibrated; other channels are not |
-| E3 | `sw_diagnose()` module for the relativisation diagnostics | One table for all checks | None |
-| E4 | Optimal-transport distance per file to a pooled reference (paper's OTD) | Paper's main score | Needs geomloss or a clean rewrite; multivariate |
+| # | Extension | Function | Why it matters | Risk |
+|---|---|---|---|---|
+| E1 | Per-batch controls: one single stain of a stable reference marker per channel and batch (the spectral unmixing single stains qualify when each channel uses the same marker in every batch) | `sw_relativise_batch_map()` | 40-colour panels cannot carry a CD3 control per channel and sample | Removes batch offset and gain only, not sample-level; needs the controls stained and run with the batch |
+| E2 | Internal reference from the full stain, for the reference channel only | `sw_relativise_internal_map()` | No extra tubes | Only the reference channel is calibrated; its negative median depends on the sample's cell mix |
+| E3 | `sw_diagnose()` modules `relativise` and `otd` | `sw_diagnose(..., relativise, otd)` | One table for all checks | `sw_diagnose()` gained two required arguments; callers updated |
+| E4 | Optimal-transport distance per file to a pooled reference (paper's OTD) | `sw_sinkhorn_divergence()`, `sw_otd_scores()` | Paper's main score | Clean rewrite of the debiased Sinkhorn divergence (cost `|x-y|^2/2`, `epsilon = blur^2`, annealing factor 0.7). Checked: a translation by `d` gives `|d|^2/2` at any blur; symmetric; 0 on equal sets. Small blur converges slowly and is flagged |
