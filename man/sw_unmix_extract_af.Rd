@@ -8,17 +8,18 @@ sw_unmix_extract_af(
   unstained_fcs,
   setup,
   spectra,
-  refine = TRUE,
-  som_dim = 10,
-  parallel = TRUE,
-  threads = NULL
+  refine = NULL,
+  som_dim = NULL,
+  parallel = NULL,
+  threads = NULL,
+  ...
 )
 }
 \arguments{
 \item{unstained_fcs}{Character path to an unstained FCS file, or a named
 list of paths for tissue-specific AF (e.g.,
 \code{list(spleen = "spleen_unstained.fcs",
-             lung = "lung_unstained.fcs")}).}
+           lung = "lung_unstained.fcs")}).}
 
 \item{setup}{An \code{sw_setup} object from
 \code{\link{sw_unmix_setup}}.}
@@ -26,37 +27,37 @@ list of paths for tissue-specific AF (e.g.,
 \item{spectra}{A fluorophore spectral matrix (from
 \code{\link{sw_unmix_prepare}}).}
 
-\item{refine}{Logical; whether to perform a second-pass refinement
-targeting high-error cells. Default: \code{TRUE}. Recommended for
-tissue samples with complex autofluorescence.}
+\item{refine}{Logical or \code{NULL}; second-pass refinement of
+high-error cells. \code{NULL} (default) uses AutoSpectral's default
+(\code{TRUE} in 1.8.8).}
 
-\item{som_dim}{Integer; SOM grid dimension. Default: \code{10} (up to
-100 AF clusters).}
+\item{som_dim}{Integer or \code{NULL}; SOM grid dimension. \code{NULL}
+(default) uses AutoSpectral's default (\code{10} in 1.8.8).}
 
-\item{parallel}{Logical; whether to enable parallel processing. Default:
-\code{TRUE}.}
+\item{parallel}{Logical or \code{NULL}; parallel processing. \code{NULL}
+(default) uses AutoSpectral's default (\code{TRUE} in 1.8.8).}
 
-\item{threads}{Integer or \code{NULL}; number of threads. Default:
-\code{NULL} (auto-detect).}
+\item{threads}{Integer or \code{NULL}; number of threads. \code{NULL}
+(default) uses AutoSpectral's default (\code{if (parallel) 0 else 1},
+where 0 means all cores).}
+
+\item{...}{Further arguments for \code{AutoSpectral::get.af.spectra()},
+under AutoSpectral's own names (e.g. \code{af.assign.method}).}
 }
 \value{
 If \code{unstained_fcs} is a single path: a matrix of AF spectra
-(clusters in rows, detectors in columns). If a named list: a named list
+(spectra in rows, detectors in columns). If a named list: a named list
 of such matrices.
 }
 \description{
 Extracts autofluorescence (AF) spectral variation from unstained samples
-using SOM clustering. For multi-tissue experiments, provide a named list
-of unstained files to get tissue-matched AF spectra.
+with \code{AutoSpectral::get.af.spectra()}. For multi-tissue experiments,
+provide a named list of unstained files to get tissue-matched AF spectra.
 }
 \details{
-This is Step 3 of the SpectraWeaveR unmixing workflow. Per-cell AF
-extraction allows AutoSpectral to model cell-to-cell variation in
-autofluorescence, producing better unmixing with less spread.
-
-For different tissue types (e.g., spleen, lung, liver), provide separate
-unstained samples and match the resulting AF spectra to the corresponding
-stained samples during unmixing.
+This is Step 3 of the SpectraWeaveR unmixing workflow. For a named list,
+each tissue's plots and table get the title \code{"AF <tissue>"} unless
+\code{title} is passed in \code{...}.
 
 Installation of \code{AutoSpectralRcpp} is strongly recommended for
 faster processing.

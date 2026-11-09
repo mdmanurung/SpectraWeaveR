@@ -982,11 +982,7 @@ sw_pipeline_show <- function(pipeline) {
   correct_data   = list(input = c("tbl_df", "data.frame"),
                         output = c("tbl_df", "data.frame")),
   cluster        = list(input = c("tbl_df", "data.frame", "matrix"),
-                        output = character(0)),
-  annotate       = list(input = character(0),
-                        output = c("tbl_df", "data.frame")),
-  differential   = list(input = c("tbl_df", "data.frame"),
-                        output = c("tbl_df", "data.frame"))
+                        output = character(0))
 )
 
 #' Create a Step for Reading FCS Files
@@ -1147,48 +1143,6 @@ sw_pipeline_step_cluster <- function(...,
                             input_type  = .SW_STEP_DEFAULT_TYPES$cluster$input,
                             output_type = .SW_STEP_DEFAULT_TYPES$cluster$output) {
   sw_pipeline_step("cluster", sw_cluster_run, list(...),
-          input_type = input_type, output_type = output_type)
-}
-
-#' Create a Step for Cell Type Annotation
-#'
-#' Convenience constructor for a \code{\link{ProcessingStep}} that wraps
-#' \code{\link{sw_annotate_run}}. Accepts either an
-#' \code{sw_cluster_result} or a MFI tibble from \code{\link{sw_cluster_mfi}}
-#' as input and returns an annotation tibble.
-#'
-#' @param ... Additional arguments passed to \code{sw_annotate_run}.
-#' @param input_type Character vector overriding the default input port type.
-#' @param output_type Character vector overriding the default output port type.
-#'
-#' @return A \code{ProcessingStep} object.
-#'
-#' @export
-sw_pipeline_step_annotate <- function(...,
-                             input_type  = .SW_STEP_DEFAULT_TYPES$annotate$input,
-                             output_type = .SW_STEP_DEFAULT_TYPES$annotate$output) {
-  sw_pipeline_step("annotate", sw_annotate_run, list(...),
-          input_type = input_type, output_type = output_type)
-}
-
-#' Create a Step for Differential Expression
-#'
-#' Convenience constructor for a \code{\link{ProcessingStep}} that wraps
-#' \code{\link{sw_diff_expression}}. Input should be a
-#' \code{data.frame}/\code{tibble} with a \code{cluster} column; output is a
-#' long-format DE result tibble.
-#'
-#' @param ... Additional arguments passed to \code{sw_diff_expression}.
-#' @param input_type Character vector overriding the default input port type.
-#' @param output_type Character vector overriding the default output port type.
-#'
-#' @return A \code{ProcessingStep} object.
-#'
-#' @export
-sw_pipeline_step_diff <- function(...,
-                                  input_type  = .SW_STEP_DEFAULT_TYPES$differential$input,
-                                  output_type = .SW_STEP_DEFAULT_TYPES$differential$output) {
-  sw_pipeline_step("differential", sw_diff_expression, list(...),
           input_type = input_type, output_type = output_type)
 }
 

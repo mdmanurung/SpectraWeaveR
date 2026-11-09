@@ -14,7 +14,7 @@ sw_channel_is_fluor(
 
 \item{exclude_patterns}{Character vector of patterns to exclude
 (case-insensitive grep). Default: \code{c("FSC", "SSC", "Time",
-  "Original_ID", "File", "SampleID")}.}
+"Original_ID", "File", "SampleID")}.}
 }
 \value{
 A named logical vector with length equal to \code{ncol(x)}.

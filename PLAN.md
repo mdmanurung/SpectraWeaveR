@@ -119,7 +119,7 @@ Ported from CytoPipeline and CytoPipelineUtils (UCLouvain-CBIO).
 ## Phase 3: Documentation ✅
 
 ### Roxygen2 documentation
-- [x] All 90 exported functions have roxygen2 documentation in source files
+- [x] All 136 exported functions have roxygen2 documentation in source files
 - [x] `man/` Rd file names updated to match new function names (Session 12)
 - [ ] Regenerate `man/` pages via `devtools::document()` (requires R with dependencies)
 
@@ -217,8 +217,8 @@ Tests use synthetic in-memory data (no real FCS files required). External depend
 ### Phase 8: Function Rename Overhaul ✅
 - [x] Renamed all ~90 exported functions to `sw_{module}_{verb}()` hierarchy (Session 12)
 - [x] All R source files updated (17 files)
-- [x] NAMESPACE updated (90 exports with new names)
-- [x] All 16 test files updated
+- [x] NAMESPACE updated (90 exports at the rename; 136 by 2026-11-09)
+- [x] All 16 test files updated (29 by 2026-11-09)
 - [x] All vignettes updated (8 files: 2 core + 5 tutorial + 1 llm-assistant)
 - [x] All reference docs updated (12 .qmd files)
 - [x] All LLM prompt templates updated (`inst/prompts/`)

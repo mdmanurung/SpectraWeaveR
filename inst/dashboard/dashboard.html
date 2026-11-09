@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d6dae3; --panel: #f5f6f9;
+  --pass: #1b7f3b; --warn: #a15c00; --fail: #b42318; --nj: #5b6475; --nr: #8a91a0;
+  --accent: #0b5cad;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151c; --fg: #e6e9f0; --muted: #9aa3b5; --line: #2b3140; --panel: #1b202b;
+    --pass: #5fd07f; --warn: #f0b24a; --fail: #ff8b7e; --nj: #9aa3b5; --nr: #7a8294;
+    --accent: #6db2ff;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --fg: #e6e9f0; --muted: #9aa3b5; --line: #2b3140; --panel: #1b202b;
+  --pass: #5fd07f; --warn: #f0b24a; --fail: #ff8b7e; --nj: #9aa3b5; --nr: #7a8294;
+  --accent: #6db2ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex;
+  flex-wrap: wrap; gap: 12px; align-items: center; }
+header h1 { font-size: 17px; margin: 0; flex: 1 1 260px; }
+select, input[type=search], button { font: inherit; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+button[aria-pressed="true"], button.on { border-color: var(--accent); color: var(--accent); }
+nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--line); }
+nav button { border-radius: 6px 6px 0 0; border-bottom: none; }
+nav button[aria-selected="true"] { background: var(--bg); color: var(--accent); border-color: var(--accent); }
+main { padding: 16px; max-width: 1180px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 12px; }
+.note { color: var(--muted); font-size: 13px; }
+.banner { border: 1px solid var(--warn); color: var(--warn); border-radius: 6px; padding: 6px 10px; margin: 0 0 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { cursor: pointer; white-space: nowrap; position: sticky; top: 0; background: var(--bg); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor;
+  font-size: 12px; white-space: nowrap; }
+.s-pass { color: var(--pass); } .s-warn { color: var(--warn); } .s-fail { color: var(--fail); }
+.s-not_judged { color: var(--nj); } .s-not_run { color: var(--nr); }
+.cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-width: 110px; }
+.card b { display: block; font-size: 20px; }
+svg text { fill: var(--fg); font-size: 11px; }
+svg .axis { stroke: var(--muted); }
+svg .grid { stroke: var(--line); }
+.legend span { margin-right: 12px; cursor: pointer; user-select: none; }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 4px; }
+.legend .off { opacity: 0.35; text-decoration: line-through; }
+.grid2 { display: flex; flex-wrap: wrap; gap: 12px; }
+.tip { position: fixed; pointer-events: none; background: var(--panel); border: 1px solid var(--line);
+  padding: 4px 8px; border-radius: 6px; font-size: 12px; display: none; z-index: 5; }
+canvas { border: 1px solid var(--line); }
+canvas.wide { width: 100%; height: auto; display: block; border: none; }
+.scroll { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.gallery figure { margin: 0; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: var(--panel); }
+.gallery img { width: 100%; height: 150px; object-fit: contain; background: #fff; display: block; }
+.gallery figcaption { font-size: 12px; margin-top: 4px; word-break: break-word; }
+@media (max-width: 640px) { main { padding: 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <label>Run <select id="run"></select></label>
+  <button id="theme" aria-label="Toggle dark mode">Theme</button>
+</header>
+<nav id="tabs" role="tablist"></nav>
+<main id="main"></main>
+<div class="tip" id="tip"></div>
+<script>
+const D = __DATA__;
+(function () {
+"use strict";
+
+// ---- helpers ------------------------------------------------------------------
+const A = (x) => (x === null || x === undefined ? [] : Array.isArray(x) ? x : [x]);
+const NS = "http://www.w3.org/2000/svg";
+function setAttrs(e, attrs) {
+  for (const k in (attrs || {})) {
+    if (k === "text") e.textContent = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  return e;
+}
+function h(tag, attrs, kids) {
+  const e = setAttrs(document.createElement(tag), attrs);
+  for (const c of A(kids)) e.append(c);
+  return e;
+}
+function s(tag, attrs, kids) {
+  const e = setAttrs(document.createElementNS(NS, tag), attrs);
+  for (const c of A(kids)) e.append(c);
+  return e;
+}
+const fmt = (v, d) => (v === null || v === undefined || Number.isNaN(v) ? "" :
+  (typeof v === "number" ? (Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0) ? v.toExponential(2) : String(+v.toPrecision(d || 4))) : String(v)));
+const SYM = { pass: "✓", warn: "!", fail: "✕", not_judged: "–", not_run: "·" };
+function chip(status) {
+  return h("span", { class: "chip s-" + status, text: (SYM[status] || "?") + " " + status });
+}
+// Change a chip in place (status text and colour class).
+function setChip(el, status) {
+  el.className = "chip s-" + status; el.textContent = (SYM[status] || "?") + " " + status;
+}
+const tip = document.getElementById("tip");
+function showTip(ev, text) {
+  tip.textContent = text; tip.style.display = "block";
+  tip.style.left = (ev.clientX + 12) + "px"; tip.style.top = (ev.clientY + 12) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+const color = (m) => (D.palette && D.palette[m]) || "#888888";
+const TABS = [["overview", "Overview"], ["checks", "Checks"], ["sif", "SIF"], ["spectra", "Spectra"],
+  ["similarity", "Similarity"], ["distributions", "Distributions"], ["biplot", "Biplot"], ["autospectral", "AutoSpectral"], ["compare", "Compare"]];
+
+// Shared canvas setup for the similarity matrix and the biplot: a backing store
+// `scale` times the logical size, CSS variables read once per draw, and a
+// mapper from a mouse event to logical coordinates.
+function canvasPlot(W, H, scale, label) {
+  const cv = h("canvas", { width: Math.round(W * scale), height: Math.round(H * scale), role: "img", "aria-label": label });
+  const g = cv.getContext("2d");
+  g.scale(scale, scale);
+  const css = getComputedStyle(document.body);
+  const v = (name) => css.getPropertyValue(name).trim();
+  g.fillStyle = v("--bg"); g.fillRect(0, 0, W, H);
+  const at = (ev) => { const r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height]; };
+  return { cv, g, v, at };
+}
+
+// ---- state --------------------------------------------------------------------
+const hash = new URLSearchParams(location.hash.slice(1));
+const st = {
+  run: Math.min(Math.max(parseInt(hash.get("run") || "0", 10) || 0, 0), D.runs.length - 1),
+  tab: TABS.some((t) => t[0] === hash.get("tab")) ? hash.get("tab") : "overview",
+  statuses: new Set(["pass", "warn", "fail", "not_judged", "not_run"]),
+  search: "", metric: "", sort: { col: null, dir: 1 }, showAll: false,
+  fluor: null, off: {}, channel: null, whatif: {}, sifMode: "saved",
+  asub: ["matrix", "af", "versions", "gallery"].includes(hash.get("asub")) ? hash.get("asub") : "matrix", asMat: parseInt(hash.get("mat") || "0", 10) || 0, asAfSet: 0, asAfSel: null, galFolder: "", galSearch: "", galAll: false
+};
+const R = () => D.runs[st.run];
+function saved(run) {
+  const l = run.limits || {};
+  return { warn: l.warn === undefined ? null : l.warn, fail: l.fail === undefined ? null : l.fail };
+}
+function statusOf(v, lim) {
+  if (v === null || v === undefined) return "not_run";
+  if (lim.warn === null && lim.fail === null) return "not_judged";
+  if (lim.fail !== null && v > lim.fail) return "fail";
+  if (lim.warn !== null && v > lim.warn) return "warn";
+  return "pass";
+}
+function whatif(run) {
+  if (!st.whatif[run.name]) { const sv = saved(run); st.whatif[run.name] = { warn: sv.warn === null ? 4 : sv.warn, fail: sv.fail === null ? 6 : sv.fail }; }
+  return st.whatif[run.name];
+}
+function sifRows(run) {
+  const f = A(run.sif.fluorophore), v = A(run.sif.value), p = A(run.sif.partner), pv = A(run.sif.partner_value), ss = A(run.sif.status);
+  return f.map((x, i) => ({ f: x, v: v[i], partner: p[i], pv: pv[i], saved: ss[i] }));
+}
+function fluors(run) {
+  if (run.spectra && A(run.spectra.fluorophores).length) return A(run.spectra.fluorophores);
+  return sifRows(run).map((r) => r.f);
+}
+function ensureFluor(run) {
+  const fl = fluors(run);
+  if (!st.fluor || fl.indexOf(st.fluor) < 0) {
+    const rows = sifRows(run).filter((r) => r.v !== null).sort((a, b) => b.v - a.v);
+    st.fluor = rows.length ? rows[0].f : fl[0];
+  }
+}
+
+// ---- shell --------------------------------------------------------------------
+document.getElementById("title").textContent = D.title;
+const runSel = document.getElementById("run");
+D.runs.forEach((r, i) => runSel.append(h("option", { value: i, text: r.name })));
+runSel.value = st.run;
+runSel.addEventListener("change", () => { st.run = +runSel.value; st.fluor = null; st.channel = null; render(); });
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  render(); // canvases read the theme colours when drawn
+});
+const tabs = document.getElementById("tabs");
+TABS.forEach((t) => tabs.append(h("button", { role: "tab", "data-tab": t[0], text: t[1],
+  onclick: () => { st.tab = t[0]; render(); } })));
+
+function render() {
+  tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === st.tab)));
+  const main = document.getElementById("main");
+  main.replaceChildren();
+  ensureFluor(R());
+  VIEWS[st.tab](main, R());
+  history.replaceState(null, "", "#tab=" + st.tab + "&run=" + st.run + "&asub=" + st.asub);
+}
+
+// ---- overview -----------------------------------------------------------------
+function overview(main, run) {
+  const sc = run.status_counts || {};
+  const cards = h("div", { class: "cards" });
+  ["pass", "warn", "fail", "not_judged", "not_run"].forEach((k) =>
+    cards.append(h("div", { class: "card" }, [h("b", { class: "s-" + k, text: String(sc[k] || 0) }), chip(k)])));
+  main.append(h("p", { class: "note", text: "Run " + (run.run_id || run.name) + (run.figures_dir ? "; figure tables from " + run.figures_dir : "; no figure tables found") }), cards);
+  const sv = saved(run);
+  main.append(h("p", { text: "Saved SIF cutoffs: " + (sv.warn === null && sv.fail === null ? "none (SIF not judged)" : "warn above " + fmt(sv.warn) + ", fail above " + fmt(sv.fail)) }));
+  const p = run.provenance, rows = A(p.section).map((sec, i) => [sec, A(p.field)[i], A(p.value)[i]]);
+  const t = h("table", {}, [h("thead", {}, h("tr", {}, ["Section", "Field", "Value"].map((x) => h("th", { text: x })))),
+    h("tbody", {}, rows.map((r) => h("tr", {}, r.map((c) => h("td", { text: c === null ? "" : String(c) })))))]);
+  main.append(h("div", { class: "scroll" }, t));
+}
+
+// ---- checks -------------------------------------------------------------------
+// Table rows are built once per run and reused: filtering, sorting and the
+// status buttons only reorder existing <tr> nodes.
+const CHECK_COLS = ["check_id", "scope", "item", "metric", "value", "limit", "status", "reason"];
+const checkRowCache = {};
+function checkRow(run, i) {
+  const cache = checkRowCache[run.name] || (checkRowCache[run.name] = []);
+  if (cache[i]) return cache[i];
+  const c = run.checks;
+  const tr = h("tr", {}, CHECK_COLS.map((k) => {
+    const v = A(c[k])[i];
+    if (k === "status") return h("td", {}, chip(v));
+    return h("td", { class: k === "value" ? "num" : "", text: k === "value" ? fmt(v) : (v === null ? "" : String(v)) });
+  }));
+  cache[i] = tr;
+  return tr;
+}
+function checks(main, run) {
+  const c = run.checks, cols = CHECK_COLS;
+  const n = A(c.status).length;
+  const statusCol = A(c.status), metricCol = A(c.metric);
+  const hay = A(c.item).map((it, i) => (String(it) + " " + String(A(c.reason)[i])).toLowerCase());
+  const metrics = Array.from(new Set(metricCol)).sort();
+  const bar = h("div", { class: "row" });
+  const statusBtns = {};
+  ["pass", "warn", "fail", "not_judged", "not_run"].forEach((k) => {
+    statusBtns[k] = h("button", { "aria-pressed": String(st.statuses.has(k)), text: SYM[k] + " " + k,
+      onclick: () => { st.statuses.has(k) ? st.statuses.delete(k) : st.statuses.add(k); statusBtns[k].setAttribute("aria-pressed", String(st.statuses.has(k))); renderRows(); } });
+    bar.append(statusBtns[k]);
+  });
+  const ms = h("select", { "aria-label": "Metric" }, [h("option", { value: "", text: "All metrics" })].concat(metrics.map((m) => h("option", { value: m, text: m }))));
+  ms.value = st.metric; ms.addEventListener("change", () => { st.metric = ms.value; renderRows(); });
+  const q = h("input", { type: "search", placeholder: "Search item or reason", value: st.search });
+  q.addEventListener("input", () => { st.search = q.value; renderRows(); });
+  bar.append(ms, q);
+  main.append(bar);
+  const info = h("p", { class: "note" });
+  const tbody = h("tbody");
+  const ths = {};
+  const headLabel = (k) => k + (st.sort.col === k ? (st.sort.dir > 0 ? " ▲" : " ▼") : "");
+  function renderRows() {
+    const needle = st.search.toLowerCase();
+    let idx = [];
+    for (let i = 0; i < n; i++) {
+      if (st.statuses.has(statusCol[i]) && (!st.metric || metricCol[i] === st.metric) && (!needle || hay[i].includes(needle))) idx.push(i);
+    }
+    if (st.sort.col) {
+      const col = A(c[st.sort.col]);
+      idx.sort((a, b) => { const x = col[a], y = col[b]; if (x === y) return 0; if (x === null) return 1; if (y === null) return -1; return (x > y ? 1 : -1) * st.sort.dir; });
+    }
+    const shown = st.showAll ? idx : idx.slice(0, 300);
+    info.textContent = shown.length + " of " + idx.length + " rows" + (idx.length > shown.length ? " (first 300; click here to show all)" : "");
+    info.onclick = () => { if (idx.length > shown.length) { st.showAll = true; renderRows(); } };
+    cols.forEach((k) => { ths[k].textContent = headLabel(k); });
+    tbody.replaceChildren(...shown.map((i) => checkRow(run, i)));
+  }
+  const thead = h("thead", {}, h("tr", {}, cols.map((k) => (ths[k] = h("th", { text: headLabel(k),
+    onclick: () => { st.sort = { col: k, dir: st.sort.col === k ? -st.sort.dir : 1 }; renderRows(); } })))));
+  main.append(info, h("div", { class: "scroll" }, h("table", {}, [thead, tbody])));
+  renderRows();
+}
+
+// ---- SIF ----------------------------------------------------------------------
+// The SVG and the table are built once per render. A slider event recolours
+// bars, symbols, what-if lines and the what-if column in place; only a change
+// of the x range (a cutoff beyond the largest bar) rebuilds the drawing.
+function sif(main, run) {
+  const sv = saved(run), wi = whatif(run), rows = sifRows(run).filter((r) => r.v !== null).sort((a, b) => b.v - a.v);
+  main.append(h("div", { class: "banner", text: "What-if cutoffs are display only. Nothing is saved, and the saved verdicts in Checks are unchanged." }));
+  if (run.sif_source === "computed") main.append(h("div", { class: "banner", text: "This run has no saved SIF check. The values are computed here from the run's saved spectra with the same formula, and no saved verdict exists (not_judged)." }));
+  if (!rows.length) { main.append(h("p", { text: "No SIF values: the run has no spectra table with two or more fluorophores." })); return; }
+  const ctl = h("div", { class: "row" });
+  const outs = {}, inputs = {};
+  const mk = (key, label) => {
+    const out = outs[key] = h("b", { text: fmt(wi[key]) });
+    const inp = inputs[key] = h("input", { type: "range", min: "0", max: "20", step: "0.1", value: String(wi[key]) });
+    inp.addEventListener("input", () => { wi[key] = +inp.value; st.sifMode = "whatif"; out.textContent = fmt(wi[key]); refresh(); });
+    return h("label", {}, [label + " above ", out, " ", inp]);
+  };
+  const preset = (w, f) => { wi.warn = w; wi.fail = f; st.sifMode = "whatif";
+    ["warn", "fail"].forEach((k) => { inputs[k].value = String(wi[k]); outs[k].textContent = fmt(wi[k]); }); refresh(); };
+  ctl.append(mk("warn", "warn"), mk("fail", "fail"),
+    h("button", { text: "Saved", onclick: () => { st.sifMode = "saved"; refresh(); } }),
+    h("button", { text: "AutoSpectral 4 / 6", onclick: () => preset(4, 6) }),
+    h("button", { text: "Mage 3 / 8", onclick: () => preset(3, 8) }));
+  main.append(ctl);
+  const host = h("div"); main.append(host);
+  const tbl = h("div", { class: "scroll" }); main.append(h("p", { class: "note", text: "Click a bar to select that fluorophore for the Spectra and Similarity tabs." }), tbl);
+  const xmaxOf = () => Math.max(8, ...rows.map((r) => r.v), wi.fail, sv.fail || 0) * 1.05;
+  let xmax = null, parts = null;
+  function refresh() { if (xmaxOf() !== xmax) draw(); else recolor(); }
+  function recolor() {
+    const whatifOn = st.sifMode === "whatif";
+    parts.wiLines.forEach((l) => l.setAttribute("visibility", whatifOn ? "visible" : "hidden"));
+    const setLim = (pair, v) => { pair[0].setAttribute("x1", parts.x(v)); pair[0].setAttribute("x2", parts.x(v)); pair[1].setAttribute("x", parts.x(v) + 3); pair[1].textContent = "what-if " + fmt(v); };
+    setLim(parts.wiLine.warn, wi.warn); setLim(parts.wiLine.fail, wi.fail);
+    rows.forEach((r, i) => {
+      const status = whatifOn ? statusOf(r.v, wi) : r.saved, p = parts.bars[i];
+      p.status = status;
+      p.bar.setAttribute("class", "s-" + status);
+      p.bar.setAttribute("style", r.f === st.fluor ? "stroke:var(--fg);stroke-width:2" : "");
+      p.sym.textContent = status === "fail" ? SYM.fail : status === "warn" ? SYM.warn : "";
+      setChip(p.chip, statusOf(r.v, wi));
+    });
+  }
+  function draw() {
+    const W = 760, rowH = 16, M = { l: 130, r: 20, t: 20, b: 28 }, H = M.t + M.b + rows.length * rowH;
+    xmax = xmaxOf();
+    const x = (v) => M.l + (v / xmax) * (W - M.l - M.r);
+    const svg = s("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "SIF per fluorophore" });
+    for (let t = 0; t <= xmax; t += 2) { svg.append(s("line", { class: "grid", x1: x(t), x2: x(t), y1: M.t, y2: H - M.b }), s("text", { x: x(t), y: H - 10, "text-anchor": "middle", text: String(t) })); }
+    const lim = (v, dash, lab, dy) => { const l = s("line", { x1: x(v), x2: x(v), y1: M.t - 4, y2: H - M.b, stroke: "currentColor", "stroke-dasharray": dash, style: "color:var(--muted)" }), t = s("text", { x: x(v) + 3, y: M.t - 6 + dy, text: lab }); svg.append(l, t); return [l, t]; };
+    if (sv.warn !== null) lim(sv.warn, "none", "saved " + fmt(sv.warn), 0);
+    if (sv.fail !== null) lim(sv.fail, "none", "saved " + fmt(sv.fail), 0);
+    const wiLine = { warn: lim(wi.warn, "4 3", "what-if " + fmt(wi.warn), -8), fail: lim(wi.fail, "4 3", "what-if " + fmt(wi.fail), -8) };
+    const bars = rows.map((r, i) => {
+      const y = M.t + i * rowH, p = { status: null };
+      p.bar = s("rect", { x: x(0), y: y + 2, width: Math.max(1, x(r.v) - x(0)), height: rowH - 4, fill: "currentColor",
+        onmousemove: (ev) => showTip(ev, r.f + ": SIF " + fmt(r.v) + " (" + p.status + ")" + (r.partner ? "; partner " + r.partner + " " + fmt(r.pv) : "")), onmouseleave: hideTip,
+        onclick: () => { st.fluor = r.f; recolor(); } });
+      p.sym = s("text", { x: x(r.v) + 4, y: y + rowH - 4 });
+      p.chip = chip("pass");
+      svg.append(p.bar, s("text", { x: M.l - 6, y: y + rowH - 4, "text-anchor": "end", text: r.f }), p.sym);
+      return p;
+    });
+    host.replaceChildren(svg);
+    const body = rows.map((r, i) => h("tr", {}, [h("td", { text: r.f }), h("td", { class: "num", text: fmt(r.v) }), h("td", {}, chip(r.saved)), h("td", {}, bars[i].chip), h("td", { text: r.partner ? r.partner + " (" + fmt(r.pv) + ")" : "" })]));
+    tbl.replaceChildren(h("table", {}, [h("thead", {}, h("tr", {}, ["Fluorophore", "SIF", "Saved verdict", "What-if", "Largest off-diagonal partner"].map((k) => h("th", { text: k })))), h("tbody", {}, body)]));
+    parts = { x, bars, wiLine, wiLines: wiLine.warn.concat(wiLine.fail) };
+    recolor();
+  }
+  draw();
+}
+
+// ---- spectra ------------------------------------------------------------------
+function fluorPicker(run, onchange) {
+  const sel = h("select", { "aria-label": "Fluorophore" }, fluors(run).map((f) => h("option", { value: f, text: f })));
+  sel.value = st.fluor; sel.addEventListener("change", () => { st.fluor = sel.value; onchange(); });
+  return h("label", {}, ["Fluorophore ", sel]);
+}
+function legend(methods, key, redraw) {
+  const l = h("div", { class: "legend" });
+  methods.forEach((m) => l.append(h("span", { class: (st.off[key + m] ? "off" : ""), onclick: () => { st.off[key + m] = !st.off[key + m]; redraw(); } }, [h("i", { style: "background:" + color(m) }), m])));
+  return l;
+}
+function spectra(main, run) {
+  const sp = run.spectra, dets = A(sp.detectors), methods = A(sp.methods);
+  const host = h("div"), leg = h("div"), info = h("p", { class: "note" });
+  main.append(h("div", { class: "row" }, [fluorPicker(run, draw)]), leg, host, info);
+  function draw() {
+    leg.replaceChildren(legend(methods, "sp", draw));
+    const item = sp.items[st.fluor] || {}, W = 900, H = 320, M = { l: 40, r: 10, t: 10, b: 60 };
+    const x = (i) => M.l + (i / Math.max(1, dets.length - 1)) * (W - M.l - M.r), y = (v) => M.t + (1 - v) * (H - M.t - M.b);
+    const svg = s("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "Spectra of " + st.fluor });
+    [0, 0.25, 0.5, 0.75, 1].forEach((t) => svg.append(s("line", { class: "grid", x1: M.l, x2: W - M.r, y1: y(t), y2: y(t) }), s("text", { x: M.l - 4, y: y(t) + 3, "text-anchor": "end", text: String(t) })));
+    const step = Math.ceil(dets.length / 16);
+    dets.forEach((d, i) => { if (i % step === 0) svg.append(s("text", { transform: "translate(" + x(i) + "," + (H - M.b + 10) + ") rotate(60)", text: d })); });
+    methods.filter((m) => item[m] && !st.off["sp" + m]).forEach((m) => {
+      const v = A(item[m]);
+      svg.append(s("polyline", { fill: "none", stroke: color(m), "stroke-width": "1.6", points: v.map((q, i) => q === null ? null : x(i) + "," + y(q)).filter(Boolean).join(" ") }));
+    });
+    const cap = s("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent",
+      onmousemove: (ev) => { const r = svg.getBoundingClientRect(), i = Math.round(((ev.clientX - r.left) / r.width * W - M.l) / (W - M.l - M.r) * (dets.length - 1));
+        if (i >= 0 && i < dets.length) showTip(ev, dets[i] + "  " + methods.filter((m) => item[m]).map((m) => m + " " + fmt(A(item[m])[i])).join("  ")); }, onmouseleave: hideTip });
+    svg.append(cap); host.replaceChildren(svg);
+    const ang = item.angle || {};
+    info.textContent = "Peak-normalised. " + Object.keys(ang).filter((m) => m !== "ours").map((m) => "Angle ours vs " + m + ": " + fmt(ang[m]) + " deg").join("; ");
+  }
+  draw();
+}
+
+// ---- similarity ---------------------------------------------------------------
+const RAMP = [[68, 1, 84], [59, 82, 139], [33, 144, 141], [93, 201, 99], [253, 231, 37]];
+// Colour of t in [0, 1] as [r, g, b], and as a CSS string.
+function rampRGB(t) {
+  t = Math.min(1, Math.max(0, t)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(t)), f = t - i, a = RAMP[i], b = RAMP[i + 1];
+  return [Math.round(a[0] + (b[0] - a[0]) * f), Math.round(a[1] + (b[1] - a[1]) * f), Math.round(a[2] + (b[2] - a[2]) * f)];
+}
+const ramp = (t) => "rgb(" + rampRGB(t).join(",") + ")";
+// The matrix is one canvas with one mousemove and one click listener; the
+// cell under the pointer comes from the coordinates, not from n*n elements.
+function similarity(main, run) {
+  const sm = run.similarity;
+  if (!sm) { main.append(h("p", { text: "No similarity table in this run." })); return; }
+  const fl = A(sm.fluorophores), n = fl.length, cos = A(sm.cosine), sr = {};
+  sifRows(run).forEach((r) => { sr[r.f] = r; });
+  const info = h("p", { class: "note", text: "Click a cell to see the pair." });
+  const W = 760, M = { l: 130, t: 10, r: 10, b: 130 }, cell = (W - M.l - M.r) / n, H = M.t + M.b + cell * n;
+  const scale = Math.max(1, Math.min(3, (main.clientWidth || W) / W)) * (window.devicePixelRatio || 1);
+  const cp = canvasPlot(W, H, scale, "Cosine similarity matrix");
+  const g = cp.g, fontPx = Math.min(11, cell * 0.9);
+  cp.cv.classList.add("wide");
+  // The coloured cells are drawn once into an offscreen layer; a click only
+  // redraws the layer, the highlight and the labels.
+  const layer = document.createElement("canvas"); layer.width = cp.cv.width; layer.height = cp.cv.height;
+  const lg = layer.getContext("2d"); lg.scale(scale, scale);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const v = cos[i * n + j];
+    if (v === null) continue;
+    lg.fillStyle = ramp(v); lg.fillRect(M.l + j * cell, M.t + i * cell, cell, cell);
+  }
+  function draw() {
+    g.fillStyle = cp.v("--bg"); g.fillRect(0, 0, W, H);
+    g.drawImage(layer, 0, 0, W, H);
+    g.strokeStyle = cp.v("--fg"); g.lineWidth = 0.5;
+    const k = fl.indexOf(st.fluor);
+    if (k >= 0) { g.strokeRect(M.l, M.t + k * cell, n * cell, cell); g.strokeRect(M.l + k * cell, M.t, cell, n * cell); }
+    g.fillStyle = cp.v("--fg"); g.font = fontPx + "px system-ui, sans-serif";
+    fl.forEach((f, i) => {
+      g.textAlign = "end"; g.fillText(f, M.l - 4, M.t + i * cell + cell * 0.75);
+      g.save(); g.translate(M.l + i * cell + cell * 0.7, M.t + n * cell + 6); g.rotate(Math.PI / 3); g.textAlign = "start"; g.fillText(f, 0, 0); g.restore();
+    });
+  }
+  const cellAt = (ev) => { const [px, py] = cp.at(ev), j = Math.floor((px - M.l) / cell), i = Math.floor((py - M.t) / cell);
+    return (i >= 0 && i < n && j >= 0 && j < n) ? [i, j] : null; };
+  cp.cv.addEventListener("mousemove", (ev) => { const c = cellAt(ev); if (c) showTip(ev, fl[c[0]] + " vs " + fl[c[1]] + ": " + fmt(cos[c[0] * n + c[1]])); else hideTip(); });
+  cp.cv.addEventListener("mouseleave", hideTip);
+  cp.cv.addEventListener("click", (ev) => { const c = cellAt(ev); if (!c) return; const [i, j] = c, v = cos[i * n + j];
+    st.fluor = fl[i]; const a = sr[fl[i]], b = sr[fl[j]];
+    info.textContent = fl[i] + " vs " + fl[j] + ": cosine " + fmt(v) + (a ? "; SIF " + fl[i] + " " + fmt(a.v) : "") + (b ? "; SIF " + fl[j] + " " + fmt(b.v) : "");
+    draw(); });
+  draw();
+  const top = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (cos[i * n + j] !== null) top.push([fl[i], fl[j], cos[i * n + j]]);
+  top.sort((a, b) => b[2] - a[2]);
+  const tb = h("table", {}, [h("thead", {}, h("tr", {}, ["Pair", "Cosine"].map((k) => h("th", { text: k })))),
+    h("tbody", {}, top.slice(0, 10).map((r) => h("tr", {}, [h("td", { text: r[0] + " / " + r[1] }), h("td", { class: "num", text: fmt(r[2]) })])))]);
+  main.append(info, cp.cv, h("p", { class: "note", text: "Ten highest off-diagonal cosines" }), tb);
+}
+
+// ---- distributions ------------------------------------------------------------
+const SG = () => D.settings.pseudo_log_sigma;
+const inv = (y) => 2 * SG() * Math.sinh(y);
+function tickValues(lo, hi) {
+  const out = [], vlo = inv(lo), vhi = inv(hi);
+  for (let k = 3; k <= 8; k++) for (const sgn of [-1, 1]) { const v = sgn * Math.pow(10, k); if (v >= vlo && v <= vhi) out.push(v); }
+  if (vlo <= 0 && vhi >= 0) out.push(0);
+  return out.sort((a, b) => a - b);
+}
+const tf = (v) => Math.asinh(v / (2 * SG()));
+const tlab = (v) => v === 0 ? "0" : (v < 0 ? "−" : "") + "10^" + Math.round(Math.log10(Math.abs(v)));
+function distributions(main, run) {
+  const dd = run.distributions;
+  if (!dd) { main.append(h("p", { text: "No distribution table in this run." })); return; }
+  const chans = A(dd.channels), methods = A(dd.methods);
+  if (!st.channel || chans.indexOf(st.channel) < 0) st.channel = chans[0];
+  const sel = h("select", { "aria-label": "Channel" }, chans.map((c) => h("option", { value: c, text: c })));
+  sel.value = st.channel; sel.addEventListener("change", () => { st.channel = sel.value; draw(); });
+  const host = h("div"), leg = h("div"), info = h("p", { class: "note" });
+  main.append(h("div", { class: "row" }, [h("label", {}, ["Channel ", sel])]), leg, host, info);
+  function draw() {
+    leg.replaceChildren(legend(methods, "di", draw));
+    const p = A(dd.panels).find((q) => q.channel === st.channel), e = A(p.edges), nb = e.length - 1, bw = e[1] - e[0];
+    const W = 900, H = 320, M = { l: 44, r: 10, t: 10, b: 36 };
+    const dens = {}; let ymax = 0;
+    methods.forEach((m) => { const c = A(p.counts[m]), tot = c.reduce((a, b) => a + b, 0) || 1; dens[m] = c.map((q) => q / tot / bw); ymax = Math.max(ymax, ...dens[m]); });
+    const x = (t) => M.l + (t - e[0]) / (e[nb] - e[0]) * (W - M.l - M.r), y = (v) => M.t + (1 - v / ymax) * (H - M.t - M.b);
+    const svg = s("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "Distribution of " + st.channel });
+    tickValues(e[0], e[nb]).forEach((v) => svg.append(s("line", { class: "grid", x1: x(tf(v)), x2: x(tf(v)), y1: M.t, y2: H - M.b }), s("text", { x: x(tf(v)), y: H - 18, "text-anchor": "middle", text: tlab(v) })));
+    [0, 0.5, 1].forEach((t) => svg.append(s("text", { x: M.l - 4, y: y(t * ymax) + 3, "text-anchor": "end", text: fmt(t * ymax, 2) })));
+    methods.filter((m) => !st.off["di" + m]).forEach((m) => svg.append(s("polyline", { fill: "none", stroke: color(m), "stroke-width": "1.5",
+      points: dens[m].map((v, i) => x(e[i] + bw / 2) + "," + y(v)).join(" ") })));
+    svg.append(s("text", { x: W / 2, y: H - 3, "text-anchor": "middle", text: "Unmixed intensity (pseudo-log, sigma = " + SG() + ")" }));
+    const hit = s("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent",
+      onmousemove: (ev) => { const r = svg.getBoundingClientRect(), t = e[0] + (((ev.clientX - r.left) / r.width * W - M.l) / (W - M.l - M.r)) * (e[nb] - e[0]), i = Math.floor((t - e[0]) / bw);
+        if (i >= 0 && i < nb) showTip(ev, "~" + fmt(inv(t), 3) + "  " + methods.map((m) => m + " " + fmt(dens[m][i], 3)).join("  ")); }, onmouseleave: hideTip });
+    svg.append(hit); host.replaceChildren(svg);
+    info.textContent = "Density from " + nb + " bins; events per method: " + methods.map((m) => m + " " + (p.n[m] || "")).join(", ") + ".";
+  }
+  draw();
+}
+
+// ---- biplot -------------------------------------------------------------------
+// Cells arrive as delta-coded bin keys `k` (key = y * bins + x, differences
+// between successive keys) and counts `n`. Decoding gives a dense count grid,
+// drawn once as an image and used for O(1) hover lookups.
+function biplotGrid(c, nx, ny) {
+  if (c._grid) return c._grid;
+  const dk = A(c.k), N = A(c.n), grid = new Int32Array(nx * ny);
+  let key = -1;
+  for (let i = 0; i < dk.length; i++) { key += dk[i]; grid[key] = N[i]; }
+  c._grid = grid;
+  return grid;
+}
+function biplot(main, run) {
+  const b = run.biplot;
+  if (!b) { main.append(h("p", { text: "No biplot table in this run." })); return; }
+  const methods = A(b.methods), ex = A(b.ex), ey = A(b.ey), nx = ex.length - 1, ny = ey.length - 1, grid = h("div", { class: "grid2" });
+  main.append(h("p", { class: "note", text: "Counts per bin on the pseudo-log scale (sigma = " + SG() + ", " + D.settings.bins + " bins). Colour is log10(count + 1) on a shared scale." }), grid);
+  const labels = A(b.labels); let cmax = 1;
+  methods.forEach((m) => A(b.cells[m].n).forEach((q) => { cmax = Math.max(cmax, q); }));
+  const lmax = Math.log10(cmax + 1);
+  methods.forEach((m) => {
+    const c = b.cells[m], px = 3, W = nx * px, H = ny * px, M = 50;
+    const counts = biplotGrid(c, nx, ny);
+    const cp = canvasPlot(W + M + 10, H + M + 10, 1, "Biplot " + m), g = cp.g, cv = cp.cv;
+    // One pixel per bin in an offscreen image, scaled up without smoothing.
+    const off = document.createElement("canvas"); off.width = nx; off.height = ny;
+    const og = off.getContext("2d"), img = og.createImageData(nx, ny), px4 = img.data;
+    for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
+      const nn = counts[iy * nx + ix];
+      if (nn === 0) continue;
+      const rgb = rampRGB(Math.log10(nn + 1) / lmax), o = ((ny - 1 - iy) * nx + ix) * 4;
+      px4[o] = rgb[0]; px4[o + 1] = rgb[1]; px4[o + 2] = rgb[2]; px4[o + 3] = 255;
+    }
+    og.putImageData(img, 0, 0);
+    g.imageSmoothingEnabled = false; g.drawImage(off, M, 10, W, H);
+    g.fillStyle = cp.v("--fg"); g.strokeStyle = cp.v("--muted"); g.font = "10px sans-serif"; g.strokeRect(M, 10, W, H);
+    tickValues(ex[0], ex[nx]).forEach((v) => { const xx = M + (tf(v) - ex[0]) / (ex[nx] - ex[0]) * W; g.fillText(tlab(v), xx - 8, H + 24); });
+    tickValues(ey[0], ey[ny]).forEach((v) => { const yy = 10 + (1 - (tf(v) - ey[0]) / (ey[ny] - ey[0])) * H; g.fillText(tlab(v), 2, yy + 3); });
+    g.fillText(labels[0], M + W / 2 - 20, H + 40); g.fillText(labels[1], 2, 8);
+    cv.addEventListener("mousemove", (ev) => { const [qx, qy] = cp.at(ev), ix = Math.floor((qx - M) / px), iy = ny - 1 - Math.floor((qy - 10) / px);
+      if (ix >= 0 && ix < nx && iy >= 0 && iy < ny) showTip(ev, m + ": " + counts[iy * nx + ix] + " events in bin"); else hideTip(); });
+    cv.addEventListener("mouseleave", hideTip);
+    grid.append(h("div", {}, [h("b", { style: "color:" + color(m), text: m }), h("div", { class: "note", text: (c.total || "") + " events" }), cv]));
+  });
+}
+
+// ---- compare ------------------------------------------------------------------
+function compare(main) {
+  if (D.runs.length < 2) { main.append(h("p", { text: "Give two or more runs to compare them." })); return; }
+  const a = D.runs[0];
+  main.append(h("p", { class: "note", text: "Reference run: " + a.name + ". Angles are between reference spectra of the same fluorophore. SIF difference is run minus reference." }));
+  A(D.compare).forEach((cp) => {
+    const bRun = D.runs.find((r) => r.name === cp.b);
+    main.append(h("h3", { text: cp.b + " vs " + cp.a }));
+    if (cp.angles) {
+      const f = A(cp.angles.fluorophore), ang = A(cp.angles.angle_deg), sr = {}; sifRows(a).forEach((r) => { sr[r.f] = r; });
+      const sb = {}; sifRows(bRun).forEach((r) => { sb[r.f] = r; });
+      const rows = f.map((x, i) => ({ f: x, ang: ang[i], sa: sr[x] ? sr[x].v : null, sb: sb[x] ? sb[x].v : null })).sort((p, q) => q.ang - p.ang);
+      main.append(h("div", { class: "scroll" }, h("table", {}, [h("thead", {}, h("tr", {}, ["Fluorophore", "Angle (deg)", "SIF " + a.name, "SIF " + bRun.name, "SIF diff"].map((k) => h("th", { text: k })))),
+        h("tbody", {}, rows.map((r) => h("tr", {}, [h("td", { text: r.f }), h("td", { class: "num", text: fmt(r.ang) }), h("td", { class: "num", text: fmt(r.sa) }), h("td", { class: "num", text: fmt(r.sb) }), h("td", { class: "num", text: r.sa === null || r.sb === null ? "" : fmt(r.sb - r.sa) })])))])));
+    } else main.append(h("p", { text: "No shared fluorophores or detectors." }));
+  });
+}
+
+// ---- AutoSpectral outputs -----------------------------------------------------
+const AS_COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9"];
+const peakNorm = (v) => { const a = A(v), m = Math.max(...a.map((q) => (q === null ? 0 : Math.abs(q)))); return m > 0 ? a.map((q) => (q === null ? null : q / m)) : a; };
+// Lines over detectors, peak-normalised by the caller. `series` items: name, v, color, width, opacity.
+function linePlot(dets, series, label) {
+  const W = 900, H = 320, M = { l: 40, r: 10, t: 10, b: 60 };
+  const x = (i) => M.l + (i / Math.max(1, dets.length - 1)) * (W - M.l - M.r), y = (v) => M.t + (1 - v) * (H - M.t - M.b);
+  const svg = s("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": label });
+  [0, 0.25, 0.5, 0.75, 1].forEach((t) => svg.append(s("line", { class: "grid", x1: M.l, x2: W - M.r, y1: y(t), y2: y(t) }), s("text", { x: M.l - 4, y: y(t) + 3, "text-anchor": "end", text: String(t) })));
+  const step = Math.ceil(dets.length / 16);
+  dets.forEach((d, i) => { if (i % step === 0) svg.append(s("text", { transform: "translate(" + x(i) + "," + (H - M.b + 10) + ") rotate(60)", text: d })); });
+  series.forEach((q) => svg.append(s("polyline", { fill: "none", stroke: q.color, "stroke-width": q.width || 1.6, "stroke-opacity": q.opacity || 1,
+    points: A(q.v).map((val, i) => val === null ? null : x(i) + "," + y(val)).filter(Boolean).join(" ") })));
+  svg.append(s("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent",
+    onmousemove: (ev) => { const r = svg.getBoundingClientRect(), i = Math.round(((ev.clientX - r.left) / r.width * W - M.l) / (W - M.l - M.r) * (dets.length - 1));
+      if (i >= 0 && i < dets.length) showTip(ev, dets[i] + "  " + series.filter((q) => !q.quiet).map((q) => q.name + " " + fmt(A(q.v)[i])).join("  ")); }, onmouseleave: hideTip }));
+  return svg;
+}
+function pick(label, options, value, onchange) {
+  const sel = h("select", { "aria-label": label }, options.map((o) => h("option", { value: o, text: o })));
+  sel.value = value; sel.addEventListener("change", () => onchange(sel.value));
+  return h("label", {}, [label + " ", sel]);
+}
+// A matrix (rows x columns) on one canvas: hover shows the value, click names the pair.
+function asMatrix(body, a) {
+  const ms = A(a.matrices);
+  if (!ms.length) { body.append(h("p", { text: "AutoSpectral saved no matrix tables in this run (unmix/figure_similarity_heatmap)." })); return; }
+  st.asMat = Math.min(st.asMat, ms.length - 1);
+  const m = ms[st.asMat], rows = A(m.rows), cols = A(m.cols), nr = rows.length, nc = cols.length, vals = A(m.values);
+  let vmax = 0; vals.forEach((v) => { if (v !== null && v > vmax) vmax = v; }); if (!(vmax > 0)) vmax = 1;
+  const info = h("p", { class: "note", text: "Colour is linear from 0 to " + fmt(vmax) + ". Empty cells have no value. Click a cell for the pair." });
+  body.append(h("div", { class: "row" }, [pick("Matrix", ms.map((q) => q.label), m.label, (v) => { st.asMat = ms.findIndex((q) => q.label === v); render(); })]), info);
+  const Wd = 760, M = { l: 130, t: 10, r: 10, b: 130 }, cell = Math.min(24, (Wd - M.l - M.r) / Math.max(nc, 1)), H = M.t + M.b + cell * nr;
+  const scale = Math.max(1, Math.min(3, (body.clientWidth || Wd) / Wd)) * (window.devicePixelRatio || 1);
+  const cp = canvasPlot(Wd, H, scale, m.label), g = cp.g, fontPx = Math.min(11, Math.max(7, cell * 0.9));
+  cp.cv.classList.add("wide");
+  function draw() {
+    g.fillStyle = cp.v("--bg"); g.fillRect(0, 0, Wd, H);
+    for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) { const v = vals[i * nc + j]; if (v === null) continue; g.fillStyle = ramp(v / vmax); g.fillRect(M.l + j * cell, M.t + i * cell, cell, cell); }
+    g.fillStyle = cp.v("--fg"); g.strokeStyle = cp.v("--fg"); g.lineWidth = 0.5; g.font = fontPx + "px system-ui, sans-serif";
+    const k = rows.indexOf(st.fluor), l = cols.indexOf(st.fluor);
+    if (k >= 0) g.strokeRect(M.l, M.t + k * cell, nc * cell, cell);
+    if (l >= 0) g.strokeRect(M.l + l * cell, M.t, cell, nr * cell);
+    rows.forEach((f, i) => { g.textAlign = "end"; g.fillText(f, M.l - 4, M.t + i * cell + cell * 0.75); });
+    cols.forEach((f, j) => { g.save(); g.translate(M.l + j * cell + cell * 0.7, M.t + nr * cell + 6); g.rotate(Math.PI / 3); g.textAlign = "start"; g.fillText(f, 0, 0); g.restore(); });
+  }
+  const cellAt = (ev) => { const [px, py] = cp.at(ev), j = Math.floor((px - M.l) / cell), i = Math.floor((py - M.t) / cell); return (i >= 0 && i < nr && j >= 0 && j < nc) ? [i, j] : null; };
+  cp.cv.addEventListener("mousemove", (ev) => { const c = cellAt(ev); if (c) showTip(ev, rows[c[0]] + " / " + cols[c[1]] + ": " + fmt(vals[c[0] * nc + c[1]])); else hideTip(); });
+  cp.cv.addEventListener("mouseleave", hideTip);
+  cp.cv.addEventListener("click", (ev) => { const c = cellAt(ev); if (!c) return; st.fluor = rows[c[0]]; info.textContent = rows[c[0]] + " / " + cols[c[1]] + ": " + fmt(vals[c[0] * nc + c[1]]) + ". The row dye is now the selected fluorophore."; draw(); });
+  draw(); body.append(cp.cv);
+}
+// AutoSpectral's autofluorescence spectra: all signatures faint, one highlighted.
+function asAF(body, a) {
+  const sets = A(a.af);
+  if (!sets.length) { body.append(h("p", { text: "No autofluorescence spectra table in this run." })); return; }
+  st.asAfSet = Math.min(st.asAfSet, sets.length - 1);
+  const set = sets[st.asAfSet], dets = A(set.detectors), names = A(set.names), nd = dets.length, vals = A(set.values);
+  if (!st.asAfSel || names.indexOf(st.asAfSel) < 0) st.asAfSel = names[0];
+  const host = h("div"), info = h("p", { class: "note" });
+  const bar = h("div", { class: "row" });
+  if (sets.length > 1) bar.append(pick("Unstained file", sets.map((q) => q.label), set.label, (v) => { st.asAfSet = sets.findIndex((q) => q.label === v); render(); }));
+  bar.append(pick("AF signature", names, st.asAfSel, (v) => { st.asAfSel = v; draw(); }));
+  body.append(bar, host, info);
+  function draw() {
+    const series = names.map((n, i) => ({ name: n, v: peakNorm(vals.slice(i * nd, (i + 1) * nd)), color: n === st.asAfSel ? color("ours") : "#8a91a0", width: n === st.asAfSel ? 2.4 : 1, opacity: n === st.asAfSel ? 1 : 0.4, quiet: n !== st.asAfSel }));
+    series.sort((p, q) => (p.quiet === q.quiet ? 0 : p.quiet ? -1 : 1));
+    host.replaceChildren(linePlot(dets, series, "Autofluorescence spectra"));
+    info.textContent = names.length + " autofluorescence signatures from " + set.label + ", each peak-normalised. The selected one is drawn in blue.";
+  }
+  draw();
+}
+// The same fluorophore across AutoSpectral's stages (automated, original, cleaned).
+function asVersions(body, a) {
+  const vs = A(a.versions);
+  if (!vs.length) { body.append(h("p", { text: "No per-stage spectra tables in this run." })); return; }
+  const all = Array.from(new Set(vs.flatMap((v) => A(v.fluorophores))));
+  const f = all.indexOf(st.fluor) >= 0 ? st.fluor : all[0];
+  const host = h("div"), leg = h("div", { class: "legend" }), info = h("p", { class: "note" });
+  body.append(h("div", { class: "row" }, [pick("Fluorophore", all, f, (v) => { st.fluor = v; render(); })]), leg, host, info);
+  const series = [];
+  vs.forEach((v, k) => { const fl = A(v.fluorophores), i = fl.indexOf(f), nd = A(v.detectors).length;
+    if (i >= 0) series.push({ name: v.label, v: peakNorm(A(v.values).slice(i * nd, (i + 1) * nd)), color: AS_COLORS[k % AS_COLORS.length], width: Math.max(1.4, 3.6 - 1.1 * k), dets: A(v.detectors) }); });
+  if (!series.length) { info.textContent = "No stage has spectra for " + f + "."; return; }
+  series.forEach((q) => leg.append(h("span", {}, [h("i", { style: "background:" + q.color }), q.name])));
+  host.append(linePlot(series[0].dets, series, "Spectra of " + f + " by stage"));
+  info.textContent = "Peak-normalised. Stages with this fluorophore: " + series.map((q) => q.name).join(", ") + ".";
+}
+// AutoSpectral's image and PDF files, linked relative to this file (not embedded).
+function asGallery(body, a) {
+  const g = a.gallery;
+  if (!g) { body.append(h("p", { text: "AutoSpectral wrote no image or PDF files in this run." })); return; }
+  const folder = A(g.folder), name = A(g.name), href = A(g.href), pdf = A(g.pdf), folders = Array.from(new Set(folder));
+  body.append(h("p", { class: "note", text: "Files are linked, not embedded, with paths relative to this file. They show only while this file stays next to the run folder." }));
+  const q = h("input", { type: "search", placeholder: "Search file names", value: st.galSearch });
+  const sel = pick("Folder", ["(all)"].concat(folders), st.galFolder || "(all)", (v) => { st.galFolder = v === "(all)" ? "" : v; draw(); });
+  const count = h("p", { class: "note" }), grid = h("div", { class: "gallery" });
+  body.append(h("div", { class: "row" }, [sel, q]), count, grid);
+  q.addEventListener("input", () => { st.galSearch = q.value; draw(); });
+  function draw() {
+    const idx = name.map((_, i) => i).filter((i) => (!st.galFolder || folder[i] === st.galFolder) && (!st.galSearch || name[i].toLowerCase().includes(st.galSearch.toLowerCase())));
+    const shown = st.galAll ? idx : idx.slice(0, 60);
+    count.textContent = shown.length + " of " + idx.length + " files" + (idx.length > shown.length ? " (click to show all)" : "");
+    count.onclick = () => { if (idx.length > shown.length) { st.galAll = true; draw(); } };
+    grid.replaceChildren(...shown.map((i) => h("figure", {}, [
+      pdf[i] ? h("a", { href: href[i], target: "_blank", rel: "noopener", text: "PDF: open" }) : h("a", { href: href[i], target: "_blank", rel: "noopener" }, h("img", { src: href[i], loading: "lazy", alt: name[i] })),
+      h("figcaption", { text: folder[i] + " / " + name[i] })])));
+  }
+  draw();
+}
+function autospectral(main, run) {
+  const a = run.autospectral;
+  if (!a) { main.append(h("p", { text: "This run has no unmix/ folder, so there are no AutoSpectral outputs to show." })); return; }
+  const subs = [["matrix", "Matrices"], ["af", "AF spectra"], ["versions", "Spectra by stage"], ["gallery", "Figures (linked)"]];
+  main.append(h("div", { class: "row" }, subs.map((q) => h("button", { "aria-pressed": String(st.asub === q[0]), text: q[1], onclick: () => { st.asub = q[0]; render(); } }))));
+  const body = h("div"); main.append(body);
+  ({ matrix: asMatrix, af: asAF, versions: asVersions, gallery: asGallery })[st.asub](body, a);
+}
+
+const VIEWS = { overview, checks, sif, spectra, similarity, distributions, biplot, autospectral, compare };
+render();
+})();
+</script>
+</body>
+</html>

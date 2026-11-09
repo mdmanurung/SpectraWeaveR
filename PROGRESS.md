@@ -269,10 +269,10 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 
 | Category | Count |
 |----------|-------|
-| R source files | 17 |
+| R source files | 17 (31 on 2026-11-09) |
 | R source lines | ~7,500 |
-| Exported functions | 90 |
-| Test files | 16 |
+| Exported functions | 90 (136 on 2026-11-09) |
+| Test files | 16 (29 on 2026-11-09) |
 | Test lines | ~4,700 |
 | Documentation pages (.qmd) | 21 |
 | Vignettes | 8 |
@@ -321,3 +321,36 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 | **Annotation vignette** | MEDIUM | Low | Tutorial for cluster annotation + DA/DE workflow |
 | **R CMD check** | HIGH | Low | Requires R environment to run |
 | **man/ pages** | HIGH | Low | `devtools::document()` needed |
+
+---
+
+## Session 13 — 2026-11-09 (Beta decisions and OMIP reruns)
+
+### Completed
+
+- [x] Beta results are in for Mendeley 7-colour, OMIP-109, OMIP-069v2 and the correction run. Details: `experiments/benchmarks/RESULTS.md`.
+- [x] User confirmed the run settings for the OMIP datasets: methods OLS + AutoSpectral fast + slow, seed 1, 50,000 events, pseudo-log sigma 1000, 200 bins.
+- [x] OMIP-069v2 rerun the documented AutoSpectral way (article 02b): one control file `control_combined.csv`, two runs (`config_cells_set.R`, `config_beads_set.R`; folders `2026-11-09_omip069v2-cells-set-v2` and `-beads-set-v2`). Both `-cells-set-v2` and `-beads-set-v2` runs finished. The first `-cells-set` and `-beads-set` attempts failed (variants names) and stay as history, with the older `-cells` and `-beads-v2` runs.
+- [x] New diagnostic `max_sif` in `sw_unmix_diagnose()` (check id `spectra_sif`), computed in base R with the formula of `AutoSpectral::calculate.hotspot.matrix()` in 1.8.8.
+- [x] New `sw_unmix_limits_autospectral()` returns `list(max_sif = c(warn = 4, fail = 6))`, from AutoSpectral article 01 (Mage, Konecny, Mair 2026, Cytometry A 109(6):436-455). Condition number, max cosine and negative spread have no sourced cutoff and stay not judged. Benchmark configs pass `limits` explicitly.
+- [x] Removed `sw_pipeline_step_annotate()` and `sw_pipeline_step_diff()` (unused). The composable pipeline has 8 convenience step constructors.
+- [x] User confirmed the `sw_pipeline_run_all()` defaults: cofactor 6000, n_metaclusters 20, seed 42, gate_node 'lymphocytes', unmix_method 'AutoSpectral'.
+- [x] Figure plan: question and claim recorded in the user's words; F1 to F4 approved, F5 is a table (`plans/beta_unmix_report_figure_plan.md`).
+
+## Session 14 (2026-11-09): dashboard, value cuts, drift fixes
+
+- New `sw_unmix_dashboard()` (one offline HTML file, vanilla JS and SVG, eight tabs, what-if SIF sliders that are display only) and `sw_unmix_app()` (Shiny; the Events tab reads the unmixed FCS files and redraws any channel pair). Both read run folders through `R/unmix_dashboard_data.R`. Event-level tables are binned in R with `pseudo_log_sigma` and `bins`, which have no default. Tests: `tests/testthat/test-unmix_dashboard.R` (76 expectations, mock run folders; one app test uses `shiny::testServer`).
+- Dashboards for the real runs are in `experiments/runs/2026-11-09_dashboard/` (OMIP-069v2 cells vs beads, Mendeley 7-colour, OMIP-109). Runs made before the `max_sif` check have SIF computed from `report/spectra.csv` and labelled "computed"; no verdict is attached.
+- Seven `sw_unmix_assess_*` and `sw_unmix_compare*` wrappers became internal. B3 to B10 are parked, and the batch-side and flowstate code is frozen (ROADMAP.md).
+- Real-data finding in the app: OLS unmixed FCS files have no AF channels, so events are aligned on the area channels all files share.
+- Not done: protocol-audit follow-ups for OMIP-069v2 and OMIP-109 (control file review, `speed` check, filled `channel` and gate columns) wait for the user's answer.
+
+## Session 15 (2026-11-09): dashboard front-end measurement and speed-up
+
+- Measured the dashboard in headless Firefox 153 through WebDriver BiDi (node 26, no packages): real DOM events, handler plus forced layout, median of three passes. Scripts: scratch only; outputs in `experiments/runs/2026-11-09_dashboard_v2/`.
+- Front end (`inst/dashboard/dashboard.html`): similarity matrix on one canvas with a hit test (was n squared SVG rects); biplot drawn from an ImageData with a dense count grid for hover; SIF slider recolours bars in place; checks rows are built once per run and reused by filter, sort and status buttons; theme toggle redraws. Same numbers and statuses.
+- Payload: biplot bins travel as delta-coded keys (lossless; max abs diff 0 on Mendeley, OMIP-069v2, OMIP-109 and cells vs beads after decoding). HTML 426 KB to 303 KB (OMIP-069v2 cells), 479 KB to 334 KB (OMIP-109).
+- R reader: `scan()` with fixed column types and `tabulate()` instead of `read.csv()` and per-method subsets; a test checks the old and new binning give identical results. Mendeley (1.2 M rows) builds in 2.5 to 3.0 s.
+- Runner writes `report/dashboard.html`; `sw_unmix_app()` and `sw_unmix_dashboard()` share one argument check; reference pages added.
+- Left alone after measuring: the 300-row checks table costs 22 to 27 ms of browser layout per rebuild (handler 2 to 7 ms); similarity hover and biplot hover were already under 0.5 ms.
+- AutoSpectral tab (2026-11-09): `sw_unmix_dashboard()` now reads `<run>/unmix`. Interactive: the CSV matrices in `figure_similarity_heatmap` (hotspot, similarity, spillover spread), the autofluorescence spectra, and the spectra of each stage. Linked, not embedded: the JPG and PDF figures (about 100 MB per run). Not read: `Spectral_variants.rds` (76 MB); its 40 variants plots are in the gallery. Dashboards: `experiments/runs/2026-11-09_dashboard_v3/` (links are relative, so keep the folder next to the run folders).

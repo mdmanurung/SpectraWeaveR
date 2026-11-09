@@ -9,7 +9,8 @@ sw_unmix_setup(
   cytometer = "aurora",
   control_file = NULL,
   output_dir = "SpectraWeaveR_unmix",
-  figures = TRUE
+  figures = TRUE,
+  workflow = c("automated", "legacy")
 )
 }
 \arguments{
@@ -18,8 +19,10 @@ control FCS files.}
 
 \item{cytometer}{Character string specifying the cytometer type. One of
 \code{"aurora"} (default), \code{"auroraNL"}, \code{"id7000"},
-\code{"s8"}, \code{"a8"}, \code{"a5se"}, \code{"opteon"},
-\code{"mosaic"}, or \code{"xenith"}.}
+\code{"a5se"}, \code{"opteon"}, \code{"mosaic"}, \code{"xenith"},
+\code{"cytostellar"}, \code{"a8"}, \code{"s8"} or \code{"discover"}
+(the values \code{AutoSpectral::get.autospectral.param()} accepts in
+1.8.8).}
 
 \item{control_file}{Character path to an existing control file CSV, or
 \code{NULL} (default) to auto-generate one from the FCS file names.}
@@ -29,26 +32,43 @@ Default: \code{"SpectraWeaveR_unmix"}.}
 
 \item{figures}{Logical; whether to generate QC plots throughout the
 workflow. Default: \code{TRUE}.}
+
+\item{workflow}{Character; \code{"automated"} (default) or
+\code{"legacy"}. Sets AutoSpectral's \code{legacy} argument of
+\code{create.control.file()} and \code{check.control.file()}. A
+control file for the legacy gating path (\code{sw_unmix_prepare(
+workflow = "legacy")}) needs the gating columns that only
+\code{legacy = TRUE} writes.}
 }
 \value{
 A named list (\code{sw_setup}) with components:
 \describe{
 \item{\code{asp}}{The AutoSpectral parameter list, with output
 directories routed under \code{output_dir}.}
-\item{\code{control_file}}{The validated path to the control CSV.}
+\item{\code{control_file}}{The path to the control CSV.}
 \item{\code{control_dir}}{The control directory path.}
+\item{\code{workflow}}{The workflow the control file was made or
+checked for.}
+\item{\code{control_issues}}{What \code{check.control.file()}
+returned (\code{TRUE} or a data frame of issues), or \code{NULL}
+for a new draft file.}
 }
 }
 \description{
 Sets up the AutoSpectral parameter list for a given cytometer, and either
 creates a draft control file CSV from the FCS filenames in
-\code{control_dir} or validates an existing one.
+\code{control_dir} or checks an existing one.
 }
 \details{
 This is Step 1 of the SpectraWeaveR unmixing workflow. If
-\code{control_file = NULL}, a draft CSV is created and a message instructs
-the user to review and edit it before proceeding to
+\code{control_file = NULL}, a draft CSV is written to \code{output_dir}
+and a message asks the user to review it before
 \code{\link{sw_unmix_prepare}}.
+
+\code{check.control.file()} runs in AutoSpectral's default non-strict
+mode: it returns a table of issues instead of stopping. The wrapper
+warns when that table holds errors and keeps it in
+\code{control_issues}.
 }
 \examples{
 \dontrun{

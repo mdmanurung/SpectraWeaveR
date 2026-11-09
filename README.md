@@ -231,7 +231,7 @@ result <- sw_unmix_pipeline(
 setup    <- sw_unmix_setup("controls/", cytometer = "aurora")
 controls <- sw_unmix_prepare(setup)
 af       <- sw_unmix_extract_af("unstained.fcs", setup, controls$spectra)
-variants <- sw_unmix_extract_variants(setup, controls$spectra, af)
+variants <- sw_unmix_extract_variants(setup, controls$spectra)
 unmixed  <- sw_unmix_run("samples/", controls$spectra, setup,
                      controls$flow_control, af_spectra = af,
                      spectra_variants = variants)

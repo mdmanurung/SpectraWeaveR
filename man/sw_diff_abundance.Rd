@@ -21,7 +21,7 @@ sw_diff_abundance(
 Typically the corrected tibble from \code{\link{sw_correct_run}} or
 \code{\link{sw_correct_apply}} with cluster assignments attached (e.g.,
 via \code{dplyr::mutate(corrected,
-  cluster = sw_cluster_assignments(result))}).}
+cluster = sw_cluster_assignments(result))}).}
 
 \item{meta}{A sample-level \code{data.frame}/\code{tibble} with columns
 \code{sample_col} and \code{group_col}.  One row per sample.}

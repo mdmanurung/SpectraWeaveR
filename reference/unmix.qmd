@@ -141,11 +141,9 @@ Map fluorophore emission variability from single-stain controls.
 sw_unmix_extract_variants(
   setup,
   spectra,
-  af_spectra,
-  refine = TRUE,
-  som_dim = 10,
-  n_cells = 2000,
-  parallel = FALSE,
+  n_cells = NULL,
+  som_dim = NULL,
+  parallel = NULL,
   threads = NULL
 )
 ```
@@ -156,12 +154,10 @@ sw_unmix_extract_variants(
 |----------|-------------|
 | `setup` | An `sw_setup` object. |
 | `spectra` | Fluorophore spectra matrix. |
-| `af_spectra` | AF spectra matrix (matched to control tissue). |
-| `refine` | Logical; second-pass refinement. |
-| `som_dim` | SOM grid dimension. |
-| `n_cells` | Number of brightest cells per fluorophore to use. |
-| `parallel` | Logical; enable parallel processing. |
-| `threads` | Number of threads. |
+| `n_cells` | Cells per fluorophore. `NULL` uses AutoSpectral's default (10000). |
+| `som_dim` | SOM grid dimension. `NULL` uses AutoSpectral's default (5). |
+| `parallel` | `NULL` uses AutoSpectral's default (`TRUE`). |
+| `threads` | `NULL` uses AutoSpectral's default. |
 
 ### Details
 
@@ -189,7 +185,7 @@ sw_unmix_run(
   spectra,
   setup,
   flow_control,
-  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "FastPoisson"),
   af_spectra = NULL,
   spectra_variants = NULL,
   speed = c("fast", "medium", "slow"),
@@ -210,7 +206,7 @@ sw_unmix_run(
 | `setup` | An `sw_setup` object. |
 | `flow_control` | Flow control object from `sw_unmix_prepare()`. |
 | `method` | Unmixing method. |
-| `af_spectra` | AF spectra matrix (required for AutoSpectral/Automatic). |
+| `af_spectra` | AF spectra matrix (required for `"AutoSpectral"`; at least 2 rows). |
 | `spectra_variants` | An `sw_variants` object (optional but recommended). |
 | `speed` | Speed/precision trade-off: `"fast"` (1 variant), `"medium"` (3), `"slow"` (10). |
 | `output_dir` | Output directory for unmixed FCS files. |
@@ -245,7 +241,7 @@ sw_unmix_pipeline(
   unstained_fcs = NULL,
   cytometer = "aurora",
   control_file = NULL,
-  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "FastPoisson"),
   speed = c("fast", "medium", "slow"),
   refine = TRUE,
   output_dir = "SpectraWeaveR_unmix",
@@ -345,3 +341,85 @@ detector limits (floor or ceiling).
 ### Value
 
 A `flowFrame` with margin events removed.
+
+---
+
+## `sw_unmix_dashboard` {#sw_unmix_dashboard}
+
+Write an interactive unmixing dashboard as one HTML file.
+
+### Usage
+
+```r
+sw_unmix_dashboard(
+  runs,
+  path,
+  pseudo_log_sigma,
+  bins,
+  title = "Unmixing dashboard",
+  figures_dir = NULL,
+  axis_labels = NULL
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `runs` | Run folders, a character vector; names become the run labels. Each folder needs `report/checks.csv`, `report/spectra.csv` and `report/provenance.csv`. |
+| `path` | Output file. Must not exist. |
+| `pseudo_log_sigma` | Positive number, the linear-zone width of the pseudo-log scale used to bin events. Required, no default. |
+| `bins` | Whole number of at least 10, bins per axis for the distribution and biplot panels. Required, no default. |
+| `title` | Page title. |
+| `figures_dir` | Optional folder name inside each run (for example `"figures_v2"`) to read the figure tables from. |
+| `axis_labels` | Optional two strings, the names of the biplot axes. |
+
+### Details
+
+Reads one or more finished run folders and writes a single self-contained
+HTML file: inline CSS, JavaScript, SVG and canvas, nothing loaded from the
+web. Tabs: overview, checks (filter, search, sort), SIF with the run's
+cutoffs, spectra per fluorophore, a clickable similarity matrix, unmixed
+distributions, a biplot and a comparison of two or more runs.
+
+Verdicts come from the run. The SIF sliders recolour the bars with cutoffs of
+the viewer's choice; they are display only and a banner says so. Event tables
+are binned in R on the pseudo-log scale, so the file stays small. The
+benchmark runner writes `report/dashboard.html` with this function.
+
+### Value
+
+`path`, invisibly.
+
+---
+
+## `sw_unmix_app` {#sw_unmix_app}
+
+Live Shiny explorer for unmixing runs.
+
+### Usage
+
+```r
+sw_unmix_app(runs, n_events, seed, pseudo_log_sigma, bins, figures_dir = NULL)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `runs` | Run folders, a character vector; names become run labels. |
+| `n_events` | Positive whole number, events drawn per FCS file. Required. |
+| `seed` | Integer seed for the draws. Required. |
+| `pseudo_log_sigma` | Positive number, pseudo-log linear-zone width. Required. |
+| `bins` | Whole number of at least 10, bins per axis for the biplot. Required. |
+| `figures_dir` | Optional folder name inside each run to read the figure tables from. |
+
+### Details
+
+Uses the same run-folder reader as `sw_unmix_dashboard()`. The Events tab
+reads the unmixed FCS files in `<run>/unmixed/<method>/` and redraws
+distributions or a biplot for any channel pair. Needs `shiny` and `ggplot2`.
+
+### Value
+
+A `shiny.appobj`. Print it, or pass it to `shiny::runApp()`.

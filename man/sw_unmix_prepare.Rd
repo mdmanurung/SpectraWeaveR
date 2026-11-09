@@ -2,41 +2,56 @@
 % Please edit documentation in R/unmix.R
 \name{sw_unmix_prepare}
 \alias{sw_unmix_prepare}
-\title{Prepare Controls: Gate, Clean, and Extract Fluorophore Spectra}
+\title{Prepare Controls and Extract Fluorophore Spectra}
 \usage{
 sw_unmix_prepare(
   setup,
+  workflow = c("automated", "legacy"),
   gating_system = c("landmarks", "density"),
   gate_list = NULL,
   clean = TRUE,
   af_remove = TRUE,
   parallel = FALSE,
-  threads = NULL
+  threads = NULL,
+  ...
 )
 }
 \arguments{
 \item{setup}{An \code{sw_setup} object from
 \code{\link{sw_unmix_setup}}.}
 
-\item{gating_system}{Character; the gating algorithm to use.
-\code{"landmarks"} (default) or \code{"density"}.}
+\item{workflow}{Character; \code{"automated"} (default) or
+\code{"legacy"}. \code{"automated"} is AutoSpectral's recommended path:
+\code{get.spectra.automated()} then \code{reload.flow.control()}.
+\code{"legacy"} stays available: \code{define.flow.control()},
+\code{clean.controls()} and \code{get.fluorophore.spectra()}. The
+legacy path needs a control file with gating columns (see
+\code{workflow} in \code{\link{sw_unmix_setup}}).}
 
-\item{gate_list}{Optional named list of pre-defined gates (created via
-\code{AutoSpectral::define.gate.landmarks()} or
-\code{AutoSpectral::define.gate.density()}). Default: \code{NULL}
-(auto-generate gates).}
+\item{gating_system}{Legacy only. Character; \code{"landmarks"} (default)
+or \code{"density"}. Note that AutoSpectral's own default is
+\code{"density"}.}
 
-\item{clean}{Logical; whether to run control cleaning. Default:
-\code{TRUE}.}
+\item{gate_list}{Legacy only. Optional named list of pre-defined gates
+(from \code{AutoSpectral::define.gate.landmarks()} or
+\code{AutoSpectral::define.gate.density()}). Default: \code{NULL}.}
 
-\item{af_remove}{Logical; whether to remove autofluorescence intrusions
-from cell-based controls during cleaning. Default: \code{TRUE}.}
+\item{clean}{Legacy only. Logical; whether to run
+\code{clean.controls()}. Default: \code{TRUE}.}
 
-\item{parallel}{Logical; whether to enable parallel processing. Default:
+\item{af_remove}{Legacy only. Logical; whether to remove autofluorescence
+intrusions during cleaning. Default: \code{TRUE}.}
+
+\item{parallel}{Legacy only. Logical; parallel processing. Default:
 \code{FALSE}.}
 
-\item{threads}{Integer or \code{NULL}; number of threads for parallel
-processing. Default: \code{NULL} (auto-detect).}
+\item{threads}{Legacy only. Integer or \code{NULL}; number of threads.
+Default: \code{NULL} (AutoSpectral's default).}
+
+\item{...}{Automated only. Further arguments for
+\code{AutoSpectral::get.spectra.automated()}, under AutoSpectral's own
+names (e.g. \code{n.candidates}, \code{refine}). Nothing is set for
+you, except \code{figures = FALSE} when the setup turned figures off.}
 }
 \value{
 A named list (\code{sw_controls}) with components:
@@ -47,17 +62,15 @@ structure from AutoSpectral.}
 (fluorophores in rows, detectors in columns), L-infinity
 normalized.}
 \item{\code{setup}}{Pass-through of the \code{sw_setup} object.}
+\item{\code{workflow}}{The workflow used.}
 }
 }
 \description{
-Loads single-stain control FCS files, applies automated gating, cleans
-the controls (autofluorescence removal, universal negatives,
-downsampling), and extracts fluorophore spectral signatures via robust
-linear modeling.
+Extracts fluorophore spectral signatures from the single-stain controls
+and builds the \code{flow.control} structure needed for unmixing.
 }
 \details{
-This is Step 2 of the SpectraWeaveR unmixing workflow. It wraps
-\code{AutoSpectral::define.flow.control()},
-\code{AutoSpectral::clean.controls()}, and
-\code{AutoSpectral::get.fluorophore.spectra()} into a single call.
+This is Step 2 of the SpectraWeaveR unmixing workflow. The legacy-only
+arguments are ignored, with a warning, when \code{workflow =
+"automated"}.
 }

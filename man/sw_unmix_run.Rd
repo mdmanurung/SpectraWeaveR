@@ -9,15 +9,16 @@ sw_unmix_run(
   spectra,
   setup,
   flow_control,
-  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "FastPoisson"),
   af_spectra = NULL,
   spectra_variants = NULL,
   speed = c("fast", "medium", "slow"),
   output_dir = NULL,
   file_suffix = NULL,
-  parallel = TRUE,
+  parallel = NULL,
   threads = NULL,
-  chunk_size = 2e+06
+  chunk_size = NULL,
+  ...
 )
 }
 \arguments{
@@ -33,11 +34,11 @@ FCS file paths, or a directory containing FCS files.}
 \item{flow_control}{The \code{flow.control} list from
 \code{\link{sw_unmix_prepare}}.}
 
-\item{method}{Character; unmixing algorithm. One of
-\code{"AutoSpectral"} (default), \code{"OLS"}, \code{"WLS"},
-\code{"Poisson"}, or \code{"Automatic"}.}
+\item{method}{Character; unmixing algorithm, as in \code{unmix.fcs()}
+1.8.8. One of \code{"AutoSpectral"} (default), \code{"OLS"},
+\code{"WLS"}, \code{"Poisson"} or \code{"FastPoisson"}.}
 
-\item{af_spectra}{A matrix of AF spectra (from
+\item{af_spectra}{A matrix of AF spectra with at least 2 rows (from
 \code{\link{sw_unmix_extract_af}}). Required for
 \code{method = "AutoSpectral"}.}
 
@@ -50,45 +51,46 @@ optimization. \code{"fast"} (1 variant/cell, default), \code{"medium"}
 (3), or \code{"slow"} (10).}
 
 \item{output_dir}{Character path for output unmixed FCS files. Default:
-\code{NULL} (uses setup output directory).}
+\code{NULL} (uses \code{setup$asp$unmixed.fcs.dir}).}
 
 \item{file_suffix}{Character; optional suffix appended to output file
 names. Default: \code{NULL}.}
 
-\item{parallel}{Logical; enable parallel processing. Default:
-\code{TRUE}.}
+\item{parallel}{Logical or \code{NULL}; parallel processing. \code{NULL}
+(default) uses AutoSpectral's default, which is \code{TRUE} for
+\code{unmix.fcs()} and \code{FALSE} for \code{unmix.folder()} in 1.8.8.}
 
-\item{threads}{Integer or \code{NULL}; number of threads. Default:
-\code{NULL} (auto-detect).}
+\item{threads}{Integer or \code{NULL}; number of threads. \code{NULL}
+(default) uses AutoSpectral's default.}
 
-\item{chunk_size}{Integer; number of events per processing chunk for
-memory management. Default: \code{2e6}.}
+\item{chunk_size}{Number or \code{NULL}; events per processing chunk.
+\code{NULL} (default) uses AutoSpectral's default (\code{2e6}).}
+
+\item{...}{Further arguments for \code{unmix.fcs()} or
+\code{unmix.folder()}, under AutoSpectral's own names (e.g.
+\code{weighted}, \code{include.raw}).}
 }
 \value{
 A named list with components:
 \describe{
 \item{\code{output_dir}}{Path to the directory containing unmixed
 FCS files.}
-\item{\code{output_files}}{Character vector of paths to the unmixed
-FCS files written to disk.}
+\item{\code{output_files}}{Character vector of FCS files this call
+wrote or replaced in \code{output_dir}.}
 \item{\code{spectra}}{The spectra matrix used for unmixing.}
 \item{\code{method}}{The unmixing method used.}
 }
 }
 \description{
-Performs spectral unmixing on fully-stained sample FCS files using
-AutoSpectral. Supports OLS, WLS, Poisson, and full AutoSpectral unmixing
-with per-cell autofluorescence extraction and fluorophore optimization.
+Performs spectral unmixing on fully-stained sample FCS files with
+\code{AutoSpectral::unmix.fcs()} (files) or
+\code{AutoSpectral::unmix.folder()} (a directory).
 }
 \details{
 This is Step 5 of the SpectraWeaveR unmixing workflow. The function
 auto-detects whether \code{input} is a single file, multiple files, or
 a directory.
 
-When \code{method = "AutoSpectral"}, \code{af_spectra} is required.
-Providing \code{spectra_variants} additionally enables per-cell
-fluorophore optimization, which can reduce spillover spread.
-
 Installation of \code{AutoSpectralRcpp} is strongly recommended for
-faster processing.
+faster processing; \code{"FastPoisson"} uses it.
 }

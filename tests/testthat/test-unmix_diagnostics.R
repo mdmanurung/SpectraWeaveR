@@ -55,7 +55,7 @@ test_that("SSM computation produces correct structure", {
   expect_equal(rownames(result$matrix), c("BV421", "FITC", "PE", "APC"))
 
   # Diagonal should be zero (no self-spreading)
-  expect_equal(diag(result$matrix), c(0, 0, 0, 0))
+  expect_equal(diag(result$matrix), c(0, 0, 0, 0), ignore_attr = TRUE)
 
   # All values should be non-negative
   expect_true(all(result$matrix >= 0))

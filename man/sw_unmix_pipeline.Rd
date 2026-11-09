@@ -10,15 +10,16 @@ sw_unmix_pipeline(
   unstained_fcs = NULL,
   cytometer = "aurora",
   control_file = NULL,
-  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "Automatic"),
+  method = c("AutoSpectral", "OLS", "WLS", "Poisson", "FastPoisson"),
   speed = c("fast", "medium", "slow"),
-  refine = TRUE,
+  refine = NULL,
   output_dir = "SpectraWeaveR_unmix",
-  parallel = FALSE,
+  parallel = NULL,
   threads = NULL,
+  workflow = c("automated", "legacy"),
   gating_system = c("landmarks", "density"),
-  som_dim = 10,
-  chunk_size = 2e+06
+  som_dim = NULL,
+  chunk_size = NULL
 )
 }
 \arguments{
@@ -27,7 +28,7 @@ sw_unmix_pipeline(
 \item{sample_input}{Character path to fully-stained FCS file(s) or a
 directory.}
 
-\item{unstained_fcs}{Character path to unstained FCS file(s), or a named
+\item{unstained_fcs}{Character path to an unstained FCS file, or a named
 list for tissue-specific AF (see \code{\link{sw_unmix_extract_af}}).
 Required when \code{method = "AutoSpectral"}.}
 
@@ -36,31 +37,39 @@ Required when \code{method = "AutoSpectral"}.}
 \item{control_file}{Character path to an existing control CSV, or
 \code{NULL} to auto-generate. Default: \code{NULL}.}
 
-\item{method}{Character; unmixing method. Default:
-\code{"AutoSpectral"}.}
+\item{method}{Character; unmixing method, one of \code{"AutoSpectral"}
+(default), \code{"OLS"}, \code{"WLS"}, \code{"Poisson"} or
+\code{"FastPoisson"}.}
 
 \item{speed}{Character; variant testing speed. Default: \code{"fast"}.}
 
-\item{refine}{Logical; whether to refine AF and variant extraction.
-Default: \code{TRUE}.}
+\item{refine}{Logical or \code{NULL}; AF refinement in
+\code{get.af.spectra()}. \code{NULL} (default) uses AutoSpectral's
+default.}
 
 \item{output_dir}{Character path for all output files. Default:
 \code{"SpectraWeaveR_unmix"}.}
 
-\item{parallel}{Logical; enable parallel processing. Default:
-\code{FALSE}.}
+\item{parallel}{Logical or \code{NULL}; parallel processing for AF,
+variants and unmixing (and for the legacy control path). \code{NULL}
+(default) uses each AutoSpectral function's default.}
 
 \item{threads}{Integer or \code{NULL}; number of threads. Default:
 \code{NULL}.}
 
-\item{gating_system}{Character; gating algorithm. Default:
-\code{"landmarks"}.}
+\item{workflow}{Character; \code{"automated"} (default) or
+\code{"legacy"}, passed to \code{\link{sw_unmix_setup}} and
+\code{\link{sw_unmix_prepare}}.}
 
-\item{som_dim}{Integer; SOM grid dimension for AF and variant extraction.
-Default: \code{10}.}
+\item{gating_system}{Character; gating algorithm for the legacy
+workflow. Default: \code{"landmarks"}.}
 
-\item{chunk_size}{Integer; events per unmixing chunk. Default:
-\code{2e6}.}
+\item{som_dim}{Integer or \code{NULL}; SOM grid dimension for both AF
+and variant extraction. \code{NULL} (default) keeps AutoSpectral's
+separate defaults (10 for AF, 5 for variants in 1.8.8).}
+
+\item{chunk_size}{Number or \code{NULL}; events per unmixing chunk.
+\code{NULL} (default) uses AutoSpectral's default.}
 }
 \value{
 A named list with all intermediate results:
@@ -76,25 +85,19 @@ extracted).}
 }
 }
 \description{
-One-call orchestrator that runs the complete AutoSpectral unmixing
-workflow: setup, control preparation, AF extraction, spectral variant
-mapping, and unmixing.
+One-call orchestrator that runs the AutoSpectral unmixing workflow:
+setup, control preparation, AF extraction, spectral variant mapping, and
+unmixing.
 }
 \details{
 This convenience function calls \code{\link{sw_unmix_setup}},
 \code{\link{sw_unmix_prepare}}, \code{\link{sw_unmix_extract_af}},
 \code{\link{sw_unmix_extract_variants}}, and \code{\link{sw_unmix_run}}
-in sequence. Steps 3--4 are skipped when \code{method} is \code{"OLS"}
-or \code{"WLS"} (no per-cell optimization needed).
+in sequence. Steps 3--4 run only for \code{method = "AutoSpectral"}.
 
 \strong{Multi-tissue experiments}: When \code{unstained_fcs} is a named
-list of tissue-specific unstained files, the pipeline extracts AF spectra
-for each tissue but uses only the first tissue's AF spectra for spectral
-variant extraction and for the final unmixing call. This is because
-spectral variants are derived from single-stain controls (which come from
-one tissue type), and the pipeline cannot automatically match sample
-files to tissue types. For tissue-specific unmixing with matched AF
-spectra, call \code{\link{sw_unmix_run}} separately for each tissue group,
-passing the corresponding AF spectra from the named list returned by
-\code{\link{sw_unmix_extract_af}}.
+list, the pipeline extracts AF spectra for each tissue but unmixes with
+the first tissue's AF spectra. The pipeline cannot match sample files to
+tissues. For tissue-matched unmixing, call \code{\link{sw_unmix_run}}
+once per tissue group with the matching matrix.
 }

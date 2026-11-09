@@ -36,6 +36,8 @@ control to a one-call orchestrator.
 | [`sw_unmix_pipeline()`](unmix.qmd#sw_unmix_pipeline) | End-to-end unmixing pipeline |
 | [`sw_io_load_unmixed()`](unmix.qmd#sw_io_load_unmixed) | Load pre-unmixed FCS files |
 | [`sw_filter_margins()`](unmix.qmd#sw_filter_margins) | Remove margin events |
+| [`sw_unmix_dashboard()`](unmix.qmd#sw_unmix_dashboard) | Interactive dashboard over finished unmixing runs (one HTML file) |
+| [`sw_unmix_app()`](unmix.qmd#sw_unmix_app) | Live Shiny explorer for unmixing runs |
 
 ## Gating
 

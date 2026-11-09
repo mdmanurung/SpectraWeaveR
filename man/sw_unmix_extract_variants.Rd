@@ -7,12 +7,11 @@
 sw_unmix_extract_variants(
   setup,
   spectra,
-  af_spectra,
-  refine = TRUE,
-  som_dim = 10,
-  n_cells = 2000,
-  parallel = FALSE,
-  threads = NULL
+  n_cells = NULL,
+  som_dim = NULL,
+  parallel = NULL,
+  threads = NULL,
+  ...
 )
 }
 \arguments{
@@ -22,43 +21,43 @@ sw_unmix_extract_variants(
 \item{spectra}{A fluorophore spectral matrix (from
 \code{\link{sw_unmix_prepare}}).}
 
-\item{af_spectra}{A matrix of AF spectra matching the control cell type
-(from \code{\link{sw_unmix_extract_af}}).}
+\item{n_cells}{Integer or \code{NULL}; maximum positive events per
+fluorophore. \code{NULL} (default) uses AutoSpectral's default
+(\code{10000} in 1.8.8).}
 
-\item{refine}{Logical; whether to perform a second pass on high-error
-cells. Default: \code{TRUE}.}
+\item{som_dim}{Integer or \code{NULL}; SOM grid dimension. \code{NULL}
+(default) uses AutoSpectral's default (\code{5} in 1.8.8).}
 
-\item{som_dim}{Integer; SOM grid dimension. Default: \code{10} (up to
-100 variants per fluorophore).}
+\item{parallel}{Logical or \code{NULL}; parallel processing. \code{NULL}
+(default) uses AutoSpectral's default (\code{TRUE} in 1.8.8).}
 
-\item{n_cells}{Integer; number of brightest positive cells to use per
-fluorophore. Default: \code{2000}.}
+\item{threads}{Integer or \code{NULL}; number of threads. \code{NULL}
+(default) uses AutoSpectral's default (\code{asp$worker.process.n}).}
 
-\item{parallel}{Logical; enable parallel processing. Default:
-\code{FALSE}.}
-
-\item{threads}{Integer or \code{NULL}; number of threads. Default:
-\code{NULL} (auto-detect).}
+\item{...}{Further arguments for
+\code{AutoSpectral::get.spectral.variants()}, under AutoSpectral's own
+names. Use \code{unstained.sample = "path.fcs"} when the control file
+has no \code{"AF"} row.}
 }
 \value{
-A list (class \code{sw_variants}) containing:
-\describe{
-\item{\code{thresholds}}{Per-channel positivity thresholds.}
-\item{\code{variants}}{Named list of variant spectral matrices.}
-\item{\code{delta.list}}{Pre-computed spectral deltas.}
-\item{\code{delta.norms}}{Pre-computed delta norms.}
-}
+The list from \code{get.spectral.variants()} with class
+\code{sw_variants} (elements include \code{thresholds} and
+\code{variants}).
 }
 \description{
-Maps fluorophore emission variability from single-stain controls using
-SOM clustering. The resulting spectral variants are used during unmixing
-to optimize fluorophore signatures on a per-cell basis, reducing spillover
-spread.
+Maps fluorophore emission variability from single-stain controls with
+\code{AutoSpectral::get.spectral.variants()}. The resulting spectral
+variants are used during unmixing to optimize fluorophore signatures on a
+per-cell basis, reducing spillover spread.
 }
 \details{
 This is Step 4 of the SpectraWeaveR unmixing workflow. It is optional
-but recommended: per-cell fluorophore optimization can significantly
-reduce spillover spread, especially for tandem dyes.
+but recommended: per-cell fluorophore optimization can reduce spillover
+spread, especially for tandem dyes.
 
-Results are saved as an RDS file in the output directory for reuse.
+The wrapper takes no AF spectra. Since AutoSpectral 1.6.0,
+\code{get.spectral.variants()} derives AF in situ from the unstained
+files in the control table and ignores \code{af.spectra} and
+\code{refine}, so the earlier \code{af_spectra} and \code{refine}
+arguments were removed.
 }

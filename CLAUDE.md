@@ -9,34 +9,56 @@
 ```
 SpectraWeaveR/
 ├── DESCRIPTION          # Package metadata, dependencies, and version
-├── NAMESPACE            # 74 exported functions and imported namespaces
+├── NAMESPACE            # 136 exported functions and imported namespaces
 ├── LICENSE              # MIT license
 ├── README.md            # Project overview, installation, usage examples
 ├── CLAUDE.md            # This file — repo summary for AI assistants
 ├── PLAN.md              # Full implementation plan with completion status
 ├── PROGRESS.md          # Session-by-session progress log
 ├── R/
-│   ├── utils.R              # Format conversions + channel classification + aggregation
-│   ├── unmix.R              # Step 1: Spectral unmixing (AutoSpectral)
-│   ├── gate.R               # Step 2: Automated gating (openCyto)
-│   ├── qc.R                 # Step 3: Signal stability QC (PeacoQC)
-│   ├── batch_correct.R      # Step 4: Batch correction (cyCombine)
-│   ├── cluster.R            # Step 5: Clustering (kohonen SOM / FastPG)
-│   ├── pipeline.R           # Full end-to-end pipeline orchestrator
-│   ├── composable_pipeline.R # S7-based composable step/pipeline framework
-│   ├── transforms.R         # Scale transforms (ported from CytoPipeline)
-│   ├── gating_utils.R       # Standalone gating utilities (ported from CytoPipeline)
-│   ├── dimred.R             # Dimensionality reduction (UMAP/PCA)
-│   └── unmix_diagnostics.R  # Unmixing quality diagnostics (SSM)
+│   ├── annotate.R                # Cluster annotation from marker scores
+│   ├── assistant.R               # LLM assistant (ellmer) with tool list
+│   ├── batch_correct.R           # Step 4: batch correction (cyCombine), diagnostics, plots
+│   ├── batch_decide.R            # Batch decision policy and states (batchdx port)
+│   ├── batch_flag.R              # Control IQR flags (Tukey fence)
+│   ├── cluster.R                 # Step 5: clustering (kohonen SOM / FastPG)
+│   ├── composable_pipeline.R     # S7 composable step and pipeline framework
+│   ├── corrector.R               # Corrector contract: fit, integrate, diagnose, save, load, compare
+│   ├── corrector_paired_shift.R  # Paired-reference mean shift engine
+│   ├── design_audit.R            # Design audit: pair support, anchor bridge, method eligibility
+│   ├── differential.R            # Differential abundance and expression
+│   ├── dimred.R                  # Dimensionality reduction (UMAP/PCA)
+│   ├── flowstate_io.R            # flowstate reader, writer and bridges (wrapped)
+│   ├── gate.R                    # Step 2: automated gating (openCyto)
+│   ├── gating_utils.R            # Standalone gating utilities (from CytoPipeline)
+│   ├── manifest.R                # Validated sample manifest
+│   ├── pipeline.R                # End-to-end pipeline orchestrator
+│   ├── qc.R                      # Step 3: signal stability QC (PeacoQC)
+│   ├── spectracle.R              # Spectra from raw controls (spectracle, wrapped)
+│   ├── targets_backend.R         # Optional targets backend for composable pipelines
+│   ├── transforms.R              # Scale transforms (from CytoPipeline)
+│   ├── unmix.R                   # Step 1: spectral unmixing (AutoSpectral)
+│   ├── unmix_assess.R            # AutoSpectral diagnostic wrappers (7 internal, 2 exported)
+│   ├── unmix_correct.R           # Spectra correction wrappers (AutoSpectral)
+│   ├── unmix_dashboard.R         # Unmix dashboard and app (another worker)
+│   ├── unmix_dashboard_data.R    # Data model for the unmix dashboard
+│   ├── unmix_diagnostics.R       # Unmixing quality: spillover matrix, CV
+│   ├── unmix_figures.R           # Approved unmix figure panels F1 to F4
+│   ├── unmix_report.R            # Unmix result, diagnose, report
+│   ├── unmix_dashboard.R         # sw_unmix_dashboard(): one self-contained interactive HTML
+│   ├── unmix_dashboard_data.R    # Run-folder reader and event binning shared by the dashboard and app
+│   ├── unmix_app.R               # sw_unmix_app(): Shiny explorer over run folders
+│   ├── utils.R                   # Format bridges, channel classes, subsample
+│   └── zzz.R                     # Package load hooks (S7 classes)
 ├── tests/
-│   └── testthat/        # 12 test files, ~3,600 lines (testthat edition 3)
+│   └── testthat/        # 30 test files, ~11,100 lines (testthat edition 3)
 ├── inst/
 │   └── scripts/
 │       └── install_dependencies.R  # pak-based setup script
 ├── vignettes/
 │   ├── spectral-unmixing.qmd       # Unmixing vignette
 │   └── batch-correction.qmd       # Batch correction vignette
-├── reference/           # 11 API reference .qmd pages
+├── reference/           # 12 API reference .qmd pages
 ├── index.qmd            # Quarto website landing page
 ├── installation.qmd     # Installation guide
 ├── _quarto.yml          # Quarto website configuration
@@ -62,6 +84,16 @@ SpectraWeaveR/
 | 4c. Visualization | `sw_plot_batch_densities()`, `sw_plot_batch_dimred()` | cyCombine / ggplot2 | density/UMAP/PCA plots |
 | 5. Clustering | `sw_cluster_run()`, `sw_plot_clusters()`, `sw_cluster_predict()` | kohonen / FastPG | tibble/matrix → sw_cluster_result |
 | End-to-end | `sw_pipeline_run_all()` | all of the above | FCS files → annotated clusters |
+| Design audit | `sw_design_audit()` | batchdx-cyto (ported) | sample table → pair support classes, method eligibility |
+| Batch decision | `sw_batch_policy()`, `sw_batch_decide()`, `sw_batch_candidates_from_metrics()` | batchdx-cyto (ported) | candidate metrics → state per candidate, identity always kept |
+| Control flags | `sw_flag_iqr()`, `sw_flag_iqr_summary()` | CytoBatchFlagR method (clean rewrite) | control events → Tukey-fence flags per batch |
+| Unmix checks | `sw_unmix_check_controls()`, `sw_unmix_condition_number()` | AutoSpectral (wrapped) | spectra / FCS → diagnostics tibbles. The other seven wrappers in `R/unmix_assess.R` are internal since 2026-11-09. |
+| Alt. I/O and spectra | `sw_io_*_flowstate()`, `sw_unmix_spectracle()`, `sw_io_spectracle_to_spectra()` | flowstate, spectracle (wrapped) | flowstate / controls → tibble, flowFrame, spectra matrix |
+| Unmix report | `sw_unmix_result()`, `sw_unmix_diagnose()`, `sw_unmix_report()`, `sw_unmix_limits_autospectral()` | AutoSpectral 1.8.8 (reference) | unmix results → tables (incl. `max_sif`, check `spectra_sif`), provenance, HTML/CSV/JSON report; the limits helper gives `max_sif` warn 4, fail 6 |
+| Unmix dashboard | `sw_unmix_dashboard()`, `sw_unmix_app()` | run folders (report/ and figures*/panels/source_data) | one offline HTML file with what-if SIF sliders (display only) and an AutoSpectral tab (its hotspot, similarity and spillover-spread matrices, AF spectra and per-stage spectra as interactive views; its JPG and PDF figures as a linked gallery), or a Shiny app that redraws events for any channel pair; `inst/dashboard/dashboard.html` is the page template |
+| Unmix figures | `sw_unmix_sample_events()`, `sw_unmix_figure_*()`, `sw_unmix_save_figures()` | ggplot2 | approved panels F1 to F4 with source data |
+| Unmix correction | `sw_unmix_correct()`, `sw_unmix_correct_signatures()`, `sw_unmix_correct_spillover()`, `sw_unmix_compare_spectra()` | AutoSpectral (wrapped) | spectra → candidate corrected spectra, change table |
+| Manifest and correctors | `sw_sample_manifest()`, `sw_corrector_*()` | cyTether design (paired shift engine) | manifest + frozen model → corrected data with per-cell-group actions |
 
 ## Extended Modules
 
@@ -117,7 +149,7 @@ Ported from CytoPipeline / CytoPipelineUtils (UCLouvain-CBIO):
 - `methods`, `stats` — base R
 
 ### Optional (Suggests)
-- `AutoSpectral` (≥ 1.5.0) — spectral unmixing (GitHub)
+- `AutoSpectral` (≥ 1.8.8) — spectral unmixing (GitHub)
 - `AutoSpectralRcpp` (≥ 1.0.0) — faster unmixing (GitHub)
 - `FastPG` — fast graph-based clustering
 - `S7` (≥ 0.2.0) — R7 OOP for composable pipeline
@@ -155,3 +187,28 @@ devtools::test()
 # or
 testthat::test_dir("tests/testthat")
 ```
+
+## Repository layout: package vs experiments
+
+```
+Package (what R CMD build ships)
+  R/  man/  tests/  vignettes/  inst/  DESCRIPTION  NAMESPACE  LICENSE  README.md
+Project docs and planning (not shipped)
+  CLAUDE.md  PLAN.md  PROGRESS.md  ROADMAP.md  EVALUATION.md  plans/
+Website (not shipped)
+  _quarto.yml  index.qmd  installation.qmd  reference/
+Dev environment (not shipped)
+  pixi.toml  pixi.lock  .pixi/  tools/ (setup_pixi_env.sh)
+Experiments, benchmarks, reproducibility (not shipped; see experiments/README.md)
+  experiments/datasets/     registry + verified download script (data live in $SW_DATA_DIR, outside the repo)
+  experiments/benchmarks/   one numbered folder per benchmark: README plan + run.R
+  experiments/integration/  real-data smoke tests that need the full stack
+  experiments/slurm/        sbatch wrappers
+  experiments/runs/         dated output folders (git-ignored)
+```
+
+Rules: the package never reads `experiments/`; experiments call only exported package functions; unit tests in `tests/` use mocks; data are never committed; each run writes to a new dated folder.
+
+## Roadmap and rules for new code
+
+See `ROADMAP.md`. Latest AutoSpectral is the gold standard; extensions are scored against it. AGPL/GPL packages are wrapped, never copied. Impactful choices (thresholds, limits, tolerances, grids, seeds) are required arguments with no default.

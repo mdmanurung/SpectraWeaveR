@@ -242,13 +242,12 @@ were prepared from.
 
 ```{r}
 #| label: step4-variants
+# AutoSpectral 1.8.8 derives the AF it needs from the controls itself, so no
+# AF matrix is passed here. Leave n_cells and som_dim unset to use
+# AutoSpectral's own defaults (10000 and 5).
 variants <- sw_unmix_extract_variants(
-  setup      = setup,
-  spectra    = controls$spectra,
-  af_spectra = af_spectra$spleen,  # match AF to control tissue
-  refine     = TRUE,
-  som_dim    = 10,
-  n_cells    = 2000  # brightest cells per fluorophore
+  setup   = setup,
+  spectra = controls$spectra
 )
 
 # Returns an sw_variants object with:
@@ -340,7 +339,7 @@ result <- sw_unmix_run(
 | `"OLS"` | Ordinary least squares | No | No |
 | `"WLS"` | Weighted least squares | No | No |
 | `"Poisson"` | Poisson regression | No | No |
-| `"Automatic"` | AutoSpectral auto-selects | Yes | Yes |
+| `"FastPoisson"` | Fast Poisson regression | No | No |
 
 ## One-call pipeline: `sw_unmix_pipeline()`
 
@@ -473,11 +472,10 @@ af_spectra <- sw_unmix_extract_af(
   refine  = TRUE
 )
 
-# Step 4: Extract variants using spleen AF (controls are from spleen)
+# Step 4: Extract spectral variants
 variants <- sw_unmix_extract_variants(
-  setup      = setup,
-  spectra    = controls$spectra,
-  af_spectra = af_spectra$spleen
+  setup   = setup,
+  spectra = controls$spectra
 )
 
 # Step 5: Unmix each tissue with its matched AF spectra

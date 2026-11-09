@@ -7,18 +7,24 @@
 Functions for spectral unmixing of flow cytometry data using AutoSpectral,
 and for loading pre-unmixed FCS files (e.g., from SpectroFlo).
 
-The AutoSpectral workflow is streamlined into five steps plus an orchestrator:
+The wrappers target AutoSpectral 1.8.8 and follow its automated workflow:
 \enumerate{
-\item \code{\link{sw_unmix_setup}} — initialize parameters and
-control file
-\item \code{\link{sw_unmix_prepare}} — gate, clean, and extract
-fluorophore spectra
-\item \code{\link{sw_unmix_extract_af}} — per-cell autofluorescence
-extraction from unstained samples
-\item \code{\link{sw_unmix_extract_variants}} — fluorophore emission
-variability mapping
-\item \code{\link{sw_unmix_run}} — unmix fully-stained sample FCS files
-\item \code{\link{sw_unmix_pipeline}} — one-call end-to-end orchestrator
+\item \code{\link{sw_unmix_setup}}: \code{get.autospectral.param()},
+\code{create.control.file()} or \code{check.control.file()}
+\item \code{\link{sw_unmix_prepare}}: \code{get.spectra.automated()}
+and \code{reload.flow.control()} (or the legacy gating path)
+\item \code{\link{sw_unmix_extract_af}}: \code{get.af.spectra()}
+\item \code{\link{sw_unmix_extract_variants}}:
+\code{get.spectral.variants()}
+\item \code{\link{sw_unmix_run}}: \code{unmix.fcs()} or
+\code{unmix.folder()}
+\item \code{\link{sw_unmix_pipeline}}: one-call orchestrator
 }
+
+Each AutoSpectral call is built by an internal \code{.sw_args_*()}
+function. It returns the argument list under AutoSpectral's own names and
+leaves out every argument the caller did not set, so AutoSpectral's
+defaults apply. A parity test checks these names against the 1.8.8
+formals.
 }
 \keyword{internal}

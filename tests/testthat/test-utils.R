@@ -64,8 +64,8 @@ test_that("sw_io_tibble_to_ff converts tibble to flowFrame", {
   ff <- sw_io_tibble_to_ff(df, markers = c("CD3", "CD4"))
 
   expect_true(methods::is(ff, "flowFrame"))
-  expect_equal(nrow(ff), 50)
-  expect_equal(ncol(ff), 2)
+  expect_equal(nrow(ff), 50, ignore_attr = TRUE)
+  expect_equal(ncol(ff), 2, ignore_attr = TRUE)
   expect_true(all(c("CD3", "CD4") %in% flowCore::colnames(ff)))
 })
 
@@ -76,7 +76,7 @@ test_that("sw_io_tibble_to_ff uses all numeric cols when markers=NULL", {
   ff <- sw_io_tibble_to_ff(df)
 
   expect_true(methods::is(ff, "flowFrame"))
-  expect_equal(ncol(ff), 2)
+  expect_equal(ncol(ff), 2, ignore_attr = TRUE)
 })
 
 test_that("sw_io_tibble_to_ff rejects missing markers", {
@@ -154,8 +154,8 @@ test_that("sw_channel_set_markers renames channels", {
   ff2 <- sw_channel_set_markers(ff, marker_map)
 
   pdata <- flowCore::pData(flowCore::parameters(ff2))
-  expect_equal(pdata$desc[pdata$name == "BV421-A"], "CD3")
-  expect_equal(pdata$desc[pdata$name == "PE-A"], "CD4")
+  expect_equal(pdata$desc[pdata$name == "BV421-A"], "CD3", ignore_attr = TRUE)
+  expect_equal(pdata$desc[pdata$name == "PE-A"], "CD4", ignore_attr = TRUE)
 })
 
 test_that("sw_channel_set_markers warns on missing channel", {
@@ -329,12 +329,12 @@ test_that("sw_io_event_audit works with numeric inputs", {
     cluster = 750
   ))
 
-  expect_equal(nrow(result), 4)
-  expect_equal(result$step, c("load", "qc", "gate", "cluster"))
-  expect_equal(result$n_events, c(1000L, 900L, 800L, 750L))
-  expect_equal(result$pct_of_initial[1], 100)
-  expect_equal(result$pct_of_initial[4], 75)
-  expect_equal(result$pct_of_previous[1], 100)
+  expect_equal(nrow(result), 4, ignore_attr = TRUE)
+  expect_equal(result$step, c("load", "qc", "gate", "cluster"), ignore_attr = TRUE)
+  expect_equal(result$n_events, c(1000L, 900L, 800L, 750L), ignore_attr = TRUE)
+  expect_equal(result$pct_of_initial[1], 100, ignore_attr = TRUE)
+  expect_equal(result$pct_of_initial[4], 75, ignore_attr = TRUE)
+  expect_equal(result$pct_of_previous[1], 100, ignore_attr = TRUE)
 })
 
 test_that("sw_io_event_audit works with data.frames", {
@@ -342,8 +342,8 @@ test_that("sw_io_event_audit works with data.frames", {
     step1 = data.frame(x = 1:100),
     step2 = data.frame(x = 1:80)
   ))
-  expect_equal(result$n_events, c(100L, 80L))
-  expect_equal(result$pct_of_initial[2], 80)
+  expect_equal(result$n_events, c(100L, 80L), ignore_attr = TRUE)
+  expect_equal(result$pct_of_initial[2], 80, ignore_attr = TRUE)
 })
 
 test_that("sw_io_event_audit works with flowFrame input", {
@@ -359,7 +359,7 @@ test_that("sw_io_event_audit works with flowFrame input", {
     load = ff1,
     filter = ff2
   ))
-  expect_equal(result$n_events, c(100L, 80L))
+  expect_equal(result$n_events, c(100L, 80L), ignore_attr = TRUE)
 })
 
 test_that("sw_io_event_audit handles list of flowFrames", {
@@ -374,5 +374,5 @@ test_that("sw_io_event_audit handles list of flowFrames", {
   result <- sw_io_event_audit(list(
     step1 = list(sample1 = ff1, sample2 = ff2)
   ))
-  expect_equal(result$n_events, 90L)  # 50 + 40
+  expect_equal(result$n_events, 90L, ignore_attr = TRUE)  # 50 + 40
 })

@@ -14,7 +14,7 @@ sw_channel_is_signal(
 
 \item{exclude_patterns}{Character vector of patterns to exclude
 (case-insensitive grep). Default: \code{c("Time", "Original_ID",
-  "File", "SampleID")}.}
+"File", "SampleID")}.}
 }
 \value{
 A named logical vector with length equal to \code{ncol(x)}.
