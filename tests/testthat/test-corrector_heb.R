@@ -108,6 +108,28 @@ test_that("heb effects match an lme4 REML fit on the same summaries", {
   expect_equal(eff$estimate[eff$batch == "s1_r1"], 0)
 })
 
+test_that("heb Satterthwaite df reduces to the residual df without shrinkage", {
+  # With batch variances far above the noise, the contrast variance is proportional to
+  # sigma^2, so df = 2 / Var(log sigma^2). REML gives Var(log sigma^2) = 2 / df_resid, and
+  # this 3 donor x 2 batch layout has df_resid = 6 - 3 - 1 = 2.
+  d <- .sw_heb_design(
+    data.frame(
+      value = c(1, 2.1, 3, 2, 3, 4.2), reference_id = rep(c("D1", "D2", "D3"), 2),
+      batch = rep(c("a", "b"), each = 3), aliquot = 1:6
+    ),
+    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "random"
+  )
+  # Ratio 1e8 on purpose: the old form G - G Z'PZ G gave df 4.9 here (cancellation);
+  # the mixed-model-equation form must stay exact.
+  est <- .sw_heb_blup(d, c(1, 1, 1e-8), "a", cov_log = diag(c(0, 0, 2 / 2)))
+  expect_equal(est$df[est$batch == "b"], 2, tolerance = 1e-3)
+  expect_true(is.na(est$df[est$batch == "a"]))
+  # Fitted effects carry df: positive for every non-anchor batch, NA at the anchor.
+  eff <- heb_fit(heb_sim())$effects
+  expect_true(all(eff$df[eff$batch != "s1_r1"] > 0))
+  expect_true(all(is.na(eff$df[eff$batch == "s1_r1"])))
+})
+
 test_that("heb leaves earlier corrected values unchanged when new rows arrive", {
   s <- heb_sim()
   model <- heb_fit(s)

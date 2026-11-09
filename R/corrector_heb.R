@@ -21,7 +21,9 @@
 #' \code{study}, one row per batch. It has no default. Variance components
 #' are bounded below by \code{variance_floor} (also required, no default).
 #' \code{se_donor} holds the posterior standard error of the effect, from the
-#' prediction error covariance. A batch at integrate time that the model has
+#' prediction error covariance; \code{df} holds its Satterthwaite degrees of
+#' freedom from the inverse REML information, with components at the floor
+#' treated as known (\code{Inf} when all are). A batch at integrate time that the model has
 #' not seen is estimated as in \code{paired_shift}: its own reference cells
 #' against the frozen anchor summaries, without shrinkage. Effects of known
 #' batches are never changed.
@@ -108,23 +110,63 @@ NULL
     log(rep(scale, 3) * c(0.1, 0.1, 0.5)), obj,
     method = "L-BFGS-B", lower = lo, upper = lo + 40
   )
-  exp(fit$par)
+  # Covariance of the log components from the inverse observed REML information.
+  # A component pinned at the floor is treated as known (user decision 2026-11-09):
+  # its rows and columns are zero. A non-positive curvature direction gets no variance.
+  free <- fit$par - lo > 1e-4
+  cov_log <- matrix(0, 3, 3)
+  if (any(free)) {
+    H <- stats::optimHess(fit$par, obj)[free, free, drop = FALSE]
+    e <- eigen((H + t(H)) / 2, symmetric = TRUE)
+    pos <- e$values > 1e-10 * max(abs(e$values), 1)
+    cov_log[free, free] <- e$vectors[, pos, drop = FALSE] %*%
+      (t(e$vectors[, pos, drop = FALSE]) / e$values[pos])
+  }
+  list(theta = exp(fit$par), cov_log = cov_log)
 }
 
-# BLUPs and prediction error for one design at given variance components.
-.sw_heb_blup <- function(z, th, anchor) {
-  y <- z$y
-  X <- z$X
-  V <- th[[1]] * z$M1 + th[[2]] * z$M2 + th[[3]] * diag(length(y))
-  Vinv <- chol2inv(chol(V))
-  XtVX <- crossprod(X, Vinv %*% X)
-  P <- Vinv - Vinv %*% X %*% solve(XtVX, crossprod(X, Vinv))
+# BLUPs and prediction error variance of each anchor contrast, from Henderson's
+# mixed-model equations scaled by sigma^2:
+#   C = [X'X, X'Z; Z'X, Z'Z + sigma^2 G^-1],  C [b; u] = [X'y; Z'y],  PEV(u) = sigma^2 (C^-1)_uu.
+# Same model as V-based GLS; the form G - G Z'PZ G cancels catastrophically once G / sigma^2
+# exceeds about 1e6, which happens when sigma^2 is near the floor.
+.sw_heb_pev <- function(z, th) {
   G <- th[[1]] * z$K1 + th[[2]] * z$K2
-  u <- G %*% crossprod(z$Z, P %*% y)
-  pev <- G - G %*% crossprod(z$Z, P %*% z$Z) %*% G
+  p <- ncol(z$X)
+  W <- cbind(z$X, z$Z)
+  C <- crossprod(W)
+  iu <- p + seq_len(ncol(z$Z))
+  C[iu, iu] <- C[iu, iu] + th[[3]] * solve(G)
+  R <- chol(C)
+  sol <- backsolve(R, forwardsolve(t(R), crossprod(W, z$y)))
+  Cinv_uu <- chol2inv(R)[iu, iu, drop = FALSE]
+  list(u = sol[iu], var = pmax(th[[3]] * rowSums((z$L %*% Cinv_uu) * z$L), 0))
+}
+
+# BLUPs, prediction error and Satterthwaite df for one design at given variance components.
+# df = 2 v^2 / (g' C g), v the contrast's prediction error variance, g its gradient in the
+# log components (central differences) and C their covariance. cov_log = NULL gives df = NA.
+.sw_heb_blup <- function(z, th, anchor, cov_log = NULL) {
+  p <- .sw_heb_pev(z, th)
+  u <- p$u
+  df <- rep(NA_real_, length(z$batches))
+  if (!is.null(cov_log)) {
+    h <- 1e-4
+    g <- vapply(1:3, function(k) {
+      if (all(cov_log[k, ] == 0)) {
+        return(rep(0, length(p$var)))
+      }
+      step <- replace(rep(0, 3), k, h)
+      (.sw_heb_pev(z, th * exp(step))$var - .sw_heb_pev(z, th * exp(-step))$var) / (2 * h)
+    }, numeric(length(p$var)))
+    g <- matrix(g, nrow = length(p$var))
+    denom <- rowSums((g %*% cov_log) * g)
+    df <- ifelse(denom > 0, 2 * p$var^2 / denom, Inf)
+    df[z$batches == anchor] <- NA_real_
+  }
   list(
     batch = z$batches, estimate = as.vector(z$L %*% u),
-    se = sqrt(pmax(rowSums((z$L %*% pev) * z$L), 0))
+    se = sqrt(p$var), df = df
   )
 }
 
@@ -169,13 +211,14 @@ NULL
   theta <- lapply(split(designs, pool_key), .sw_heb_theta, variance_floor = variance_floor)
   rows <- lapply(names(designs), function(nm) {
     z <- designs[[nm]]
-    r <- .sw_heb_blup(z, theta[[pool_key[[nm]]]], anchor)
+    tk <- theta[[pool_key[[nm]]]]
+    r <- .sw_heb_blup(z, tk$theta, anchor, tk$cov_log)
     d <- z$d
     n_don <- vapply(r$batch, function(b) length(unique(d$reference_id[d$batch == b])), integer(1))
     n_aliq <- vapply(r$batch, function(b) length(unique(d$aliquot[d$batch == b])), integer(1))
     tibble::tibble(
       batch = r$batch, population = d$population[[1]], marker = d$marker[[1]],
-      estimate = r$estimate, se_donor = r$se, n_donors = n_don, n_aliquots = n_aliq,
+      estimate = r$estimate, se_donor = r$se, df = r$df, n_donors = n_don, n_aliquots = n_aliq,
       n_aliquots_anchor = n_aliq[match(anchor, r$batch)],
       support = if_else_chr(r$batch == anchor, "anchor", "joint_reml"), source = "fit"
     )
