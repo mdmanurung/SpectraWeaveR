@@ -22,7 +22,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 # Benchmark settings ---------------------------------------------------------
 SEEDS <- 1:6
 N_CLEAN <- 60
-N_BAD <- 12
+N_BAD <- as.integer(Sys.getenv("SW_N_BAD", 12)) # faulty files; env override for sweeps
 N_CH <- 8
 N_EV <- 1000
 FILE_JITTER <- 0.1
@@ -31,7 +31,8 @@ NEV <- 500
 AGG <- 5000
 NTREES <- 300
 FOREST_SAMPLE <- 32
-CLUSTER_K <- 6 # clusters for the cluster-level scores
+CLUSTER_K <- as.integer(Sys.getenv("SW_K", 6)) # clusters; env override for sweeps
+ONLY <- Sys.getenv("SW_ONLY", "") # comma list of sweep:size to keep, empty keeps all
 SHIFT_SIZES <- c(0.05, 0.1, 0.2, 0.3, 0.5) # SD units added to one marker
 STRETCH_SIZES <- c(1.05, 1.1, 1.2, 1.3, 1.5) # width factor on one marker
 RARE_FRACTIONS <- c(0.02, 0.05, 0.1, 0.2) # share of events in the shifted population
@@ -113,6 +114,10 @@ jobs <- c(
     x
   }))
 )
+if (nzchar(ONLY)) {
+  keep <- strsplit(ONLY, ",")[[1]]
+  jobs <- Filter(\(j) paste0(j$sweep, ":", j$size) %in% keep, jobs)
+}
 long <- lapply(SEEDS, \(sd) {
   lapply(jobs, \(j) run_one(sd, j$sweep, j$size, j$fault, j$rf))
 }) |>
