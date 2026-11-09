@@ -29,17 +29,21 @@ sw_emd_1d <- function(x, y) {
   if (length(x) == 0 || length(y) == 0) {
     stop("`x` and `y` must not be empty.", call. = FALSE)
   }
-  x <- sort(x)
-  y <- sort(y)
-  n <- length(x)
-  m <- length(y)
-  # Jump points of both quantile functions on (0, 1].
+  .sw_emd_sorted(sort(x), sort(y), .sw_emd_plan(length(x), length(y)))
+}
+
+# Jump points of both quantile functions on (0, 1], as the interval widths and
+# the index each sample uses on each interval. It depends only on the two
+# sample sizes, so one plan serves every file of a cohort.
+.sw_emd_plan <- function(n, m) {
   breaks <- sort(unique(c(0, seq_len(n) / n, seq_len(m) / m)))
-  width <- diff(breaks)
   mid <- (breaks[-1] + breaks[-length(breaks)]) / 2
-  qx <- x[ceiling(mid * n)]
-  qy <- y[ceiling(mid * m)]
-  sum(abs(qx - qy) * width)
+  list(width = diff(breaks), ix = ceiling(mid * n), iy = ceiling(mid * m))
+}
+
+# EMD of two sorted samples given their plan.
+.sw_emd_sorted <- function(x_sorted, y_sorted, plan) {
+  sum(abs(x_sorted[plan$ix] - y_sorted[plan$iy]) * plan$width)
 }
 
 #' Per-file features for anomaly detection
@@ -218,7 +222,16 @@ sw_anomaly_features <- function(
         call. = FALSE
       )
     }
-    m[, channels, drop = FALSE]
+    m <- m[, channels, drop = FALSE]
+    if (anyNA(m)) {
+      stop(
+        "File '",
+        f,
+        "' has NA values in the chosen channels.",
+        call. = FALSE
+      )
+    }
+    m
   })
   names(mats) <- files
 
@@ -256,10 +269,13 @@ sw_anomaly_features <- function(
     }
   }
   if ("emd" %in% features) {
+    # The plan depends only on the sizes, and the pool is sorted once per channel.
+    plan <- .sw_emd_plan(n_events, nrow(pool))
     for (ch in channels) {
+      pool_sorted <- sort(pool[, ch])
       cols[[paste0(ch, "_emd")]] <- vapply(
         drawn,
-        function(m) sw_emd_1d(m[, ch], pool[, ch]),
+        function(m) .sw_emd_sorted(sort(m[, ch]), pool_sorted, plan),
         numeric(1)
       )
     }

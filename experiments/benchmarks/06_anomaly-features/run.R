@@ -39,7 +39,11 @@ EFFECT_SCALE <- env_num("EFFECT_SCALE", 1) # multiplies every injected effect si
 N_CH_AFFECTED <- env_num("N_CH_AFFECTED", 1) # channels hit in an injected file
 POP_ONLY <- env_num("POP_ONLY", 0) == 1 # effect only on the rarest population
 SCORER <- Sys.getenv("SW_SCORER", "iforest") # iforest | novelty | robustz
-EFFECTS <- c("shift", "stretch", "bimodal") # injected effects, cycled over bad files
+EFFECTS <- strsplit(Sys.getenv("SW_EFFECTS", "shift,stretch,bimodal"), ",")[[1]] # cycled over bad files
+BATCH_FRAC <- env_num("BATCH_FRAC", 0) # share of clean files given a +0.3 all-channel shift (a batch; not an anomaly)
+REF_CONTAM <- env_num("REF_CONTAM", 0) # share of the 30 reference files that are anomalous
+HEAVY_DF <- env_num("HEAVY_DF", 0) # >0: Student-t noise with this df instead of normal noise
+FOREST_SEED_OFFSET <- env_num("FOREST_SEED_OFFSET", 0) # moves only the forest seed
 # Feature and flag settings shared by every candidate (illustrative, not tuned):
 QSTEP <- env_num("QSTEP", 0.1)
 NEV <- env_num("NEV", 500)
@@ -56,7 +60,12 @@ simulate_cohort <- function(seed) {
   make_file <- function() {
     pop <- sample(1:3, N_EV, replace = TRUE, prob = c(0.5, 0.3, 0.2))
     jit <- matrix(stats::rnorm(3 * N_CH, 0, FILE_JITTER), 3)
-    x <- mu[pop, ] + jit[pop, ] + matrix(stats::rnorm(N_EV * N_CH), N_EV)
+    noise <- if (HEAVY_DF > 0) {
+      matrix(stats::rt(N_EV * N_CH, HEAVY_DF), N_EV)
+    } else {
+      matrix(stats::rnorm(N_EV * N_CH), N_EV)
+    }
+    x <- mu[pop, ] + jit[pop, ] + noise
     colnames(x) <- CHANNELS
     attr(x, "pop") <- pop
     x
@@ -66,17 +75,36 @@ simulate_cohort <- function(seed) {
   for (i in which(effect != "clean")) {
     x <- files[[i]]
     rows <- if (POP_ONLY) attr(x, "pop") == 3 else rep(TRUE, nrow(x))
-    for (ch in sample(CHANNELS, N_CH_AFFECTED)) {
-      v <- x[rows, ch]
-      x[rows, ch] <- switch(
-        effect[i],
-        shift = v + 0.5 * EFFECT_SCALE,
-        stretch = mean(v) + (v - mean(v)) * (1 + 0.5 * EFFECT_SCALE),
-        bimodal = v +
-          sample(c(-0.5, 0.5) * EFFECT_SCALE, length(v), replace = TRUE)
-      )
+    if (effect[i] == "scale_all") {
+      # Every channel stretched by 1.3 about its mean (a different cofactor).
+      x[] <- sweep(sweep(x, 2, colMeans(x)), 2, 1.3, "*") +
+        rep(colMeans(x), each = nrow(x))
+    } else {
+      for (ch in sample(CHANNELS, N_CH_AFFECTED)) {
+        v <- x[rows, ch]
+        x[rows, ch] <- switch(
+          effect[i],
+          shift = v + 0.5 * EFFECT_SCALE,
+          stretch = mean(v) + (v - mean(v)) * (1 + 0.5 * EFFECT_SCALE),
+          bimodal = v +
+            sample(c(-0.5, 0.5) * EFFECT_SCALE, length(v), replace = TRUE),
+          # Debris: 10% of events pushed far right.
+          debris = {
+            hit <- sample(length(v), round(0.1 * length(v)))
+            v[hit] <- 8
+            v
+          }
+        )
+      }
     }
     files[[i]] <- x
+  }
+  if (BATCH_FRAC > 0) {
+    batch_idx <- sample(which(effect == "clean"), round(BATCH_FRAC * N_CLEAN))
+    for (i in batch_idx) {
+      files[[i]][] <- files[[i]] + 0.3
+    }
+    effect[batch_idx] <- "batch"
   }
   ord <- sample(length(files)) # file order carries no label
   files <- files[ord]
@@ -104,7 +132,11 @@ res <- lapply(SEEDS, function(s) {
   sim <- simulate_cohort(s)
   ids <- names(sim$files)
   # Reference = 30 known-clean files, as a lab would hold known-good controls.
-  ref <- head(ids[sim$effect == "clean"], 30)
+  n_bad_ref <- round(REF_CONTAM * 30)
+  ref <- c(
+    head(ids[sim$effect == "clean"], 30 - n_bad_ref),
+    head(ids[!sim$effect %in% c("clean", "batch")], n_bad_ref)
+  )
   feat <- sw_anomaly_features(
     sim$files,
     channels = CHANNELS,
@@ -124,7 +156,7 @@ res <- lapply(SEEDS, function(s) {
       sample_size = FOREST_SAMPLE,
       ndim = FOREST_NDIM,
       cutoff = 0.5,
-      seed = s
+      seed = s + FOREST_SEED_OFFSET
     )
   } else if (SCORER == "novelty") {
     # Score = minus log-density; reference files are left out of the evaluation.
@@ -147,15 +179,16 @@ res <- lapply(SEEDS, function(s) {
     set.seed(1000 + s)
     lab <- sample(lab)
   }
+  # A shifted batch is real but is not an injected anomaly: it counts as negative.
   pair_auroc <- function(e) {
-    keep <- lab %in% c("clean", e)
+    keep <- lab %in% c("clean", "batch", e)
     auroc(fl$score[keep], lab[keep] == e)
   }
   tibble(
     seed = s,
     effect = c("all", EFFECTS),
     auroc = c(
-      auroc(fl$score, lab != "clean"),
+      auroc(fl$score, !lab %in% c("clean", "batch")),
       vapply(EFFECTS, pair_auroc, numeric(1))
     )
   )

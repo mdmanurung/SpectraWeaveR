@@ -20,5 +20,5 @@ run_one() {
 export -f run_one
 export RSCRIPT DIR
 
-tail -n +2 "$DIR/scenarios.tsv" |
+tail -n +2 "${3:-$DIR/scenarios.tsv}" |
   xargs -P "$JOBS" -d '\n' -I{} bash -c 'IFS=$'"'"'\t'"'"' read -r t c e <<< "{}"; run_one "$t" "$c" "$e"' >> "$OUT"

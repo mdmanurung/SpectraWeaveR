@@ -1,0 +1,13 @@
+tag	candidate	env
+e01_debris_both	both	SW_EFFECTS=debris
+e02_debris_emd	emd	SW_EFFECTS=debris
+e03_debris_quantile	quantile	SW_EFFECTS=debris
+e04_scaleall_both	both	SW_EFFECTS=scale_all
+e05_scaleall_quantile	quantile	SW_EFFECTS=scale_all
+e06_batch30_both	both	SW_BATCH_FRAC=0.3
+e07_batch30_novelty_emd	emd	SW_BATCH_FRAC=0.3 SW_SCORER=novelty
+e08_refcontam20_novelty_emd	emd	SW_REF_CONTAM=0.2 SW_SCORER=novelty
+e09_heavytail_both	both	SW_HEAVY_DF=3
+e10_heavytail_emd	emd	SW_HEAVY_DF=3
+e11_forestseed100	both	SW_FOREST_SEED_OFFSET=100
+e12_forestseed200	both	SW_FOREST_SEED_OFFSET=200
