@@ -211,7 +211,7 @@ Source data: `figures/spill-leak-real-source.csv`.](figures/spill-leak-real.png)
 
 `sw_cluster_stability()` reruns k-means with several seeds and subsample sizes
 and reports the adjusted Rand index and the share of events that change
-cluster. On the real Aurora files (500 events from each of 160 files, 5
+cluster. On the real Aurora files (500 events from each of 149 files, 5
 seeds), k = 6 gave identical partitions, k = 12 moved a median 12% of events
 between seeds (up to 21%), and k = 20 moved 29% (up to 43%)
 (figure: `figures/cluster-stability-real.png`). Two runs raised k-means
