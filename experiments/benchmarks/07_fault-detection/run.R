@@ -33,7 +33,10 @@ N_BAD <- 12 # faulty files in a file-level cohort
 N_CH <- 8 # markers
 N_EV <- 1000 # events per file
 FILE_JITTER <- 0.1 # SD of file-to-file population-mean jitter
-RANGE_MAX <- 6 # instrument maximum on the simulated scale
+# Instrument maximum on the simulated scale. It sits above every clean, stretched
+# or debris value (debris is 8), so only the saturation fault reaches it. At 6 the
+# scale, stretch and debris faults crossed it and scored 1.00 by construction.
+RANGE_MAX <- 9
 N_BATCH <- 4 # batches in a batch-level cohort
 FILES_PER_BATCH <- 12
 # Feature and flag settings (as in benchmark v1, not tuned):

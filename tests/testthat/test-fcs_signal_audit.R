@@ -76,6 +76,28 @@ test_that("a dead channel, non-finite values and saturation are found", {
   expect_equal(val(res, "f1", "floor_share", "A"), 0)
 })
 
+test_that("rate_cv counts events per bin, so thinning a window raises it", {
+  # Regression: rate_cv once counted occupied bins, not events, so a window
+  # with 80% fewer events (no empty bin) looked like a clean file.
+  d <- make_sig(n = 2000)
+  win <- d$f5[, "Time"] > 40 & d$f5[, "Time"] < 70
+  set.seed(9)
+  drop <- win & stats::runif(nrow(d$f5)) < 0.8
+  d$f5 <- d$f5[!drop, ]
+  res <- audit(d, time_channel = "Time", time_bin = 5)
+  clean <- c(val(res, "f1", "rate_cv"), val(res, "f2", "rate_cv"))
+  expect_true(val(res, "f5", "rate_cv") > 2 * max(clean))
+  # Exact value on a hand-made file: bins of 1 unit hold 3, 1, 0, 2 events.
+  m <- cbind(Time = c(0.1, 0.2, 0.3, 1.5, 3.2, 3.9), A = 1:6, B = 6:1)
+  d2 <- list(x = m, y = m)
+  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1)
+  counts <- c(3, 1, 0, 2)
+  expect_equal(
+    r2$value[r2$check == "rate_cv"][1],
+    stats::sd(counts) / mean(counts)
+  )
+})
+
 test_that("a gap in event times raises rate_cv and max_gap", {
   d <- make_sig()
   keep <- !(d$f5[, "Time"] > 40 & d$f5[, "Time"] < 70)

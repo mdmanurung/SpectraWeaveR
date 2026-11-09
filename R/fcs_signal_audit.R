@@ -181,12 +181,9 @@ sw_fcs_signal_audit <- function(
     if (!is.null(time_channel)) {
       tt <- sort(m[, time_channel])
       tt <- tt[is.finite(tt)]
-      bins <- table(floor((tt - min(tt)) / time_bin))
-      # Empty bins inside the run count as zero events.
-      full <- tabulate(
-        as.integer(names(bins)) + 1L,
-        nbins = max(as.integer(names(bins))) + 1L
-      )
+      # Events per time bin; bins with no events inside the run count as zero.
+      bin_id <- as.integer(floor((tt - min(tt)) / time_bin)) + 1L
+      full <- tabulate(bin_id, nbins = max(bin_id))
       add(
         f,
         "rate_cv",
