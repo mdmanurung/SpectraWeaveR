@@ -60,6 +60,50 @@ shiny::runApp(sw_qc_app(dx, n = 15, qc_report = NULL))
 
 The numbers above are illustrative. They are not recommended values.
 
+## Coverage at a glance
+
+One row per fault class: the check that finds it best, its AUROC in simulation
+and, where tested, on real Aurora files with the fault injected. AUROC ranks
+faulty files (or, for batch faults, the hit marker among 40) above clean ones;
+0.5 is chance. Sizes are the ones tested, not guarantees. Sections below give
+the figures behind each number. Faults marked "not tested" on real files have
+no real-file evidence yet.
+
+| Fault class | Best check | Simulation | Real files (injected) |
+|---|---|---|---|
+| Header / keyword mismatch | `sw_fcs_header_audit()` | exact by construction | not tested |
+| Saturation | `saturation_share` | 1.00 | not tested |
+| Dead channel | `zero_variance` | 1.00 | not tested |
+| Missing or infinite values | `nonfinite_share` | 1.00 | not tested |
+| Clog / event-rate drop | `rate_cv` | 1.00 | not tested |
+| Drift within a file | `time_trend` | 1.00 | not tested |
+| Debris spike | `corr_shift` | 1.00 | not tested |
+| Spillover between two channels | `corr_shift` | 1.00 | not tested |
+| One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
+| One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
+| All markers widened | `sd_z` | 1.00 | not tested |
+| Split into two modes (one marker) | `corr_shift` | **0.67 (weak)** | not tested |
+| Change in a rare population | `cluster_median_z` | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | not tested |
+| Composition change | forest, `cluster_freq_z` | 1.00 | not tested |
+| Negative population shifted | `neg_median_z` | 1.00 at 0.3 SD | 1.00 at 1 SD, 0.84 at 0.3 SD |
+| Negative population widened | `neg_sd_z` | 1.00 at x1.5, 0.96 at x1.2 | 1.00 at x1.5 |
+| Hyper-negative events | `hyper_negative_share` | 1.00 at 1% | 1.00 at 3% |
+| Angled negative | `neg_corr_z` | 1.00 at slope 0.3 | 0.93 at slope 0.3 |
+| Leak into a negative channel | `spill_corr_z` (+ `neg_median_z` if it shifts) | 0.96 at 15% | 0.94 at 15%, 0.68 at 5% |
+| Batch shift (one marker) | `pair_emd` | 1.00 | 0.92 at 0.5 SD, 0.75 at 0.25 SD |
+| Batch stretch (one marker) | `spread_ratio` / `pair_emd` | 1.00 | 0.87 at x1.3 |
+| Batch split into two modes | `spread_ratio` | **0.86 (weak, seeds 0.57 to 1.0)** | not tested |
+| Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
+| Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | not tested (needs linear data and controls) |
+
+Real-file numbers come from one Aurora dataset (36 to 144 donor files, 40
+markers, OMIQ-transformed). The negative-population numbers cover only the 10
+of 40 channels whose mixture split cleanly. The batch numbers sit on top of
+real batch differences that are confounded with donor.
+
+![Batch faults injected into one of four real batches: AUROC of the hit marker
+among 40. Source data: `figures/batch-faults-real-source.csv`.](figures/batch-faults-real.png)
+
 ## How well each check finds a fault (simulation)
 
 The benchmark in `experiments/benchmarks/07_fault-detection/` injects one fault
