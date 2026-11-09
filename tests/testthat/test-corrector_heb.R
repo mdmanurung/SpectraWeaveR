@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", seed = 1, ...
   )
 }
 
@@ -83,7 +83,7 @@ test_that("heb needs pool and pooled variance runs", {
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -120,4 +120,27 @@ test_that("heb leaves earlier corrected values unchanged when new rows arrive", 
     transform = list(name = "asinh", cofactor = 5), unsupported = "abstain"
   )
   expect_identical(old$x, again$x)
+})
+
+test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired_shift without shrinkage", {
+  s <- heb_sim()
+  fixed <- sw_corrector_fit(
+    s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+    transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
+    anchor_effect = "fixed", seed = 1
+  )$effects
+  expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
+  expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)
+  # Limiting case: variance components far above the noise mean no shrinkage, so the batch effect is
+  # the mean paired difference to the anchor, which is what paired_shift estimates.
+  d <- .sw_heb_design(
+    data.frame(
+      value = c(1, 2, 3, 2, 3, 4), reference_id = rep(c("D1", "D2", "D3"), 2),
+      batch = rep(c("a", "b"), each = 3), aliquot = 1:6
+    ),
+    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "fixed"
+  )
+  est <- .sw_heb_blup(d, c(1e3, 1e3, 1e-3), "a")
+  expect_equal(est$estimate, c(0, 1), tolerance = 1e-3)
 })

@@ -31,9 +31,10 @@
 NULL
 
 # Negative REML log-likelihood (up to a constant) for log variance components.
-.sw_heb_reml <- function(log_theta, y, X, Zs, Zb) {
+# V = th1 * M1 + th2 * M2 + th3 * I, with M1 = Z K1 Z' and M2 = Z K2 Z'.
+.sw_heb_reml <- function(log_theta, y, X, M1, M2) {
   th <- exp(log_theta)
-  V <- th[[1]] * tcrossprod(Zs) + th[[2]] * tcrossprod(Zb) + th[[3]] * diag(length(y))
+  V <- th[[1]] * M1 + th[[2]] * M2 + th[[3]] * diag(length(y))
   R <- tryCatch(chol(V), error = function(e) NULL)
   if (is.null(R)) {
     return(1e10)
@@ -52,19 +53,46 @@ NULL
 }
 
 # Design pieces for one (population, marker): NULL when it cannot give a contrast to the anchor.
-.sw_heb_design <- function(d, hier, anchor) {
+# anchor_effect = "random": study and run effects of every batch are random and the anchor's own
+#   effect is a BLUP; the correction is the BLUP difference to the anchor (derivation v0).
+# anchor_effect = "fixed": the anchor-relative effects b_b = beta_b - beta_anchor are the random
+#   effects, b_anchor = 0 exactly, with covariance
+#   tau_s^2 (S_ij - S_ia - S_ja + 1) + tau_b^2 (delta_ij + 1), S = same-study indicator (derivation v1).
+.sw_heb_design <- function(d, hier, anchor, anchor_effect) {
   batches <- sort(unique(d$batch))
   if (length(batches) < 2 || !anchor %in% batches) {
     return(NULL)
   }
   study_of <- hier$study[match(batches, hier$batch)]
   studies <- sort(unique(study_of))
+  nb <- length(batches)
+  if (anchor_effect == "random") {
+    Zs <- outer(hier$study[match(d$batch, hier$batch)], studies, `==`) * 1
+    Zb <- outer(d$batch, batches, `==`) * 1
+    Z <- cbind(Zs, Zb)
+    q1 <- length(studies)
+    K1 <- diag(c(rep(1, q1), rep(0, nb)))
+    K2 <- diag(c(rep(0, q1), rep(1, nb)))
+    L <- matrix(0, nb, ncol(Z))
+    L[cbind(seq_len(nb), match(study_of, studies))] <- 1
+    L[cbind(seq_len(nb), q1 + seq_len(nb))] <- 1
+    L <- sweep(L, 2, L[match(anchor, batches), ], `-`)
+  } else {
+    na <- batches[batches != anchor]
+    s_n <- study_of[match(na, batches)]
+    s_a <- study_of[match(anchor, batches)]
+    Z <- outer(d$batch, na, `==`) * 1
+    ia <- as.numeric(s_n == s_a)
+    K1 <- outer(s_n, s_n, `==`) * 1 - outer(ia, rep(1, length(na))) - outer(rep(1, length(na)), ia) + 1
+    K2 <- diag(length(na)) + 1
+    L <- matrix(0, nb, length(na))
+    L[cbind(match(na, batches), seq_along(na))] <- 1
+  }
   list(
-    d = d, batches = batches, studies = studies, study_of = study_of,
-    y = d$value,
+    d = d, batches = batches, y = d$value,
     X = stats::model.matrix(~ 0 + factor(d$reference_id)),
-    Zs = outer(hier$study[match(d$batch, hier$batch)], studies, `==`) * 1,
-    Zb = outer(d$batch, batches, `==`) * 1
+    Z = Z, K1 = K1, K2 = K2, L = L,
+    M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z)
   )
 }
 
@@ -73,7 +101,7 @@ NULL
 .sw_heb_theta <- function(designs, variance_floor) {
   scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
   obj <- function(lt) {
-    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$Zs, z$Zb), numeric(1)))
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2), numeric(1)))
   }
   lo <- rep(log(variance_floor), 3)
   fit <- stats::optim(
@@ -87,26 +115,20 @@ NULL
 .sw_heb_blup <- function(z, th, anchor) {
   y <- z$y
   X <- z$X
-  V <- th[[1]] * tcrossprod(z$Zs) + th[[2]] * tcrossprod(z$Zb) + th[[3]] * diag(length(y))
+  V <- th[[1]] * z$M1 + th[[2]] * z$M2 + th[[3]] * diag(length(y))
   Vinv <- chol2inv(chol(V))
   XtVX <- crossprod(X, Vinv %*% X)
   P <- Vinv - Vinv %*% X %*% solve(XtVX, crossprod(X, Vinv))
-  Z <- cbind(z$Zs, z$Zb)
-  G <- diag(c(rep(th[[1]], ncol(z$Zs)), rep(th[[2]], ncol(z$Zb))))
-  u <- G %*% crossprod(Z, P %*% y)
-  pev <- G - G %*% crossprod(Z, P %*% Z) %*% G
-  # beta_b = study effect + run effect; contrast against the anchor.
-  L <- matrix(0, length(z$batches), ncol(Z))
-  L[cbind(seq_along(z$batches), match(z$study_of, z$studies))] <- 1
-  L[cbind(seq_along(z$batches), length(z$studies) + seq_along(z$batches))] <- 1
-  L <- sweep(L, 2, L[match(anchor, z$batches), ], `-`)
+  G <- th[[1]] * z$K1 + th[[2]] * z$K2
+  u <- G %*% crossprod(z$Z, P %*% y)
+  pev <- G - G %*% crossprod(z$Z, P %*% z$Z) %*% G
   list(
-    batch = z$batches, estimate = as.vector(L %*% u),
-    se = sqrt(pmax(rowSums((L %*% pev) * L), 0))
+    batch = z$batches, estimate = as.vector(z$L %*% u),
+    se = sqrt(pmax(rowSums((z$L %*% pev) * z$L), 0))
   )
 }
 
-.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, ...) {
+.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -115,6 +137,9 @@ NULL
   }
   if (missing(pool) || !pool %in% c("none", "population", "all")) {
     stop("heb needs pool = 'none', 'population' or 'all' (no default).", call. = FALSE)
+  }
+  if (missing(anchor_effect) || !anchor_effect %in% c("random", "fixed")) {
+    stop("heb needs anchor_effect = 'random' or 'fixed' (no default).", call. = FALSE)
   }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
@@ -131,7 +156,7 @@ NULL
   )
   key <- paste(s$summ$population, s$summ$marker, sep = "\r")
   designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
-    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor)
+    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor, anchor_effect)
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
   # Which designs share variance components.
