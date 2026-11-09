@@ -27,6 +27,10 @@
 #'   `time_channel` is given.
 #' * `max_gap`: largest gap between consecutive event times, as a multiple of
 #'   the median gap (file level). Only when `time_channel` is given.
+#' * `time_trend`: Spearman correlation of a channel with time, per channel. A
+#'   steady drift of a marker inside one acquisition (laser, fluidics or
+#'   detector drift) gives a value far from 0. Only when `time_channel` is
+#'   given.
 #' * `corr_shift`: largest absolute difference between the file's Spearman
 #'   correlation of a channel pair and the median of that pair over all files
 #'   (file level, `detail` names the pair). A wrong spillover or unmixing
@@ -198,6 +202,20 @@ sw_fcs_signal_audit <- function(
         NA_character_,
         if (length(gaps) && med > 0) max(gaps) / med else NA_real_
       )
+      # Drift inside the file: rank correlation of each channel with time.
+      for (ch in channels) {
+        add(
+          f,
+          "time_trend",
+          ch,
+          suppressWarnings(stats::cor(
+            m[, ch],
+            m[, time_channel],
+            method = "spearman",
+            use = "pairwise.complete.obs"
+          ))
+        )
+      }
     }
   }
 

@@ -98,6 +98,18 @@ test_that("rate_cv counts events per bin, so thinning a window raises it", {
   )
 })
 
+test_that("a marker drifting with time shows in time_trend for that channel only", {
+  d <- make_sig(n = 600)
+  d$f2[, "A"] <- d$f2[, "A"] + 0.03 * d$f2[, "Time"] # about 3 SD over the run
+  res <- audit(d, time_channel = "Time", time_bin = 5)
+  # A ramp 0 to 3 on unit noise correlates at about sqrt(0.75 / 1.75) = 0.65.
+  expect_equal(val(res, "f2", "time_trend", "A"), 0.65, tolerance = 0.1)
+  expect_lt(abs(val(res, "f2", "time_trend", "B")), 0.2)
+  expect_lt(abs(val(res, "f1", "time_trend", "A")), 0.2)
+  # Without a time channel the check is absent.
+  expect_false("time_trend" %in% audit(d)$check)
+})
+
 test_that("a gap in event times raises rate_cv and max_gap", {
   d <- make_sig()
   keep <- !(d$f5[, "Time"] > 40 & d$f5[, "Time"] < 70)

@@ -110,6 +110,12 @@ FILE_FAULTS <- list(
     ch <- sample(CHANNELS, 2)
     x[, ch[2]] <- 0.6 * x[, ch[1]] + 0.8 * x[, ch[2]]
     x
+  },
+  # Added after the first run so earlier faults keep their seeds.
+  time_drift = function(x) {
+    ch <- sample(CHANNELS, 1)
+    x[, ch] <- x[, ch] + 0.03 * x[, "Time"] # about 3 SD over the run
+    x
   }
 )
 
@@ -166,7 +172,15 @@ file_tool_scores <- function(files, seed) {
     nonfinite_share = as.numeric(by("nonfinite_share")),
     rate_cv = as.numeric(by("rate_cv")),
     max_gap = as.numeric(by("max_gap")),
-    corr_shift = as.numeric(by("corr_shift"))
+    corr_shift = as.numeric(by("corr_shift")),
+    time_trend = as.numeric(
+      tapply(
+        abs(aud$value[aud$check == "time_trend"]),
+        aud$file[aud$check == "time_trend"],
+        max,
+        na.rm = TRUE
+      )[ids]
+    )
   )
 }
 

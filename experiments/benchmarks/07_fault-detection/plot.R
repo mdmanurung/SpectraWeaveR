@@ -29,6 +29,7 @@ fault_order <- c(
   "nonfinite",
   "clog",
   "spillover",
+  "time_drift",
   "batch_shift",
   "batch_stretch",
   "batch_bimodal",
