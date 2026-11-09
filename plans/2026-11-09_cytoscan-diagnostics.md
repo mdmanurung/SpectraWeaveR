@@ -112,3 +112,25 @@ Modules: 1 header audit, 2 features (quantiles + exact-coupling EMD), 3 flags (i
 mclust novelty with n_ref > features check), 5 CytoScan/CytoTools wrappers, 6 `sw_qc_plot()` /
 `sw_qc_heatmap()`, 7 `sw_qc_app()`. Dropped: batch EMD scores (Track A frozen), correction
 add-ons (separate plan), iidx differential analysis. PeacoQC is never copied.
+
+## Goal update (2026-11-09, user): consistent diagnosis of technical problems, batch effects extensively
+
+User message: "work autonomously until we can consistently diagnose for any technical problems
+including but not limited to batch effects extensively". This overrides the ROADMAP Track A
+freeze for this branch (the user's later, explicit instruction). Impactful choices are still
+required arguments with no default, so autonomy does not need new answers.
+
+Done so far: header audit, quantile + exact-EMD features, outlier/novelty flags, CytoScan and
+CytoTools wrappers, PeacoQC plot and heatmap wrappers, benchmark v1 (50 iterations).
+
+| # | Module | Exports | Fault classes it covers |
+|---|--------|---------|-------------------------|
+| 8 | `R/fcs_signal_audit.R` | `sw_fcs_signal_audit()` | saturation, dead channel, NA/Inf, negative share, event-rate instability and gaps, channel-pair correlation change (spillover/unmixing error) |
+| 9 | `R/batch_scores.R` | `sw_batch_scores()` | per-marker batch shift (pairwise exact EMD, median range), variance explained by batch, within-batch acquisition-order drift |
+| 10 | `R/diagnose.R` | `sw_diagnose()` | runs 1, 3, 8, 9 and returns one findings table |
+| 7 | `R/qc_app.R` | `sw_qc_app()` | shows a diagnosis (Shiny, bslib, ggiraph) |
+| 11 | benchmark v2 | `experiments/benchmarks/07_fault-detection/` | fault injection, detection matrix per tool; gaps listed, not hidden |
+
+"Consistently" is measured, not declared: benchmark v2 reports detection (AUROC) per fault class
+and per tool over many seeds with intervals. The pass bar is the user's choice and is not set here.
+Known gap from v1: a rare-population change (20% of events) is invisible at file level.
