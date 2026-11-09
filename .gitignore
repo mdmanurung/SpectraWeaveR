@@ -51,3 +51,16 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# pixi environment
+.pixi/
+
+# experiment outputs (kept out of git; see experiments/README.md)
+experiments/runs/*
+!experiments/runs/.gitkeep
+experiments/slurm/logs/
+
+# BMV unmixing comparison data (large, never committed)
+experiments/bmv_test/**/*.zip
+experiments/bmv_test/**/data/
+experiments/bmv_test/**/*.fcs

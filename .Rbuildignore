@@ -14,3 +14,10 @@
 ^codecov\.yml$
 ^\.lintr$
 ^README\.Rmd$
+^ROADMAP\.md$
+^plans$
+^pixi\.toml$
+^pixi\.lock$
+^\.pixi$
+^experiments$
+^tools$
