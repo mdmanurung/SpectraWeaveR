@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Purpose: write the development scenarios S13, S13b, S14, S15, S16 (shrinkage, thin reference design) for dev seeds.
+"""Purpose: write the development scenarios S13, S13b, S14, S15, S16, S17 (shrinkage, thin reference design) for dev seeds.
 
 Run:     <python> experiments/benchmarks/05_cytether-synthetic/gen_scenarios.py <out_dir> <seed> [<seed> ...]
 Inputs:  cyTether bundle v1 (MIT) at $SW_DATA_DIR/cytether_bundle_v1, read only, never modified
@@ -11,7 +11,9 @@ The bundle generator draws the biology and cells. A post-hoc layer, in the style
 then (1) swaps each batch's technical offset for a new draw and (2) drops reference rows to make the design thin.
 Shift-only stages have x = x_true + offset, so a batch's old offset is exactly mean(x - x_true) over its cells.
 
-Scenario indices 13 to 16 are registered in LEVELS here; S13b reuses index 13, so S13 and S13b share truth and offsets.
+S17 is S13 with population-specific shifts: every cell type gets its own independent study and run offset,
+so an effect shared across populations is wrong. Truth offsets then have a cell-type axis (study, type, marker).
+Scenario indices 13 to 17 are registered in LEVELS here; S13b reuses index 13, so S13 and S13b share truth and offsets.
 Seeds 441 to 450 are the development seeds. Test seeds 431 to 440 are never written or read here.
 """
 import json
@@ -20,6 +22,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 sys.dont_write_bytecode = True  # keep the read-only bundle free of new files
 
@@ -27,7 +30,7 @@ sys.dont_write_bytecode = True  # keep the read-only bundle free of new files
 CELLS_PER_PARTICIPANT = 70  # approved E2
 CELLS_PER_REFERENCE_ALIQUOT = 90  # approved E2
 DEV_SEEDS = range(441, 451)  # test seeds 431 to 440 are never touched
-SD_RUN, SD_STUDY = 0.10, 0.47  # S13, S13b, S15, S16 (S16 overrides two runs)
+SD_RUN, SD_STUDY = 0.10, 0.47  # S13, S13b, S15, S16, S17 (S16 overrides two runs)
 SD_FLAT_RUN = 0.47  # S14: all offset variance sits in the runs
 SD_DISCREPANT_RUN = 0.60  # S16, the two discrepant runs
 DISCREPANT_RUNS = ["ST2_RUN1", "ST4_RUN2"]
@@ -45,16 +48,23 @@ LEVELS["S13"] = dict(title="shrink_thin_nested", studies=6, runs=3, shift=1, sca
 LEVELS["S14"] = dict(title="flat_large_runs", studies=6, runs=3, shift=1, scale=0, refs=3)
 LEVELS["S15"] = dict(title="new_run_vs_new_study", studies=6, runs=4, shift=1, scale=0, refs=3)
 LEVELS["S16"] = dict(title="discrepant_runs", studies=6, runs=3, shift=1, scale=0, refs=3)
-SCENARIO_INDEX = {"S13": 13, "S14": 14, "S15": 15, "S16": 16}
+LEVELS["S17"] = dict(title="population_specific_shift", studies=6, runs=3, shift=1, scale=0, refs=3)
+SCENARIO_INDEX = {"S13": 13, "S14": 14, "S15": 15, "S16": 16, "S17": 17}
 
 
 # Post-hoc layer --------------------------------------------------------------------
-def redraw_offsets(x, true, meta, n_studies, n_runs, sd_study, sd_run, index, seed):
-    """Replace each batch's offset: x = x - old_offset + new_offset. Study 0 and run (0, 0) stay at zero."""
+def redraw_offsets(x, true, meta, n_studies, n_runs, sd_study, sd_run, index, seed, by_population=False):
+    """Replace each batch's offset: x = x - old_offset + new_offset. Study 0 and run (0, 0) stay at zero.
+
+    by_population=True (S17) draws an independent offset per cell type, so offsets have shape (..., type, marker).
+    """
     rng = np.random.default_rng(seed + 1000 + index)
     n_markers = x.shape[1]
-    study_offset = rng.normal(0, 1, (n_studies, n_markers)) * sd_study
-    run_offset = rng.normal(0, 1, (n_studies, n_runs, n_markers)) * np.asarray(sd_run)[:, :, None]
+    types = sorted(meta.cell_type.unique())
+    pop_shape = (len(types),) if by_population else ()
+    study_offset = rng.normal(0, 1, (n_studies, *pop_shape, n_markers)) * sd_study
+    sd_run = np.asarray(sd_run).reshape(n_studies, n_runs, *([1] * len(pop_shape)), 1)
+    run_offset = rng.normal(0, 1, (n_studies, n_runs, *pop_shape, n_markers)) * sd_run
     study_offset[0] = 0
     run_offset[0, 0] = 0
     x = x.astype("float64")
@@ -62,7 +72,11 @@ def redraw_offsets(x, true, meta, n_studies, n_runs, sd_study, sd_run, index, se
         for r in range(n_runs):
             rows = (meta.batch == f"ST{s}_RUN{r}").to_numpy()
             old_offset = (x[rows] - true[rows]).mean(axis=0)
-            x[rows] = x[rows] - old_offset + study_offset[s] + run_offset[s, r]
+            new_offset = study_offset[s] + run_offset[s, r]  # (marker,) or (type, marker)
+            if by_population:
+                type_index = pd.Categorical(meta.cell_type[rows], categories=types).codes
+                new_offset = new_offset[type_index]
+            x[rows] = x[rows] - old_offset + new_offset
     return x.astype("float32"), study_offset, run_offset
 
 
@@ -92,7 +106,8 @@ def build(base_stage, seed):
     if base_stage == "S16":
         for b in DISCREPANT_RUNS:
             sd_run[int(b[2]), int(b[-1])] = SD_DISCREPANT_RUN
-    x, study_off, run_off = redraw_offsets(x, true, meta, ns, nr, sd_study, sd_run, SCENARIO_INDEX[base_stage], seed)
+    x, study_off, run_off = redraw_offsets(x, true, meta, ns, nr, sd_study, sd_run, SCENARIO_INDEX[base_stage], seed,
+                                         by_population=base_stage == "S17")
     meta = meta.copy()
     extra = {}
     if base_stage == "S15":
@@ -125,7 +140,9 @@ def write_stage(seed_dir, stage, x, true, meta, cfg, offsets, extra, seed, desig
 
 
 stage_titles = {"S13": "shrink_thin_nested", "S13b": "shrink_balanced_twin", "S14": "flat_large_runs",
-                "S15": "new_run_vs_new_study", "S16": "discrepant_runs"}
+                "S15": "new_run_vs_new_study", "S16": "discrepant_runs", "S17": "population_specific_shift"}
+
+BASE_STAGES = ["S17"] if os.environ.get("S17_ONLY") else ["S13", "S14", "S15", "S16", "S17"]
 
 # Generate --------------------------------------------------------------------------
 out_dir = Path(sys.argv[1])
@@ -136,7 +153,7 @@ for seed in seeds:
     seed_dir = out_dir / f"seed_{seed}"
     if seed_dir.exists():
         sys.exit(f"{seed_dir} exists; run dirs are never overwritten")
-    for base in ["S13", "S14", "S15", "S16"]:
+    for base in BASE_STAGES:
         x, true, meta, cfg, offsets, extra = build(base, seed)
         refless = (REFLESS_KNOWN_RUN,) if base == "S15" else ()
         keep = thin_reference_rows(meta, refless)
