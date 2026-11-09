@@ -4,7 +4,17 @@
 \alias{sw_diagnose}
 \title{Run the technical diagnostics and collect their numbers in one table}
 \usage{
-sw_diagnose(data, header, signal, anomaly, batch, cluster, relativise, otd)
+sw_diagnose(
+  data,
+  header,
+  signal,
+  anomaly,
+  batch,
+  cluster,
+  relativise,
+  otd,
+  negative
+)
 }
 \arguments{
 \item{data}{A named list of per-file numeric matrices (event data on the
@@ -31,6 +41,9 @@ batches); it does not use \code{data}.}
 
 \item{otd}{\code{NULL} or a list with \code{markers}, \code{n_events}, \code{reference_events},
 \code{blur}, \code{seed}, \code{max_iter}, \code{tol}.}
+
+\item{negative}{\code{NULL} or a list with \code{channels}, \code{n_events}, \code{seed},
+\code{hyper_k}, \code{pairs}.}
 }
 \value{
 A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
@@ -39,7 +52,7 @@ A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
 lists the modules that ran.
 }
 \description{
-Run any of seven diagnostic modules and stack what they return into one tidy
+Run any of eight diagnostic modules and stack what they return into one tidy
 table (\code{module}, \code{subject}, \code{check}, \code{item}, \code{value}, \code{text}). A module runs
 only when you give it a settings list; pass \code{NULL} to skip it. Nothing is
 marked pass or fail. Use \code{\link[=sw_diagnosis_top]{sw_diagnosis_top()}} to see the files or batches
@@ -52,6 +65,7 @@ with the largest value per check.\tabular{lll}{
    \code{cluster} \tab \code{\link[=sw_cluster_scores]{sw_cluster_scores()}} \tab \code{data} \cr
    \code{relativise} \tab \code{\link[=sw_relativise_diagnose]{sw_relativise_diagnose()}} \tab a fitted relativisation model \cr
    \code{otd} \tab \code{\link[=sw_otd_scores]{sw_otd_scores()}} \tab \code{data} \cr
+   \code{negative} \tab \code{\link[=sw_negative_audit]{sw_negative_audit()}} \tab \code{data} \cr
 }
 }
 \details{
@@ -77,7 +91,8 @@ dx <- sw_diagnose(
   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
   cluster = NULL,
   relativise = NULL,
-  otd = NULL
+  otd = NULL,
+  negative = NULL
 )
 sw_diagnosis_top(dx, n = 3)
 }

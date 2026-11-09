@@ -87,7 +87,8 @@ test_that("sw_diagnose runs the otd module", {
       seed = 1,
       max_iter = 500,
       tol = 1e-6
-    )
+    ),
+    negative = NULL
   )
   expect_equal(attr(dx, "modules"), "otd")
   expect_equal(nrow(dx), 4)

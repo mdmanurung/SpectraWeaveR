@@ -6,7 +6,7 @@
 #' Run the technical diagnostics and collect their numbers in one table
 #'
 #' @description
-#' Run any of seven diagnostic modules and stack what they return into one tidy
+#' Run any of eight diagnostic modules and stack what they return into one tidy
 #' table (`module`, `subject`, `check`, `item`, `value`, `text`). A module runs
 #' only when you give it a settings list; pass `NULL` to skip it. Nothing is
 #' marked pass or fail. Use [sw_diagnosis_top()] to see the files or batches
@@ -21,6 +21,7 @@
 #' | `cluster` | [sw_cluster_scores()] | `data` |
 #' | `relativise` | [sw_relativise_diagnose()] | a fitted relativisation model |
 #' | `otd` | [sw_otd_scores()] | `data` |
+#' | `negative` | [sw_negative_audit()] | `data` |
 #'
 #' @details
 #' **No defaults anywhere.** Each settings list holds the arguments of its
@@ -51,6 +52,8 @@
 #'   batches); it does not use `data`.
 #' @param otd `NULL` or a list with `markers`, `n_events`, `reference_events`,
 #'   `blur`, `seed`, `max_iter`, `tol`.
+#' @param negative `NULL` or a list with `channels`, `n_events`, `seed`,
+#'   `hyper_k`, `pairs`.
 #'
 #' @return A tibble of class `sw_diagnosis` with columns `module`, `subject`
 #'   (file, batch or batch pair), `check`, `item` (channel or marker, else
@@ -70,13 +73,24 @@
 #'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
 #'   cluster = NULL,
 #'   relativise = NULL,
-#'   otd = NULL
+#'   otd = NULL,
+#'   negative = NULL
 #' )
 #' sw_diagnosis_top(dx, n = 3)
 #' }
 #'
 #' @export
-sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativise, otd) {
+sw_diagnose <- function(
+  data,
+  header,
+  signal,
+  anomaly,
+  batch,
+  cluster,
+  relativise,
+  otd,
+  negative
+) {
   .sw_stop_missing(c(
     data = missing(data),
     header = missing(header),
@@ -85,9 +99,19 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativis
     batch = missing(batch),
     cluster = missing(cluster),
     relativise = missing(relativise),
-    otd = missing(otd)
+    otd = missing(otd),
+    negative = missing(negative)
   ))
-  modules <- c("header", "signal", "anomaly", "batch", "cluster", "relativise", "otd")
+  modules <- c(
+    "header",
+    "signal",
+    "anomaly",
+    "batch",
+    "cluster",
+    "relativise",
+    "otd",
+    "negative"
+  )
   for (nm in modules) {
     v <- get(nm)
     if (!is.null(v) && !is.list(v)) {
@@ -103,10 +127,11 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativis
         !is.null(anomaly) ||
         !is.null(batch) ||
         !is.null(cluster) ||
-        !is.null(otd))
+        !is.null(otd) ||
+        !is.null(negative))
   ) {
     stop(
-      "`data` is needed for the signal, anomaly, batch, cluster and otd modules.",
+      "`data` is needed for the signal, anomaly, batch, cluster, otd and negative modules.",
       call. = FALSE
     )
   }
@@ -235,6 +260,19 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativis
     ran <- c(ran, "otd")
   }
 
+  if (!is.null(negative)) {
+    ng <- do.call(sw_negative_audit, c(list(data = data), negative))
+    parts$negative <- tibble::tibble(
+      module = "negative",
+      subject = ng$file,
+      check = ng$check,
+      item = ng$channel,
+      value = ng$value,
+      text = ng$detail
+    )
+    ran <- c(ran, "negative")
+  }
+
   out <- dplyr::bind_rows(parts)
   attr(out, "modules") <- ran
   class(out) <- c("sw_diagnosis", class(out))
@@ -250,7 +288,10 @@ sw_diagnose <- function(data, header, signal, anomaly, batch, cluster, relativis
   "time_trend",
   "order_rho",
   "gain_z",
-  "gain_order_rho"
+  "gain_order_rho",
+  "neg_median_z",
+  "neg_sd_z",
+  "neg_corr_z"
 )
 .sw_diag_key <- function(check, value) {
   # A gain ratio departs from 1 either way, so its log size ranks.
