@@ -39,6 +39,8 @@ fault_order <- c(
   "clog",
   "spillover",
   "time_drift",
+  "rare_pop",
+  "composition",
   "batch_shift",
   "batch_stretch",
   "batch_bimodal",

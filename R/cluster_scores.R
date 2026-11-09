@@ -34,6 +34,11 @@
 #' with `seed`, and the caller's RNG state is restored. A file with fewer events
 #' than `n_events` is an error.
 #'
+#' **k-means warnings.** On large pools `stats::kmeans` may warn that its
+#' quick-transfer stage reached its step limit. The clusters are still returned.
+#' The warning is re-issued once with context, and attribute `kmeans_warnings`
+#' keeps its text, so you can see how often it happens.
+#'
 #' **Reference is the cohort.** The z-scores compare a file with the other
 #' files you pass. A fault shared by most files, or a real batch effect, shifts
 #' the reference too.
@@ -148,10 +153,28 @@ sw_cluster_scores <- function(
     if (nrow(unique(pool)) < k) {
       stop("`k` is larger than the number of distinct events.", call. = FALSE)
     }
-    km <- stats::kmeans(pool, centers = k, nstart = nstart, iter.max = 100)
-    list(km = km)
+    # Keep kmeans' own warnings (for example "Quick-TRANSfer stage steps
+    # exceeded maximum" on large pools) visible, but once and with context.
+    km_warn <- character(0)
+    km <- withCallingHandlers(
+      stats::kmeans(pool, centers = k, nstart = nstart, iter.max = 100),
+      warning = function(w) {
+        km_warn <<- c(km_warn, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(km = km, warnings = unique(km_warn))
   })
   km <- res$km
+  if (length(res$warnings) > 0) {
+    warning(
+      "k-means reported: ",
+      paste(res$warnings, collapse = "; "),
+      ". The clusters are still used; a larger `nstart` or a smaller pool ",
+      "(`n_events`) can help.",
+      call. = FALSE
+    )
+  }
   cl <- split(km$cluster, rep(files, each = n_events))[files]
 
   robust_z <- function(x) {
@@ -199,6 +222,7 @@ sw_cluster_scores <- function(
   }
   out <- dplyr::bind_rows(rows)
   attr(out, "centers") <- km$centers
+  attr(out, "kmeans_warnings") <- res$warnings
   class(out) <- c("sw_cluster_scores", class(out))
   out
 }

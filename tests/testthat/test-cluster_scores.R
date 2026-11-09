@@ -104,3 +104,38 @@ test_that("results do not depend on file order and keep the RNG state", {
   r2 <- cs(d[rev(names(d))])
   expect_equal(r1$value, r2$value)
 })
+
+test_that("kmeans warnings are kept in an attribute and re-issued once", {
+  res <- cs(make_pops())
+  expect_type(attr(res, "kmeans_warnings"), "character")
+  # A large pool of overlapping clusters can trigger the quick-transfer warning;
+  # whether it fires depends on the data, so only the contract is tested: if
+  # any warning was kept, it was also signalled as one clear message.
+  set.seed(3)
+  big <- lapply(1:12, function(i) {
+    cbind(A = stats::rnorm(20000), B = stats::rnorm(20000))
+  })
+  names(big) <- paste0("g", 1:12)
+  got <- NULL
+  out <- withCallingHandlers(
+    sw_cluster_scores(
+      big,
+      c("A", "B"),
+      k = 30,
+      n_events = 20000,
+      seed = 1,
+      nstart = 1,
+      min_cluster_events = 50
+    ),
+    warning = function(w) {
+      got <<- c(got, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  kept <- attr(out, "kmeans_warnings")
+  expect_equal(length(got) > 0, length(kept) > 0)
+  if (length(kept) > 0) {
+    expect_length(got, 1)
+    expect_match(got, "k-means reported")
+  }
+})

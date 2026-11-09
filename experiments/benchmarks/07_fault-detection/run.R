@@ -18,7 +18,8 @@ for (f in c(
   "anomaly_features",
   "anomaly_flag",
   "fcs_signal_audit",
-  "batch_scores"
+  "batch_scores",
+  "cluster_scores"
 )) {
   source(file.path("R", paste0(f, ".R")))
 }
@@ -43,6 +44,7 @@ FILES_PER_BATCH <- 12
 QSTEP <- 0.1
 NEV <- 500
 AGG <- 5000
+CLUSTER_K <- 6 # clusters for the cluster-level scores (illustrative)
 NTREES <- 300
 FOREST_SAMPLE <- 32
 CHANNELS <- paste0("C", seq_len(N_CH))
@@ -53,7 +55,9 @@ make_file <- function(mu) {
   jit <- matrix(stats::rnorm(3 * N_CH, 0, FILE_JITTER), 3)
   x <- mu[pop, ] + jit[pop, ] + matrix(stats::rnorm(N_EV * N_CH), N_EV)
   colnames(x) <- CHANNELS
-  cbind(Time = sort(stats::runif(N_EV, 0, 100)), x)
+  out <- cbind(Time = sort(stats::runif(N_EV, 0, 100)), x)
+  attr(out, "pop") <- pop # known population of each event, used by two faults
+  out
 }
 MU <- matrix(rep(c(-2, 0, 2), N_CH), nrow = 3)
 
@@ -116,6 +120,20 @@ FILE_FAULTS <- list(
     ch <- sample(CHANNELS, 1)
     x[, ch] <- x[, ch] + 0.03 * x[, "Time"] # about 3 SD over the run
     x
+  },
+  # One marker shifted by 1 in the rarest population only (20% of events).
+  rare_pop = function(x) {
+    ch <- sample(CHANNELS, 1)
+    r <- attr(x, "pop") == 3
+    x[r, ch] <- x[r, ch] + 1
+    x
+  },
+  # 40% of the events of the commonest population move to the rarest one's place.
+  composition = function(x) {
+    p1 <- which(attr(x, "pop") == 1)
+    moved <- sample(p1, floor(0.4 * length(p1)))
+    x[moved, CHANNELS] <- x[moved, CHANNELS] + 4
+    x
   }
 )
 
@@ -152,6 +170,18 @@ file_tool_scores <- function(files, seed) {
     fl <- sw_anomaly_flag_outlier(feat, NTREES, FOREST_SAMPLE, 1, 0.5, seed)
     forest <- fl$score[match(ids, fl$file)]
   }
+  # Cluster-level scores; also need complete data.
+  cl_median <- cl_freq <- rep(NA_real_, length(ids))
+  if (!any(with_na)) {
+    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30)
+    mx <- function(v) if (all(is.na(v))) NA_real_ else max(abs(v), na.rm = TRUE)
+    one <- function(check) {
+      a <- cs[cs$check == check, ]
+      vapply(split(a$value, a$file)[ids], mx, numeric(1))
+    }
+    cl_median <- one("median_z")
+    cl_freq <- one("freq_z")
+  }
   aud <- sw_fcs_signal_audit(
     files,
     CHANNELS,
@@ -180,7 +210,9 @@ file_tool_scores <- function(files, seed) {
     corr_shift = as.numeric(by("corr_shift")),
     time_trend = as.numeric(by_abs("time_trend")),
     median_z = as.numeric(by_abs("median_z")),
-    sd_z = as.numeric(by_abs("sd_z"))
+    sd_z = as.numeric(by_abs("sd_z")),
+    cluster_median_z = as.numeric(cl_median),
+    cluster_freq_z = as.numeric(cl_freq)
   )
 }
 

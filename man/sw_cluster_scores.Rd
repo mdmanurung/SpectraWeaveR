@@ -58,6 +58,11 @@ with at most 100 iterations. Events are drawn per file without replacement
 with \code{seed}, and the caller's RNG state is restored. A file with fewer events
 than \code{n_events} is an error.
 
+\strong{k-means warnings.} On large pools \code{stats::kmeans} may warn that its
+quick-transfer stage reached its step limit. The clusters are still returned.
+The warning is re-issued once with context, and attribute \code{kmeans_warnings}
+keeps its text, so you can see how often it happens.
+
 \strong{Reference is the cohort.} The z-scores compare a file with the other
 files you pass. A fault shared by most files, or a real batch effect, shifts
 the reference too.

@@ -17,6 +17,7 @@ those, because a different choice flags different files.
 | Drift of a marker inside one file | `sw_fcs_signal_audit()` | `time_trend` per channel |
 | One marker shifted, stretched or split in a file | `sw_fcs_signal_audit()` | `median_z`, `sd_z` per channel |
 | Wrong spillover or unmixing (channel-pair correlation) | `sw_fcs_signal_audit()` | `corr_shift` and the pair |
+| Change in a rare population, or in a file's composition | `sw_cluster_scores()` | `freq_z`, `median_z` per cluster |
 | File unlike the other files | `sw_anomaly_features()` + `sw_anomaly_flag_outlier()` | forest score per file |
 | File unlike a reference set | `sw_anomaly_features()` + `sw_anomaly_flag_novelty()` | log-density per file |
 | Batch effect per marker | `sw_batch_scores()` | pairwise EMD, median range, eta2, spread ratio, order drift |
@@ -41,7 +42,11 @@ dx <- sw_diagnose(
     aggregate_from = "all", agg_size = 5000,
     ntrees = 300, sample_size = 32, ndim = 1
   ),
-  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL)
+  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
+  cluster = list(
+    markers = chans, k = 6, n_events = 500, seed = 1, nstart = 3,
+    min_cluster_events = 30
+  )
 )
 sw_diagnosis_top(dx, n = 5)
 shiny::runApp(sw_qc_app(dx, n = 15, qc_report = NULL))
@@ -60,10 +65,14 @@ fault of that size, not how it will do on your cohort.
 ![Mean AUROC per injected fault and check, 10 seeds. Source data:
 `figures/fault-detection-matrix-source.csv`.](figures/fault-detection-matrix.png)
 
-- Thirteen of the 15 fault classes have a check with mean AUROC of 0.98 or
+- Fifteen of the 17 fault classes have a check with mean AUROC of 0.98 or
   higher (figure: `figures/fault-detection-matrix.png`). One check per class is
-  not enough to name a cause: `median_z` and `sd_z` also respond to saturation
-  and drift.
+  not enough to name a cause: `median_z`, `sd_z` and the cluster checks also
+  respond to saturation, drift and dead channels.
+- A shift confined to the rarest population (20% of events) is found by
+  `cluster_median_z` (AUROC 1.00) and, in this simulation, by `sd_z` (0.99); the
+  forest scores 0.63. A composition change is found by `cluster_freq_z` (1.00).
+  The cluster checks need `k`, which you choose, and were run with k = 6 here.
 - A symmetric split into two modes in a single marker is the weak case:
   best AUROC 0.67 (+/- 0.07) in a file and 0.86 (+/- 0.11, seeds from 0.57 to
   1.0) for a batch. In this mixture the split changes the SD by about 4%, which
@@ -75,9 +84,9 @@ fault of that size, not how it will do on your cohort.
 
 These limits come from the same benchmark and from benchmark v1.
 
-- A change confined to a rare cell population (20% of events) is invisible to
-  every file-level check. It needs a cluster-level feature, which this package
-  does not have yet.
+- A change in a population smaller than the 20% tested here, or one that falls
+  between your `k` clusters, may not be found. The benchmark did not vary the
+  population size or `k`.
 - A batch label confounded with biology (all cases in one batch) cannot be
   separated from a batch effect by any score here. Run `sw_design_audit()` first.
 - `median_z`, `sd_z` and the forest compare a file with the other files you pass.

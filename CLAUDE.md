@@ -24,6 +24,7 @@ SpectraWeaveR/
 │   ├── batch_scores.R            # Per-marker batch scores: pairwise EMD, median range, eta2, order drift
 │   ├── anomaly_features.R        # Per-file quantile + exact-EMD features; sw_emd_1d()
 │   ├── anomaly_flag.R            # Outlier (isolation forest) and novelty (GMM) flags
+│   ├── cluster_scores.R          # Cluster shares and per-cluster medians as robust z (rare-population checks)
 │   ├── cytoscan_wrap.R           # CytoScan and CytoTools wrappers (GPL, Suggests)
 │   ├── diagnose.R                # sw_diagnose(): stacks the diagnostic modules
 │   ├── fcs_header_audit.R        # FCS header audit against a reference file
@@ -107,7 +108,8 @@ SpectraWeaveR/
 | Signal audit | `sw_fcs_signal_audit()` | own code | per-file event matrices → numbers for saturation, dead channel, non-finite, event-rate and correlation shifts; no cutoffs |
 | Anomaly features and flags | `sw_anomaly_features()`, `sw_emd_1d()`, `sw_anomaly_flag_outlier()`, `sw_anomaly_flag_novelty()` | CytoScan method (clean rewrite); isotree, mclust (Suggests) | transformed per-file data → quantile + exact-EMD features → isolation-forest score or GMM log-density. Every cutoff is a required argument. |
 | Batch-effect scores | `sw_batch_scores()` | own code | per-file data + batch labels → pairwise EMD, median range, eta2, order drift per marker |
-| Diagnosis | `sw_diagnose()`, `sw_diagnosis_top()` | own code | stacks the header, signal, anomaly and batch modules into one table; no pass or fail |
+| Cluster scores | `sw_cluster_scores()` | own code (stats::kmeans) | per-file cluster shares and per-cluster marker medians as robust z against other files; `k`, `nstart`, events, seed and min events are required, no scaling |
+| Diagnosis | `sw_diagnose()`, `sw_diagnosis_top()` | own code | stacks the header, signal, anomaly, batch and cluster modules into one table; no pass or fail |
 | CytoScan family wrappers | `sw_cytoscan_run()`, `sw_cytoscan_preprocess_none()`, `sw_cytotools_header()` | CytoScan, CytoTools (GPL, wrapped from Suggests) | FCS paths → CytoScan flags with the caller's preprocess function |
 | QC plots and app | `sw_qc_plot()`, `sw_qc_heatmap()`, `sw_qc_app()` | PeacoQC (wrapped); layout adapted from iidx (Apache-2.0, see NOTICE) | QC result or diagnosis → PNG, heatmap, Shiny explorer |
 
