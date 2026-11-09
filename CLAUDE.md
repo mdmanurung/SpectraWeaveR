@@ -30,6 +30,7 @@ SpectraWeaveR/
 │   ├── fcs_header_audit.R        # FCS header audit against a reference file
 │   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation)
 │   ├── qc_app.R                  # sw_qc_app(): Shiny explorer (layout adapted from iidx, Apache-2.0)
+│   ├── relativise.R              # CD3 (reference-population) relativisation, Glehr et al. 2026
 │   ├── qc_plots.R                # PeacoQC plot and heatmap wrappers
 │   ├── cluster.R                 # Step 5: clustering (kohonen SOM / FastPG)
 │   ├── composable_pipeline.R     # S7 composable step and pipeline framework
@@ -110,6 +111,7 @@ SpectraWeaveR/
 | Batch-effect scores | `sw_batch_scores()` | own code | per-file data + batch labels → pairwise EMD, median range, eta2, order drift per marker |
 | Cluster scores | `sw_cluster_scores()` | own code (stats::kmeans) | per-file cluster shares and per-cluster marker medians as robust z against other files; `k`, `nstart`, events, seed and min events are required, no scaling |
 | Diagnosis | `sw_diagnose()`, `sw_diagnosis_top()` | own code | stacks the header, signal, anomaly, batch and cluster modules into one table; no pass or fail |
+| Reference relativisation | `sw_relativise_split_kmeans()`, `sw_relativise_fit()`, `sw_relativise_diagnose()`, `sw_relativise_apply()` | Glehr et al. 2026 Box 1 (clean rewrite from the paper) | linear controls + control map → per-channel offset and gain per unit → gain diagnostics → relativised linear data. Split scale, seed, nstart, min events, targets and `input_scale = "linear"` are required. Spec: `plans/2026-11-09_reference-relativisation.md` |
 | CytoScan family wrappers | `sw_cytoscan_run()`, `sw_cytoscan_preprocess_none()`, `sw_cytotools_header()` | CytoScan, CytoTools (GPL, wrapped from Suggests) | FCS paths → CytoScan flags with the caller's preprocess function |
 | QC plots and app | `sw_qc_plot()`, `sw_qc_heatmap()`, `sw_qc_app()` | PeacoQC (wrapped); layout adapted from iidx (Apache-2.0, see NOTICE) | QC result or diagnosis → PNG, heatmap, Shiny explorer |
 
