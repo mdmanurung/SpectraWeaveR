@@ -26,7 +26,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -111,7 +111,7 @@ correct_stage <- function(stage_dir) {
   xt <- as_tibble(x) |> mutate(sample_id = meta$sample_id, .before = 1)
   pop <- meta$cell_type
   engine <- if (method == "reversed_shift") "paired_shift" else if (method == "heb_shared") "heb_shared" else if (startsWith(method, "heb")) "heb" else method
-  heb_pool <- c(heb = "none", heb_flat = "none", heb_pool_pop = "population", heb_pool_all = "all", heb_shared = NA)[method]
+  heb_pool <- c(heb = "none", heb_afix = "none", heb_flat = "none", heb_pool_pop = "population", heb_pool_all = "all", heb_shared = NA)[method]
   hierarchy <- if (engine %in% c("heb", "heb_shared")) distinct(meta, batch, study) else NULL
   if (method == "heb_flat") {
     hierarchy$study <- hierarchy$batch # flat arm: one random effect per batch, no study level
@@ -121,7 +121,8 @@ correct_stage <- function(stage_dir) {
     population = pop[fit_rows], markers = markers, transform = TRANSFORM,
     anchor = anchor, engine = engine, min_cells = MIN_CELLS, seed = SEED,
     hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
-    pool = if (engine == "heb") unname(heb_pool) else NULL
+    pool = if (engine == "heb") unname(heb_pool) else NULL,
+    anchor_effect = if (engine == "heb") (if (method == "heb_afix") "fixed" else "random") else NULL
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.

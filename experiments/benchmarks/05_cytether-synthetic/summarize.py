@@ -30,6 +30,11 @@ N_BOOT = 10000  # resamples of seeds for the paired interval
 BOOT_SEED = 20261109  # fixed so the interval reproduces
 
 scores = pd.read_csv(sys.argv[1])
+# Scenario sets differ in which columns exist (no S5 or S12, no effects file): keep the summary running.
+for col in ["unsupported_unchanged_share", "heldout_share_changed", "heldout_ref_rmse_common_with_ps", "n_effects",
+            "cov90", "cov95", "effect_rmse", "fits_on_heldout", "ref_mode_ok", "protected_contrast_mae", "historical_max_delta"]:
+    if col not in scores.columns:
+        scores[col] = np.nan
 out = Path(sys.argv[2])
 ref = sys.argv[3]
 out.mkdir(parents=True, exist_ok=True)
@@ -94,7 +99,7 @@ for method in pcs.columns:
 pd.DataFrame(pc_rows).to_csv(out / "protected_contrast.csv", index=False)
 
 # Interval coverage of the engine's own effects on S4 and S9 (proposed rule: within 5 points of nominal; needs confirm).
-cov = scores[scores.stage.isin(["S4", "S9"]) & scores.n_effects.notna() & (scores.n_effects > 0)].groupby("method").agg(
+cov = scores[scores.stage.isin(PRIMARY_STAGES) & scores.n_effects.notna() & (scores.n_effects > 0)].groupby("method").agg(
     n_effects=("n_effects", "sum"), cov90=("cov90", "mean"), cov95=("cov95", "mean"), effect_rmse=("effect_rmse", "mean")).reset_index()
 cov["pass_proposed_within_0.05"] = ((cov.cov90 - 0.90).abs() <= 0.05) & ((cov.cov95 - 0.95).abs() <= 0.05)
 cov.to_csv(out / "coverage.csv", index=False)
