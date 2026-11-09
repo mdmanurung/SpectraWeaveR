@@ -1,0 +1,13 @@
+"fault","size","score","ci95_half","auroc"
+"shift",0.3,"max over 40 markers",0.122377748105544,0.555555555555556
+"shift",0.3,"injected marker only (oracle)",0.138678896978832,0.819547325102881
+"shift",0.5,"max over 40 markers",0.143187088990043,0.695884773662551
+"shift",0.5,"injected marker only (oracle)",0.118452923981028,0.809053497942387
+"shift",1,"max over 40 markers",0.152037764713947,0.735802469135802
+"shift",1,"injected marker only (oracle)",0.0498924571049804,0.949794238683128
+"stretch",1.1,"max over 40 markers",0.0720749311793571,0.462551440329218
+"stretch",1.1,"injected marker only (oracle)",0.102572406574264,0.59238683127572
+"stretch",1.3,"max over 40 markers",0.0488529474267619,0.564609053497942
+"stretch",1.3,"injected marker only (oracle)",0.0889306760911862,0.796502057613169
+"stretch",1.5,"max over 40 markers",0.112317174112334,0.68641975308642
+"stretch",1.5,"injected marker only (oracle)",0.0481104264867376,0.938271604938272

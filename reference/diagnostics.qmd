@@ -85,13 +85,48 @@ fault of that size, not how it will do on your cohort.
 - With labels shuffled, every check scores 0.50 to 0.54, so the benchmark does
   not reward noise.
 
+## How small a fault can be (simulation)
+
+`experiments/benchmarks/08_detection-limits/` puts one fault of a given size into
+12 of 72 simulated files and scores four checks over 6 seeds.
+
+![AUROC against effect size per check. Source data:
+`figures/detection-limits-source.csv`.](figures/detection-limits.png)
+
+- A one-marker shift is found well at 0.5 SD (`median_z` 0.99) and is near chance
+  at 0.2 SD or less. A one-marker stretch is found at x1.2 (`sd_z` 1.00) and not at
+  x1.05 (0.57). A 1 SD shift in a rare population is found when it holds 10% of
+  events (`cluster_median_z` 0.95), not at 5% (0.59) or 2% (0.49)
+  (figure: `figures/detection-limits.png`).
+- Changing `k` (3, 6, 12) or the number of faulty files (4, 12, 24) moved these
+  limits little; effect size sets them.
+
+## On real files: rank markers, not files
+
+Faults were injected into 36 real Aurora donor files of one batch (40 markers,
+OMIQ-transformed; 25% of files faulty, 10 seeds). The z-score of the hit marker
+finds a 1 SD shift at AUROC 0.95 and a x1.5 stretch at 0.94. Taking the largest
+|z| over all 40 markers per file drops these to 0.74 and 0.69
+(figure: `figures/real-injected-marker-level.png`). The hit-marker score knows
+which marker was hit, so it is an upper bound. Files differed little in these
+data: the SD of file medians was 0.10 of the pooled marker SD.
+
+![AUROC of the hit marker's own z against the largest |z| over 40 markers, real
+files. Source data: `figures/real-injected-marker-level-source.csv`.](figures/real-injected-marker-level.png)
+
+So `sw_diagnose()` keeps one row per file and marker, and `sw_diagnosis_top()`
+ranks within each check and marker. There is no per-file summary score; that
+was decided on 2026-11-09.
+
 ## What the checks cannot see
 
-These limits come from the same benchmark and from benchmark v1.
+These limits come from the benchmarks above and from benchmark v1.
 
-- A change in a population smaller than the 20% tested here, or one that falls
-  between your `k` clusters, may not be found. The benchmark did not vary the
-  population size or `k`.
+- A change in a population smaller than about 10% of events, or one that falls
+  between your `k` clusters, may not be found.
+- A one-marker shift below about 0.3 SD, or a stretch below about x1.2, is near
+  chance in simulation; on real files the per-marker score needs about 1 SD or
+  x1.5 for AUROC 0.95.
 - A batch label confounded with biology (all cases in one batch) cannot be
   separated from a batch effect by any score here. Run `sw_design_audit()` first.
 - `median_z`, `sd_z` and the forest compare a file with the other files you pass.

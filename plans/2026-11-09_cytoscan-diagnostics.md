@@ -105,6 +105,8 @@ the corrector contract and a decision on whether it fits the shift-based
 
 | Q12 | New `sw_qc_app()` for file-level QC. `sw_unmix_app()` untouched. | user |
 | Q13 | Widgets: cards (bslib) + ggiraph + shinycssloaders only. No shinyjs, shinyBS, bsplus, shinythemes, shinyWidgets. | user |
+| Q14 | File ranking: per-marker rows only, no per-file summary score (max over 40 markers cost about 0.2 AUROC on real files; `reference/figures/real-injected-marker-level.png`). | user, 2026-11-09 |
+| Q15 | Relativisation extensions E1 to E4 approved (per-batch controls, internal reference channel, `sw_diagnose()` modules, OTD). | user, 2026-11-09 |
 
 ## Final scope (awaiting go)
 
