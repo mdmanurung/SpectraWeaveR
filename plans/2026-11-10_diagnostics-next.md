@@ -107,3 +107,12 @@ files and the reference-only view (W7) is in the report.
 3. W4, W5, W6, W7 in parallel.
 4. W2 scorecard; ledger and `final_report.md`; docs and CLAUDE.md rows; tests; atomic commits.
 5. W8 when data and installs arrive.
+
+## Decisions answered (user, 2026-11-10)
+
+| Row | Answer |
+|---|---|
+| D1 consistency bar | Named check's mean real-file AUROC >= 0.90 over >= 5 seeds, lower 95% CI >= 0.80, shuffled-label null <= 0.55. |
+| D2 size per class | The smallest size already tested on real files; smaller sizes are listed as limits. |
+| D5 second dataset | Search public repositories; download only after the user approves a specific dataset. |
+| D8 faust | Install faust and scamp (GPL-3) now; then ask the FAUST choice rows F1 to F19. |
