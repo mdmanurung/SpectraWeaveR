@@ -51,7 +51,7 @@ Primary metric: held-out reference RMSE to truth, mean over S4, S9, S10, S11, 10
 
 Reading the table:
 - Sanity passes: the oracle scores 0 and `reversed_shift` is worse than `none`.
-- `naive_batch_center` wins this metric but has the worst protected-contrast ratio among the corrective methods that use references only on all-cell grounds (1.70 vs 1.00 for `paired_shift`). It is the unsafe stress control, as in the bundle.
+- `naive_batch_center` wins this metric but its protected-contrast error is 1.70 times that of `paired_shift` (cyCombine 2.93, CytoNorm 2.40, HEB-v0 0.94, none 2.41). It is the unsafe stress control, as in the bundle: low technical error with biology damaged.
 - HEB-v0 beats `paired_shift` by 0.012 at `min_cells = 10`. In a labelled diagnostic at `min_cells = 3` (not the approved setting) both score about 0.185 and the difference is -0.0007 [-0.0022, +0.0011]. So HEB-v0's gain comes from using summaries `paired_shift` drops, not from better shrinkage.
 - CytoNorm with the approved package defaults (15x15 SOM, 10 clusters) computes no quantiles where a batch has under 50 reference cells in a cluster. At 70 and 90 cells per unit it is data-limited here, and one seed scores 1.63. This is not a verdict on CytoNorm; the Z247 track is its fair test.
 - cyCombine ran in reference mode first; where ComBat failed because a cluster lacked anchor cells it ran with no reference batch (recorded in each `status.csv`).
