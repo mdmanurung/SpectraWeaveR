@@ -148,6 +148,20 @@ negative checks on a channel.
 ![AUROC per check for negative-population faults injected into real files.
 Source data: `figures/negative-faults-real-source.csv`.](figures/negative-faults-real.png)
 
+## Is the clustering stable enough to trust the cluster checks?
+
+`sw_cluster_stability()` reruns k-means with several seeds and subsample sizes
+and reports the adjusted Rand index and the share of events that change
+cluster. On the real Aurora files (500 events from each of 160 files, 5
+seeds), k = 6 gave identical partitions, k = 12 moved a median 12% of events
+between seeds (up to 21%), and k = 20 moved 29% (up to 43%)
+(figure: `figures/cluster-stability-real.png`). Two runs raised k-means
+quick-transfer warnings, so part of that may be non-convergence. Check the
+stability at your `k` before reading `cluster_median_z` or `cluster_freq_z`.
+
+![Seed and subsample agreement of k-means on real files, by k. Source data:
+`figures/cluster-stability-real-source.csv`.](figures/cluster-stability-real.png)
+
 ## What the checks cannot see
 
 - The negative checks assume a channel splits into a negative and a positive
