@@ -12,7 +12,8 @@ sw_cluster_stability(
   sizes,
   n_events,
   draw_seed,
-  nstart
+  nstart,
+  iter_max
 )
 }
 \arguments{
@@ -24,17 +25,21 @@ sw_cluster_stability(
 
 \item{seeds}{Whole numbers, at least two, one k-means run each.}
 
-\item{sizes}{Whole numbers, subsample sizes (each below the pool size).}
+\item{sizes}{Whole numbers, subsample sizes (each at least \code{k} and below
+the pool size).}
 
 \item{n_events}{Whole number of events drawn per file into the pool.}
 
 \item{draw_seed}{Whole number for the event draws.}
 
 \item{nstart}{Whole number of k-means random starts per run.}
+
+\item{iter_max}{Whole number, most k-means iterations per run.}
 }
 \value{
 A tibble with columns \code{check}, \code{item} (the seed pair \code{"s1 ~ s2"} or
-the size), and \code{value}. Attribute \code{pool_size} holds the pool's event count.
+the size), and \code{value}. Attribute \code{pool_size} holds the pool's event
+count; attribute \code{kmeans_warnings} holds any k-means warnings.
 }
 \description{
 Pool \code{n_events} events from each file, then:
@@ -52,9 +57,14 @@ one-to-one matching of cluster labels (greedy on the contingency table).
 Numbers only; nothing is marked unstable.
 }
 \details{
-\strong{No defaults.} \code{k}, \code{seeds}, \code{sizes}, \code{n_events}, \code{draw_seed} and \code{nstart}
-change the numbers, so each must be passed. The caller's RNG state is
-restored.
+\strong{No defaults.} \code{k}, \code{seeds}, \code{sizes}, \code{n_events}, \code{draw_seed}, \code{nstart}
+and \code{iter_max} change the numbers, so each must be passed. The caller's RNG
+state is restored.
+
+\strong{Non-converged runs are kept, not hidden.} A k-means run that stops at
+\code{iter_max} or hits the quick-transfer limit looks like seed instability. Its
+warnings are re-issued once and stored in attribute \code{kmeans_warnings}, so
+raise \code{iter_max} before reading low agreement as instability.
 
 \strong{Scale is yours.} Cluster on the scale you analyse; this function never
 transforms or scales.

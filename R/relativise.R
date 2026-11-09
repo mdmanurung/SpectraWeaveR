@@ -236,6 +236,9 @@ sw_relativise_diagnose <- function(model, batch, order) {
     if (!is.null(v) && (is.null(names(v)) || !all(units %in% names(v)))) {
       stop("`", arg, "` must be NULL or named with every unit.", call. = FALSE)
     }
+    if (!is.null(v) && anyDuplicated(names(v))) {
+      stop("`", arg, "` has duplicated names.", call. = FALSE)
+    }
   }
 
   long <- function(check, unit, value) {
@@ -251,6 +254,9 @@ sw_relativise_diagnose <- function(model, batch, order) {
   out <- c(out, list(long("gain_z", model$unit, gain_z)))
 
   by_channel <- split(model, model$channel)
+  if (!is.null(batch) && anyNA(batch[units])) {
+    stop("`batch` is NA for: ", paste(units[is.na(batch[units])], collapse = ", "), call. = FALSE)
+  }
   if (!is.null(batch)) {
     ratio <- lapply(by_channel, function(d) {
       b <- as.character(batch[d$unit])

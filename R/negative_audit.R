@@ -43,7 +43,8 @@
 #' RNG state is restored. mclust itself is deterministic.
 #'
 #' **What can go wrong.** A unimodal channel still gets two components; read
-#' `separation` before trusting the other numbers. A fit that fails gives `NA`
+#' `separation` before trusting the other numbers. A fit that fails, a
+#' constant channel, or a channel with missing or infinite values gives `NA`
 #' with the reason in `detail`.
 #'
 #' @param data A named list of numeric matrices, one per file, one column per
@@ -163,7 +164,8 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
       if (nrow(d) == 0) {
         return(NULL)
       }
-      v <- if (ck[[1]] == "neg_sd") log(d$value) else d$value
+      # A negative SD of 0 (ties) has no log; it becomes NA, not -Inf.
+      v <- if (ck[[1]] == "neg_sd") log(ifelse(d$value > 0, d$value, NA_real_)) else d$value
       d$value <- stats::ave(v, d$channel, FUN = robust_z)
       d$check <- ck[[2]]
       d$detail <- NA_character_
@@ -185,6 +187,10 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
     negative = rep(NA, length(v)),
     detail = NA_character_
   )
+  if (!all(is.finite(v))) {
+    empty$detail <- "non-finite values (see nonfinite_share in sw_fcs_signal_audit())"
+    return(empty)
+  }
   if (stats::sd(v) == 0) {
     empty$detail <- "constant channel"
     return(empty)

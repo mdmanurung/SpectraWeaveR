@@ -61,7 +61,8 @@ replacement with \code{seed}; a file with fewer events is an error. The caller's
 RNG state is restored. mclust itself is deterministic.
 
 \strong{What can go wrong.} A unimodal channel still gets two components; read
-\code{separation} before trusting the other numbers. A fit that fails gives \code{NA}
+\code{separation} before trusting the other numbers. A fit that fails, a
+constant channel, or a channel with missing or infinite values gives \code{NA}
 with the reason in \code{detail}.
 }
 \examples{

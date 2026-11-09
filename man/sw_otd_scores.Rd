@@ -54,6 +54,11 @@ did.
 and \code{tol} change the numbers. The reference draws the same number of events
 from each file (\code{reference_events / length(data)}, rounded down), so every
 file weighs the same. The caller's RNG state is restored.
+
+\strong{A file is part of its own reference.} As in the paper, the pool includes
+every file, and a file's draw may share events with its own slice of the
+pool. With many files this pulls each score down only a little; with few
+files it shrinks every score.
 }
 \seealso{
 \code{\link[=sw_sinkhorn_divergence]{sw_sinkhorn_divergence()}}, \code{\link[=sw_batch_scores]{sw_batch_scores()}}

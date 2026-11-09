@@ -280,7 +280,7 @@ sw_diagnose <- function(
 }
 
 # Checks whose sign only gives a direction: the size of the deviation is what
-# ranks. Novelty log-density is the other way round: low means unusual.
+# ranks. Some checks are the other way round: low means unusual.
 .sw_signed_checks <- c(
   "median_z",
   "sd_z",
@@ -291,28 +291,36 @@ sw_diagnose <- function(
   "gain_order_rho",
   "neg_median_z",
   "neg_sd_z",
+  "neg_corr",
   "neg_corr_z"
 )
+# Novelty log-density: low is unusual. GMM separation: a small value means the
+# channel did not split into a negative and a positive, so it ranks first.
+.sw_low_first_checks <- c("novelty_log_density", "separation")
 .sw_diag_key <- function(check, value) {
-  # A gain ratio departs from 1 either way, so its log size ranks.
-  ifelse(
-    check == "novelty_log_density",
-    -value,
-    ifelse(
-      check %in% .sw_signed_checks,
-      abs(value),
-      ifelse(check == "gain_batch_ratio", abs(log(value)), value)
-    )
-  )
+  key <- value
+  signed <- check %in% .sw_signed_checks
+  key[signed] <- abs(value[signed])
+  low <- check %in% .sw_low_first_checks
+  key[low] <- -value[low]
+  # A gain ratio departs from 1 either way, so its log size ranks. Only these
+  # rows are logged, so negative values elsewhere raise no warning.
+  ratio <- check == "gain_batch_ratio"
+  key[ratio] <- abs(log(value[ratio]))
+  key
 }
 
 #' Largest values per check in a diagnosis
 #'
 #' For each module and check, list the `n` subjects (files, batches or
 #' markers) with the largest value. No cutoff is applied. Signed checks
-#' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`) are ranked by the
-#' size of the value, ignoring its sign. For `novelty_log_density` the smallest
-#' values are the unusual ones, so that check is ranked from the lowest value.
+#' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`, `gain_z`,
+#' `gain_order_rho`, `neg_median_z`, `neg_sd_z`, `neg_corr`, `neg_corr_z`) are
+#' ranked by the size of the value, ignoring its sign. `gain_batch_ratio` is
+#' ranked by `abs(log(value))`. For `novelty_log_density` and `separation` the
+#' smallest values are the unusual ones, so those checks rank from the lowest
+#' value. Level values (`offset`, `gain`, `neg_median`, `neg_sd`, `neg_share`)
+#' rank by raw value; read their `_z` rows to rank deviations.
 #'
 #' @param diagnosis An `sw_diagnosis` result.
 #' @param n Whole number, rows kept per check.

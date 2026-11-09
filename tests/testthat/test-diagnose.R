@@ -178,3 +178,12 @@ test_that("the cluster module adds cluster rows with their cluster in the text",
   expect_setequal(unique(dx$check), c("freq_z", "median_z"))
   expect_true(all(grepl("^cluster [0-9]+; n_events=", dx$text)))
 })
+
+test_that("ranking keys: signed, low-first and ratio checks, without spurious warnings", {
+  key <- .sw_diag_key(
+    c("neg_corr", "separation", "gain_batch_ratio", "offset", "novelty_log_density"),
+    c(-0.9, 0.5, 0.5, -3, -10)
+  )
+  expect_equal(key, c(0.9, -0.5, abs(log(0.5)), -3, 10))
+  expect_no_warning(.sw_diag_key(c("offset", "gain_batch_ratio"), c(-5, 2)))
+})

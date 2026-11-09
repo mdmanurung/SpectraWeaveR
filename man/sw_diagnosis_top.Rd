@@ -17,9 +17,13 @@ A tibble with the same columns as the diagnosis plus \code{rank}.
 \description{
 For each module and check, list the \code{n} subjects (files, batches or
 markers) with the largest value. No cutoff is applied. Signed checks
-(\code{median_z}, \code{sd_z}, \code{freq_z}, \code{time_trend}, \code{order_rho}) are ranked by the
-size of the value, ignoring its sign. For \code{novelty_log_density} the smallest
-values are the unusual ones, so that check is ranked from the lowest value.
+(\code{median_z}, \code{sd_z}, \code{freq_z}, \code{time_trend}, \code{order_rho}, \code{gain_z},
+\code{gain_order_rho}, \code{neg_median_z}, \code{neg_sd_z}, \code{neg_corr}, \code{neg_corr_z}) are
+ranked by the size of the value, ignoring its sign. \code{gain_batch_ratio} is
+ranked by \code{abs(log(value))}. For \code{novelty_log_density} and \code{separation} the
+smallest values are the unusual ones, so those checks rank from the lowest
+value. Level values (\code{offset}, \code{gain}, \code{neg_median}, \code{neg_sd}, \code{neg_share})
+rank by raw value; read their \verb{_z} rows to rank deviations.
 }
 \examples{
 \dontrun{

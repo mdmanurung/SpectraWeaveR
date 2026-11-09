@@ -65,6 +65,11 @@ test_that("sw_otd_scores and the divergence stop on bad input", {
   expect_error(sw_otd_scores(files, "A", 10, 4, 1, 1, 10, 1e-6), "fewer")
   expect_error(sw_otd_scores(files, "Z", 2, 4, 1, 1, 10, 1e-6), "lacks")
   expect_error(sw_otd_scores(files["a"], "A", 2, 4, 1, 1, 10, 1e-6), "at least two")
+  expect_error(sw_otd_scores(files, "A", 2, 4, -1, 1, 10, 1e-6), "blur")
+  expect_error(sw_otd_scores(files, "A", 2, 4, 1, 1, 10, 0), "tol")
+  expect_error(sw_otd_scores(stats::setNames(files, c("a", "a")), "A", 2, 4, 1, 1, 10, 1e-6), "duplicated")
+  files$a[1, "A"] <- NA
+  expect_error(sw_otd_scores(files, "A", 2, 4, 1, 1, 10, 1e-6), "missing values")
 })
 
 test_that("sw_diagnose runs the otd module", {

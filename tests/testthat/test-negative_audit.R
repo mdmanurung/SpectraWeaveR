@@ -84,6 +84,11 @@ test_that("a constant channel gives NA with a reason, not an error", {
   row <- na[na$file == "f1" & na$channel == "C" & na$check == "neg_median", ]
   expect_true(is.na(row$value))
   expect_equal(row$detail, "constant channel")
+  files$f2[1, "A"] <- NA
+  na <- sw_negative_audit(files, c("A", "C"), 1500, seed = 1, hyper_k = 4, pairs = NULL)
+  row <- na[na$file == "f2" & na$channel == "A" & na$check == "neg_median", ]
+  expect_true(is.na(row$value))
+  expect_match(row$detail, "non-finite")
 })
 
 test_that("sw_diagnose runs the negative module", {
@@ -120,15 +125,18 @@ test_that("cluster stability: identical runs score 1, and well-separated cluster
     sizes = c(300, 1000),
     n_events = 500,
     draw_seed = 1,
-    nstart = 3
+    nstart = 3,
+    iter_max = 50
   )
   expect_identical(.Random.seed, before)
   expect_equal(attr(st, "pool_size"), 2000)
   expect_true(all(st$value[st$check == "ari_seed_pair"] > 0.99))
   expect_true(all(st$value[st$check == "moved_share_seed_pair"] < 0.01))
   expect_equal(sort(unique(st$item[st$check == "ari_size"])), c("1000", "300"))
-  expect_error(sw_cluster_stability(files, "A", 3, 1, 300, 500, 1, 3), "at least two")
-  expect_error(sw_cluster_stability(files, "A", 3, 1:2, 5000, 500, 1, 3), "below the pool")
+  expect_error(sw_cluster_stability(files, "A", 3, 1, 300, 500, 1, 3, 50), "two different")
+  expect_error(sw_cluster_stability(files, "A", 3, c(1, 1), 300, 500, 1, 3, 50), "two different")
+  expect_error(sw_cluster_stability(files, "A", 3, 1:2, 2, 500, 1, 3, 50), "at least `k`")
+  expect_error(sw_cluster_stability(files, "A", 3, 1:2, 5000, 500, 1, 3, 50), "below the pool")
 })
 
 test_that("ARI and moved share agree with hand-worked cases", {
@@ -137,4 +145,18 @@ test_that("ARI and moved share agree with hand-worked cases", {
   expect_equal(.sw_moved_share(a, c(2, 2, 3, 3, 1, 1)), 0)
   expect_equal(.sw_moved_share(a, c(1, 1, 2, 2, 3, 1)), 1 / 6)
   expect_lt(.sw_ari(a, c(1, 2, 3, 1, 2, 3)), 0)
+})
+
+test_that("cluster stability reports k-means non-convergence instead of hiding it", {
+  set.seed(10)
+  files <- list(a = matrix(stats::rnorm(4000), ncol = 2), b = matrix(stats::rnorm(4000), ncol = 2))
+  files <- lapply(files, \(m) {
+    colnames(m) <- c("A", "B")
+    m
+  })
+  expect_warning(
+    st <- sw_cluster_stability(files, c("A", "B"), 8, 1:2, 500, 2000, 1, 1, iter_max = 1),
+    "k-means warning"
+  )
+  expect_gt(length(attr(st, "kmeans_warnings")), 0)
 })

@@ -94,6 +94,11 @@ sw_sinkhorn_divergence <- function(x, y, blur, max_iter, tol) {
 #' from each file (`reference_events / length(data)`, rounded down), so every
 #' file weighs the same. The caller's RNG state is restored.
 #'
+#' **A file is part of its own reference.** As in the paper, the pool includes
+#' every file, and a file's draw may share events with its own slice of the
+#' pool. With many files this pulls each score down only a little; with few
+#' files it shrinks every score.
+#'
 #' @param data A named list of numeric matrices, one per file.
 #' @param markers Character vector of columns to use jointly.
 #' @param n_events Whole number of events drawn per file.
@@ -110,6 +115,16 @@ sw_otd_scores <- function(data, markers, n_events, reference_events, blur, seed,
   if (!is.list(data) || is.null(names(data)) || length(data) < 2) {
     stop("`data` must be a named list of at least two matrices.", call. = FALSE)
   }
+  if (anyDuplicated(names(data))) {
+    stop("`data` has duplicated file names.", call. = FALSE)
+  }
+  if (!is.numeric(blur) || length(blur) != 1 || !is.finite(blur) || blur <= 0) {
+    stop("`blur` must be one positive number.", call. = FALSE)
+  }
+  .sw_check_count(max_iter, "max_iter")
+  if (!is.numeric(tol) || length(tol) != 1 || !is.finite(tol) || tol <= 0) {
+    stop("`tol` must be one positive number.", call. = FALSE)
+  }
   .sw_check_count(n_events, "n_events")
   .sw_check_count(reference_events, "reference_events")
   .sw_check_count(seed, "seed")
@@ -121,6 +136,9 @@ sw_otd_scores <- function(data, markers, n_events, reference_events, blur, seed,
     absent <- setdiff(markers, colnames(data[[f]]))
     if (length(absent) > 0) {
       stop("File ", f, " lacks markers: ", paste(absent, collapse = ", "), call. = FALSE)
+    }
+    if (anyNA(data[[f]][, markers])) {
+      stop("File ", f, " has missing values in `markers`.", call. = FALSE)
     }
     if (nrow(data[[f]]) < max(n_events, per_file_ref)) {
       stop(

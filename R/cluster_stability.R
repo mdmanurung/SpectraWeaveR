@@ -22,9 +22,14 @@
 #' Numbers only; nothing is marked unstable.
 #'
 #' @details
-#' **No defaults.** `k`, `seeds`, `sizes`, `n_events`, `draw_seed` and `nstart`
-#' change the numbers, so each must be passed. The caller's RNG state is
-#' restored.
+#' **No defaults.** `k`, `seeds`, `sizes`, `n_events`, `draw_seed`, `nstart`
+#' and `iter_max` change the numbers, so each must be passed. The caller's RNG
+#' state is restored.
+#'
+#' **Non-converged runs are kept, not hidden.** A k-means run that stops at
+#' `iter_max` or hits the quick-transfer limit looks like seed instability. Its
+#' warnings are re-issued once and stored in attribute `kmeans_warnings`, so
+#' raise `iter_max` before reading low agreement as instability.
 #'
 #' **Scale is yours.** Cluster on the scale you analyse; this function never
 #' transforms or scales.
@@ -33,18 +38,31 @@
 #' @param markers Character vector of columns to cluster on.
 #' @param k Whole number of clusters.
 #' @param seeds Whole numbers, at least two, one k-means run each.
-#' @param sizes Whole numbers, subsample sizes (each below the pool size).
+#' @param sizes Whole numbers, subsample sizes (each at least `k` and below
+#'   the pool size).
 #' @param n_events Whole number of events drawn per file into the pool.
 #' @param draw_seed Whole number for the event draws.
 #' @param nstart Whole number of k-means random starts per run.
+#' @param iter_max Whole number, most k-means iterations per run.
 #'
 #' @return A tibble with columns `check`, `item` (the seed pair `"s1 ~ s2"` or
-#'   the size), and `value`. Attribute `pool_size` holds the pool's event count.
+#'   the size), and `value`. Attribute `pool_size` holds the pool's event
+#'   count; attribute `kmeans_warnings` holds any k-means warnings.
 #'
 #' @seealso [sw_cluster_scores()]
 #'
 #' @export
-sw_cluster_stability <- function(data, markers, k, seeds, sizes, n_events, draw_seed, nstart) {
+sw_cluster_stability <- function(
+  data,
+  markers,
+  k,
+  seeds,
+  sizes,
+  n_events,
+  draw_seed,
+  nstart,
+  iter_max
+) {
   if (!is.list(data) || is.null(names(data))) {
     stop("`data` must be a named list of matrices.", call. = FALSE)
   }
@@ -52,8 +70,9 @@ sw_cluster_stability <- function(data, markers, k, seeds, sizes, n_events, draw_
   .sw_check_count(n_events, "n_events")
   .sw_check_count(draw_seed, "draw_seed")
   .sw_check_count(nstart, "nstart")
-  if (length(seeds) < 2) {
-    stop("`seeds` must hold at least two seeds.", call. = FALSE)
+  .sw_check_count(iter_max, "iter_max")
+  if (length(seeds) < 2 || anyDuplicated(seeds)) {
+    stop("`seeds` must hold at least two different seeds.", call. = FALSE)
   }
   for (s in seeds) .sw_check_count(s, "seeds")
   for (s in sizes) .sw_check_count(s, "sizes")
@@ -72,12 +91,27 @@ sw_cluster_stability <- function(data, markers, k, seeds, sizes, n_events, draw_
       lapply(data, \(m) as.matrix(m[sample.int(nrow(m), n_events), markers, drop = FALSE]))
     )
   })
-  if (any(sizes >= nrow(pool))) {
-    stop("Every value in `sizes` must be below the pool size (", nrow(pool), ").", call. = FALSE)
+  if (any(sizes >= nrow(pool)) || any(sizes < k)) {
+    stop(
+      "Every value in `sizes` must be at least `k` and below the pool size (",
+      nrow(pool),
+      ").",
+      call. = FALSE
+    )
   }
 
+  km_warn <- character(0)
   run <- function(x, seed) {
-    .sw_with_seed(seed, suppressWarnings(stats::kmeans(x, centers = k, nstart = nstart)))
+    .sw_with_seed(
+      seed,
+      withCallingHandlers(
+        stats::kmeans(x, centers = k, nstart = nstart, iter.max = iter_max),
+        warning = function(w) {
+          km_warn <<- c(km_warn, conditionMessage(w))
+          invokeRestart("muffleWarning")
+        }
+      )
+    )
   }
   full <- lapply(seeds, \(s) run(pool, s)$cluster)
   pairs <- utils::combn(seq_along(seeds), 2)
@@ -104,7 +138,17 @@ sw_cluster_stability <- function(data, markers, k, seeds, sizes, n_events, draw_
     )
   })
   out <- dplyr::bind_rows(c(seed_rows, size_rows))
+  if (length(km_warn) > 0) {
+    warning(
+      length(km_warn),
+      " k-means warning(s), for example: ",
+      km_warn[[1]],
+      " Low agreement may be non-convergence; see attr(, \"kmeans_warnings\").",
+      call. = FALSE
+    )
+  }
   attr(out, "pool_size") <- nrow(pool)
+  attr(out, "kmeans_warnings") <- km_warn
   out
 }
 
