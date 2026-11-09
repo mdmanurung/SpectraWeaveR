@@ -22,19 +22,31 @@ CANDIDATE <- args[[1]]
 SHUFFLE <- length(args) > 1 && args[[2]] == "shuffle"
 
 # Benchmark settings (frozen) ------------------------------------------------
-SEEDS <- 1:10 # ten simulated cohorts
-N_CLEAN <- 60 # clean files per cohort
-N_BAD <- 12 # injected files per cohort
-N_CH <- 8 # channels
-N_EV <- 1000 # events per file
-FILE_JITTER <- 0.1 # SD of file-to-file population-mean jitter
+# Each value can be overridden by an environment variable (SW_<NAME>) for a
+# sensitivity run. The defaults are the frozen v1 values; the primary metric is
+# only ever reported at the defaults.
+env_num <- function(name, default) {
+  as.numeric(Sys.getenv(paste0("SW_", name), as.character(default)))
+}
+SEED_START <- env_num("SEED_START", 1)
+SEEDS <- SEED_START + 0:(env_num("N_SEEDS", 10) - 1) # simulated cohorts
+N_CLEAN <- env_num("N_CLEAN", 60) # clean files per cohort
+N_BAD <- env_num("N_BAD", 12) # injected files per cohort
+N_CH <- env_num("N_CH", 8) # channels
+N_EV <- env_num("N_EV", 1000) # events per file
+FILE_JITTER <- env_num("FILE_JITTER", 0.1) # SD of file-to-file population-mean jitter
+EFFECT_SCALE <- env_num("EFFECT_SCALE", 1) # multiplies every injected effect size
+N_CH_AFFECTED <- env_num("N_CH_AFFECTED", 1) # channels hit in an injected file
+POP_ONLY <- env_num("POP_ONLY", 0) == 1 # effect only on the rarest population
+SCORER <- Sys.getenv("SW_SCORER", "iforest") # iforest | novelty | robustz
 EFFECTS <- c("shift", "stretch", "bimodal") # injected effects, cycled over bad files
 # Feature and flag settings shared by every candidate (illustrative, not tuned):
-QSTEP <- 0.1
-NEV <- 500
-AGG <- 5000
-NTREES <- 300
-FOREST_SAMPLE <- 32
+QSTEP <- env_num("QSTEP", 0.1)
+NEV <- env_num("NEV", 500)
+AGG <- env_num("AGG", 5000)
+NTREES <- env_num("NTREES", 300)
+FOREST_SAMPLE <- env_num("FOREST_SAMPLE", 32)
+FOREST_NDIM <- env_num("FOREST_NDIM", 1)
 CHANNELS <- paste0("C", seq_len(N_CH))
 
 # Simulation -----------------------------------------------------------------
@@ -46,20 +58,24 @@ simulate_cohort <- function(seed) {
     jit <- matrix(stats::rnorm(3 * N_CH, 0, FILE_JITTER), 3)
     x <- mu[pop, ] + jit[pop, ] + matrix(stats::rnorm(N_EV * N_CH), N_EV)
     colnames(x) <- CHANNELS
+    attr(x, "pop") <- pop
     x
   }
   files <- lapply(seq_len(N_CLEAN + N_BAD), function(i) make_file())
   effect <- c(rep("clean", N_CLEAN), rep(EFFECTS, length.out = N_BAD))
   for (i in which(effect != "clean")) {
     x <- files[[i]]
-    ch <- sample(CHANNELS, 1)
-    v <- x[, ch]
-    x[, ch] <- switch(
-      effect[i],
-      shift = v + 0.5,
-      stretch = mean(v) + (v - mean(v)) * 1.5,
-      bimodal = v + sample(c(-0.5, 0.5), N_EV, replace = TRUE)
-    )
+    rows <- if (POP_ONLY) attr(x, "pop") == 3 else rep(TRUE, nrow(x))
+    for (ch in sample(CHANNELS, N_CH_AFFECTED)) {
+      v <- x[rows, ch]
+      x[rows, ch] <- switch(
+        effect[i],
+        shift = v + 0.5 * EFFECT_SCALE,
+        stretch = mean(v) + (v - mean(v)) * (1 + 0.5 * EFFECT_SCALE),
+        bimodal = v +
+          sample(c(-0.5, 0.5) * EFFECT_SCALE, length(v), replace = TRUE)
+      )
+    }
     files[[i]] <- x
   }
   ord <- sample(length(files)) # file order carries no label
@@ -101,14 +117,31 @@ res <- lapply(SEEDS, function(s) {
     agg_size = AGG,
     reference = ref
   )
-  fl <- sw_anomaly_flag_outlier(
-    feat,
-    ntrees = NTREES,
-    sample_size = FOREST_SAMPLE,
-    ndim = 1,
-    cutoff = 0.5,
-    seed = s
-  )
+  fl <- if (SCORER == "iforest") {
+    sw_anomaly_flag_outlier(
+      feat,
+      ntrees = NTREES,
+      sample_size = FOREST_SAMPLE,
+      ndim = FOREST_NDIM,
+      cutoff = 0.5,
+      seed = s
+    )
+  } else if (SCORER == "novelty") {
+    # Score = minus log-density; reference files are left out of the evaluation.
+    nv <- sw_anomaly_flag_novelty(feat, reference = ref, quantile = 0.05)
+    nv <- nv[nv$role == "test", ]
+    tibble(file = nv$file, score = -nv$log_density)
+  } else {
+    # Comparator: sum of robust z-scores over all features.
+    m <- as.matrix(feat[-1])
+    z <- sweep(
+      abs(sweep(m, 2, apply(m, 2, median))),
+      2,
+      apply(m, 2, mad) + 1e-12,
+      "/"
+    )
+    tibble(file = feat$file, score = rowSums(z))
+  }
   lab <- sim$effect[match(fl$file, ids)]
   if (SHUFFLE) {
     set.seed(1000 + s)
@@ -134,6 +167,8 @@ out <- list(
   candidate = CANDIDATE,
   shuffle = SHUFFLE,
   mean_auroc = by_effect$auroc[by_effect$effect == "all"],
+  # 95% interval of the mean over cohorts (normal approximation, few seeds).
+  ci95_half = 1.96 * sd(res$auroc[res$effect == "all"]) / sqrt(length(SEEDS)),
   by_effect = as.list(setNames(by_effect$auroc, by_effect$effect)),
   runtime_s = as.numeric(difftime(Sys.time(), t0, units = "secs"))
 )
