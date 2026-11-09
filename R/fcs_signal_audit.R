@@ -27,6 +27,12 @@
 #'   `time_channel` is given.
 #' * `max_gap`: largest gap between consecutive event times, as a multiple of
 #'   the median gap (file level). Only when `time_channel` is given.
+#' * `median_z`, `sd_z`: robust z-score of the file's median and of its SD in
+#'   a channel against all files, `(value - median) / (1.4826 * MAD)` over
+#'   files. A shift of one marker shows in `median_z`; a stretch or a split
+#'   into two modes widens the SD and shows in `sd_z`. The reference is the
+#'   cohort you pass, batch effects included, so a whole batch that differs
+#'   shifts the reference too. `NA` with fewer than 3 files.
 #' * `time_trend`: Spearman correlation of a channel with time, per channel. A
 #'   steady drift of a marker inside one acquisition (laser, fluidics or
 #'   detector drift) gives a value far from 0. Only when `time_channel` is
@@ -146,10 +152,17 @@ sw_fcs_signal_audit <- function(
       file = file,
       check = check,
       channel = channel,
-      value = value,
+      value = as.numeric(value), # as.numeric drops names carried by some inputs
       detail = detail
     )
   }
+  # Per file and channel median and SD, for the cohort z-scores below.
+  med_mat <- sd_mat <- matrix(
+    NA_real_,
+    length(files),
+    length(channels),
+    dimnames = list(files, channels)
+  )
   for (f in files) {
     m <- mats[[f]]
     add(f, "n_events", NA_character_, nrow(m))
@@ -165,6 +178,10 @@ sw_fcs_signal_audit <- function(
         as.numeric(length(vf) > 0 && stats::var(vf) == 0)
       )
       add(f, "negative_share", ch, if (length(vf)) mean(vf < 0) else NA_real_)
+      if (length(vf) > 1) {
+        med_mat[f, ch] <- stats::median(vf)
+        sd_mat[f, ch] <- stats::sd(vf)
+      }
       if (!is.null(lim_max)) {
         add(
           f,
@@ -208,14 +225,33 @@ sw_fcs_signal_audit <- function(
           f,
           "time_trend",
           ch,
-          suppressWarnings(stats::cor(
+          as.numeric(suppressWarnings(stats::cor(
             m[, ch],
             m[, time_channel],
             method = "spearman",
             use = "pairwise.complete.obs"
-          ))
+          )))
         )
       }
+    }
+  }
+
+  # Robust z of each file's median and SD against the other files, per channel:
+  # (value - median over files) / (1.4826 * MAD over files). NA with fewer than
+  # 3 files or when the spread over files is 0.
+  robust_z <- function(x) {
+    s <- 1.4826 * stats::mad(x, na.rm = TRUE)
+    if (sum(!is.na(x)) < 3 || is.na(s) || s == 0) {
+      return(rep(NA_real_, length(x)))
+    }
+    (x - stats::median(x, na.rm = TRUE)) / s
+  }
+  for (ch in channels) {
+    zm <- robust_z(med_mat[, ch])
+    zs <- robust_z(sd_mat[, ch])
+    for (j in seq_along(files)) {
+      add(files[j], "median_z", ch, zm[j])
+      add(files[j], "sd_z", ch, zs[j])
     }
   }
 

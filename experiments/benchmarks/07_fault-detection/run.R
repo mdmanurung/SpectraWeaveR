@@ -164,6 +164,11 @@ file_tool_scores <- function(files, seed) {
     a <- aud[aud$check == check, ]
     tapply(a$value, a$file, max, na.rm = TRUE)[ids]
   }
+  # Signed checks (time trend, z-scores): the size of the deviation is what counts.
+  by_abs <- function(check) {
+    a <- aud[aud$check == check, ]
+    tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids]
+  }
   tibble(
     file = ids,
     forest = forest,
@@ -173,14 +178,9 @@ file_tool_scores <- function(files, seed) {
     rate_cv = as.numeric(by("rate_cv")),
     max_gap = as.numeric(by("max_gap")),
     corr_shift = as.numeric(by("corr_shift")),
-    time_trend = as.numeric(
-      tapply(
-        abs(aud$value[aud$check == "time_trend"]),
-        aud$file[aud$check == "time_trend"],
-        max,
-        na.rm = TRUE
-      )[ids]
-    )
+    time_trend = as.numeric(by_abs("time_trend")),
+    median_z = as.numeric(by_abs("median_z")),
+    sd_z = as.numeric(by_abs("sd_z"))
   )
 }
 

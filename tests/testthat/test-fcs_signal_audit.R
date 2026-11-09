@@ -55,11 +55,32 @@ test_that("clean files give the base checks only", {
       "nonfinite_share",
       "zero_variance",
       "negative_share",
+      "median_z",
+      "sd_z",
       "corr_shift"
     )
   )
   expect_equal(val(res, "f1", "n_events"), 400)
   expect_equal(val(res, "f1", "zero_variance", "A"), 0)
+})
+
+test_that("median_z and sd_z flag a shifted and a stretched marker", {
+  d <- make_sig(n_files = 12, n = 800)
+  d$f2[, "A"] <- d$f2[, "A"] + 0.5
+  d$f3[, "B"] <- mean(d$f3[, "B"]) + (d$f3[, "B"] - mean(d$f3[, "B"])) * 1.5
+  # A split into two modes: +-0.5 on unit noise raises the SD by about 12%.
+  set.seed(4)
+  d$f4[, "C"] <- d$f4[, "C"] + sample(c(-0.5, 0.5), 800, replace = TRUE)
+  res <- audit(d)
+  expect_gt(val(res, "f2", "median_z", "A"), 3)
+  expect_gt(val(res, "f3", "sd_z", "B"), 3)
+  expect_gt(val(res, "f4", "sd_z", "C"), 2)
+  # The same files are not flagged on the other channels.
+  expect_lt(abs(val(res, "f2", "median_z", "B")), 3)
+  expect_lt(abs(val(res, "f1", "sd_z", "B")), 3)
+  # Fewer than 3 files: no z-score.
+  two <- audit(make_sig(n_files = 2))
+  expect_true(all(is.na(two$value[two$check %in% c("median_z", "sd_z")])))
 })
 
 test_that("a dead channel, non-finite values and saturation are found", {
