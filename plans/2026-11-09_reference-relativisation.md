@@ -82,6 +82,21 @@ not the biology.
   gain, per-sample CD3 controls, and donor-to-donor CD3 variation (A1 broken on purpose). Score:
   per-channel pairwise EMD between batches on an arcsinh scale, before and after. Figure saved and
   inspected.
+- Result (run `experiments/runs/2026-11-09_relativisation-v2`, figure `fig_relativisation.png`,
+  inspected; 4 batches x 8 donors, 6 channels, 5 seeds). Median largest batch-pair EMD per channel,
+  arcsinh scale:
+
+  | CD3 donor log SD | observed | per sample | per batch (E1) | no instrument |
+  |---|---|---|---|---|
+  | 0 | 0.179 | 0.037 | 0.038 | 0.034 |
+  | 0.1 | 0.234 | 0.044 | 0.038 | 0.040 |
+  | 0.3 | 0.164 | 0.066 | 0.034 | 0.035 |
+
+  Median per-file OTD (blur 0.75) tells the same story: at log SD 0.3 it is 0.0322 observed,
+  0.0236 per sample, 0.0103 per batch and 0.0097 with no instrument; every solve converged.
+  Per-sample relativisation inherits donor CD3 variation; E1 does not, because its reference is one
+  fixed material per batch. The simulation has no technical variation inside a batch, which E1
+  cannot remove.
 - Real data: not possible on the Aurora run folder. Its files are OMIQ-transformed (A2 unknown)
   and it has no CD3 controls.
 
