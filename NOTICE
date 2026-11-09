@@ -1,0 +1,15 @@
+SpectraWeaveR
+Copyright (c) SpectraWeaveR authors. MIT license (see LICENSE).
+
+This package includes material adapted from other software.
+
+iidx (https://github.com/saeyslab/iidx)
+  Copyright 2025 David Novak
+  Licensed under the Apache License, Version 2.0.
+  Adapted in: R/qc_app.R (page CSS for the card look and the idea of a spinner
+  wrapper). The adapted parts were rewritten for bslib cards and for the
+  sw_diagnosis table; no differential-expression code is used.
+  The licence text is in inst/licenses/iidx-Apache-2.0.txt.
+
+PeacoQC, CytoScan and CytoTools are GPL packages. This package calls them from
+Suggests or Imports and does not contain their code.
