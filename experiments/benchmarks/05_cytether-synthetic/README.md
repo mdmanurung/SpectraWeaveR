@@ -9,7 +9,8 @@ Plan: `plans/cytether_benchmark_plan.md` and `plans/cytether_benchmark_strategy.
 | 1 | `gen_data.py` | Bundle simulator for S0 to S12 per seed (70 cells per participant, 90 per reference aliquot). Seed 431 reproduces the bundle files exactly. |
 | 2 | `export_observed.py` | Writes `observed_X.csv.gz` so R reads the data without the truth file. |
 | 3 | `run_method.R` | One method over all stages of one seed. Fit uses initial, non-holdout reference cells only. Held-out reference cells never calibrate. |
-| 4 | `evaluate.py` | The only script that reads `truth_EVALUATION_ONLY.npz`. |
+| 4 | `evaluate.py` | With `diag_mismatch.py`, one of the two evaluation-only scripts that reads `truth_EVALUATION_ONLY.npz`. |
+| diag | `diag_a9_modes.R`, `diag_mismatch.py` | A9 mode per population x marker (refit, no truth), then effect error against mode mismatch (reads truth; evaluation only, user C4 2026-11-10). |
 | 5 | `summarize.py` | Primary table with seed-level paired bootstrap, guardrail table, figure. |
 | all | `run_all.sh` | Steps 3 to 5 for a seed set. |
 
