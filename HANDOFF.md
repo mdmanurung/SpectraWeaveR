@@ -1,6 +1,6 @@
 # Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
 
-**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 112/150
+**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 114/150
 
 ## Check first
 Run `git log --oneline c16607f..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
@@ -9,7 +9,7 @@ Run `git log --oneline c16607f..HEAD` and `git status --short`. If either shows 
 Active /goal: "work autonomously until we can consistently diagnose for any technical problems including but not limited to batch effects extensively". Bar per fault class: real-file AUROC mean >= 0.90, lower 95% CI >= 0.80 (D1). tusoskill ledger target 150 (G4); stop gate: `/usr/bin/python3.12 /home/mdmanurung/.claude/skills/tusoskill/scripts/biomni_method_state.py stop-check --root experiments/runs/2026-11-09_tusoskill`.
 
 ## Next action
-Add the FAUST and two-way results as tusoskill ledger entries (112 → 114), then pick the next gap from Open items with the user. Nothing is running.
+Pick the next gap from Open items with the user. Nothing is running.
 
 ## State
 - All work committed through c16607f: two-way residual (G10), FAUST forest depth (G11), G13, `match_by = "marker_state"` (G14), FAUST script and results.
@@ -45,6 +45,6 @@ Add the FAUST and two-way results as tusoskill ledger entries (112 → 114), the
 - `experiments/runs/2026-11-09_tusoskill/reports/final_round2.md` — outdated; write `final_round3.md` at the end.
 
 ## Open items
-- Ledger 112 → 150: 38 iterations left; replenish from diagnosis (e.g. test detector-noise cause with unstained/negative SD per instrument — needs user approval of the design). lean (not a decision): ask before any new impactful choice.
+- Ledger 114 → 150: 36 iterations left; replenish from diagnosis (e.g. test detector-noise cause with unstained/negative SD per instrument — needs user approval of the design). lean (not a decision): ask before any new impactful choice.
 - Batch split ±0.5 SD (0.68) — stays a documented limit unless the user wants another design. lean (not a decision): document.
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.
