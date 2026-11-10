@@ -30,6 +30,7 @@ ARMS = {
     "lead": "heb_pool_pop_kv_bap",
     "anchor": "heb_pool_pop_kv_bap_anc",
     "anchor_d": "heb_pool_pop_kv_bap_anc_d",  # plan A11; skipped where not run
+    "anchor_u": "heb_pool_pop_kv_bap_anc_u",  # plan A13; skipped where not run
 }
 N_BOOT = 10000  # seed resamples for the mean-slope interval
 BOOT_SEED = 20261109  # same as summarize.py
@@ -180,6 +181,8 @@ def main():
             ("anchor", "nd0"),
             ("anchor_d", "nd1"),
             ("anchor_d", "nd0"),
+            ("anchor_u", "nd1"),
+            ("anchor_u", "nd0"),
         ]
         if ((em.arm == arm) & (em.cls == cls)).any()
     ]

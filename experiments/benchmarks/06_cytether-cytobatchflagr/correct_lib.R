@@ -82,7 +82,8 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
     variance_prior = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_bap", "heb_kv_bap_anc")) "boundary_avoiding" else "none") else NULL,
     residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv", "heb_kv_bap_anc")) "known_plus_extra" else "estimated") else NULL,
     anchors = if (is_heb) heb_anchors else NULL,
-    anchor_discrepancy = if (is_heb) (if (endsWith(method, "_anc_d")) "batch" else "none") else NULL # plan A11
+    anchor_discrepancy = if (is_heb) (if (endsWith(method, "_anc_d")) "batch" else "none") else NULL, # plan A11
+    anchor_batches = if (is_heb) "all" else NULL # plan A13; T6 (A8) keeps anchors in every batch
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")
