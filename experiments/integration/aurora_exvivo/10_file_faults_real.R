@@ -132,6 +132,10 @@ long <- lapply(SEEDS, function(seed) {
       max_gap = row_of("max_gap", NA),
       time_trend = row_of("time_trend", pick[2]),
       corr_shift = row_of("corr_shift", NA),
+      # The injected pair's row (oracle, like the channel rows), and the largest over all pairs.
+      # Pair names follow the channel order of `ch`.
+      corr_pair_z = row_of("corr_pair_z", paste(pick[order(match(pick, ch))], collapse = " ~ ")),
+      corr_pair_z_max = row_of("corr_pair_z", unique(sa$channel[sa$check == "corr_pair_z"])),
       median_z = row_of("median_z", pick[2]),
       sd_z = row_of("sd_z", pick[2])
     )
