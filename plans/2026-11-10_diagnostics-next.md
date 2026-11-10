@@ -131,3 +131,5 @@ files and the reference-only view (W7) is in the report.
 | G8 FAUST markers | 37 markers: drop AF1-A, AF-A and LIVE DEAD NIR-A. |
 | G9 reference_group details | Confirmed: global_sd_z cohort SD within group; agg_size per group; batch scores skip groups with < 2 batches, order_rho within group, median over groups per row; benchmark on asinh(x/6000), 30 shared markers. |
 | G10 next for the four limits | Two-way residual: robust z of the value after removing donor and batch medians (median polish); test on the CBF donor-by-batch design. |
+| G11 FAUST annotationForestDepth | 3 (FAUST default), passed explicitly. |
+| G12 FAUST prop_by_batch | Range over batches of the per-batch median share, before and after correction. |
