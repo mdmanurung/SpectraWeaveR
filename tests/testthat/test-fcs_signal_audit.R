@@ -58,7 +58,8 @@ test_that("clean files give the base checks only", {
       "median_z",
       "sd_z",
       "corr_shift",
-      "corr_pair_z"
+      "corr_pair_z",
+      "global_sd_z"
     )
   )
   expect_equal(val(res, "f1", "n_events"), 400)
@@ -161,6 +162,23 @@ test_that("limits can be per channel and must cover every channel", {
   expect_true("saturation_share" %in% res$check)
   expect_error(audit(d, time_channel = "Time"), "time_bin")
   expect_error(audit(d, time_channel = "T2", time_bin = 1), "lacks column")
+})
+
+test_that("global_sd_z finds a file widened a little in every channel", {
+  set.seed(31)
+  files <- lapply(1:12, function(i) {
+    w <- if (i == 7) 1.15 else 1
+    m <- matrix(stats::rnorm(800 * 6, sd = w), ncol = 6)
+    colnames(m) <- paste0("c", 1:6)
+    m
+  })
+  names(files) <- paste0("f", 1:12)
+  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL)
+  g <- au[au$check == "global_sd_z", ]
+  expect_equal(nrow(g), 12)
+  expect_true(all(is.na(g$channel)))
+  expect_equal(g$file[which.max(g$value)], "f7")
+  expect_gt(max(g$value), 3)
 })
 
 test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has one row per pair", {

@@ -348,6 +348,7 @@ sw_diagnose <- function(
   "neg_corr",
   "neg_corr_z",
   "corr_pair_z",
+  "global_sd_z",
   "spill_corr",
   "spill_corr_z",
   "kept_share_z",

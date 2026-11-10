@@ -79,8 +79,10 @@ long <- lapply(SEEDS, function(seed) {
     sd_z <- sa[sa$check == "sd_z" & sa$channel == b, ]
     cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
     fz <- cs[cs$check == "freq_z", ]
+    gz <- sa[sa$check == "global_sd_z", ]
     scores <- list(
       sd_z_one_marker = abs(sd_z$value[match(names(files), sd_z$file)]),
+      global_sd_z = abs(gz$value[match(names(files), gz$file)]),
       cluster_freq_z = as.numeric(tapply(abs(fz$value), fz$file, top)[names(files)])
     )
     if (startsWith(fault, "composition")) {

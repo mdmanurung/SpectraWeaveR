@@ -33,6 +33,12 @@
 #'   into two modes widens the SD and shows in `sd_z`. The reference is the
 #'   cohort you pass, batch effects included, so a whole batch that differs
 #'   shifts the reference too. `NA` with fewer than 3 files.
+#' * `global_sd_z`: per file, the median over channels of
+#'   `log(file SD / cohort median SD)`, as a robust z over files (file level).
+#'   A fault that widens or narrows every channel a little (a gain or focus
+#'   change) shows here even when no single channel's `sd_z` stands out. It is
+#'   a check of its own, not a summary of the other rows. `NA` with fewer than
+#'   3 files.
 #' * `time_trend`: Spearman correlation of a channel with time, per channel. A
 #'   steady drift of a marker inside one acquisition (laser, fluidics or
 #'   detector drift) gives a value far from 0. Only when `time_channel` is
@@ -260,6 +266,18 @@ sw_fcs_signal_audit <- function(
       add(files[j], "median_z", ch, zm[j])
       add(files[j], "sd_z", ch, zs[j])
     }
+  }
+  # File-wide spread change (user decision 2026-11-10): per file, the median
+  # over channels of log(file SD / cohort median SD), as a robust z over files.
+  # A fault that widens every channel a little shows here, not in any one row.
+  cohort_sd <- apply(sd_mat, 2, stats::median, na.rm = TRUE)
+  log_ratio <- log(sweep(sd_mat, 2, cohort_sd, "/"))
+  log_ratio[!is.finite(log_ratio)] <- NA_real_
+  global <- apply(log_ratio, 1, stats::median, na.rm = TRUE)
+  global[is.nan(global)] <- NA_real_
+  zg <- robust_z(global)
+  for (j in seq_along(files)) {
+    add(files[j], "global_sd_z", NA_character_, zg[j])
   }
 
   # Channel-pair Spearman correlation against the cohort median per pair.

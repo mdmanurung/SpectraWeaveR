@@ -64,6 +64,12 @@ files. A shift of one marker shows in \code{median_z}; a stretch or a split
 into two modes widens the SD and shows in \code{sd_z}. The reference is the
 cohort you pass, batch effects included, so a whole batch that differs
 shifts the reference too. \code{NA} with fewer than 3 files.
+\item \code{global_sd_z}: per file, the median over channels of
+\verb{log(file SD / cohort median SD)}, as a robust z over files (file level).
+A fault that widens or narrows every channel a little (a gain or focus
+change) shows here even when no single channel's \code{sd_z} stands out. It is
+a check of its own, not a summary of the other rows. \code{NA} with fewer than
+3 files.
 \item \code{time_trend}: Spearman correlation of a channel with time, per channel. A
 steady drift of a marker inside one acquisition (laser, fluidics or
 detector drift) gives a value far from 0. Only when \code{time_channel} is
