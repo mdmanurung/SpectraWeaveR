@@ -69,7 +69,8 @@ correct_t6 <- function(x, meta, population, method, markers) {
     min_cells = MIN_CELLS, seed = 1, hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (method == "heb") HEB_POOL else NULL,
     anchor_effect = if (method == "heb") "random" else NULL,
-    variance_prior = if (method == "heb") "none" else NULL # N4 as approved; F6 is tested on synthetic dev first
+    variance_prior = if (method == "heb") "none" else NULL, # N4 as approved; F6/F8 are tested on synthetic dev first
+    residual_model = if (method == "heb") "estimated" else NULL
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")

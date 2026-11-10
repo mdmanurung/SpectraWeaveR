@@ -70,7 +70,8 @@ NULL
     population = character(),
     marker = character(),
     value = double(),
-    n_cells = integer()
+    n_cells = integer(),
+    var_mean = double()
   )
   if (nrow(ref) == 0) {
     return(list(summ = empty, excluded = .sw_empty_excluded()))
@@ -115,6 +116,13 @@ NULL
       apply(xm[ii, , drop = FALSE], 2, function(v) mean(sort(v)))
     })
   )
+  # Sampling variance of each mean, var(cells) / n; used by heb residual_model = "known_plus_extra".
+  var_means <- do.call(
+    rbind,
+    lapply(groups[keep], function(ii) {
+      apply(xm[ii, , drop = FALSE], 2, stats::var) / length(ii)
+    })
+  )
   k <- which(keep)
   n_m <- length(markers)
   summ <- tibble::tibble(
@@ -124,7 +132,8 @@ NULL
     population = rep(info$population[k], each = n_m),
     marker = rep(markers, length(k)),
     value = as.vector(t(means)),
-    n_cells = rep(as.integer(n[k]), each = n_m)
+    n_cells = rep(as.integer(n[k]), each = n_m),
+    var_mean = as.vector(t(var_means))
   )
   list(summ = summ, excluded = excluded)
 }

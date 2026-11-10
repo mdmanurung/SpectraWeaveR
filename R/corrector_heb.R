@@ -24,6 +24,9 @@
 #' \code{"boundary_avoiding"} for the gamma(2) prior of Chung et al. (2013) on
 #' the study and run standard deviations, which keeps them off zero when one
 #' donor per batch cannot separate them from the residual.
+#' \code{residual_model} (required) is \code{"estimated"} for one residual
+#' variance, or \code{"known_plus_extra"}: each summary's residual is its known
+#' sampling variance, var(cells) / n, plus one estimated extra variance.
 #' \code{se_donor} holds the posterior standard error of the effect, from the
 #' prediction error covariance; \code{df} holds its Satterthwaite degrees of
 #' freedom from the inverse REML information, with components at the floor
@@ -37,10 +40,11 @@
 NULL
 
 # Negative REML log-likelihood (up to a constant) for log variance components.
-# V = th1 * M1 + th2 * M2 + th3 * I, with M1 = Z K1 Z' and M2 = Z K2 Z'.
-.sw_heb_reml <- function(log_theta, y, X, M1, M2) {
+# V = th1 * M1 + th2 * M2 + th3 * I + diag(D), with M1 = Z K1 Z' and M2 = Z K2 Z'.
+# D holds known sampling variances of the summaries (residual_model = "known_plus_extra"), else 0.
+.sw_heb_reml <- function(log_theta, y, X, M1, M2, D = 0) {
   th <- exp(log_theta)
-  V <- th[[1]] * M1 + th[[2]] * M2 + th[[3]] * diag(length(y))
+  V <- th[[1]] * M1 + th[[2]] * M2 + diag(th[[3]] + D, length(y))
   R <- tryCatch(chol(V), error = function(e) NULL)
   if (is.null(R)) {
     return(1e10)
@@ -64,7 +68,7 @@ NULL
 # anchor_effect = "fixed": the anchor-relative effects b_b = beta_b - beta_anchor are the random
 #   effects, b_anchor = 0 exactly, with covariance
 #   tau_s^2 (S_ij - S_ia - S_ja + 1) + tau_b^2 (delta_ij + 1), S = same-study indicator (derivation v1).
-.sw_heb_design <- function(d, hier, anchor, anchor_effect) {
+.sw_heb_design <- function(d, hier, anchor, anchor_effect, residual_model) {
   batches <- sort(unique(d$batch))
   if (length(batches) < 2 || !anchor %in% batches) {
     return(NULL)
@@ -99,7 +103,9 @@ NULL
     # Donor indicators; outer() also covers a design with one donor, which model.matrix refuses.
     X = outer(d$reference_id, sort(unique(d$reference_id)), `==`) * 1,
     Z = Z, K1 = K1, K2 = K2, L = L,
-    M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z)
+    M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z),
+    # Known part of each summary's residual variance: var(cells) / n (Fay-Herriot style).
+    D = if (residual_model == "known_plus_extra") d$var_mean else rep(0, nrow(d))
   )
 }
 
@@ -114,7 +120,7 @@ NULL
   scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
   penalty <- if (variance_prior == "boundary_avoiding") function(lt) -0.5 * (lt[[1]] + lt[[2]]) else function(lt) 0
   obj <- function(lt) {
-    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2), numeric(1))) + penalty(lt)
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2, z$D), numeric(1))) + penalty(lt)
   }
   lo <- rep(log(variance_floor), 3)
   fit <- stats::optim(
@@ -141,10 +147,22 @@ NULL
 #   C = [X'X, X'Z; Z'X, Z'Z + sigma^2 G^-1],  C [b; u] = [X'y; Z'y],  PEV(u) = sigma^2 (C^-1)_uu.
 # Same model as V-based GLS; the form G - G Z'PZ G cancels catastrophically once G / sigma^2
 # exceeds about 1e6, which happens when sigma^2 is near the floor.
+# With known sampling variances D the residual is heteroscedastic, R = diag(th3 + D), and the
+# unscaled equations are used: C = W' R^-1 W + [0, 0; 0, G^-1], PEV(u) = (C^-1)_uu.
 .sw_heb_pev <- function(z, th) {
   G <- th[[1]] * z$K1 + th[[2]] * z$K2
   p <- ncol(z$X)
   W <- cbind(z$X, z$Z)
+  if (any(z$D > 0)) {
+    rinv <- 1 / (th[[3]] + z$D)
+    C <- crossprod(W * sqrt(rinv))
+    iu <- p + seq_len(ncol(z$Z))
+    C[iu, iu] <- C[iu, iu] + solve(G)
+    R <- chol(C)
+    sol <- backsolve(R, forwardsolve(t(R), crossprod(W, rinv * z$y)))
+    Cinv_uu <- chol2inv(R)[iu, iu, drop = FALSE]
+    return(list(u = sol[iu], var = pmax(rowSums((z$L %*% Cinv_uu) * z$L), 0)))
+  }
   C <- crossprod(W)
   iu <- p + seq_len(ncol(z$Z))
   C[iu, iu] <- C[iu, iu] + th[[3]] * solve(G)
@@ -182,7 +200,7 @@ NULL
 }
 
 .sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
-                        variance_prior, ...) {
+                        variance_prior, residual_model, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -197,6 +215,9 @@ NULL
   }
   if (missing(variance_prior) || !variance_prior %in% c("none", "boundary_avoiding")) {
     stop("heb needs variance_prior = 'none' or 'boundary_avoiding' (no default).", call. = FALSE)
+  }
+  if (missing(residual_model) || !residual_model %in% c("estimated", "known_plus_extra")) {
+    stop("heb needs residual_model = 'estimated' or 'known_plus_extra' (no default).", call. = FALSE)
   }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
@@ -213,7 +234,7 @@ NULL
   )
   key <- paste(s$summ$population, s$summ$marker, sep = "\r")
   designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
-    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor, anchor_effect)
+    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor, anchor_effect, residual_model)
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
   # Which designs share variance components.

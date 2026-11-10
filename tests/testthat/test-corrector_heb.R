@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", seed = 1, ...
   )
 }
 
@@ -83,7 +83,7 @@ test_that("heb needs pool and pooled variance runs", {
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -115,7 +115,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-      anchor_effect = "random", seed = 1
+      anchor_effect = "random", residual_model = "estimated", seed = 1
     ),
     "variance_prior"
   )
@@ -129,10 +129,29 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
     s1$x, s1$manifest, s1$audit, population = rep("T", nrow(s1$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s1$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "boundary_avoiding", seed = 1
+    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", seed = 1
   )$effects
   se <- bap$se_donor[bap$batch != "s1_r1"]
   expect_true(all(se > 1e-3))
+})
+
+test_that("known sampling variance sets the one-donor, one-aliquot SE", {
+  s <- heb_sim()
+  keep <- s$meta$donor == "D1" & endsWith(s$meta$sample_id, "_1")
+  s$meta <- s$meta[keep, ]
+  s$x <- s$x[s$x$sample_id %in% s$meta$sample_id, ]
+  s$manifest <- s$manifest[s$manifest$sample_id %in% s$meta$sample_id, ]
+  eff <- sw_corrector_fit(
+    s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+    transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
+    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", seed = 1
+  )$effects
+  # Each contrast is a difference of two batch means of 40 cells (sd 0.4 before asinh): the SE
+  # cannot fall below the sampling SE of that difference, about sqrt(2) * 0.4 / sqrt(40) on asinh/5.
+  se <- eff$se_donor[eff$batch != "s1_r1"]
+  expect_true(all(se > 0.5 * sqrt(2) * 0.4 / sqrt(40) / 5))
+  expect_true(all(is.finite(eff$estimate)))
 })
 
 test_that("heb fits a design with one reference donor", {
@@ -156,7 +175,7 @@ test_that("heb Satterthwaite df reduces to the residual df without shrinkage", {
       value = c(1, 2.1, 3, 2, 3, 4.2), reference_id = rep(c("D1", "D2", "D3"), 2),
       batch = rep(c("a", "b"), each = 3), aliquot = 1:6
     ),
-    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "random"
+    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "random", "estimated"
   )
   # Ratio 1e8 on purpose: the old form G - G Z'PZ G gave df 4.9 here (cancellation);
   # the mixed-model-equation form must stay exact.
@@ -189,7 +208,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "fixed", variance_prior = "none", seed = 1
+    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", seed = 1
   )$effects
   expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
   expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)
@@ -200,7 +219,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
       value = c(1, 2, 3, 2, 3, 4), reference_id = rep(c("D1", "D2", "D3"), 2),
       batch = rep(c("a", "b"), each = 3), aliquot = 1:6
     ),
-    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "fixed"
+    data.frame(batch = c("a", "b"), study = c("s", "s")), "a", "fixed", "estimated"
   )
   est <- .sw_heb_blup(d, c(1e3, 1e3, 1e-3), "a")
   expect_equal(est$estimate, c(0, 1), tolerance = 1e-3)
