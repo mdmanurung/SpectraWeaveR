@@ -18,10 +18,11 @@ CYTOFIN_MODE <- "meanshift" # N7
 MIN_BATCHES <- 2
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift"
 T6_TRANSFORM <- list(name = "asinh", cofactor = 6000) # Q4
-T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap", "heb_kv", "heb_bap", "cycombine_ref")
-# cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4; cycombine_ref: F11 (fit on reference cells only)
+T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap", "heb_kv", "heb_bap", "cycombine_ref", "heb_kv_bap_anc")
+# cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4; cycombine_ref: F11 (fit on reference cells only);
+# heb_kv_bap_anc: heb_kv_bap plus internal anchors (anchor plan A8), needs 'anchors'
 
-correct_t6 <- function(x, meta, population, method, markers) {
+correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
   if (method == "none") {
     return(list(x = x, supported = TRUE, abstained = 0L, reason = "raw", fits_on_heldout = FALSE))
   }
@@ -63,20 +64,23 @@ correct_t6 <- function(x, meta, population, method, markers) {
     require_shared_reference = TRUE, anchor = ANCHOR
   )
   # N4: flat hierarchy, one random effect per batch. heb_kv_bap (F9) adds F6 and F8 to the same model.
-  is_heb <- method %in% c("heb", "heb_kv_bap", "heb_kv", "heb_bap")
+  is_heb <- method %in% c("heb", "heb_kv_bap", "heb_kv", "heb_bap", "heb_kv_bap_anc")
   engine <- if (is_heb) "heb" else method
   hierarchy <- if (is_heb) dplyr::mutate(dplyr::distinct(meta, batch), study = batch) else NULL
-  heb_anchors <- NULL # T6 anchor arm (plan A8) is added with its own strip-controls script
+  if (method == "heb_kv_bap_anc" && is.null(anchors)) stop("heb_kv_bap_anc needs anchors.", call. = FALSE)
+  heb_anchors <- if (method == "heb_kv_bap_anc") anchors else NULL
   xt <- tibble::as_tibble(x) |> dplyr::mutate(sample_id = meta$sample_id, .before = 1)
-  fit_rows <- meta$is_reference
+  # Every non-held-out cell enters the fit; heb summarises only reference samples (manifest), and a batch
+  # whose controls are not references (anchor plan A8) still belongs to the fitted data.
+  fit_rows <- !meta$is_holdout_reference
   model <- sw_corrector_fit(
     xt[fit_rows, ], manifest, audit, population = population[fit_rows], markers = markers,
     transform = T6_TRANSFORM, anchor = ANCHOR, engine = engine,
     min_cells = MIN_CELLS, seed = 1, hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (is_heb) HEB_POOL else NULL,
     anchor_effect = if (is_heb) "random" else NULL,
-    variance_prior = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_bap")) "boundary_avoiding" else "none") else NULL,
-    residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv")) "known_plus_extra" else "estimated") else NULL,
+    variance_prior = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_bap", "heb_kv_bap_anc")) "boundary_avoiding" else "none") else NULL,
+    residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv", "heb_kv_bap_anc")) "known_plus_extra" else "estimated") else NULL,
     anchors = if (is_heb) heb_anchors else NULL
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
