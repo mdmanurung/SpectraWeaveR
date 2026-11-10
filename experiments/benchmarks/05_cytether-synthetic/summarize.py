@@ -59,7 +59,8 @@ flags = scores.groupby("method").agg(
     fits_on_heldout=("fits_on_heldout", "max"), ref_mode_ok_share=("ref_mode_ok", "mean"))
 rows = []
 for method in wide.columns:
-    diff = (wide[method] - wide[ref]).dropna().to_numpy()
+    # A reference that abstained on every seed (S18 has batches without reference donors) has no column.
+    diff = (wide[method] - wide[ref]).dropna().to_numpy() if ref in wide.columns else np.array([])
     lo, hi = seed_boot(diff)
     rows.append({
         "method": method, "n_seeds": int(wide[method].notna().sum()),

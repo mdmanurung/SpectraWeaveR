@@ -53,10 +53,10 @@ def effect_coverage(eff, obs, truth, meta, markers):
             true = shift.loc[(r.batch, r.population), r.marker] - shift.loc[(anchor, r.population), r.marker]
         except KeyError:
             continue
-        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor, r.df, r.n_donors))
+        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor, r.df, r.n_donors, true))
     if not out:
         return {"n_effects": 0}
-    err, z, df, nd = np.array(out).T
+    err, z, df, nd, true = np.array(out).T
     hit = z <= student_t.ppf(0.95, df)
     res = {"n_effects": len(z), "cov90": float(np.mean(hit)),
            "cov95": float(np.mean(z <= student_t.ppf(0.975, df))),
@@ -69,6 +69,8 @@ def effect_coverage(eff, obs, truth, meta, markers):
         res[f"cov90_{name}"] = float(np.mean(hit[m])) if m.any() else np.nan
         res[f"rmse_{name}"] = float(np.sqrt(np.mean(err[m] ** 2))) if m.any() else np.nan
         res[f"medz_{name}"] = float(np.median(z[m])) if m.any() else np.nan
+        # Abstaining leaves the true effect in place: its RMSE is the root mean square of the true effects.
+        res[f"rmse_abstain_{name}"] = float(np.sqrt(np.mean(true[m] ** 2))) if m.any() else np.nan
     return res
 
 
