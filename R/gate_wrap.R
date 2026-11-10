@@ -17,6 +17,18 @@
   getExportedValue(pkg, name)
 }
 
+# flowMagic 0.99 calls flowCore/flowWorkspace functions (sampleNames) and dplyr
+# verbs without a namespace and only Suggests them, so they must be on the
+# search path. Attach the ones that are missing; nothing is attached otherwise.
+.sw_flowmagic_attach <- function() {
+  for (pkg in c("flowCore", "flowWorkspace", "dplyr")) {
+    if (!paste0("package:", pkg) %in% search()) {
+      suppressPackageStartupMessages(attachNamespace(pkg))
+    }
+  }
+  invisible(NULL)
+}
+
 # ---- sw_gate <-> flowCore ---------------------------------------------------
 
 #' Convert an sw_gate to a flowCore gate
@@ -387,6 +399,7 @@ sw_gate_flowmagic_train <- function(gs, parent_node, samples_id, channel_x, chan
     stop("Give exactly one of `n_points_per_plot` and `prop_down`; set the other to NULL.", call. = FALSE)
   }
   train <- .sw_gate_wrap_fn("magic_template_train", "flowMagic")
+  .sw_flowmagic_attach()
   train(
     gs_input = gs, parent_node = parent_node, samples_id = samples_id,
     channel_x = channel_x, channel_y = channel_y, n_gates = n_gates,
@@ -433,6 +446,7 @@ sw_gate_flowmagic <- function(gs, parent_node, channel_x, channel_y, ref_train, 
     stop("`label_to_node` must be a named character vector (label = gate name).", call. = FALSE)
   }
   predict_fn <- .sw_gate_wrap_fn("magic_template_predict", "flowMagic")
+  .sw_flowmagic_attach()
   res <- predict_fn(
     gs_input = gs, parent_node = parent_node, channel_x = channel_x, channel_y = channel_y,
     ref_train = ref_train, ref_model_info = ref_model_info, label_to_node = label_to_node,
