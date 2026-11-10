@@ -2,7 +2,7 @@
 # Purpose: fit m and M from the CD3 single-stain controls with sw_relativise_split_kmeans() and
 #          sw_relativise_fit(), and compare them with the authors' own m and M recovered by
 #          01_invert_authors.R (Glehr et al. 2026, BAD study, Aurora, 9 donors).
-# Run:     Rscript experiments/integration/glehr2026/02_reproduce_cd3.R <data_dir> <invert_run_dir> <run_dir>
+# Run:     Rscript experiments/integration/glehr2026/02_reproduce_cd3.R <data_dir> <invert_run_dir> <run_dir> <instrument>
 # Inputs:  <data_dir>/BAD/aurora/<donor>/*_0N-CD3-<fluor>.fcs   CD3 control per channel
 #          <data_dir>/BAD/aurora/<donor>/*relativised*12-panel.fcs   authors' gated events (scatter range)
 #          <invert_run_dir>/authors_m_M.csv   authors' m and M per donor and channel
@@ -27,6 +27,7 @@ args <- commandArgs(trailingOnly = TRUE)
 data_dir <- args[[1]]
 invert_dir <- args[[2]]
 run_dir <- args[[3]]
+instrument <- args[[4]] # "aurora" or "fortessa"
 if (dir.exists(run_dir)) stop("run dir exists: ", run_dir, call. = FALSE)
 dir.create(run_dir, recursive = TRUE)
 
@@ -44,7 +45,7 @@ read_exprs <- function(path) {
 
 # Fit per donor --------------------------------------------------------------------------------
 
-donors <- sort(list.dirs(file.path(data_dir, "BAD", "aurora"), recursive = FALSE))
+donors <- sort(list.dirs(file.path(data_dir, "BAD", instrument), recursive = FALSE))
 ours <- lapply(seq_along(donors), function(i) {
   unit <- paste0("d", i)
   fs <- list.files(donors[i], pattern = "\\.fcs$", full.names = TRUE)
@@ -77,7 +78,7 @@ ours <- lapply(seq_along(donors), function(i) {
 
 authors <- read.csv(file.path(invert_dir, "authors_m_M.csv"))
 cmp <- ours |>
-  select(donor = unit, channel, n_gated, n_negative, n_positive, m, M) |>
+  select(donor = unit, channel, n_gated, n_negative, n_positive, m, M, separation) |>
   inner_join(
     select(authors, donor, channel, m_authors = m, M_authors = M),
     by = join_by(donor, channel),

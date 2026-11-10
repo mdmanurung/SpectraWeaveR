@@ -20,7 +20,8 @@ reference-positive events. From \code{\link[=sw_relativise_split_kmeans]{sw_rela
 }
 \value{
 A tibble of class \code{sw_relativise_model} with columns \code{unit},
-\code{channel}, \code{control}, \code{n_negative}, \code{n_positive}, \code{m}, \code{M} and \code{gain}.
+\code{channel}, \code{control}, \code{n_negative}, \code{n_positive}, \code{m}, \code{M}, \code{gain},
+\code{sd_negative}, \code{sd_positive} and \code{separation}.
 }
 \description{
 Step 2 of the relativisation workflow. For each row of \code{control_map} (one
@@ -30,9 +31,16 @@ compute
 \item \code{m}: median over reference-negative events (the offset);
 \item \code{M}: median over reference-positive events;
 \item \code{gain}: \code{M - m}.
+\item \code{sd_negative}, \code{sd_positive}: robust SD (\code{1.4826 * MAD}) of each side.
+\item \code{separation}: \code{gain / (sd_negative + sd_positive)}. A low value means the
+two sides overlap, so any split pulls \code{m} and \code{M} toward each other and
+the gain is too small. On 9 donors acquired on a Fortessa, the KrO
+channel's CD3 control split this way and gave an \code{M} about 20\% below the
+authors' (see \verb{experiments/integration/glehr2026/}).
 }
 
-These are the per-channel numbers of Glehr et al. (2026), Box 1.
+\code{m}, \code{M} and \code{gain} are the per-channel numbers of Glehr et al. (2026),
+Box 1.
 }
 \details{
 Stops when a unit-channel has fewer than \code{min_events} events on either side,

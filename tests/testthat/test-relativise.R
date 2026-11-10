@@ -130,7 +130,7 @@ test_that("diagnose flags a unit and a batch with a doubled gain", {
   expect_gt(ratio$value[ratio$unit == "b2"], 1.8)
   expect_equal(nrow(dx[dx$check == "gain_order_rho", ]), 1)
   no_extra <- sw_relativise_diagnose(model, batch = NULL, order = NULL)
-  expect_setequal(unique(no_extra$check), c("offset", "gain", "gain_z"))
+  expect_setequal(unique(no_extra$check), c("offset", "gain", "separation", "gain_z"))
   expect_error(sw_relativise_diagnose(model, batch = c(s1 = "b1"), order = NULL), "every unit")
 })
 
@@ -187,7 +187,23 @@ test_that("sw_diagnose runs the relativise module without data", {
     negative = NULL
   )
   expect_equal(attr(dx, "modules"), "relativise")
-  expect_setequal(unique(dx$check), c("offset", "gain", "gain_z", "gain_order_rho"))
+  expect_setequal(unique(dx$check), c("offset", "gain", "separation", "gain_z", "gain_order_rho"))
   top <- sw_diagnosis_top(dx, n = 1)
   expect_equal(top$subject[top$check == "gain_z"], "s5")
+})
+
+test_that("separation is gain over the summed robust SDs and is low for overlapping sides", {
+  set.seed(5)
+  wide <- c(stats::rnorm(400, 100, 10), stats::rnorm(400, 5000, 10))
+  close <- c(stats::rnorm(400, 100, 300), stats::rnorm(400, 600, 300))
+  ctrl <- list(a = cbind(B1 = wide), b = cbind(B1 = close))
+  map <- data.frame(unit = c("a", "b"), channel = "B1", control = c("a", "b"))
+  pos <- list(a = rep(c(FALSE, TRUE), each = 400), b = rep(c(FALSE, TRUE), each = 400))
+  model <- sw_relativise_fit(ctrl, map, pos, min_events = 50)
+  exp_sep <- (model$M[1] - model$m[1]) / (stats::mad(wide[1:400]) + stats::mad(wide[401:800]))
+  expect_equal(model$separation[1], exp_sep)
+  expect_gt(model$separation[1], 100)
+  expect_lt(model$separation[2], 2)
+  dx <- sw_relativise_diagnose(model, batch = NULL, order = NULL)
+  expect_equal(dx$value[dx$check == "separation"], model$separation)
 })

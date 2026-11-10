@@ -4,7 +4,7 @@
 #          event of the authors' file is matched to the original panel on scatter and time, which
 #          relativisation leaves unchanged; a line fit of relativised on original value per channel
 #          gives slope (high - low) / (M - m) and intercept low - m * slope, with low 0, high 1e4.
-# Run:     Rscript experiments/integration/glehr2026/01_invert_authors.R <data_dir> <run_dir>
+# Run:     Rscript experiments/integration/glehr2026/01_invert_authors.R <data_dir> <run_dir> <instrument>
 # Inputs:  <data_dir>/BAD/aurora/<donor>/*_12-panel.fcs   original and relativised panel per donor
 # Outputs: <run_dir>/authors_m_M.csv   donor (d1..), channel, n_matched, slope, intercept, r2, m, M
 #          <run_dir>/fig_authors_fit.png, figure_source_data_authors_fit.csv
@@ -19,6 +19,7 @@ theme_set(ggpubr::theme_pubr(base_size = 8))
 args <- commandArgs(trailingOnly = TRUE)
 data_dir <- args[[1]]
 run_dir <- args[[2]]
+instrument <- args[[3]] # "aurora" or "fortessa"
 if (dir.exists(run_dir)) stop("run dir exists: ", run_dir, call. = FALSE)
 dir.create(run_dir, recursive = TRUE)
 
@@ -31,7 +32,7 @@ read_exprs <- function(path) {
   exprs(read.FCS(path, truncate_max_range = FALSE, transformation = FALSE, emptyValue = FALSE))
 }
 
-donors <- sort(list.dirs(file.path(data_dir, "BAD", "aurora"), recursive = FALSE))
+donors <- sort(list.dirs(file.path(data_dir, "BAD", instrument), recursive = FALSE))
 fits <- lapply(seq_along(donors), function(i) {
   fs <- list.files(donors[i], pattern = "12-panel\\.fcs$", full.names = TRUE)
   orig <- read_exprs(fs[grepl("_ungated_", fs)])

@@ -97,8 +97,15 @@ sw_relativise_split_kmeans <- function(controls, control_map, split_transform, s
 #' * `m`: median over reference-negative events (the offset);
 #' * `M`: median over reference-positive events;
 #' * `gain`: `M - m`.
+#' * `sd_negative`, `sd_positive`: robust SD (`1.4826 * MAD`) of each side.
+#' * `separation`: `gain / (sd_negative + sd_positive)`. A low value means the
+#'   two sides overlap, so any split pulls `m` and `M` toward each other and
+#'   the gain is too small. On 9 donors acquired on a Fortessa, the KrO
+#'   channel's CD3 control split this way and gave an `M` about 20% below the
+#'   authors' (see `experiments/integration/glehr2026/`).
 #'
-#' These are the per-channel numbers of Glehr et al. (2026), Box 1.
+#' `m`, `M` and `gain` are the per-channel numbers of Glehr et al. (2026),
+#' Box 1.
 #'
 #' @details
 #' Stops when a unit-channel has fewer than `min_events` events on either side,
@@ -111,7 +118,8 @@ sw_relativise_split_kmeans <- function(controls, control_map, split_transform, s
 #' @param min_events Whole number. Fewest events allowed on each side.
 #'
 #' @return A tibble of class `sw_relativise_model` with columns `unit`,
-#'   `channel`, `control`, `n_negative`, `n_positive`, `m`, `M` and `gain`.
+#'   `channel`, `control`, `n_negative`, `n_positive`, `m`, `M`, `gain`,
+#'   `sd_negative`, `sd_positive` and `separation`.
 #'
 #' @seealso [sw_relativise_diagnose()], [sw_relativise_apply()]
 #'
@@ -173,6 +181,9 @@ sw_relativise_fit <- function(controls, control_map, positive, min_events) {
         call. = FALSE
       )
     }
+    # Robust SD of each side (stats::mad() already scales by 1.4826).
+    sd_neg <- stats::mad(v[!pos])
+    sd_pos <- stats::mad(v[pos])
     tibble::tibble(
       unit = as.character(control_map$unit[[i]]),
       channel = channel,
@@ -181,7 +192,10 @@ sw_relativise_fit <- function(controls, control_map, positive, min_events) {
       n_positive = n_pos,
       m = m,
       M = big_m,
-      gain = big_m - m
+      gain = big_m - m,
+      sd_negative = sd_neg,
+      sd_positive = sd_pos,
+      separation = (big_m - m) / (sd_neg + sd_pos)
     )
   })
   model <- dplyr::bind_rows(rows)
@@ -207,6 +221,9 @@ sw_relativise_fit <- function(controls, control_map, positive, min_events) {
 #'
 #' * `offset`: `m` per unit and channel.
 #' * `gain`: `M - m` per unit and channel.
+#' * `separation`: the control's `gain / (sd_negative + sd_positive)` per unit
+#'   and channel. Low means the reference split was weak, so `m` and `M` are
+#'   pulled together.
 #' * `gain_z`: robust z of `log(gain)` across units within a channel,
 #'   `(v - median) / (1.4826 * MAD)`. `NA` when the MAD is 0.
 #' * `gain_batch_ratio`: a batch's median gain divided by the median gain over
@@ -245,6 +262,10 @@ sw_relativise_diagnose <- function(model, batch, order) {
     tibble::tibble(check = check, channel = model$channel, unit = unit, value = value)
   }
   out <- list(long("offset", model$unit, model$m), long("gain", model$unit, model$gain))
+  # Models fitted before `separation` existed lack the column.
+  if ("separation" %in% names(model)) {
+    out <- c(out, list(long("separation", model$unit, model$separation)))
+  }
 
   log_gain <- log(model$gain)
   gain_z <- stats::ave(log_gain, model$channel, FUN = function(v) {

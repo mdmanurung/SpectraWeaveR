@@ -26,6 +26,9 @@ instrument, settings, reagent or control. Numbers only; nothing is marked bad.
 \itemize{
 \item \code{offset}: \code{m} per unit and channel.
 \item \code{gain}: \code{M - m} per unit and channel.
+\item \code{separation}: the control's \code{gain / (sd_negative + sd_positive)} per unit
+and channel. Low means the reference split was weak, so \code{m} and \code{M} are
+pulled together.
 \item \code{gain_z}: robust z of \code{log(gain)} across units within a channel,
 \code{(v - median) / (1.4826 * MAD)}. \code{NA} when the MAD is 0.
 \item \code{gain_batch_ratio}: a batch's median gain divided by the median gain over
