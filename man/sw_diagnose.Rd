@@ -24,17 +24,19 @@ analysis scale), or \code{NULL} when only \code{header} is used.}
 \item{header}{\code{NULL} or a list with \code{paths}, \code{keywords}, \code{reference}.}
 
 \item{signal}{\code{NULL} or a list with \code{channels}, \code{range_max}, \code{range_min},
-\code{time_channel}, \code{time_bin}.}
+\code{time_channel}, \code{time_bin}, \code{area_height}, \code{area_height_quantile},
+\code{reference_group}.}
 
 \item{anomaly}{\code{NULL} or a list with \code{channels}, \code{features},
 \code{quantile_step}, \code{n_events}, \code{seed}, \code{scale}, \code{aggregate_from},
-\code{agg_size}, \code{reference} (when needed), \code{ntrees}, \code{sample_size}, \code{ndim}.}
+\code{agg_size}, \code{reference} (when needed), \code{reference_group}, \code{ntrees},
+\code{sample_size}, \code{ndim}.}
 
 \item{batch}{\code{NULL} or a list with \code{batch}, \code{markers}, \code{n_events}, \code{seed},
-\code{order}.}
+\code{order}, \code{reference_group}.}
 
 \item{cluster}{\code{NULL} or a list with \code{markers}, \code{k}, \code{n_events}, \code{seed},
-\code{nstart}, \code{min_cluster_events}.}
+\code{nstart}, \code{min_cluster_events}, \code{reference}, \code{reference_group}.}
 
 \item{relativise}{\code{NULL} or a list with \code{model} (from
 \code{\link[=sw_relativise_fit]{sw_relativise_fit()}}), \code{batch}, \code{order}. Subjects are units (samples or
@@ -44,7 +46,7 @@ batches); it does not use \code{data}.}
 \code{blur}, \code{seed}, \code{max_iter}, \code{tol}.}
 
 \item{negative}{\code{NULL} or a list with \code{channels}, \code{n_events}, \code{seed},
-\code{hyper_k}, \code{pairs}.}
+\code{hyper_k}, \code{pairs}, \code{spread_quantile}.}
 
 \item{gate}{\code{NULL} or a list with \code{gates}, \code{reference}, \code{edge_width}. The
 \code{item} column is the gate id, with the channel after a \code{/} for
@@ -84,6 +86,8 @@ kept. Add \code{novelty_reference} and \code{novelty_quantile} to also compute n
 log-densities. When \code{features} includes \code{"emd"}, the module also returns
 \code{emd_z}: per channel, the robust z over files of each file's EMD to the
 pooled sample. It finds a marker split into two modes better than \code{sd_z}.
+With a \code{reference_group} in the \code{anomaly} list, the pooled sample and the z
+are both taken within each file's group.
 
 \strong{Modules are independent.} A fault one module misses may show in another.
 Run all of them when you can.
@@ -94,9 +98,12 @@ dx <- sw_diagnose(
   data = files,
   header = NULL,
   signal = list(channels = chans, range_max = 6, range_min = NULL,
-                time_channel = NULL, time_bin = NULL),
+                time_channel = NULL, time_bin = NULL,
+                area_height = NULL, area_height_quantile = NULL,
+                reference_group = NULL),
   anomaly = NULL,
-  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
+  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
+               reference_group = NULL),
   cluster = NULL,
   relativise = NULL,
   otd = NULL,

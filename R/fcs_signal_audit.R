@@ -85,6 +85,15 @@
 #' @param area_height_quantile Number in (0, 1), the upper quantile of area /
 #'   height reported per file. Needed when `area_height` is given; otherwise
 #'   pass `NULL`.
+#' @param reference_group `NULL`, or a named character vector with one group
+#'   label per file (names = file ids, covering every file in `data`), for
+#'   example the donor. With `NULL`, every robust z (`median_z`, `sd_z`,
+#'   `global_sd_z`, `area_height_z`, `corr_pair_z`) is taken over all files.
+#'   With groups, each z uses only the files of the same group: median and MAD
+#'   come from the group, and the cohort SD behind `global_sd_z` too. A group
+#'   with fewer than 3 files, or with MAD 0, gives `NA`. `corr_shift` still
+#'   uses all files. Use groups when files of one donor differ from other
+#'   donors for biological reasons.
 #'
 #' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
 #'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
@@ -102,7 +111,7 @@
 #'   files,
 #'   channels = c("A", "B"),
 #'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
-#'   area_height = NULL, area_height_quantile = NULL
+#'   area_height = NULL, area_height_quantile = NULL, reference_group = NULL
 #' )
 #'
 #' @export
@@ -114,7 +123,8 @@ sw_fcs_signal_audit <- function(
   time_channel,
   time_bin,
   area_height,
-  area_height_quantile
+  area_height_quantile,
+  reference_group
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -124,7 +134,8 @@ sw_fcs_signal_audit <- function(
     time_channel = missing(time_channel),
     time_bin = missing(time_bin),
     area_height = missing(area_height),
-    area_height_quantile = missing(area_height_quantile)
+    area_height_quantile = missing(area_height_quantile),
+    reference_group = missing(reference_group)
   ))
   if (!is.null(area_height)) {
     if (!is.character(area_height) || is.null(names(area_height)) || any(names(area_height) == "")) {
@@ -166,6 +177,7 @@ sw_fcs_signal_audit <- function(
   }
 
   files <- sort(names(data))
+  grp <- .sw_check_reference_group(reference_group, files)
   mats <- lapply(files, function(f) {
     m <- as.matrix(data[[f]])
     need <- c(channels, time_channel, names(area_height), unname(area_height))
@@ -273,16 +285,10 @@ sw_fcs_signal_audit <- function(
   }
 
   # Robust z of each file's median and SD against the other files, per channel:
-  # (value - median over files) / (1.4826 * MAD over files). NA with fewer than
-  # 3 files or when the spread over files is 0.
-  robust_z <- function(x) {
-    # stats::mad() scales by 1.4826 by default; constant = 1 keeps the raw MAD.
-    s <- 1.4826 * stats::mad(x, constant = 1, na.rm = TRUE)
-    if (sum(!is.na(x)) < 3 || is.na(s) || s == 0) {
-      return(rep(NA_real_, length(x)))
-    }
-    (x - stats::median(x, na.rm = TRUE)) / s
-  }
+  # (value - median over files) / (1.4826 * MAD over files), over all files or
+  # within each `reference_group`. NA with fewer than 3 files or when the
+  # spread over files is 0.
+  robust_z <- function(x) .sw_robust_z(x, grp)
   for (ch in channels) {
     zm <- robust_z(med_mat[, ch])
     zs <- robust_z(sd_mat[, ch])
@@ -294,8 +300,18 @@ sw_fcs_signal_audit <- function(
   # File-wide spread change (user decision 2026-11-10): per file, the median
   # over channels of log(file SD / cohort median SD), as a robust z over files.
   # A fault that widens every channel a little shows here, not in any one row.
+  # With groups, the cohort SD of a channel is the median over the file's own group.
   cohort_sd <- apply(sd_mat, 2, stats::median, na.rm = TRUE)
-  log_ratio <- log(sweep(sd_mat, 2, cohort_sd, "/"))
+  cohort_sd_by_file <- matrix(cohort_sd, nrow(sd_mat), ncol(sd_mat), byrow = TRUE)
+  for (g in unique(grp)) {
+    cohort_sd_by_file[grp == g, ] <- matrix(
+      apply(sd_mat[grp == g, , drop = FALSE], 2, stats::median, na.rm = TRUE),
+      sum(grp == g),
+      ncol(sd_mat),
+      byrow = TRUE
+    )
+  }
+  log_ratio <- log(sd_mat / cohort_sd_by_file)
   log_ratio[!is.finite(log_ratio)] <- NA_real_
   global <- apply(log_ratio, 1, stats::median, na.rm = TRUE)
   global[is.nan(global)] <- NA_real_

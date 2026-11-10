@@ -64,6 +64,12 @@
 #' @param reference `NULL` to fit k-means on all files, or a character vector
 #'   of file ids to fit it on; all files are then assigned to the nearest
 #'   centre.
+#' @param reference_group `NULL`, or a named character vector with one group
+#'   label per file (names = file ids, covering every file in `data`), for
+#'   example the donor. With groups, `freq_z` and `median_z` use the median and
+#'   MAD of the file's own group only. The clusters are still fitted as set by
+#'   `reference`. A group with fewer than 3 files (or 3 scored medians), or
+#'   with MAD 0, gives `NA`.
 #'
 #' @return A tibble of class `sw_cluster_scores` with columns `file`, `cluster`
 #'   (integer), `marker` (`NA` for `freq_z`), `check`, `value`, `n_events`
@@ -82,7 +88,7 @@
 #' sw_cluster_scores(
 #'   files, c("A", "B"),
 #'   k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20,
-#'   reference = NULL
+#'   reference = NULL, reference_group = NULL
 #' )
 #'
 #' @export
@@ -94,7 +100,8 @@ sw_cluster_scores <- function(
   seed,
   nstart,
   min_cluster_events,
-  reference
+  reference,
+  reference_group
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -104,7 +111,8 @@ sw_cluster_scores <- function(
     seed = missing(seed),
     nstart = missing(nstart),
     min_cluster_events = missing(min_cluster_events),
-    reference = missing(reference)
+    reference = missing(reference),
+    reference_group = missing(reference_group)
   ))
   if (
     !is.list(data) ||
@@ -142,6 +150,7 @@ sw_cluster_scores <- function(
   }
 
   files <- sort(names(data))
+  grp <- .sw_check_reference_group(reference_group, files)
   drawn_in <- lapply(files, function(f) {
     m <- as.matrix(data[[f]])
     if (!all(markers %in% colnames(m))) {
@@ -219,14 +228,8 @@ sw_cluster_scores <- function(
   }
   cl <- split(labels, rep(files, each = n_events))[files]
 
-  robust_z <- function(x) {
-    # stats::mad() scales by 1.4826 by default; constant = 1 keeps the raw MAD.
-    s <- 1.4826 * stats::mad(x, constant = 1, na.rm = TRUE)
-    if (sum(!is.na(x)) < 3 || is.na(s) || s == 0) {
-      return(rep(NA_real_, length(x)))
-    }
-    (x - stats::median(x, na.rm = TRUE)) / s
-  }
+  # Over all files, or within each `reference_group`.
+  robust_z <- function(x) .sw_robust_z(x, grp)
 
   # Shares and counts: files x clusters.
   counts <- t(vapply(cl, function(v) tabulate(v, nbins = k), numeric(k)))

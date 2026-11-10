@@ -55,7 +55,7 @@ date_order <- setNames(as.numeric(as.Date(info$date, format = "%d-%b-%Y")), ids)
 
 # Batch scores before relativisation ------------------------------------------------------------
 
-before <- sw_batch_scores(ev, batch, markers, n_events = N_EVENTS, seed = SEED, order = NULL)
+before <- sw_batch_scores(ev, batch, markers, n_events = N_EVENTS, seed = SEED, order = NULL, reference_group = NULL)
 
 # Internal CD3 reference per file ---------------------------------------------------------------
 
@@ -83,7 +83,7 @@ after_data <- sw_relativise_apply(
   high = HIGH,
   input_scale = "linear"
 )
-after <- sw_batch_scores(after_data, batch, CD3_CHANNEL, n_events = N_EVENTS, seed = SEED, order = NULL)
+after <- sw_batch_scores(after_data, batch, CD3_CHANNEL, n_events = N_EVENTS, seed = SEED, order = NULL, reference_group = NULL)
 scores <- bind_rows(mutate(before, stage = "before"), mutate(after, stage = "after CD3"))
 write.csv(scores, file.path(run_dir, "batch_scores_long.csv"), row.names = FALSE)
 

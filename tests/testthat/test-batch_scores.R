@@ -23,7 +23,8 @@ scores <- function(x, ...) {
     markers = c("A", "B"),
     n_events = 200,
     seed = 1,
-    order = NULL
+    order = NULL,
+    reference_group = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_batch_scores, args)
@@ -41,7 +42,7 @@ test_that("required arguments have no default", {
   x <- make_batches()
   expect_error(sw_batch_scores(), "no default")
   expect_error(
-    sw_batch_scores(x$data, x$batch, c("A", "B"), n_events = 100, seed = 1),
+    sw_batch_scores(x$data, x$batch, c("A", "B"), n_events = 100, seed = 1, reference_group = NULL),
     "order"
   )
 })
@@ -127,4 +128,64 @@ test_that("results do not depend on file order and keep the RNG state", {
   )
   r2 <- scores(x2)
   expect_equal(r1$value, r2$value)
+})
+
+# reference_group ---------------------------------------------------------------
+
+# Four batches of three files, three donors with offsets 0, 4 and 8 on A.
+# Donors are spread unevenly over batches (b1: D1 D1 D2, b2: D2 D2 D3,
+# b3: D3 D3 D1, b4: D1 D2 D3), so pooled batches differ by donor mix. Batch b4
+# carries a real shift of 0.5 in A for every donor.
+make_donor_batches <- function(seed = 5, n = 300) {
+  set.seed(seed)
+  donor_of <- c("D1", "D1", "D2", "D2", "D2", "D3", "D3", "D3", "D1", "D1", "D2", "D3")
+  batch_of <- rep(c("b1", "b2", "b3", "b4"), each = 3)
+  ids <- paste0("f", seq_along(donor_of))
+  d <- lapply(seq_along(ids), function(i) {
+    off <- c(D1 = 0, D2 = 4, D3 = 8)[[donor_of[i]]]
+    cbind(
+      A = stats::rnorm(n) + off + if (batch_of[i] == "b4") 0.5 else 0,
+      B = stats::rnorm(n)
+    )
+  })
+  names(d) <- ids
+  list(
+    data = d,
+    batch = stats::setNames(batch_of, ids),
+    donor = stats::setNames(donor_of, ids)
+  )
+}
+
+test_that("reference_group finds a batch effect hidden by donor differences", {
+  x <- make_donor_batches()
+  pair_a <- function(res) {
+    r <- res[res$check == "pair_emd" & res$marker == "A", ]
+    stats::setNames(r$value, r$batch)
+  }
+  all_files <- pair_a(scores(x))
+  by_donor <- pair_a(scores(x, reference_group = x$donor))
+  with_b4 <- grepl("b4", names(by_donor))
+  # Within donors, every pair that has b4 is farther than every pair without.
+  expect_gt(min(by_donor[with_b4]), max(by_donor[!with_b4]))
+  # Over all files the donor mix swamps it.
+  b4_all <- grepl("b4", names(all_files))
+  expect_lt(min(all_files[b4_all]), max(all_files[!b4_all]))
+  # All score types are still reported.
+  res <- scores(x, reference_group = x$donor)
+  expect_setequal(unique(res$check), unique(scores(x)$check))
+})
+
+test_that("batch reference_group is required, covers every file and needs 2 batches in a group", {
+  x <- make_donor_batches()
+  expect_error(
+    sw_batch_scores(x$data, x$batch, c("A", "B"), n_events = 100, seed = 1, order = NULL),
+    "no default"
+  )
+  expect_error(scores(x, reference_group = x$donor[-1]), "label for every file")
+  # One file per group and batch: no group has two batches.
+  one_each <- stats::setNames(names(x$data), names(x$data))
+  expect_error(
+    scores(x, reference_group = one_each),
+    "at least two batches"
+  )
 })

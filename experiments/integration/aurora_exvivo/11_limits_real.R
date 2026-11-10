@@ -77,7 +77,7 @@ long <- lapply(SEEDS, function(seed) {
       }
       x
     })
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
     sd_z <- sa[sa$check == "sd_z" & sa$channel == b, ]
     af <- sw_anomaly_features(
       lapply(files, \(x) x[, b, drop = FALSE]),
@@ -89,14 +89,14 @@ long <- lapply(SEEDS, function(seed) {
       scale = "OMIQ-transformed",
       aggregate_from = "all",
       agg_size = EMD_POOL,
-      reference = NULL
+      reference = NULL, reference_group = NULL
     )
     scores <- list(
       sd_z = abs(sd_z$value[match(names(files), sd_z$file)]),
       emd_z = abs(robust_z(af[[paste0(b, "_emd")]][match(names(files), af$file)]))
     )
     if (fault == "rare_pop") {
-      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
+      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL, reference_group = NULL)
       d <- cs[cs$check == "median_z" & cs$marker == b, ]
       top <- tapply(abs(d$value), d$file, \(v) if (all(is.na(v))) NA_real_ else max(v, na.rm = TRUE))
       scores$cluster_median_z <- as.numeric(top[names(files)])

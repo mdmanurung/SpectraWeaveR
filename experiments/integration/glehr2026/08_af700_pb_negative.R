@@ -40,7 +40,7 @@ files <- lapply(seq_len(nrow(grid)), function(j) {
 })
 names(files) <- paste0("d", grid$donor, "_", grid$instrument)
 
-audit <- sw_negative_audit(files, CHANNELS, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = NULL)
+audit <- sw_negative_audit(files, CHANNELS, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = NULL, spread_quantile = NULL)
 write.csv(audit, file.path(run_dir, "negative_audit.csv"), row.names = FALSE)
 
 plot_frame <- audit |>

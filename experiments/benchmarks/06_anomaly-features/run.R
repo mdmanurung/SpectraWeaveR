@@ -145,7 +145,7 @@ res <- lapply(SEEDS, function(s) {
     scale = "simulated",
     aggregate_from = cand$from,
     agg_size = AGG,
-    reference = ref
+    reference = ref, reference_group = NULL
   )
   fl <- if (SCORER == "iforest") {
     sw_anomaly_flag_outlier(

@@ -72,7 +72,7 @@ long <- lapply(SEEDS, function(seed) {
       )
       files[[f]] <- x
     }
-    sc <- sw_batch_scores(files, batch, ch, N_EVENTS, seed, order = order_in_batch)
+    sc <- sw_batch_scores(files, batch, ch, N_EVENTS, seed, order = order_in_batch, reference_group = NULL)
     per_marker <- list(
       pair_emd = sc[sc$check == "pair_emd", ] |> summarise(v = max(value), .by = marker),
       median_range = sc[sc$check == "median_range", ] |> transmute(marker, v = value),

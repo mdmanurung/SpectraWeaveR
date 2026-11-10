@@ -23,7 +23,8 @@ signal_set <- list(
   range_max = 6,
   range_min = NULL,
   time_channel = "Time",
-  time_bin = 5, area_height = NULL, area_height_quantile = NULL
+  time_bin = 5, area_height = NULL, area_height_quantile = NULL,
+  reference_group = NULL
 )
 
 test_that("every argument must be given", {
@@ -55,7 +56,8 @@ test_that("signal and batch modules stack into one table", {
       markers = c("A", "B", "C"),
       n_events = 200,
       seed = 1,
-      order = NULL
+      order = NULL,
+      reference_group = NULL
     ),
     cluster = NULL,
     relativise = NULL,
@@ -87,6 +89,7 @@ test_that("the anomaly module keeps forest scores, and novelty when asked", {
     n_events = 200,
     seed = 1,
     scale = "test",
+    reference_group = NULL,
     ntrees = 100,
     sample_size = 10,
     ndim = 1
@@ -102,7 +105,7 @@ test_that("the anomaly module keeps forest scores, and novelty when asked", {
   d3 <- x$data
   d3$f7[, "B"] <- d3$f7[, "B"] + sample(c(-2, 2), nrow(d3$f7), replace = TRUE)
   an_emd <- an[c("channels", "n_events", "seed", "scale", "ntrees", "sample_size", "ndim")]
-  an_emd <- c(an_emd, list(features = "emd", quantile_step = NULL, aggregate_from = "all", agg_size = 1500, reference = NULL))
+  an_emd <- c(an_emd, list(features = "emd", quantile_step = NULL, aggregate_from = "all", agg_size = 1500, reference = NULL, reference_group = NULL))
   dx3 <- sw_diagnose(d3, NULL, NULL, an_emd, NULL, NULL, NULL, NULL, NULL, NULL)
   ez <- dx3[dx3$check == "emd_z", ]
   expect_equal(nrow(ez), 15 * 3)
@@ -181,7 +184,8 @@ test_that("the cluster module ranks each marker and cluster as its own item", {
       seed = 1,
       nstart = 3,
       min_cluster_events = 10,
-      reference = NULL
+      reference = NULL,
+      reference_group = NULL
     ),
     relativise = NULL,
     otd = NULL,

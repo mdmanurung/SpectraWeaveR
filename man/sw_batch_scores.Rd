@@ -4,7 +4,7 @@
 \alias{sw_batch_scores}
 \title{Score batch effects per marker}
 \usage{
-sw_batch_scores(data, batch, markers, n_events, seed, order)
+sw_batch_scores(data, batch, markers, n_events, seed, order, reference_group)
 }
 \arguments{
 \item{data}{A named list. Each element is a numeric matrix or data frame
@@ -20,6 +20,15 @@ with one column per marker. Names are the file ids.}
 
 \item{order}{\code{NULL}, or a named numeric vector with the acquisition order
 (or time) of each file. Used only for \code{order_rho}.}
+
+\item{reference_group}{\code{NULL}, or a named character vector with one group
+label per file (names = file ids, covering every file in \code{data}), for
+example the donor. With groups, every score is computed within each group
+from that group's files only, across batches, and the groups are combined
+per row (marker and batch, or batch pair) by the median over groups. This
+removes donor differences from the batch scores. A group with files from
+fewer than two batches is skipped. \code{n_files} is the sum over groups.
+\code{NULL} scores all files together.}
 }
 \value{
 A tibble of class \code{sw_batch_scores} with columns \code{check}, \code{marker},
@@ -75,7 +84,8 @@ sw_batch_scores(
   markers = c("A", "B"),
   n_events = 100, # illustrative
   seed = 1,
-  order = NULL
+  order = NULL,
+  reference_group = NULL
 )
 
 }

@@ -24,7 +24,8 @@ cs <- function(d, ...) {
     seed = 1,
     nstart = 5,
     min_cluster_events = 30,
-    reference = NULL
+    reference = NULL,
+    reference_group = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_cluster_scores, args)
@@ -40,7 +41,7 @@ test_that("required arguments have no default", {
       k = 3,
       n_events = 100,
       seed = 1,
-      nstart = 2
+      nstart = 2, reference_group = NULL
     ),
     "min_cluster_events"
   )
@@ -126,7 +127,7 @@ test_that("kmeans warnings are kept in an attribute and re-issued once", {
       n_events = 20000,
       seed = 1,
       nstart = 1,
-      min_cluster_events = 50, reference = NULL
+      min_cluster_events = 50, reference = NULL, reference_group = NULL
     ),
     warning = function(w) {
       got <<- c(got, conditionMessage(w))
@@ -160,4 +161,51 @@ test_that("reference fits clusters on the given files and assigns the rest", {
   expect_equal(mz$file[which.max(abs(mz$value))], "f12")
   expect_error(cs(d, reference = "nope"), "reference")
   expect_error(cs(d, reference = c("f1", "f1")), "reference")
+})
+
+# reference_group ---------------------------------------------------------------
+
+# Three donors of four files, two populations. The share of the right-hand
+# population is 0.2, 0.5 and 0.8 by donor; file d2_4 has 0.35 instead of 0.5.
+make_donor_shares <- function(seed = 4, n = 500) {
+  set.seed(seed)
+  ids <- paste0("d", rep(1:3, each = 4), "_", rep(1:4, 3))
+  d <- lapply(ids, function(i) {
+    donor <- as.integer(substr(i, 2, 2))
+    p <- c(0.2, 0.5, 0.8)[donor]
+    if (i == "d2_4") p <- 0.35
+    right <- stats::runif(n) < p
+    cbind(A = stats::rnorm(n, ifelse(right, 4, -4)), B = stats::rnorm(n))
+  })
+  names(d) <- ids
+  list(data = d, donor = stats::setNames(substr(ids, 1, 2), ids))
+}
+
+test_that("reference_group finds a composition change that is unusual only within its donor", {
+  x <- make_donor_shares()
+  top_z <- function(res) {
+    r <- res[res$check == "freq_z" & res$file == "d2_4", ]
+    max(abs(r$value), na.rm = TRUE)
+  }
+  all_files <- cs(x$data, k = 2)
+  by_donor <- cs(x$data, k = 2, reference_group = x$donor)
+  expect_lt(top_z(all_files), 2)
+  expect_gt(top_z(by_donor), 3)
+  f <- by_donor[by_donor$check == "freq_z", ]
+  expect_equal(f$file[which.max(abs(f$value))], "d2_4")
+  # A group of 2 files gives NA for every row of those files.
+  g <- x$donor
+  g[names(g) %in% c("d3_1", "d3_2")] <- "other"
+  small <- cs(x$data, k = 2, reference_group = g)
+  expect_true(all(is.na(small$value[small$file %in% c("d3_1", "d3_2")])))
+})
+
+test_that("cluster reference_group is required and must cover every file", {
+  x <- make_donor_shares()
+  expect_error(
+    sw_cluster_scores(x$data, c("A", "B"), 2, 100, 1, 3, 10, reference = NULL),
+    "no default"
+  )
+  expect_error(cs(x$data, k = 2, reference_group = x$donor[-1]), "label for every file")
+  expect_error(cs(x$data, k = 2, reference_group = unname(x$donor)), "label for every file")
 })

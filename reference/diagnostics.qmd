@@ -34,18 +34,23 @@ dx <- sw_diagnose(
   header = NULL,
   signal = list(
     channels = chans, range_max = 4e6, range_min = NULL,
-    time_channel = "Time", time_bin = 5, area_height = NULL, area_height_quantile = NULL
+    time_channel = "Time", time_bin = 5,
+    area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.99,
+    reference_group = NULL # or a named vector file -> donor, to score within donor
   ),
   anomaly = list(
     channels = chans, features = c("quantile", "emd"), quantile_step = 0.1,
     n_events = 500, seed = 1, scale = "arcsinh, cofactor 6000",
-    aggregate_from = "all", agg_size = 5000,
+    aggregate_from = "all", agg_size = 5000, reference = NULL, reference_group = NULL,
     ntrees = 300, sample_size = 32, ndim = 1
   ),
-  batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
+  batch = list(
+    batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
+    reference_group = NULL
+  ),
   cluster = list(
     markers = chans, k = 6, n_events = 500, seed = 1, nstart = 3,
-    min_cluster_events = 30, reference = NULL
+    min_cluster_events = 30, reference = NULL, reference_group = NULL
   ),
   relativise = NULL, # or list(model = <sw_relativise_fit() result>, batch = ..., order = ...)
   otd = list(
@@ -397,6 +402,18 @@ checks stay near chance. The files were gated to singlets before upload, so
 their own doublet rate is low; real doublets also differ from this ideal sum.
 
 ![Doublet AUROC per injected share and quantile](figures/cbf_doublets.png)
+
+`reference_group` scores each file only against files of the same donor.
+On these 72 files it does not lift the four donor-limited faults to the bar.
+With it, all markers widened x1.2 scores 0.71 (0.57 without), and 50% of the
+largest cluster removed scores 0.71 (0.54). The two-mode split at ±0.5 SD
+(0.50), 50% of the smallest cluster (0.48), and the batch split at ±0.5 SD
+(0.68, CI about 0.45 to 0.91) stay near chance. Without grouping, every row is
+lower here than on the single-batch Aurora files. The likely cause, not
+tested: each donor's 18 files come from 18 batches, so batch-to-batch
+variation stays inside every group's reference.
+
+![AUROC with and without reference_group, per fault](figures/cbf_reference_group.png)
 
 ## What the checks cannot see
 

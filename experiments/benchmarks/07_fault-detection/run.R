@@ -156,7 +156,7 @@ file_tool_scores <- function(files, seed) {
       seed,
       "simulated",
       "all",
-      AGG
+      AGG, reference_group = NULL
     )
     fl <- sw_anomaly_flag_outlier(feat, NTREES, FOREST_SAMPLE, 1, 0.5, seed)
     forest <- fl$score[match(ids, fl$file)]
@@ -164,7 +164,7 @@ file_tool_scores <- function(files, seed) {
   # Cluster-level scores; also need complete data.
   cl_median <- cl_freq <- rep(NA_real_, length(ids))
   if (!any(with_na)) {
-    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30, reference = NULL)
+    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30, reference = NULL, reference_group = NULL)
     mx <- function(v) if (all(is.na(v))) NA_real_ else max(abs(v), na.rm = TRUE)
     one <- function(check) {
       a <- cs[cs$check == check, ]
@@ -179,7 +179,7 @@ file_tool_scores <- function(files, seed) {
     range_max = RANGE_MAX,
     range_min = NULL,
     time_channel = "Time",
-    time_bin = 5, area_height = NULL, area_height_quantile = NULL
+    time_bin = 5, area_height = NULL, area_height_quantile = NULL, reference_group = NULL
   )
   by <- function(check) {
     a <- aud[aud$check == check, ]
@@ -259,7 +259,7 @@ batch_level <- function(seed) {
       )
       files[[hit[k]]] <- x
     }
-    sc <- sw_batch_scores(files, batch, CHANNELS, NEV, seed, order = ord)
+    sc <- sw_batch_scores(files, batch, CHANNELS, NEV, seed, order = ord, reference_group = NULL)
     pe <- sc[sc$check == "pair_emd", ] |>
       summarise(v = max(value), .by = marker)
     mr <- sc[sc$check == "median_range", ]

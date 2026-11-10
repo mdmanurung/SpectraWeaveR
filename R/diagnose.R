@@ -34,6 +34,8 @@
 #' log-densities. When `features` includes `"emd"`, the module also returns
 #' `emd_z`: per channel, the robust z over files of each file's EMD to the
 #' pooled sample. It finds a marker split into two modes better than `sd_z`.
+#' With a `reference_group` in the `anomaly` list, the pooled sample and the z
+#' are both taken within each file's group.
 #'
 #' **Modules are independent.** A fault one module misses may show in another.
 #' Run all of them when you can.
@@ -42,21 +44,23 @@
 #'   analysis scale), or `NULL` when only `header` is used.
 #' @param header `NULL` or a list with `paths`, `keywords`, `reference`.
 #' @param signal `NULL` or a list with `channels`, `range_max`, `range_min`,
-#'   `time_channel`, `time_bin`.
+#'   `time_channel`, `time_bin`, `area_height`, `area_height_quantile`,
+#'   `reference_group`.
 #' @param anomaly `NULL` or a list with `channels`, `features`,
 #'   `quantile_step`, `n_events`, `seed`, `scale`, `aggregate_from`,
-#'   `agg_size`, `reference` (when needed), `ntrees`, `sample_size`, `ndim`.
+#'   `agg_size`, `reference` (when needed), `reference_group`, `ntrees`,
+#'   `sample_size`, `ndim`.
 #' @param batch `NULL` or a list with `batch`, `markers`, `n_events`, `seed`,
-#'   `order`.
+#'   `order`, `reference_group`.
 #' @param cluster `NULL` or a list with `markers`, `k`, `n_events`, `seed`,
-#'   `nstart`, `min_cluster_events`.
+#'   `nstart`, `min_cluster_events`, `reference`, `reference_group`.
 #' @param relativise `NULL` or a list with `model` (from
 #'   [sw_relativise_fit()]), `batch`, `order`. Subjects are units (samples or
 #'   batches); it does not use `data`.
 #' @param otd `NULL` or a list with `markers`, `n_events`, `reference_events`,
 #'   `blur`, `seed`, `max_iter`, `tol`.
 #' @param negative `NULL` or a list with `channels`, `n_events`, `seed`,
-#'   `hyper_k`, `pairs`.
+#'   `hyper_k`, `pairs`, `spread_quantile`.
 #' @param gate `NULL` or a list with `gates`, `reference`, `edge_width`. The
 #'   `item` column is the gate id, with the channel after a `/` for
 #'   per-channel checks.
@@ -74,9 +78,12 @@
 #'   data = files,
 #'   header = NULL,
 #'   signal = list(channels = chans, range_max = 6, range_min = NULL,
-#'                 time_channel = NULL, time_bin = NULL),
+#'                 time_channel = NULL, time_bin = NULL,
+#'                 area_height = NULL, area_height_quantile = NULL,
+#'                 reference_group = NULL),
 #'   anomaly = NULL,
-#'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
+#'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
+#'                reference_group = NULL),
 #'   cluster = NULL,
 #'   relativise = NULL,
 #'   otd = NULL,
@@ -205,14 +212,11 @@ sw_diagnose <- function(
     # split into two modes better than sd_z (real files, ±0.5 SD: 0.70 vs 0.54).
     emd_cols <- grep("_emd$", names(feats), value = TRUE)
     if (length(emd_cols) > 0) {
+      # With reference_group, the EMD is already measured against the file's own
+      # group pool, and the z is taken within the group.
+      emd_group <- .sw_check_reference_group(anomaly$reference_group, feats$file)
       emd_z <- lapply(emd_cols, function(col) {
-        v <- feats[[col]]
-        s <- 1.4826 * stats::mad(v, constant = 1, na.rm = TRUE)
-        z <- if (sum(!is.na(v)) < 3 || is.na(s) || s == 0) {
-          rep(NA_real_, length(v))
-        } else {
-          (v - stats::median(v, na.rm = TRUE)) / s
-        }
+        z <- .sw_robust_z(feats[[col]], emd_group)
         tibble::tibble(
           module = "anomaly",
           subject = feats$file,

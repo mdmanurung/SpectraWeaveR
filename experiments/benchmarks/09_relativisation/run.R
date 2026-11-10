@@ -72,7 +72,7 @@ instrument <- function(x, offset, gain) {
 }
 arcsinh <- function(files) lapply(files, \(m) asinh(m / COFACTOR))
 max_pair_emd <- function(files, batch, seed) {
-  sc <- sw_batch_scores(files, batch, CHANNELS, SCORE_EVENTS, seed, order = NULL)
+  sc <- sw_batch_scores(files, batch, CHANNELS, SCORE_EVENTS, seed, order = NULL, reference_group = NULL)
   sc[sc$check == "pair_emd", ] |>
     summarise(value = max(value), .by = marker)
 }

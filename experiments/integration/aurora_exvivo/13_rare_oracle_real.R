@@ -64,7 +64,7 @@ long <- lapply(SEEDS, function(seed) {
     for (i in which(bad)) {
       files[[i]][clean_hit[[i]], b] <- files[[i]][clean_hit[[i]], b] + size * marker_sd[[b]]
     }
-    cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
+    cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL, reference_group = NULL)
     d <- cs[cs$check == "median_z" & cs$marker == b, ]
     oracle <- vapply(seq_along(files), \(i) stats::median(files[[i]][clean_hit[[i]], b]), numeric(1))
     # Which found cluster best matches the injected one: share of its events that are injected.
@@ -76,7 +76,7 @@ long <- lapply(SEEDS, function(seed) {
     # The package fix: clusters fitted on known-good files only (here the clean files), the
     # rest assigned to the nearest centre.
     cs_ref <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30,
-      reference = names(files)[!bad])
+      reference = names(files)[!bad], reference_group = NULL)
     d_ref <- cs_ref[cs_ref$check == "median_z" & cs_ref$marker == b, ]
     # The row a user would read: the found cluster whose centre is nearest the injected one.
     hit_found <- which.min(rowSums(sweep(attr(cs, "centers"), 2, km$centers[smallest, ])^2))

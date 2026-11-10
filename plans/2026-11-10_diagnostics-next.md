@@ -127,3 +127,7 @@ files and the reference-only view (W7) is in the report.
 | G4 ledger | Keep target 150. |
 | G5 batch scores with groups | Per donor across batches, combined by the median over donors. |
 | G6 emd_z with groups | EMD to the pooled events of the file's own group; z within the group. |
+| G7 FAUST correction | `sw_correct_run()` with `norm_method = "rank"`; other cyCombine defaults (8x8 SOM, rlen 10, seed 42). |
+| G8 FAUST markers | 37 markers: drop AF1-A, AF-A and LIVE DEAD NIR-A. |
+| G9 reference_group details | Confirmed: global_sd_z cohort SD within group; agg_size per group; batch scores skip groups with < 2 batches, order_rho within group, median over groups per row; benchmark on asinh(x/6000), 30 shared markers. |
+| G10 next for the four limits | Two-way residual: robust z of the value after removing donor and batch medians (median polish); test on the CBF donor-by-batch design. |

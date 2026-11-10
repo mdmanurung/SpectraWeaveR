@@ -95,6 +95,13 @@ sw_emd_1d <- function(x, y) {
 #' @param agg_size Whole number, total events in the pooled sample.
 #' @param reference Character vector of file ids to pool when
 #'   `aggregate_from = "reference"`.
+#' @param reference_group `NULL`, or a named character vector with one group
+#'   label per file (names = file ids, covering every file in `data`), for
+#'   example the donor. With groups, the EMD of a file is measured against the
+#'   pooled events of its own group only (`aggregate_from = "reference"` pools
+#'   the `reference` files of that group, and every group needs at least one),
+#'   and `agg_size` is the pool size per group. `NULL` pools over all files.
+#'   Quantile features do not change.
 #'
 #' @return A tibble of class `sw_anomaly_features` with `file` and one column
 #'   per feature: `<channel>_q<probability>` and `<channel>_emd`. Attribute
@@ -115,7 +122,8 @@ sw_emd_1d <- function(x, y) {
 #'   seed = 1,
 #'   scale = "standard normal (example)",
 #'   aggregate_from = "all",
-#'   agg_size = 300 # illustrative
+#'   agg_size = 300, # illustrative
+#'   reference_group = NULL
 #' )
 #'
 #' @export
@@ -129,7 +137,8 @@ sw_anomaly_features <- function(
   scale,
   aggregate_from,
   agg_size,
-  reference
+  reference,
+  reference_group
 ) {
   req <- c(
     data = missing(data),
@@ -137,7 +146,8 @@ sw_anomaly_features <- function(
     features = missing(features),
     n_events = missing(n_events),
     seed = missing(seed),
-    scale = missing(scale)
+    scale = missing(scale),
+    reference_group = missing(reference_group)
   )
   .sw_stop_missing(req)
 
@@ -199,6 +209,7 @@ sw_anomaly_features <- function(
 
   # Sorted file order makes the draws independent of the list order.
   files <- sort(names(data))
+  grp <- .sw_check_reference_group(reference_group, files)
   mats <- lapply(files, function(f) {
     m <- as.matrix(data[[f]])
     if (!all(channels %in% colnames(m))) {
@@ -239,17 +250,25 @@ sw_anomaly_features <- function(
     drawn <- lapply(mats, function(m) {
       m[sample.int(nrow(m), n_events), , drop = FALSE]
     })
-    pool <- NULL
+    pools <- NULL
     if ("emd" %in% features) {
-      pooled <- if (aggregate_from == "all") files else sort(reference)
-      per_file <- ceiling(agg_size / length(pooled))
-      pool <- do.call(
-        rbind,
-        lapply(pooled, function(f) {
-          m <- mats[[f]]
-          m[sample.int(nrow(m), min(per_file, nrow(m))), , drop = FALSE]
-        })
-      )
+      # One pool for all files, or one pool per reference group: a file is then
+      # measured against the pooled events of its own group.
+      pool_groups <- if (is.null(grp)) list(files) else split(files, grp)
+      pools <- lapply(pool_groups, function(gf) {
+        pooled <- if (aggregate_from == "all") gf else sort(intersect(reference, gf))
+        if (length(pooled) == 0) {
+          stop("A reference group has no file in `reference` to pool.", call. = FALSE)
+        }
+        per_file <- ceiling(agg_size / length(pooled))
+        do.call(
+          rbind,
+          lapply(pooled, function(f) {
+            m <- mats[[f]]
+            m[sample.int(nrow(m), min(per_file, nrow(m))), , drop = FALSE]
+          })
+        )
+      })
     }
   })
 
@@ -269,13 +288,16 @@ sw_anomaly_features <- function(
     }
   }
   if ("emd" %in% features) {
-    # The plan depends only on the sizes, and the pool is sorted once per channel.
-    plan <- .sw_emd_plan(n_events, nrow(pool))
+    # The plan depends only on the sizes, and each pool is sorted once per channel.
+    pool_of <- if (is.null(grp)) rep(1L, length(files)) else match(grp, names(pools))
+    plans <- lapply(pools, function(p) .sw_emd_plan(n_events, nrow(p)))
     for (ch in channels) {
-      pool_sorted <- sort(pool[, ch])
+      pool_sorted <- lapply(pools, function(p) sort(p[, ch]))
       cols[[paste0(ch, "_emd")]] <- vapply(
-        drawn,
-        function(m) .sw_emd_sorted(sort(m[, ch]), pool_sorted, plan),
+        seq_along(drawn),
+        function(i) {
+          .sw_emd_sorted(sort(drawn[[i]][, ch]), pool_sorted[[pool_of[i]]], plans[[pool_of[i]]])
+        },
         numeric(1)
       )
     }
@@ -294,7 +316,8 @@ sw_anomaly_features <- function(
     scale = scale,
     aggregate_from = if (!missing(aggregate_from)) aggregate_from,
     agg_size = if (!missing(agg_size)) agg_size,
-    reference = if (!missing(reference)) reference
+    reference = if (!missing(reference)) reference,
+    reference_group = reference_group
   )
   class(out) <- c("sw_anomaly_features", class(out))
   out

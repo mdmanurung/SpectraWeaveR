@@ -4,7 +4,15 @@
 \alias{sw_negative_audit}
 \title{Audit the negative population of each channel}
 \usage{
-sw_negative_audit(data, channels, n_events, seed, hyper_k, pairs)
+sw_negative_audit(
+  data,
+  channels,
+  n_events,
+  seed,
+  hyper_k,
+  pairs,
+  spread_quantile
+)
 }
 \arguments{
 \item{data}{A named list of numeric matrices, one per file, one column per
@@ -22,6 +30,10 @@ negative median an event must sit to count as hyper-negative.}
 \item{pairs}{\code{NULL} (no pair checks), the string \code{"all"} (every pair of
 \code{channels}), or a two-column character matrix of channel pairs. Each
 pair gives \code{neg_corr} once and \code{spill_corr} in both directions.}
+
+\item{spread_quantile}{\code{NULL} (no spread check), or one number in (0.5, 1):
+the source-channel quantile above which events count as high for
+\code{spread_log_ratio}. Needs \code{pairs}.}
 }
 \value{
 A tibble of class \code{sw_negative_audit} with columns \code{file}, \code{check},
@@ -59,13 +71,22 @@ should be negative, in proportion to the bright signal, shows here: tandem
 breakdown into its parent (for example PE-Cy7 into PE) and dye-dye
 interactions (for example Spark UV 387 into RB670), as described in O.
 Burton's Colibri Cytometry posts. Pass those pairs in \code{pairs}.
+\item \code{spread_log_ratio}, \code{spread_z}: spillover spread, for each pair in both
+directions (\code{"A > B"}), when \code{spread_quantile} is given. Among the events
+negative in the target B, the robust SD of B where the source A is at or
+above its \code{spread_quantile} quantile, over the robust SD of B where A is
+at or below its median, as a natural log; and its robust z across files.
+Spread widens the target's negative in proportion to the source signal, so
+a file (or instrument) with more spread from A into B has a higher ratio.
+Fewer than 10 events on either side gives \code{NA}.
 }
 }
 \details{
 \strong{Scale is yours.} \code{data} must be on the analysis scale. The mixture is fit
 on those values; a transform changes which events are negative.
 
-\strong{No defaults.} \code{n_events}, \code{seed}, \code{hyper_k} and \code{pairs} change the
+\strong{No defaults.} \code{n_events}, \code{seed}, \code{hyper_k}, \code{pairs} and
+\code{spread_quantile} change the
 numbers, so each must be passed. Events are drawn per file without
 replacement with \code{seed}; a file with fewer events is an error. The caller's
 RNG state is restored. mclust itself is deterministic.
@@ -86,7 +107,8 @@ files <- lapply(1:6, function(i) {
   x
 })
 names(files) <- paste0("f", 1:6)
-sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all")
+sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all",
+  spread_quantile = 0.9)
 }
 
 }

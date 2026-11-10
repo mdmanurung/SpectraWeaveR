@@ -14,7 +14,8 @@ sw_anomaly_features(
   scale,
   aggregate_from,
   agg_size,
-  reference
+  reference,
+  reference_group
 )
 }
 \arguments{
@@ -41,6 +42,14 @@ result.}
 
 \item{reference}{Character vector of file ids to pool when
 \code{aggregate_from = "reference"}.}
+
+\item{reference_group}{\code{NULL}, or a named character vector with one group
+label per file (names = file ids, covering every file in \code{data}), for
+example the donor. With groups, the EMD of a file is measured against the
+pooled events of its own group only (\code{aggregate_from = "reference"} pools
+the \code{reference} files of that group, and every group needs at least one),
+and \code{agg_size} is the pool size per group. \code{NULL} pools over all files.
+Quantile features do not change.}
 }
 \value{
 A tibble of class \code{sw_anomaly_features} with \code{file} and one column
@@ -96,7 +105,8 @@ sw_anomaly_features(
   seed = 1,
   scale = "standard normal (example)",
   aggregate_from = "all",
-  agg_size = 300 # illustrative
+  agg_size = 300, # illustrative
+  reference_group = NULL
 )
 
 }

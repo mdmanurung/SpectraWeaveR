@@ -117,7 +117,7 @@ long <- lapply(SEEDS, function(seed) {
       range_max = cohort_max,
       range_min = NULL,
       time_channel = "Time",
-      time_bin = time_bin, area_height = NULL, area_height_quantile = NULL
+      time_bin = time_bin, area_height = NULL, area_height_quantile = NULL, reference_group = NULL
     )
     # Hit channel's row for channel checks; the file's single row for file-level checks.
     row_of <- function(check, item) {
@@ -141,7 +141,7 @@ long <- lapply(SEEDS, function(seed) {
     )
     if (fault == "rare_pop") {
       # Cluster checks need complete data; only this fault is scored with them.
-      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
+      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL, reference_group = NULL)
       d <- cs[cs$check == "median_z" & cs$marker == pick[2], ]
       scores$cluster_median_z <- as.numeric(tapply(abs(d$value), d$file, top)[names(files)])
     }

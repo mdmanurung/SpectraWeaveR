@@ -76,7 +76,8 @@ dx <- sw_diagnose(
     range_max = NULL, # instrument maximum on the transformed scale is not known
     range_min = NULL,
     time_channel = "Time",
-    time_bin = time_bin, area_height = NULL, area_height_quantile = NULL
+    time_bin = time_bin, area_height = NULL, area_height_quantile = NULL,
+    reference_group = NULL
   ),
   anomaly = list(
     channels = channels,
@@ -87,6 +88,7 @@ dx <- sw_diagnose(
     scale = SCALE_NOTE,
     aggregate_from = "all",
     agg_size = AGG_SIZE,
+    reference_group = NULL,
     ntrees = FOREST_TREES,
     sample_size = FOREST_SAMPLE,
     ndim = 1
@@ -96,7 +98,8 @@ dx <- sw_diagnose(
     markers = channels,
     n_events = N_EVENTS,
     seed = SEED,
-    order = acq
+    order = acq,
+    reference_group = NULL
   ),
   cluster = list(
     markers = channels,
@@ -104,7 +107,8 @@ dx <- sw_diagnose(
     n_events = N_EVENTS,
     seed = SEED,
     nstart = CLUSTER_NSTART,
-    min_cluster_events = MIN_CLUSTER_EVENTS, reference = NULL
+    min_cluster_events = MIN_CLUSTER_EVENTS, reference = NULL,
+    reference_group = NULL
   ),
   relativise = NULL, # no reference controls in these files
   otd = NULL,
@@ -130,7 +134,7 @@ feat <- sw_anomaly_features(
   SEED,
   SCALE_NOTE,
   "all",
-  AGG_SIZE
+  AGG_SIZE, reference_group = NULL
 )
 # PCA is for display only; it is run on the unscaled feature columns.
 pc <- prcomp(as.matrix(feat[-1]), center = TRUE, scale. = FALSE)

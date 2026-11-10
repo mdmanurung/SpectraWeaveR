@@ -22,7 +22,7 @@ test_that("NA values in the chosen channels are an error, not dropped", {
       seed = 1,
       scale = "x",
       aggregate_from = "all",
-      agg_size = 200
+      agg_size = 200, reference_group = NULL
     ),
     "NA values"
   )
@@ -54,7 +54,7 @@ test_that("the feature EMD equals sw_emd_1d on the same draws", {
     scale = "x",
     aggregate_from = "reference",
     agg_size = 200,
-    reference = "f1"
+    reference = "f1", reference_group = NULL
   )
   expect_equal(res$A_emd[res$file == "f2"], sw_emd_1d(d$f2[, "A"], d$f1[, "A"]))
   expect_equal(res$A_emd[res$file == "f1"], 0)

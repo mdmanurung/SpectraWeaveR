@@ -24,7 +24,8 @@ audit <- function(d, ...) {
     time_channel = NULL,
     time_bin = NULL,
     area_height = NULL,
-    area_height_quantile = NULL
+    area_height_quantile = NULL,
+    reference_group = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_fcs_signal_audit, args)
@@ -42,7 +43,7 @@ test_that("required arguments have no default", {
   expect_error(sw_fcs_signal_audit(), "no default")
   d <- make_sig()
   expect_error(
-    sw_fcs_signal_audit(d, channels = c("A", "B"), area_height = NULL, area_height_quantile = NULL),
+    sw_fcs_signal_audit(d, channels = c("A", "B"), area_height = NULL, area_height_quantile = NULL, reference_group = NULL),
     "range_max"
   )
 })
@@ -115,7 +116,7 @@ test_that("rate_cv counts events per bin, so thinning a window raises it", {
   # Exact value on a hand-made file: bins of 1 unit hold 3, 1, 0, 2 events.
   m <- cbind(Time = c(0.1, 0.2, 0.3, 1.5, 3.2, 3.9), A = 1:6, B = 6:1)
   d2 <- list(x = m, y = m)
-  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1, area_height = NULL, area_height_quantile = NULL)
+  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
   counts <- c(3, 1, 0, 2)
   expect_equal(
     r2$value[r2$check == "rate_cv"][1],
@@ -181,14 +182,14 @@ test_that("area_height_z finds the file with more doublets", {
   })
   names(files) <- paste0("f", 1:10)
   au <- sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, time_channel = NULL, time_bin = NULL,
-    area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.95)
+    area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.95, reference_group = NULL)
   z <- au[au$check == "area_height_z", ]
   expect_equal(nrow(z), 10)
   expect_equal(z$file[which.max(z$value)], "f4")
   expect_gt(max(z$value), 5)
   expect_equal(unique(z$detail), "FSC-A / FSC-H")
   expect_error(
-    sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, NULL, NULL, c(`FSC-A` = "FSC-H"), NULL),
+    sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, NULL, NULL, c(`FSC-A` = "FSC-H"), NULL, reference_group = NULL),
     "area_height_quantile"
   )
 })
@@ -202,7 +203,7 @@ test_that("global_sd_z finds a file widened a little in every channel", {
     m
   })
   names(files) <- paste0("f", 1:12)
-  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
+  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
   g <- au[au$check == "global_sd_z", ]
   expect_equal(nrow(g), 12)
   expect_true(all(is.na(g$channel)))
@@ -217,11 +218,81 @@ test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has on
     cbind(A = m + stats::rnorm(1001, 0, 1e-9), B = stats::rnorm(1001), C = stats::rnorm(1001))
   })
   names(files) <- paste0("f", 1:5)
-  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
+  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
   z <- au$value[au$check == "median_z" & au$channel == "A"]
   # Median of the file medians is 2 and their raw MAD is 1, so z = (m - 2) / 1.4826.
   expect_equal(z, (meds - 2) / 1.4826, tolerance = 1e-6)
   pz <- au[au$check == "corr_pair_z", ]
   expect_equal(nrow(pz), 5 * 3)
   expect_setequal(unique(pz$channel), c("A ~ B", "A ~ C", "B ~ C"))
+})
+
+# reference_group ---------------------------------------------------------------
+
+# Three donors of four files. Donors differ in the median of A by 0, 4 and 8.
+# File d2_4 is shifted by 0.5 on top of its donor.
+make_donors <- function(seed = 3) {
+  set.seed(seed)
+  ids <- paste0("d", rep(1:3, each = 4), "_", rep(1:4, 3))
+  d <- lapply(ids, function(i) {
+    donor <- as.integer(substr(i, 2, 2))
+    cbind(
+      A = stats::rnorm(400) + 4 * (donor - 1) + if (i == "d2_4") 0.5 else 0,
+      B = stats::rnorm(400),
+      C = stats::rnorm(400)
+    )
+  })
+  names(d) <- ids
+  donor <- stats::setNames(substr(ids, 1, 2), ids)
+  list(data = d, donor = donor)
+}
+
+test_that("reference_group finds a file that is unusual only within its donor", {
+  x <- make_donors()
+  all_files <- audit(x$data)
+  by_donor <- audit(x$data, reference_group = x$donor)
+  z_all <- val(all_files, "d2_4", "median_z", "A")
+  z_grp <- val(by_donor, "d2_4", "median_z", "A")
+  expect_lt(abs(z_all), 1)
+  expect_gt(abs(z_grp), 3)
+  # The faulty file ranks first on A only with groups.
+  rank_of <- function(res) {
+    r <- res[res$check == "median_z" & res$channel == "A", ]
+    r$file[which.max(abs(r$value))]
+  }
+  expect_equal(rank_of(by_donor), "d2_4")
+  # The result does not depend on the order of the labels.
+  shuffled <- audit(x$data, reference_group = x$donor[rev(names(x$donor))])
+  expect_equal(shuffled$value, by_donor$value)
+  # sd_z, global_sd_z and corr_pair_z keep their rows.
+  expect_setequal(unique(by_donor$check), unique(all_files$check))
+})
+
+test_that("a group with fewer than 3 files gives NA z-scores", {
+  x <- make_donors()
+  g <- x$donor
+  g[names(g) %in% c("d3_1", "d3_2")] <- "other"
+  res <- audit(x$data, reference_group = g)
+  zrows <- res[res$check %in% c("median_z", "sd_z", "global_sd_z", "corr_pair_z"), ]
+  small <- zrows$file %in% c("d3_1", "d3_2")
+  expect_true(all(is.na(zrows$value[small])))
+  expect_false(all(is.na(zrows$value[!small])))
+})
+
+test_that("reference_group is required and must cover every file", {
+  x <- make_donors()
+  expect_error(
+    sw_fcs_signal_audit(x$data, c("A", "B"), NULL, NULL, NULL, NULL, NULL, NULL),
+    "no default"
+  )
+  expect_error(
+    sw_fcs_signal_audit(x$data, c("A", "B"), NULL, NULL, NULL, NULL, NULL, NULL),
+    "reference_group"
+  )
+  expect_error(audit(x$data, reference_group = x$donor[-1]), "label for every file")
+  expect_error(audit(x$data, reference_group = unname(x$donor)), "label for every file")
+  expect_error(
+    audit(x$data, reference_group = stats::setNames(rep(1, 12), names(x$donor))),
+    "label for every file"
+  )
 })

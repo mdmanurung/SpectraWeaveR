@@ -12,7 +12,8 @@ sw_cluster_scores(
   seed,
   nstart,
   min_cluster_events,
-  reference
+  reference,
+  reference_group
 )
 }
 \arguments{
@@ -35,6 +36,13 @@ cluster for its median to be scored.}
 \item{reference}{\code{NULL} to fit k-means on all files, or a character vector
 of file ids to fit it on; all files are then assigned to the nearest
 centre.}
+
+\item{reference_group}{\code{NULL}, or a named character vector with one group
+label per file (names = file ids, covering every file in \code{data}), for
+example the donor. With groups, \code{freq_z} and \code{median_z} use the median and
+MAD of the file's own group only. The clusters are still fitted as set by
+\code{reference}. A group with fewer than 3 files (or 3 scored medians), or
+with MAD 0, gives \code{NA}.}
 }
 \value{
 A tibble of class \code{sw_cluster_scores} with columns \code{file}, \code{cluster}
@@ -99,7 +107,7 @@ names(files) <- paste0("f", 1:6)
 sw_cluster_scores(
   files, c("A", "B"),
   k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20,
-  reference = NULL
+  reference = NULL, reference_group = NULL
 )
 
 }

@@ -46,6 +46,14 @@
 #' @param seed Whole number for the draws.
 #' @param order `NULL`, or a named numeric vector with the acquisition order
 #'   (or time) of each file. Used only for `order_rho`.
+#' @param reference_group `NULL`, or a named character vector with one group
+#'   label per file (names = file ids, covering every file in `data`), for
+#'   example the donor. With groups, every score is computed within each group
+#'   from that group's files only, across batches, and the groups are combined
+#'   per row (marker and batch, or batch pair) by the median over groups. This
+#'   removes donor differences from the batch scores. A group with files from
+#'   fewer than two batches is skipped. `n_files` is the sum over groups.
+#'   `NULL` scores all files together.
 #'
 #' @return A tibble of class `sw_batch_scores` with columns `check`, `marker`,
 #'   `batch` (the batch, or `"b1 ~ b2"` for a pair, or `NA` for the all-batch
@@ -66,7 +74,8 @@
 #'   markers = c("A", "B"),
 #'   n_events = 100, # illustrative
 #'   seed = 1,
-#'   order = NULL
+#'   order = NULL,
+#'   reference_group = NULL
 #' )
 #'
 #' @export
@@ -76,7 +85,8 @@ sw_batch_scores <- function(
   markers,
   n_events,
   seed,
-  order
+  order,
+  reference_group
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -84,7 +94,8 @@ sw_batch_scores <- function(
     markers = missing(markers),
     n_events = missing(n_events),
     seed = missing(seed),
-    order = missing(order)
+    order = missing(order),
+    reference_group = missing(reference_group)
   ))
   if (!is.list(data) || is.null(names(data)) || anyDuplicated(names(data))) {
     stop("`data` must be a named list of files.", call. = FALSE)
@@ -118,6 +129,7 @@ sw_batch_scores <- function(
   if (anyNA(batch)) {
     stop("`batch` has missing labels.", call. = FALSE)
   }
+  grp <- .sw_check_reference_group(reference_group, files)
   batches <- sort(unique(batch))
   if (length(batches) < 2) {
     stop("Need at least two batches.", call. = FALSE)
@@ -159,6 +171,46 @@ sw_batch_scores <- function(
     stop("Events must not contain NA in the chosen markers.", call. = FALSE)
   }
 
+  # One set of scores over all files, or one per reference group (only that
+  # group's files, across batches) combined by the median over groups.
+  if (is.null(grp)) {
+    out <- .sw_batch_scores_core(drawn, files, batch, markers, order)
+  } else {
+    per_group <- lapply(unique(grp), function(g) {
+      keep <- files[grp == g]
+      if (length(unique(batch[files %in% keep])) < 2) {
+        return(NULL)
+      }
+      .sw_batch_scores_core(
+        drawn[keep],
+        keep,
+        batch[files %in% keep],
+        markers,
+        order
+      )
+    })
+    per_group <- dplyr::bind_rows(per_group)
+    if (nrow(per_group) == 0) {
+      stop("No reference group has files from at least two batches.", call. = FALSE)
+    }
+    out <- per_group |>
+      dplyr::summarise(
+        value = stats::median(value),
+        n_files = sum(n_files),
+        .by = c(check, marker, batch)
+      )
+    # Keep the row order of the all-files result: check, marker order as first seen.
+    out <- out[order(match(out$check, unique(per_group$check)), match(out$marker, markers)), ]
+    out <- tibble::as_tibble(out)
+  }
+  class(out) <- c("sw_batch_scores", class(out))
+  out
+}
+
+# Scores for one set of files. `drawn` is a named list of event matrices in the
+# order of `files`; `batch` has one label per file, in that order.
+.sw_batch_scores_core <- function(drawn, files, batch, markers, order) {
+  batches <- sort(unique(batch))
   # File medians per marker (rows = files).
   fmed <- t(vapply(
     drawn,
@@ -257,7 +309,5 @@ sw_batch_scores <- function(
     }
   }
 
-  out <- dplyr::bind_rows(rows)
-  class(out) <- c("sw_batch_scores", class(out))
-  out
+  dplyr::bind_rows(rows)
 }

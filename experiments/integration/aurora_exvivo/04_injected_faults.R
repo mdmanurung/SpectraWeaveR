@@ -50,14 +50,14 @@ auroc <- function(score, pos) {
 
 tool_scores <- function(files, seed) {
   ids <- names(files)
-  feat <- sw_anomaly_features(files, ch, c("quantile", "emd"), QSTEP, NEV, seed, "real, OMIQ-transformed", "all", AGG)
+  feat <- sw_anomaly_features(files, ch, c("quantile", "emd"), QSTEP, NEV, seed, "real, OMIQ-transformed", "all", AGG, reference_group = NULL)
   fl <- sw_anomaly_flag_outlier(feat, NTREES, FOREST_SAMPLE, 1, 0.5, seed)
-  aud <- sw_fcs_signal_audit(files, ch, range_max = NULL, range_min = NULL, time_channel = "Time", time_bin = time_bin, area_height = NULL, area_height_quantile = NULL)
+  aud <- sw_fcs_signal_audit(files, ch, range_max = NULL, range_min = NULL, time_channel = "Time", time_bin = time_bin, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
   by_abs <- function(check) {
     a <- aud[aud$check == check, ]
     as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids])
   }
-  cs <- sw_cluster_scores(files, ch, CLUSTER_K, NEV, seed, 3, 30, reference = NULL)
+  cs <- sw_cluster_scores(files, ch, CLUSTER_K, NEV, seed, 3, 30, reference = NULL, reference_group = NULL)
   cm <- cs[cs$check == "median_z", ]
   cm <- vapply(split(abs(cm$value), cm$file)[ids], max, numeric(1), na.rm = TRUE)
   tibble(

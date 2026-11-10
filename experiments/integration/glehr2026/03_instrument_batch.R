@@ -105,7 +105,7 @@ write.csv(diag, file.path(run_dir, "relativise_diagnose.csv"), row.names = FALSE
 batch <- setNames(units$instrument, units$unit)
 stages <- list(before = before, authors = lapply(loaded, \(x) x$authors), ours = ours)
 scores <- lapply(names(stages), function(s) {
-  sw_batch_scores(stages[[s]], batch, markers, n_events = N_EVENTS, seed = SEED, order = NULL) |>
+  sw_batch_scores(stages[[s]], batch, markers, n_events = N_EVENTS, seed = SEED, order = NULL, reference_group = NULL) |>
     mutate(stage = s)
 }) |>
   bind_rows()

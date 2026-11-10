@@ -41,7 +41,7 @@ ch <- setdiff(colnames(base[[1]]), "Time")
 names(base) <- paste0("f", seq_along(base)) # file names are not needed and stay out of outputs
 
 # (1) Bimodality per channel on the real files ---------------------------------
-clean <- sw_negative_audit(base, ch, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = NULL)
+clean <- sw_negative_audit(base, ch, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = NULL, spread_quantile = NULL)
 neg_info <- clean |>
   filter(check %in% c("separation", "neg_median", "neg_sd")) |>
   summarise(value = median(value, na.rm = TRUE), .by = c(channel, check)) |>
@@ -100,9 +100,10 @@ long <- lapply(SEEDS, function(seed) {
       N_EVENTS,
       seed = seed,
       hyper_k = HYPER_K,
-      pairs = matrix(pick, 1)
+      pairs = matrix(pick, 1),
+      spread_quantile = NULL
     )
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
     row_of <- function(tab, check, item) {
       d <- tab[tab$check == check & tab$channel == item, ]
       abs(d$value)[match(names(files), d$file)]

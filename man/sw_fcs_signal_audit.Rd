@@ -12,7 +12,8 @@ sw_fcs_signal_audit(
   time_channel,
   time_bin,
   area_height,
-  area_height_quantile
+  area_height_quantile,
+  reference_group
 )
 }
 \arguments{
@@ -39,6 +40,16 @@ channel pairs, for example \code{c("FSC-A" = "FSC-H")}, for the doublet check.}
 \item{area_height_quantile}{Number in (0, 1), the upper quantile of area /
 height reported per file. Needed when \code{area_height} is given; otherwise
 pass \code{NULL}.}
+
+\item{reference_group}{\code{NULL}, or a named character vector with one group
+label per file (names = file ids, covering every file in \code{data}), for
+example the donor. With \code{NULL}, every robust z (\code{median_z}, \code{sd_z},
+\code{global_sd_z}, \code{area_height_z}, \code{corr_pair_z}) is taken over all files.
+With groups, each z uses only the files of the same group: median and MAD
+come from the group, and the cohort SD behind \code{global_sd_z} too. A group
+with fewer than 3 files, or with MAD 0, gives \code{NA}. \code{corr_shift} still
+uses all files. Use groups when files of one donor differ from other
+donors for biological reasons.}
 }
 \value{
 A tibble of class \code{sw_fcs_signal_audit} with columns \code{file},
@@ -120,7 +131,7 @@ sw_fcs_signal_audit(
   files,
   channels = c("A", "B"),
   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
-  area_height = NULL, area_height_quantile = NULL
+  area_height = NULL, area_height_quantile = NULL, reference_group = NULL
 )
 
 }
