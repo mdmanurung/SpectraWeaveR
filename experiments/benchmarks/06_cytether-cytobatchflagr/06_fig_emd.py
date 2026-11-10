@@ -17,7 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-ORDER = ["none", "cytofin", "cytofin_pop", "paired_shift", "heb", "cytonorm", "cycombine"]
+ORDER = ["none", "cytofin", "cytofin_pop", "paired_shift", "heb", "heb_kv_bap", "cytonorm", "cycombine"]
 FOLD_COLOURS = {"tcu1": "#1b9e77", "tcu2": "#d95f02", "tcs3": "#7570b3", "tcs4": "#e7298a"}
 
 root = Path(sys.argv[1])

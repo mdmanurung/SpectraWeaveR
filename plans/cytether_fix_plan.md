@@ -16,6 +16,7 @@ no correction, explained by its one shift per marker and batch (diagnostic, no a
 | F5 | 10 extra dev seeds, 451-460 (20 dev seeds in total) | user 2026-11-10 |
 | F6 | HEB fix: boundary-avoiding prior, penalised REML with a gamma(shape 2, rate -> 0) penalty on each variance-component SD (Chung et al., PMID 24092484; blme). F4 showed 1-donor effects with median |z| 1.6-99 (variance pinned at the floor); 2+ donor effects cover 0.885-0.904 | user 2026-11-10 |
 | F8 | After F6 failed (ledger c022: prior lifts run variance, residual collapses instead), HEB residual = known sampling variance var(cells)/n per summary + one estimated extra variance (Fay-Herriot style); arms heb_pool_pop_kv and heb_pool_pop_kv_bap on dev seeds 441-460 | user 2026-11-10 |
+| F9 | T6 adds `heb_kv_bap` (N4 model + F6 prior + F8 known variance) as an extra arm on EMD and OpenProblems; the approved `heb` arm stays | user 2026-11-10 |
 | F7 | Crash fix in the ported FlowSOM mapping metric: shared cell-type levels across splits; identical result whenever both splits hold every type | agent, no value change; deviation noted in code |
 
 ## Steps

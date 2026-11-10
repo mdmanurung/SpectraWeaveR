@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Purpose: run 02b_correct_op.R for one (method, fold, split) of the T6 OpenProblems track; a job array over 56 (cytofin_pop: 48-55).
-# Run:     sbatch --array=0-55%5 experiments/slurm/t6_correct_op.sbatch <prep_dir> <out_dir>
+# Purpose: run 02b_correct_op.R for one (method, fold, split) of the T6 OpenProblems track; a job array over 64 (cytofin_pop: 48-55; heb_kv_bap: 56-63).
+# Run:     sbatch --array=0-63%5 experiments/slurm/t6_correct_op.sbatch <prep_dir> <out_dir>
 #          index i -> method METHODS[i / 8], fold FOLDS[(i % 8) / 2], split (i % 2) + 1; %5 caps concurrent jobs.
 # Inputs:  <prep_dir> from 01_prep.R and 01b_prep_op.R
 # Outputs: <out_dir>/<method>/<fold>/split_<k>/ and slurm-<jobid>_<index>.out in the submit directory
@@ -14,7 +14,7 @@ set -euo pipefail
 
 prep_dir=${1:?usage: sbatch t6_correct_op.sbatch <prep_dir> <out_dir>}
 out_dir=${2:?}
-METHODS=(none paired_shift heb cycombine cytonorm cytofin cytofin_pop)
+METHODS=(none paired_shift heb cycombine cytonorm cytofin cytofin_pop heb_kv_bap)
 FOLDS=(op_tcu1_tcs3 op_tcu1_tcs4 op_tcu2_tcs3 op_tcu2_tcs4)
 method=${METHODS[$((SLURM_ARRAY_TASK_ID / 8))]}
 fold=${FOLDS[$(((SLURM_ARRAY_TASK_ID % 8) / 2))]}

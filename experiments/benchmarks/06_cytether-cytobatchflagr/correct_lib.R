@@ -17,7 +17,7 @@ CYTOFIN_MODE <- "meanshift" # N7
 MIN_BATCHES <- 2
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift"
 T6_TRANSFORM <- list(name = "asinh", cofactor = 6000) # Q4
-T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop") # cytofin_pop: F2
+T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap") # cytofin_pop: F2; heb_kv_bap: F9
 
 correct_t6 <- function(x, meta, population, method, markers) {
   if (method == "none") {
@@ -59,18 +59,20 @@ correct_t6 <- function(x, meta, population, method, markers) {
     samples, minimum_batches = MIN_BATCHES, minimum_batches_origin = MIN_BATCHES_ORIGIN,
     require_shared_reference = TRUE, anchor = ANCHOR
   )
-  # N4: flat hierarchy, one random effect per batch.
-  hierarchy <- if (method == "heb") dplyr::mutate(dplyr::distinct(meta, batch), study = batch) else NULL
+  # N4: flat hierarchy, one random effect per batch. heb_kv_bap (F9) adds F6 and F8 to the same model.
+  is_heb <- method %in% c("heb", "heb_kv_bap")
+  engine <- if (is_heb) "heb" else method
+  hierarchy <- if (is_heb) dplyr::mutate(dplyr::distinct(meta, batch), study = batch) else NULL
   xt <- tibble::as_tibble(x) |> dplyr::mutate(sample_id = meta$sample_id, .before = 1)
   fit_rows <- meta$is_reference
   model <- sw_corrector_fit(
     xt[fit_rows, ], manifest, audit, population = population[fit_rows], markers = markers,
-    transform = T6_TRANSFORM, anchor = ANCHOR, engine = method,
+    transform = T6_TRANSFORM, anchor = ANCHOR, engine = engine,
     min_cells = MIN_CELLS, seed = 1, hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
-    pool = if (method == "heb") HEB_POOL else NULL,
-    anchor_effect = if (method == "heb") "random" else NULL,
-    variance_prior = if (method == "heb") "none" else NULL, # N4 as approved; F6/F8 are tested on synthetic dev first
-    residual_model = if (method == "heb") "estimated" else NULL
+    pool = if (is_heb) HEB_POOL else NULL,
+    anchor_effect = if (is_heb) "random" else NULL,
+    variance_prior = if (is_heb) (if (method == "heb_kv_bap") "boundary_avoiding" else "none") else NULL,
+    residual_model = if (is_heb) (if (method == "heb_kv_bap") "known_plus_extra" else "estimated") else NULL
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")
