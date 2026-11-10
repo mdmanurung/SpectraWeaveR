@@ -286,6 +286,24 @@ linear map (all 42 files matched exactly).
 
 ![FORT: instrument eta2 per marker over three instruments](figures/glehr_fort_instrument_eta2.png)
 
+Why AF700 and PB stay. On the BAD files, the authors' relativised AF700 (CD8)
+agrees between instruments at the 10th and 90th decile, but its 20th to 50th
+deciles sit up to 0.7 higher on the Fortessa (asinh(x / 1000) scale). PB
+(CD57) drifts from -0.22 at the 10th decile to +0.12 at the 90th. The CD3
+anchor lines up the positive peak, not the lower part.
+
+![Fortessa minus Aurora per decile, one line per donor](figures/glehr_af700_pb_deciles.png)
+
+`sw_negative_audit()` names the cause. On the Fortessa the AF700 negative
+population sits higher (median 0.08 to 0.50) and is 5.6 times wider (SD 0.09
+to 0.53) in every donor; PB's negative is 2.8 times wider and lower. Other
+channels widen about 2 times but keep their median. A two-point linear map
+from a CD3 single stain cannot correct a negative population that differs in
+the full stain. Spillover spread from the panel's other dyes is a likely
+reason but was not tested.
+
+![Negative-population median, SD and separation per instrument](figures/glehr_af700_pb_negative.png)
+
 `separation` flags a CD3 control whose split cannot be trusted. On the
 Fortessa, the KrO-A control's CD3- and CD3+ sides overlap (separation 1.13 to
 1.21; all other channels 2.2 to 3.2). That channel is the only one where our M
