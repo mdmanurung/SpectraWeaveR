@@ -49,7 +49,7 @@ names(files) <- paste0("d", grid$donor, "_", grid$instrument)
 
 # Spread per directed pair, two quantile variants -----------------------------
 audit <- lapply(QUANTILES, function(q) {
-  sw_negative_audit(files, CHANNELS, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = "all", spread_quantile = q) |>
+  sw_negative_audit(files, CHANNELS, N_EVENTS, seed = 1, hyper_k = HYPER_K, pairs = "all", spread_quantile = q, min_separation = 3) |> # G24
     filter(check == "spread_log_ratio") |>
     mutate(spread_quantile = q)
 }) |>

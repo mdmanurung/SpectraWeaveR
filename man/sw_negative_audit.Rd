@@ -11,7 +11,8 @@ sw_negative_audit(
   seed,
   hyper_k,
   pairs,
-  spread_quantile
+  spread_quantile,
+  min_separation
 )
 }
 \arguments{
@@ -34,6 +35,18 @@ pair gives \code{neg_corr} once and \code{spill_corr} in both directions.}
 \item{spread_quantile}{\code{NULL} (no spread check), or one number in (0.5, 1):
 the source-channel quantile above which events count as high for
 \code{spread_log_ratio}. Needs \code{pairs}.}
+
+\item{min_separation}{One non-negative number, no default. After all files
+are fit, each channel's median \code{separation} across files is compared to it.
+A channel below it has no real negative (the "negative" is a split of one
+population). For that channel, \code{neg_median}, \code{neg_sd}, \code{neg_share},
+\code{hyper_negative_share}, their z rows, and every pair check
+(\code{neg_corr}, \code{spill_corr}, \code{spread_log_ratio} and their z) that involves it
+keep their rows with value \code{NA} and the reason in \code{detail}. \code{separation}
+is always kept. The gate acts per channel, so one widened file in a bimodal
+channel stays scored. The extra check \code{split_ok} has one row per file and
+channel and repeats the channel gate: 1 when the channel is scored, 0 when
+it is gated.}
 }
 \value{
 A tibble of class \code{sw_negative_audit} with columns \code{file}, \code{check},
@@ -86,7 +99,7 @@ Fewer than 10 events on either side gives \code{NA}.
 on those values; a transform changes which events are negative.
 
 \strong{No defaults.} \code{n_events}, \code{seed}, \code{hyper_k}, \code{pairs} and
-\code{spread_quantile} change the
+\code{spread_quantile} and \code{min_separation} change the
 numbers, so each must be passed. Events are drawn per file without
 replacement with \code{seed}; a file with fewer events is an error. The caller's
 RNG state is restored. mclust itself is deterministic.
@@ -108,7 +121,8 @@ files <- lapply(1:6, function(i) {
 })
 names(files) <- paste0("f", 1:6)
 sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all",
-  spread_quantile = 0.9)
+  spread_quantile = 0.9,
+  min_separation = 3)
 }
 
 }

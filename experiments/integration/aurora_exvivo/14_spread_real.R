@@ -68,7 +68,7 @@ long <- lapply(SEEDS, function(seed) {
       x
     })
     lapply(QUANTILES, function(q) {
-      na <- sw_negative_audit(files, pick, N_EVENTS, seed, HYPER_K, pairs = matrix(pick, 1), spread_quantile = q)
+      na <- sw_negative_audit(files, pick, N_EVENTS, seed, HYPER_K, pairs = matrix(pick, 1), spread_quantile = q, min_separation = 3) # G24
       row_of <- function(check, item) {
         d <- na[na$check == check & na$channel == item, ]
         d$value[match(names(files), d$file)]

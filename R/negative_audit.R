@@ -54,7 +54,7 @@
 #' on those values; a transform changes which events are negative.
 #'
 #' **No defaults.** `n_events`, `seed`, `hyper_k`, `pairs` and
-#' `spread_quantile` change the
+#' `spread_quantile` and `min_separation` change the
 #' numbers, so each must be passed. Events are drawn per file without
 #' replacement with `seed`; a file with fewer events is an error. The caller's
 #' RNG state is restored. mclust itself is deterministic.
@@ -77,6 +77,17 @@
 #' @param spread_quantile `NULL` (no spread check), or one number in (0.5, 1):
 #'   the source-channel quantile above which events count as high for
 #'   `spread_log_ratio`. Needs `pairs`.
+#' @param min_separation One non-negative number, no default. After all files
+#'   are fit, each channel's median `separation` across files is compared to it.
+#'   A channel below it has no real negative (the "negative" is a split of one
+#'   population). For that channel, `neg_median`, `neg_sd`, `neg_share`,
+#'   `hyper_negative_share`, their z rows, and every pair check
+#'   (`neg_corr`, `spill_corr`, `spread_log_ratio` and their z) that involves it
+#'   keep their rows with value `NA` and the reason in `detail`. `separation`
+#'   is always kept. The gate acts per channel, so one widened file in a bimodal
+#'   channel stays scored. The extra check `split_ok` has one row per file and
+#'   channel and repeats the channel gate: 1 when the channel is scored, 0 when
+#'   it is gated.
 #'
 #' @return A tibble of class `sw_negative_audit` with columns `file`, `check`,
 #'   `channel` (a channel, `"A ~ B"` for a pair, or `"A > B"` for a directed
@@ -96,11 +107,21 @@
 #' })
 #' names(files) <- paste0("f", 1:6)
 #' sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all",
-#'   spread_quantile = 0.9)
+#'   spread_quantile = 0.9,
+#'   min_separation = 3)
 #' }
 #'
 #' @export
-sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, spread_quantile) {
+sw_negative_audit <- function(
+  data,
+  channels,
+  n_events,
+  seed,
+  hyper_k,
+  pairs,
+  spread_quantile,
+  min_separation
+) {
   .sw_stop_missing(c(
     data = missing(data),
     channels = missing(channels),
@@ -108,7 +129,8 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
     seed = missing(seed),
     hyper_k = missing(hyper_k),
     pairs = missing(pairs),
-    spread_quantile = missing(spread_quantile)
+    spread_quantile = missing(spread_quantile),
+    min_separation = missing(min_separation)
   ))
   if (!requireNamespace("mclust", quietly = TRUE)) {
     stop("Package 'mclust' is required for sw_negative_audit().", call. = FALSE)
@@ -121,7 +143,10 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
         spread_quantile <= 0.5 ||
         spread_quantile >= 1)
   ) {
-    stop("`spread_quantile` must be NULL or one number in (0.5, 1).", call. = FALSE)
+    stop(
+      "`spread_quantile` must be NULL or one number in (0.5, 1).",
+      call. = FALSE
+    )
   }
   if (!is.null(spread_quantile) && is.null(pairs)) {
     stop("`spread_quantile` needs `pairs`.", call. = FALSE)
@@ -129,16 +154,35 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
   if (!is.list(data) || is.null(names(data)) || length(data) < 2) {
     stop("`data` must be a named list of at least two matrices.", call. = FALSE)
   }
+  if (
+    !is.numeric(min_separation) ||
+      length(min_separation) != 1 ||
+      !is.finite(min_separation) ||
+      min_separation < 0
+  ) {
+    stop("`min_separation` must be one non-negative number.", call. = FALSE)
+  }
   .sw_check_count(n_events, "n_events")
   .sw_check_count(seed, "seed")
-  if (!is.numeric(hyper_k) || length(hyper_k) != 1 || !is.finite(hyper_k) || hyper_k <= 0) {
+  if (
+    !is.numeric(hyper_k) ||
+      length(hyper_k) != 1 ||
+      !is.finite(hyper_k) ||
+      hyper_k <= 0
+  ) {
     stop("`hyper_k` must be one positive number.", call. = FALSE)
   }
   pair_mat <- .sw_negative_pairs(pairs, channels)
   for (f in names(data)) {
     absent <- setdiff(channels, colnames(data[[f]]))
     if (length(absent) > 0) {
-      stop("File ", f, " lacks channels: ", paste(absent, collapse = ", "), call. = FALSE)
+      stop(
+        "File ",
+        f,
+        " lacks channels: ",
+        paste(absent, collapse = ", "),
+        call. = FALSE
+      )
     }
     if (nrow(data[[f]]) < n_events) {
       stop("File ", f, " has fewer than `n_events` events.", call. = FALSE)
@@ -146,7 +190,9 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
   }
 
   draws <- .sw_with_seed(seed, {
-    lapply(data, \(m) as.matrix(m[sample.int(nrow(m), n_events), channels, drop = FALSE]))
+    lapply(data, \(m) {
+      as.matrix(m[sample.int(nrow(m), n_events), channels, drop = FALSE])
+    })
   })
 
   per_file <- lapply(names(draws), function(f) {
@@ -163,7 +209,13 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
       }
       tibble::tibble(
         file = f,
-        check = c("neg_median", "neg_sd", "neg_share", "separation", "hyper_negative_share"),
+        check = c(
+          "neg_median",
+          "neg_sd",
+          "neg_share",
+          "separation",
+          "hyper_negative_share"
+        ),
         channel = ch,
         value = c(ft$neg_median, ft$neg_sd, ft$neg_share, ft$separation, hyper),
         detail = ft$detail
@@ -177,7 +229,11 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
         value <- if (anyNA(both) || sum(both) < 10) {
           NA_real_
         } else {
-          suppressWarnings(stats::cor(x[both, a], x[both, b], method = "spearman"))
+          suppressWarnings(stats::cor(
+            x[both, a],
+            x[both, b],
+            method = "spearman"
+          ))
         }
         # Directed leak: positive in the source, negative in the target.
         spill <- lapply(list(c(a, b), c(b, a)), function(st) {
@@ -187,7 +243,11 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
           v <- if (anyNA(keep) || sum(keep) < 10) {
             NA_real_
           } else {
-            suppressWarnings(stats::cor(x[keep, st[1]], x[keep, st[2]], method = "spearman"))
+            suppressWarnings(stats::cor(
+              x[keep, st[1]],
+              x[keep, st[2]],
+              method = "spearman"
+            ))
           }
           row <- tibble::tibble(
             file = f,
@@ -217,7 +277,12 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
               check = "spread_log_ratio",
               channel = paste(st[1], st[2], sep = " > "),
               value = ratio,
-              detail = paste0("high=", if (anyNA(tgt)) NA else sum(hi), ", low=", if (anyNA(tgt)) NA else sum(lo))
+              detail = paste0(
+                "high=",
+                if (anyNA(tgt)) NA else sum(hi),
+                ", low=",
+                if (anyNA(tgt)) NA else sum(lo)
+              )
             )
           )
         })
@@ -227,7 +292,10 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
             check = "neg_corr",
             channel = paste(a, b, sep = " ~ "),
             value = value,
-            detail = paste0("joint negatives=", if (anyNA(both)) NA else sum(both))
+            detail = paste0(
+              "joint negatives=",
+              if (anyNA(both)) NA else sum(both)
+            )
           ),
           spill
         )
@@ -238,10 +306,42 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
   })
   out <- dplyr::bind_rows(per_file)
 
+  # Gate (G24 to G27): a channel whose median separation across files is below
+  # `min_separation` has no real negative, so its negative-based rows become NA.
+  sep <- out[out$check == "separation", ]
+  sep_median <- tapply(sep$value, sep$channel, stats::median, na.rm = TRUE)
+  gated <- names(sep_median)[!is.na(sep_median) & sep_median < min_separation]
+  gate_reason <- sprintf(
+    "gated: median separation %.3g < min_separation %.3g",
+    sep_median[gated],
+    min_separation
+  )
+  names(gate_reason) <- gated
+  # split_ok (G26): the channel gate, repeated on each file's row; 1 = scored, 0 = gated.
+  split_ok <- sep
+  split_ok$check <- "split_ok"
+  split_ok$value <- as.numeric(!split_ok$channel %in% gated)
+  split_ok$detail <- sprintf(
+    "median separation %.3g, min_separation %.3g",
+    sep_median[split_ok$channel],
+    min_separation
+  )
+  # Each row's channels: one for a channel check, two for "A ~ B" or "A > B".
+  row_channels <- strsplit(out$channel, " ~ | > ")
+  gate_of <- vapply(row_channels, \(ch) intersect(ch, gated)[1], character(1))
+  is_gated <- !is.na(gate_of) & out$check != "separation"
+  out$value[is_gated] <- NA_real_
+  out$detail[is_gated] <- gate_reason[gate_of[is_gated]]
+  out <- dplyr::bind_rows(out, split_ok)
+
   # Cohort robust z per channel (or pair), across files.
   robust_z <- function(v) {
     s <- 1.4826 * stats::mad(v, constant = 1, na.rm = TRUE)
-    if (is.na(s) || s == 0) rep(NA_real_, length(v)) else (v - stats::median(v, na.rm = TRUE)) / s
+    if (is.na(s) || s == 0) {
+      rep(NA_real_, length(v))
+    } else {
+      (v - stats::median(v, na.rm = TRUE)) / s
+    }
   }
   z_rows <- lapply(
     list(
@@ -257,10 +357,19 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
         return(NULL)
       }
       # A negative SD of 0 (ties) has no log; it becomes NA, not -Inf.
-      v <- if (ck[[1]] == "neg_sd") log(ifelse(d$value > 0, d$value, NA_real_)) else d$value
+      v <- if (ck[[1]] == "neg_sd") {
+        log(ifelse(d$value > 0, d$value, NA_real_))
+      } else {
+        d$value
+      }
       d$value <- stats::ave(v, d$channel, FUN = robust_z)
       d$check <- ck[[2]]
-      d$detail <- NA_character_
+      # Gated rows keep their reason; every other z row has no detail.
+      d$detail <- ifelse(
+        startsWith(dplyr::coalesce(d$detail, ""), "gated:"),
+        d$detail,
+        NA_character_
+      )
       d
     }
   )
@@ -330,11 +439,18 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, sp
     return(t(utils::combn(channels, 2)))
   }
   if (!is.matrix(pairs) || ncol(pairs) != 2 || !is.character(pairs)) {
-    stop("`pairs` must be NULL, \"all\", or a two-column character matrix.", call. = FALSE)
+    stop(
+      "`pairs` must be NULL, \"all\", or a two-column character matrix.",
+      call. = FALSE
+    )
   }
   absent <- setdiff(as.vector(pairs), channels)
   if (length(absent) > 0) {
-    stop("`pairs` names channels not in `channels`: ", paste(absent, collapse = ", "), call. = FALSE)
+    stop(
+      "`pairs` names channels not in `channels`: ",
+      paste(absent, collapse = ", "),
+      call. = FALSE
+    )
   }
   pairs
 }
