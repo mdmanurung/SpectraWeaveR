@@ -308,7 +308,9 @@ sw_corrector_engines <- function() {
 }
 
 # The audit must hold an eligible row for this engine and cover the same batches.
-.sw_check_audit <- function(design_audit, engine, batches) {
+# heb with internal anchors (user 2026-11-10): a batch with used anchor rows counts as
+# bridged, so a row that fails only for unbridged batches passes when all of them have anchors.
+.sw_check_audit <- function(design_audit, engine, batches, anchored_batches = character()) {
   if (!inherits(design_audit, "sw_design_audit")) {
     stop("'design_audit' must come from sw_design_audit().", call. = FALSE)
   }
@@ -317,7 +319,11 @@ sw_corrector_engines <- function() {
   if (nrow(row) == 0) {
     stop(sprintf("audit has no %s eligibility row", engine), call. = FALSE)
   }
-  if (!isTRUE(row$eligible[1])) {
+  bridge <- design_audit$anchor_bridge
+  anchor_bridged <- engine == "heb" &&
+    identical(row$reason_code[1], "batch_without_anchor_bridge") &&
+    all(bridge$batch[!bridge$bridged] %in% anchored_batches)
+  if (!isTRUE(row$eligible[1]) && !anchor_bridged) {
     stop(
       sprintf(
         "The design audit marks engine '%s' ineligible: %s",
@@ -628,7 +634,13 @@ sw_corrector_fit <- function(
     )
   }
   eng <- .sw_corrector_engine(engine)
-  .sw_check_audit(design_audit, engine, batches)
+  anchors <- list(...)[["anchors"]]
+  anchored_batches <- if (is.list(anchors) && is.data.frame(anchors$modes)) {
+    unique(as.character(anchors$modes$batch[anchors$modes$use]))
+  } else {
+    character()
+  }
+  .sw_check_audit(design_audit, engine, batches, anchored_batches)
 
   fitted <- eng$fit(
     xm = d$xm,
