@@ -261,9 +261,16 @@ sw_diagnose <- function(
       module = "cluster",
       subject = cl$file,
       check = cl$check,
-      item = cl$marker,
+      # One ranking per marker and cluster: pooling a marker's clusters into
+      # one ranking lost a shifted rare cluster on real files (AUROC 0.88 vs
+      # 0.95 on the cluster's own row).
+      item = ifelse(
+        is.na(cl$marker),
+        paste0("cluster ", cl$cluster),
+        paste0(cl$marker, " / cluster ", cl$cluster)
+      ),
       value = cl$value,
-      text = paste0("cluster ", cl$cluster, "; n_events=", cl$n_events)
+      text = paste0("n_events=", cl$n_events)
     )
     ran <- c(ran, "cluster")
   }

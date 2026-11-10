@@ -84,7 +84,7 @@ no real-file evidence yet.
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
 | All markers widened | `sd_z` | 1.00 | not tested |
 | Split into two modes (one marker) | `emd_z` (anomaly module) | **0.67 (`corr_shift`, weak)** | limit ±1 SD: 0.93 (`sd_z` 0.90); ±1.5 SD ≥ 0.99; ±0.5 SD 0.70, below the bar |
-| Change in a rare population | `cluster_median_z` | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | limit +3 SD: 1.00; +1 SD 0.88, +2 SD 0.84 (wide CI; smallest of k = 6 clusters) |
+| Change in a rare population | `median_z` (cluster module), the cluster's own row | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | 0.95 at +1 SD, 0.96 at +2 SD on the hit cluster's row (max over clusters: 0.88, 0.84) |
 | Composition change | forest, `cluster_freq_z` | 1.00 | not tested |
 | Negative population shifted | `neg_median_z` | 1.00 at 0.3 SD | 1.00 at 1 SD, 0.84 at 0.3 SD |
 | Negative population widened | `neg_sd_z` | 1.00 at x1.5, 0.96 at x1.2 | 1.00 at x1.5 |
@@ -174,10 +174,19 @@ was decided on 2026-11-09.
 Two fault classes need a larger fault on real files than in simulation,
 because real donors already differ in shape. A marker split into two modes
 reaches AUROC 0.90 at ±1 SD (`emd_z` 0.93, `sd_z` 0.90). A shift inside the
-smallest of 6 clusters reaches it at +3 SD (`cluster_median_z` 1.00); at +1
-and +2 SD it scores 0.88 and 0.84 with wide intervals across seeds.
+smallest of 6 clusters reaches it at +3 SD when the largest |z| over all
+clusters is used (+1 and +2 SD: 0.88 and 0.84, wide intervals).
 
 ![Detection limits on real files: AUROC against fault size](figures/limits_real.png)
+
+The rare-population loss came from that maximum over clusters, not from the
+clustering. Read on the found cluster nearest the injected one, the same
+check scores 0.95 at +1 SD and 0.96 at +2 SD, as good as scoring the injected
+cluster directly (0.96). Fitting the clusters on clean files only did not
+help (0.86). So `sw_diagnose()` ranks each marker and cluster as its own item
+("CD3 / cluster 2").
+
+![Rare-population shift: the cluster's own row against the maximum over clusters](figures/rare_hitrow_real.png)
 
 ## Faults that live only in the negative population
 

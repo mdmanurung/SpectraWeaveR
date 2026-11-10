@@ -47,10 +47,7 @@
     d$subject,
     paste(d$subject, d$item, sep = " / ")
   )
-  # Cluster rows repeat a file and marker per cluster; the text names the cluster.
-  if (module == "cluster") {
-    d$label <- paste0(d$label, " (", sub(";.*", "", d$text), ")")
-  }
+  # Cluster rows already name their cluster in `item` ("CD3 / cluster 2").
   d <- d[order(-.sw_diag_key(d$check, d$value)), ]
   utils::head(d, n)
 }

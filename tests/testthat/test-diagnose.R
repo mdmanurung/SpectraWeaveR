@@ -166,7 +166,7 @@ test_that("signed checks rank by size, so a large negative z comes first", {
   expect_equal(top$subject[top$check == "median_z" & top$item == "B"], "f7")
 })
 
-test_that("the cluster module adds cluster rows with their cluster in the text", {
+test_that("the cluster module ranks each marker and cluster as its own item", {
   x <- make_dx()
   dx <- sw_diagnose(
     x$data,
@@ -180,7 +180,8 @@ test_that("the cluster module adds cluster rows with their cluster in the text",
       n_events = 200,
       seed = 1,
       nstart = 3,
-      min_cluster_events = 10, reference = NULL
+      min_cluster_events = 10,
+      reference = NULL
     ),
     relativise = NULL,
     otd = NULL,
@@ -189,7 +190,15 @@ test_that("the cluster module adds cluster rows with their cluster in the text",
   )
   expect_equal(attr(dx, "modules"), "cluster")
   expect_setequal(unique(dx$check), c("freq_z", "median_z"))
-  expect_true(all(grepl("^cluster [0-9]+; n_events=", dx$text)))
+  expect_true(all(grepl("^n_events=", dx$text)))
+  expect_setequal(unique(dx$item[dx$check == "freq_z"]), paste("cluster", 1:3))
+  expect_setequal(
+    unique(dx$item[dx$check == "median_z"]),
+    paste(rep(c("A", "B", "C"), 3), "/ cluster", rep(1:3, each = 3))
+  )
+  # Each marker and cluster is ranked on its own: n = 1 gives one row per item.
+  top <- sw_diagnosis_top(dx, n = 1)
+  expect_equal(sum(top$check == "median_z"), 9)
 })
 
 test_that("ranking keys: signed, low-first and ratio checks, without spurious warnings", {
