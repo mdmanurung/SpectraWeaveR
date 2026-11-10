@@ -103,7 +103,8 @@ test_that("sw_diagnose runs the negative module", {
     cluster = NULL,
     relativise = NULL,
     otd = NULL,
-    negative = list(channels = c("A", "B"), n_events = 500, seed = 1, hyper_k = 4, pairs = "all")
+    negative = list(channels = c("A", "B"), n_events = 500, seed = 1, hyper_k = 4, pairs = "all"),
+    gate = NULL
   )
   expect_equal(attr(dx, "modules"), "negative")
   expect_true(all(c("neg_sd_z", "neg_corr_z", "hyper_negative_share") %in% dx$check))

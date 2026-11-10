@@ -108,7 +108,8 @@ dx <- sw_diagnose(
   ),
   relativise = NULL, # no reference controls in these files
   otd = NULL,
-  negative = NULL
+  negative = NULL,
+  gate = NULL
 )
 write.csv(dx, file.path(run_dir, "diagnosis.csv"), row.names = FALSE)
 write.csv(

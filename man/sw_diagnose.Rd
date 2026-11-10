@@ -13,7 +13,8 @@ sw_diagnose(
   cluster,
   relativise,
   otd,
-  negative
+  negative,
+  gate
 )
 }
 \arguments{
@@ -44,6 +45,10 @@ batches); it does not use \code{data}.}
 
 \item{negative}{\code{NULL} or a list with \code{channels}, \code{n_events}, \code{seed},
 \code{hyper_k}, \code{pairs}.}
+
+\item{gate}{\code{NULL} or a list with \code{gates}, \code{reference}, \code{edge_width}. The
+\code{item} column is the gate id, with the channel after a \code{/} for
+per-channel checks.}
 }
 \value{
 A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
@@ -52,7 +57,7 @@ A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
 lists the modules that ran.
 }
 \description{
-Run any of eight diagnostic modules and stack what they return into one tidy
+Run any of nine diagnostic modules and stack what they return into one tidy
 table (\code{module}, \code{subject}, \code{check}, \code{item}, \code{value}, \code{text}). A module runs
 only when you give it a settings list; pass \code{NULL} to skip it. Nothing is
 marked pass or fail. Use \code{\link[=sw_diagnosis_top]{sw_diagnosis_top()}} to see the files or batches
@@ -66,6 +71,7 @@ with the largest value per check.\tabular{lll}{
    \code{relativise} \tab \code{\link[=sw_relativise_diagnose]{sw_relativise_diagnose()}} \tab a fitted relativisation model \cr
    \code{otd} \tab \code{\link[=sw_otd_scores]{sw_otd_scores()}} \tab \code{data} \cr
    \code{negative} \tab \code{\link[=sw_negative_audit]{sw_negative_audit()}} \tab \code{data} \cr
+   \code{gate} \tab \code{\link[=sw_gate_qc]{sw_gate_qc()}} \tab \code{data} and \code{sw_gate} objects \cr
 }
 }
 \details{
@@ -92,7 +98,8 @@ dx <- sw_diagnose(
   cluster = NULL,
   relativise = NULL,
   otd = NULL,
-  negative = NULL
+  negative = NULL,
+  gate = NULL
 )
 sw_diagnosis_top(dx, n = 3)
 }

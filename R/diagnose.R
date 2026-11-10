@@ -6,7 +6,7 @@
 #' Run the technical diagnostics and collect their numbers in one table
 #'
 #' @description
-#' Run any of eight diagnostic modules and stack what they return into one tidy
+#' Run any of nine diagnostic modules and stack what they return into one tidy
 #' table (`module`, `subject`, `check`, `item`, `value`, `text`). A module runs
 #' only when you give it a settings list; pass `NULL` to skip it. Nothing is
 #' marked pass or fail. Use [sw_diagnosis_top()] to see the files or batches
@@ -22,6 +22,7 @@
 #' | `relativise` | [sw_relativise_diagnose()] | a fitted relativisation model |
 #' | `otd` | [sw_otd_scores()] | `data` |
 #' | `negative` | [sw_negative_audit()] | `data` |
+#' | `gate` | [sw_gate_qc()] | `data` and `sw_gate` objects |
 #'
 #' @details
 #' **No defaults anywhere.** Each settings list holds the arguments of its
@@ -54,6 +55,9 @@
 #'   `blur`, `seed`, `max_iter`, `tol`.
 #' @param negative `NULL` or a list with `channels`, `n_events`, `seed`,
 #'   `hyper_k`, `pairs`.
+#' @param gate `NULL` or a list with `gates`, `reference`, `edge_width`. The
+#'   `item` column is the gate id, with the channel after a `/` for
+#'   per-channel checks.
 #'
 #' @return A tibble of class `sw_diagnosis` with columns `module`, `subject`
 #'   (file, batch or batch pair), `check`, `item` (channel or marker, else
@@ -74,7 +78,8 @@
 #'   cluster = NULL,
 #'   relativise = NULL,
 #'   otd = NULL,
-#'   negative = NULL
+#'   negative = NULL,
+#'   gate = NULL
 #' )
 #' sw_diagnosis_top(dx, n = 3)
 #' }
@@ -89,7 +94,8 @@ sw_diagnose <- function(
   cluster,
   relativise,
   otd,
-  negative
+  negative,
+  gate
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -100,7 +106,8 @@ sw_diagnose <- function(
     cluster = missing(cluster),
     relativise = missing(relativise),
     otd = missing(otd),
-    negative = missing(negative)
+    negative = missing(negative),
+    gate = missing(gate)
   ))
   modules <- c(
     "header",
@@ -110,7 +117,8 @@ sw_diagnose <- function(
     "cluster",
     "relativise",
     "otd",
-    "negative"
+    "negative",
+    "gate"
   )
   for (nm in modules) {
     v <- get(nm)
@@ -128,10 +136,11 @@ sw_diagnose <- function(
         !is.null(batch) ||
         !is.null(cluster) ||
         !is.null(otd) ||
-        !is.null(negative))
+        !is.null(negative) ||
+        !is.null(gate))
   ) {
     stop(
-      "`data` is needed for the signal, anomaly, batch, cluster, otd and negative modules.",
+      "`data` is needed for the signal, anomaly, batch, cluster, otd, negative and gate modules.",
       call. = FALSE
     )
   }
@@ -273,6 +282,19 @@ sw_diagnose <- function(
     ran <- c(ran, "negative")
   }
 
+  if (!is.null(gate)) {
+    gq <- do.call(sw_gate_qc, c(list(data = data), gate))
+    parts$gate <- tibble::tibble(
+      module = "gate",
+      subject = gq$sample,
+      check = gq$check,
+      item = ifelse(is.na(gq$channel), gq$gate, paste0(gq$gate, "/", gq$channel)),
+      value = gq$value,
+      text = NA_character_
+    )
+    ran <- c(ran, "gate")
+  }
+
   out <- dplyr::bind_rows(parts)
   attr(out, "modules") <- ran
   class(out) <- c("sw_diagnosis", class(out))
@@ -295,7 +317,9 @@ sw_diagnose <- function(
   "neg_corr_z",
   "corr_pair_z",
   "spill_corr",
-  "spill_corr_z"
+  "spill_corr_z",
+  "kept_share_z",
+  "centroid_shift"
 )
 # Novelty log-density: low is unusual. GMM separation: a small value means the
 # channel did not split into a negative and a positive, so it ranks first.
