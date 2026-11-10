@@ -135,3 +135,5 @@ files and the reference-only view (W7) is in the report.
 | G12 FAUST prop_by_batch | Range over batches of the per-batch median share, before and after correction. |
 | G13 FAUST correction markers | Batch correction uses the same 37 markers as FAUST (AF and dead dye excluded). |
 | G14 FAUST phenotype match (F17) | `match_by = "marker_state"`: sort each phenotype's marker tokens before matching. FAUST orders markers per run, so exact strings matched only the unclassified bin. |
+| G15 unstained gate (detector-noise test) | Box from the same donor x instrument gated panel: FSC-A, SSC-A and FSC-H/FSC-A within its 5th-95th percentiles. Revised from 1st-99th: the authors' Fortessa gate holds a 2.4% SSC tail, so the 99th-percentile box kept granulocytes. |
+| G16 detector-noise reading | Report the unstained / panel-negative Fortessa-over-Aurora SD ratio per donor (median, range) with no cutoff; word the claim by how close it is to 1. Inherited and confirmed: 6 channels, authors' maps + asinh(x/1000), 1.4826 x MAD, panel negatives from the 08 run, all 9 donors. |

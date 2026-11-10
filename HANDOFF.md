@@ -1,6 +1,6 @@
 # Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
 
-**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 114/150
+**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 115/150
 
 ## Check first
 Run `git log --oneline c16607f..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
@@ -23,7 +23,7 @@ Pick the next gap from Open items with the user. Nothing is running.
 - Results: one-way `reference_group` (donor) best 0.71; four donor/batch-limited faults stay below bar — `reference/figures/cbf_reference_group.png`
 - Results: full coverage table with figures in `reference/diagnostics.qmd` (lines ~73–105).
 - Results: two-way `reference_group` best 0.68, no fault at bar — same figure, `reference/diagnostics.qmd` after the one-way paragraph.
-- Assumed, not run: wider Fortessa detector noise floor as AF700/PB cause.
+- Results: detector noise floor accounts for PB (unstained/panel ratio 1.23) but only part of AF700 (0.55; unstained SD 0.09 vs panel 0.53) — `reference/figures/glehr_unstained_noise.png`; run `experiments/runs/2026-11-10_glehr-unstained-noise-v2` (the run without v2 used a 1–99% gate that kept granulocytes; discarded).
 
 ## Locked decisions
 - G1–G13 in `plans/2026-11-10_diagnostics-next.md` (last section): spread SD ratio; reference_group; FAUST conventions; keep 150; median over groups; group EMD pool; FAUST rank norm; 37 markers; confirm refgroup details; two-way residual; forest depth 3; prop_by_batch range; correct on 37 — user, 2026-11-10.
@@ -45,6 +45,6 @@ Pick the next gap from Open items with the user. Nothing is running.
 - `experiments/runs/2026-11-09_tusoskill/reports/final_round2.md` — outdated; write `final_round3.md` at the end.
 
 ## Open items
-- Ledger 114 → 150: 36 iterations left; replenish from diagnosis (e.g. test detector-noise cause with unstained/negative SD per instrument — needs user approval of the design). lean (not a decision): ask before any new impactful choice.
+- Ledger 115 → 150: 35 iterations left; replenish from diagnosis (candidate: what part of the AF700 stain widens its Fortessa negative — CD3 single stains are the parked source). lean (not a decision): ask before any new impactful choice.
 - Batch split ±0.5 SD (0.68) — stays a documented limit unless the user wants another design. lean (not a decision): document.
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.

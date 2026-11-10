@@ -318,9 +318,29 @@ source dye is bright with its SD where that dye is dim. On every source it sits
 near 1 on both instruments; no source spreads more on the Fortessa (AA750 into
 AF700: 1.28 on the Aurora, 1.03 on the Fortessa, quantile 0.9). The widening
 is the same at low and high source signal, which fits a wider noise floor in
-the Fortessa's AF700 and PB detectors; that cause was not tested.
+the Fortessa's AF700 and PB detectors; the next paragraph tests that.
 
 ![Target-negative SD ratio, source high over low, per donor and instrument](figures/glehr_spread_af700_pb.png)
+
+The detector noise floor accounts for PB's wider negative, but only for part
+of AF700's. Each donor has an unstained file on both instruments. We gated it
+with a box from the same donor's gated panel (5th to 95th percentile of FSC-A,
+SSC-A and FSC-H/FSC-A), mapped it with the authors' CD3 map, and took the
+robust SD on the same scale as the panel negatives. For PB, unstained cells
+widen on the Fortessa as much as the panel negative does (unstained ratio over
+panel ratio 1.23, range 0.95 to 1.49 over 9 donors). For AF700 they widen 2.9
+times, about as much as FITC, APC and PB, against 5.4 times for the panel
+negative (ratio 0.55, range 0.45 to 0.63). In absolute terms, the Fortessa AF700
+unstained SD is 0.09 against 0.53 for the panel negative (medians; table
+fallback: absolute SDs are not plotted, see `ratios.csv` in the run folder). So
+most of the AF700 widening comes with the stain, not the empty detector; this
+test does not say which part of the stain. PE and PC7 unstained ratios (7.7 and
+5.7) exceed their panel ratios because the Aurora unstained SDs on those
+channels are near zero (0.005 and 0.003), so those ratios mean little.
+
+![Unstained against panel-negative SD ratio, Fortessa over Aurora, one point per donor and channel](figures/glehr_unstained_noise.png)
+
+![Box gate on the unstained files, donor 1](figures/glehr_unstained_gate.png)
 
 The spread check finds real spread when it is present. Spread injected into
 25% of real Aurora files (5 seeds) is found by `spread_z` at AUROC 0.98 with
