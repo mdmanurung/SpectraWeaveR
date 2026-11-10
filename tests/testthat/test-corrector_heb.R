@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, seed = 1, ...
   )
 }
 
@@ -83,7 +83,7 @@ test_that("heb needs pool and pooled variance runs", {
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -115,7 +115,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-      anchor_effect = "random", residual_model = "estimated", seed = 1
+      anchor_effect = "random", residual_model = "estimated", anchors = NULL, seed = 1
     ),
     "variance_prior"
   )
@@ -129,7 +129,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
     s1$x, s1$manifest, s1$audit, population = rep("T", nrow(s1$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s1$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", seed = 1
+    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", anchors = NULL, seed = 1
   )$effects
   se <- bap$se_donor[bap$batch != "s1_r1"]
   expect_true(all(se > 1e-3))
@@ -145,7 +145,7 @@ test_that("known sampling variance sets the one-donor, one-aliquot SE", {
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", seed = 1
+    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, seed = 1
   )$effects
   # Each contrast is a difference of two batch means of 40 cells (sd 0.4 before asinh): the SE
   # cannot fall below the sampling SE of that difference, about sqrt(2) * 0.4 / sqrt(40) on asinh/5.
@@ -208,7 +208,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", seed = 1
+    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", anchors = NULL, seed = 1
   )$effects
   expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
   expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)
@@ -223,4 +223,62 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
   )
   est <- .sw_heb_blup(d, c(1e3, 1e3, 1e-3), "a")
   expect_equal(est$estimate, c(0, 1), tolerance = 1e-3)
+})
+
+test_that("sw_corrector_anchors needs its settings and splits two clear modes", {
+  set.seed(3)
+  v <- c(rnorm(200, 0, 0.3), rnorm(200, 4, 0.3), rnorm(400, 0, 0.3))
+  x <- cbind(CD3 = v, m2 = rnorm(800))
+  sid <- rep(c("a", "b"), each = 400)
+  expect_error(
+    sw_corrector_anchors(x, sid, sid, c("CD3", "m2"), positive_markers = "CD3", seed = 1),
+    "min_separation"
+  )
+  a <- sw_corrector_anchors(x, sid, rep("b1", 800), c("CD3", "m2"),
+                            positive_markers = "CD3", min_separation = 3, seed = 1)
+  expect_false(a$markers$eligible[a$markers$marker == "m2"])
+  hi <- a$modes[a$modes$sample_id == "a" & a$modes$marker == "CD3" & a$modes$mode == "high", ]
+  expect_equal(hi$value, 4, tolerance = 0.1)
+  expect_true(hi$use)
+})
+
+test_that("internal anchors give a batch without reference donors an effect near the full fit", {
+  s <- heb_sim()
+  # Batch s3_r2 keeps its cells, but its samples are not references (as a batch without reference donors).
+  m2 <- s$meta
+  no_ref <- m2$batch == "s3_r2"
+  m2$reference_role[no_ref] <- "none"
+  m2$reference_id[no_ref] <- NA
+  m2$aliquot[no_ref] <- NA
+  man2 <- sw_sample_manifest(
+    m2, sample_id = "sample_id", batch = "batch", donor = "donor", aliquot = "aliquot",
+    reference_role = "reference_role", reference_id = "reference_id"
+  )
+  fit <- function(x, anc, manifest = s$manifest) {
+    sw_corrector_fit(
+      x, manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
+      transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
+      anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "known_plus_extra",
+      anchors = anc, seed = 1
+    )
+  }
+  full <- fit(s$x, NULL)$effects
+  anchors <- sw_corrector_anchors(
+    s$x["m1"], s$x$sample_id, s$meta$batch[match(s$x$sample_id, s$meta$sample_id)], "m1",
+    positive_markers = character(), min_separation = 0, seed = 1
+  )
+  without <- fit(s$x, NULL, man2)
+  expect_false("s3_r2" %in% without$effects$batch)
+  with <- fit(s$x, anchors, man2)
+  e <- with$effects[with$effects$batch == "s3_r2", ]
+  expect_equal(nrow(e), 1)
+  expect_equal(e$support, "joint_reml_internal_anchor")
+  expect_true(is.finite(e$se_donor) && e$se_donor > 0)
+  # True effect from heb_sim's draws: study s3 (-0.4) + run s3_r2 - run s1_r1 (run effects drawn first).
+  set.seed(5)
+  run_eff <- stats::rnorm(6, 0, 0.3)
+  truth <- -0.4 + run_eff[6] - run_eff[1]
+  expect_lt(abs(e$estimate - truth), 3 * e$se_donor)
+  expect_true("s3_r2" %in% with$known_batches)
 })

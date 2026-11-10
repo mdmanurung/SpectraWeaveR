@@ -670,7 +670,8 @@ sw_corrector_fit <- function(
       anchor = anchor,
       min_cells = as.integer(min_cells),
       hierarchy = hierarchy,
-      known_batches = batches,
+      # Batches with effects but no fit cells (heb internal anchors) are known too.
+      known_batches = sort(unique(c(batches, effects$batch))),
       effects = effects,
       targets = fitted$targets,
       excluded = excluded,

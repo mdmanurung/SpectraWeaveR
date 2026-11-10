@@ -42,9 +42,10 @@ NULL
 # Negative REML log-likelihood (up to a constant) for log variance components.
 # V = th1 * M1 + th2 * M2 + th3 * I + diag(D), with M1 = Z K1 Z' and M2 = Z K2 Z'.
 # D holds known sampling variances of the summaries (residual_model = "known_plus_extra"), else 0.
-.sw_heb_reml <- function(log_theta, y, X, M1, M2, D = 0) {
+# ra marks internal-anchor rows (plan A6): their extra residual variance is th4, donor rows keep th3.
+.sw_heb_reml <- function(log_theta, y, X, M1, M2, D = 0, ra = 0) {
   th <- exp(log_theta)
-  V <- th[[1]] * M1 + th[[2]] * M2 + diag(th[[3]] + D, length(y))
+  V <- th[[1]] * M1 + th[[2]] * M2 + diag(.sw_heb_resid(th, D, ra), length(y))
   R <- tryCatch(chol(V), error = function(e) NULL)
   if (is.null(R)) {
     return(1e10)
@@ -62,14 +63,23 @@ NULL
   0.5 * (2 * sum(log(diag(R))) + 2 * sum(log(diag(Rx))) + sum(res * Vinv_res))
 }
 
+# Residual variance per row: th3 for donor rows, th4 for anchor rows, plus the known part D.
+.sw_heb_resid <- function(th, D, ra) {
+  th4 <- if (length(th) >= 4) th[[4]] else 0
+  th[[3]] * (1 - ra) + th4 * ra + D
+}
+
 # Design pieces for one (population, marker): NULL when it cannot give a contrast to the anchor.
 # anchor_effect = "random": study and run effects of every batch are random and the anchor's own
 #   effect is a BLUP; the correction is the BLUP difference to the anchor (derivation v0).
 # anchor_effect = "fixed": the anchor-relative effects b_b = beta_b - beta_anchor are the random
 #   effects, b_anchor = 0 exactly, with covariance
 #   tau_s^2 (S_ij - S_ia - S_ja + 1) + tau_b^2 (delta_ij + 1), S = same-study indicator (derivation v1).
-.sw_heb_design <- function(d, hier, anchor, anchor_effect, residual_model) {
-  batches <- sort(unique(d$batch))
+.sw_heb_design <- function(d, hier, anchor, anchor_effect, residual_model, anchor_rows = NULL) {
+  # Internal anchors (plan A0): extra rows with their own intercept, same batch random effects.
+  na <- if (is.null(anchor_rows)) 0L else nrow(anchor_rows)
+  b_all <- c(d$batch, if (na > 0) anchor_rows$batch)
+  batches <- sort(unique(b_all))
   if (length(batches) < 2 || !anchor %in% batches) {
     return(NULL)
   }
@@ -77,8 +87,8 @@ NULL
   studies <- sort(unique(study_of))
   nb <- length(batches)
   if (anchor_effect == "random") {
-    Zs <- outer(hier$study[match(d$batch, hier$batch)], studies, `==`) * 1
-    Zb <- outer(d$batch, batches, `==`) * 1
+    Zs <- outer(hier$study[match(b_all, hier$batch)], studies, `==`) * 1
+    Zb <- outer(b_all, batches, `==`) * 1
     Z <- cbind(Zs, Zb)
     q1 <- length(studies)
     K1 <- diag(c(rep(1, q1), rep(0, nb)))
@@ -88,24 +98,29 @@ NULL
     L[cbind(seq_len(nb), q1 + seq_len(nb))] <- 1
     L <- sweep(L, 2, L[match(anchor, batches), ], `-`)
   } else {
-    na <- batches[batches != anchor]
-    s_n <- study_of[match(na, batches)]
+    nab <- batches[batches != anchor]
+    s_n <- study_of[match(nab, batches)]
     s_a <- study_of[match(anchor, batches)]
-    Z <- outer(d$batch, na, `==`) * 1
+    Z <- outer(b_all, nab, `==`) * 1
     ia <- as.numeric(s_n == s_a)
-    K1 <- outer(s_n, s_n, `==`) * 1 - outer(ia, rep(1, length(na))) - outer(rep(1, length(na)), ia) + 1
-    K2 <- diag(length(na)) + 1
-    L <- matrix(0, nb, length(na))
-    L[cbind(match(na, batches), seq_along(na))] <- 1
+    K1 <- outer(s_n, s_n, `==`) * 1 - outer(ia, rep(1, length(nab))) - outer(rep(1, length(nab)), ia) + 1
+    K2 <- diag(length(nab)) + 1
+    L <- matrix(0, nb, length(nab))
+    L[cbind(match(nab, batches), seq_along(nab))] <- 1
+  }
+  # Donor indicators; outer() also covers a design with one donor, which model.matrix refuses.
+  X <- outer(d$reference_id, sort(unique(d$reference_id)), `==`) * 1
+  # Known part of each summary's residual variance: var(cells) / n (Fay-Herriot style).
+  D <- if (residual_model == "known_plus_extra") d$var_mean else rep(0, nrow(d))
+  if (na > 0) {
+    X <- rbind(cbind(X, 0), cbind(matrix(0, na, ncol(X)), 1))
+    D <- c(D, anchor_rows$var_mean)
   }
   list(
-    d = d, batches = batches, y = d$value,
-    # Donor indicators; outer() also covers a design with one donor, which model.matrix refuses.
-    X = outer(d$reference_id, sort(unique(d$reference_id)), `==`) * 1,
+    d = d, batches = batches, y = c(d$value, if (na > 0) anchor_rows$value), X = X,
     Z = Z, K1 = K1, K2 = K2, L = L,
     M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z),
-    # Known part of each summary's residual variance: var(cells) / n (Fay-Herriot style).
-    D = if (residual_model == "known_plus_extra") d$var_mean else rep(0, nrow(d))
+    D = D, ra = c(rep(0, nrow(d)), rep(1, na)), anchor_rows = anchor_rows
   )
 }
 
@@ -120,18 +135,20 @@ NULL
   scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
   penalty <- if (variance_prior == "boundary_avoiding") function(lt) -0.5 * (lt[[1]] + lt[[2]]) else function(lt) 0
   obj <- function(lt) {
-    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2, z$D), numeric(1))) + penalty(lt)
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2, z$D, z$ra), numeric(1))) + penalty(lt)
   }
-  lo <- rep(log(variance_floor), 3)
+  # A 4th component (anchor-row extra variance) only when a design in this set has anchor rows.
+  k <- if (any(vapply(designs, function(z) any(z$ra > 0), logical(1)))) 4 else 3
+  lo <- rep(log(variance_floor), k)
   fit <- stats::optim(
-    log(rep(scale, 3) * c(0.1, 0.1, 0.5)), obj,
+    log(rep(scale, k) * c(0.1, 0.1, 0.5, 0.5)[seq_len(k)]), obj,
     method = "L-BFGS-B", lower = lo, upper = lo + 40
   )
   # Covariance of the log components from the inverse observed REML information.
   # A component pinned at the floor is treated as known (user decision 2026-11-09):
   # its rows and columns are zero. A non-positive curvature direction gets no variance.
   free <- fit$par - lo > 1e-4
-  cov_log <- matrix(0, 3, 3)
+  cov_log <- matrix(0, k, k)
   if (any(free)) {
     H <- stats::optimHess(fit$par, obj)[free, free, drop = FALSE]
     e <- eigen((H + t(H)) / 2, symmetric = TRUE)
@@ -153,8 +170,8 @@ NULL
   G <- th[[1]] * z$K1 + th[[2]] * z$K2
   p <- ncol(z$X)
   W <- cbind(z$X, z$Z)
-  if (any(z$D > 0)) {
-    rinv <- 1 / (th[[3]] + z$D)
+  if (any(z$D > 0) || any(z$ra > 0)) {
+    rinv <- 1 / .sw_heb_resid(th, z$D, z$ra)
     C <- crossprod(W * sqrt(rinv))
     iu <- p + seq_len(ncol(z$Z))
     C[iu, iu] <- C[iu, iu] + solve(G)
@@ -181,11 +198,12 @@ NULL
   df <- rep(NA_real_, length(z$batches))
   if (!is.null(cov_log)) {
     h <- 1e-4
-    g <- vapply(1:3, function(k) {
+    nk <- length(th)
+    g <- vapply(seq_len(nk), function(k) {
       if (all(cov_log[k, ] == 0)) {
         return(rep(0, length(p$var)))
       }
-      step <- replace(rep(0, 3), k, h)
+      step <- replace(rep(0, nk), k, h)
       (.sw_heb_pev(z, th * exp(step))$var - .sw_heb_pev(z, th * exp(-step))$var) / (2 * h)
     }, numeric(length(p$var)))
     g <- matrix(g, nrow = length(p$var))
@@ -200,7 +218,7 @@ NULL
 }
 
 .sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
-                        variance_prior, residual_model, ...) {
+                        variance_prior, residual_model, anchors, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -219,6 +237,9 @@ NULL
   if (missing(residual_model) || !residual_model %in% c("estimated", "known_plus_extra")) {
     stop("heb needs residual_model = 'estimated' or 'known_plus_extra' (no default).", call. = FALSE)
   }
+  if (missing(anchors) || !(is.null(anchors) || (is.list(anchors) && is.data.frame(anchors$modes)))) {
+    stop("heb needs anchors = NULL or the result of sw_corrector_anchors() (no default).", call. = FALSE)
+  }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
     stop("No reference summary has at least min_cells cells.", call. = FALSE)
@@ -233,8 +254,11 @@ NULL
     marker = anc$marker, target = anc$value, n_aliquots_anchor = anc$n_aliquots
   )
   key <- paste(s$summ$population, s$summ$marker, sep = "\r")
+  anchor_for <- .sw_heb_anchor_rows(anchors, anc, anchor, hierarchy)
   designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
-    .sw_heb_design(s$summ[ii, , drop = FALSE], hierarchy, anchor, anchor_effect, residual_model)
+    d <- s$summ[ii, , drop = FALSE]
+    .sw_heb_design(d, hierarchy, anchor, anchor_effect, residual_model,
+                   anchor_rows = anchor_for(d$population[[1]], d$marker[[1]]))
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
   # Which designs share variance components.
@@ -257,7 +281,11 @@ NULL
       batch = r$batch, population = d$population[[1]], marker = d$marker[[1]],
       estimate = r$estimate, se_donor = r$se, df = r$df, n_donors = n_don, n_aliquots = n_aliq,
       n_aliquots_anchor = n_aliq[match(anchor, r$batch)],
-      support = if_else_chr(r$batch == anchor, "anchor", "joint_reml"), source = "fit"
+      support = dplyr::case_when(
+        r$batch == anchor ~ "anchor",
+        n_don == 0 ~ "joint_reml_internal_anchor",
+        .default = "joint_reml"
+      ), source = "fit"
     )
   })
   effects <- dplyr::bind_rows(rows)
@@ -265,6 +293,29 @@ NULL
 }
 
 if_else_chr <- function(cond, yes, no) ifelse(cond, yes, no)
+
+# Plan A9: an anchor joins the design of a population whose anchor-batch level for that marker lies nearer
+# that anchor's mode centre (low or high) in the anchor batch. Returns a function (population, marker) -> rows.
+.sw_heb_anchor_rows <- function(anchors, anc, anchor, hierarchy) {
+  if (is.null(anchors)) {
+    return(function(population, marker) NULL)
+  }
+  modes <- anchors$modes[anchors$modes$batch %in% hierarchy$batch, , drop = FALSE]
+  centre <- dplyr::summarise(modes[modes$batch == anchor, , drop = FALSE], centre = mean(value), .by = c(marker, mode))
+  level <- dplyr::summarise(anc, level = mean(value), .by = c(population, marker))
+  used <- modes[modes$use, c("batch", "marker", "mode", "value", "var_mean"), drop = FALSE]
+  function(population, marker) {
+    lv <- level$level[level$population == population & level$marker == marker]
+    cl <- centre$centre[centre$marker == marker & centre$mode == "low"]
+    ch <- centre$centre[centre$marker == marker & centre$mode == "high"]
+    if (length(lv) != 1 || length(cl) != 1 || length(ch) != 1) {
+      return(NULL)
+    }
+    m <- if (abs(lv - cl) <= abs(lv - ch)) "low" else "high"
+    rows <- used[used$marker == marker & used$mode == m, , drop = FALSE]
+    if (nrow(rows) == 0) NULL else rows
+  }
+}
 
 sw_corrector_register_engine(
   "heb",
