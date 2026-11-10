@@ -104,7 +104,7 @@ dx <- sw_diagnose(
     n_events = N_EVENTS,
     seed = SEED,
     nstart = CLUSTER_NSTART,
-    min_cluster_events = MIN_CLUSTER_EVENTS
+    min_cluster_events = MIN_CLUSTER_EVENTS, reference = NULL
   ),
   relativise = NULL, # no reference controls in these files
   otd = NULL,

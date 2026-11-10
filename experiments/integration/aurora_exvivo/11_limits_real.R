@@ -93,7 +93,7 @@ long <- lapply(SEEDS, function(seed) {
       emd_z = abs(robust_z(af[[paste0(b, "_emd")]][match(names(files), af$file)]))
     )
     if (fault == "rare_pop") {
-      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30)
+      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
       d <- cs[cs$check == "median_z" & cs$marker == b, ]
       top <- tapply(abs(d$value), d$file, \(v) if (all(is.na(v))) NA_real_ else max(v, na.rm = TRUE))
       scores$cluster_median_z <- as.numeric(top[names(files)])

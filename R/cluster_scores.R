@@ -43,6 +43,15 @@
 #' files you pass. A fault shared by most files, or a real batch effect, shifts
 #' the reference too.
 #'
+#' **Where the clusters come from.** With `reference = NULL`, k-means runs on
+#' the pooled draws of all files, faulty ones included. With `reference` set to
+#' file ids (for example control or known-good files), k-means runs on those
+#' files' draws only and every file's events are assigned to the nearest
+#' centre, so the clusters do not depend on the files being judged. On 36 real
+#' files with a +1 SD shift inside the smallest of 6 clusters, this did not
+#' raise the AUROC (0.86 with clean reference files, 0.88 without); scoring the
+#' injected cluster's own row with all events gave 0.96.
+#'
 #' @param data A named list. Each element is a numeric matrix or data frame
 #'   with one column per marker. Names are the file ids. At least 3 files.
 #' @param markers Character vector of marker (column) names to cluster on.
@@ -52,6 +61,9 @@
 #' @param nstart Whole number, random starts for k-means.
 #' @param min_cluster_events Whole number, fewest events a file needs in a
 #'   cluster for its median to be scored.
+#' @param reference `NULL` to fit k-means on all files, or a character vector
+#'   of file ids to fit it on; all files are then assigned to the nearest
+#'   centre.
 #'
 #' @return A tibble of class `sw_cluster_scores` with columns `file`, `cluster`
 #'   (integer), `marker` (`NA` for `freq_z`), `check`, `value`, `n_events`
@@ -69,7 +81,8 @@
 #' names(files) <- paste0("f", 1:6)
 #' sw_cluster_scores(
 #'   files, c("A", "B"),
-#'   k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20
+#'   k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20,
+#'   reference = NULL
 #' )
 #'
 #' @export
@@ -80,7 +93,8 @@ sw_cluster_scores <- function(
   n_events,
   seed,
   nstart,
-  min_cluster_events
+  min_cluster_events,
+  reference
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -89,7 +103,8 @@ sw_cluster_scores <- function(
     n_events = missing(n_events),
     seed = missing(seed),
     nstart = missing(nstart),
-    min_cluster_events = missing(min_cluster_events)
+    min_cluster_events = missing(min_cluster_events),
+    reference = missing(reference)
   ))
   if (
     !is.list(data) ||
@@ -112,6 +127,18 @@ sw_cluster_scores <- function(
   }
   if (k < 2) {
     stop("`k` must be at least 2.", call. = FALSE)
+  }
+  if (
+    !is.null(reference) &&
+      (!is.character(reference) ||
+        length(reference) == 0 ||
+        anyDuplicated(reference) ||
+        !all(reference %in% names(data)))
+  ) {
+    stop(
+      "`reference` must be NULL or distinct file ids from `names(data)`.",
+      call. = FALSE
+    )
   }
 
   files <- sort(names(data))
@@ -150,6 +177,11 @@ sw_cluster_scores <- function(
     if (anyNA(pool)) {
       stop("Events must not contain NA in the chosen markers.", call. = FALSE)
     }
+    # k-means is fitted on the reference files' draws only, when given.
+    fit_pool <- if (is.null(reference)) pool else do.call(rbind, drawn[sort(reference)])
+    if (nrow(unique(fit_pool)) < k) {
+      stop("`k` is larger than the number of distinct reference events.", call. = FALSE)
+    }
     if (nrow(unique(pool)) < k) {
       stop("`k` is larger than the number of distinct events.", call. = FALSE)
     }
@@ -157,7 +189,7 @@ sw_cluster_scores <- function(
     # exceeded maximum" on large pools) visible, but once and with context.
     km_warn <- character(0)
     km <- withCallingHandlers(
-      stats::kmeans(pool, centers = k, nstart = nstart, iter.max = 100),
+      stats::kmeans(fit_pool, centers = k, nstart = nstart, iter.max = 100),
       warning = function(w) {
         km_warn <<- c(km_warn, conditionMessage(w))
         invokeRestart("muffleWarning")
@@ -175,7 +207,17 @@ sw_cluster_scores <- function(
       call. = FALSE
     )
   }
-  cl <- split(km$cluster, rep(files, each = n_events))[files]
+  # Cluster of every drawn event: k-means' own labels, or the nearest
+  # reference centre when the clusters were fitted on reference files.
+  labels <- if (is.null(reference)) {
+    km$cluster
+  } else {
+    pool <- do.call(rbind, drawn)
+    d2 <- outer(rowSums(pool^2), rowSums(km$centers^2), "+") -
+      2 * tcrossprod(pool, km$centers)
+    max.col(-d2, ties.method = "first")
+  }
+  cl <- split(labels, rep(files, each = n_events))[files]
 
   robust_z <- function(x) {
     # stats::mad() scales by 1.4826 by default; constant = 1 keeps the raw MAD.

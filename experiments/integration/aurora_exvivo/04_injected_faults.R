@@ -57,7 +57,7 @@ tool_scores <- function(files, seed) {
     a <- aud[aud$check == check, ]
     as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids])
   }
-  cs <- sw_cluster_scores(files, ch, CLUSTER_K, NEV, seed, 3, 30)
+  cs <- sw_cluster_scores(files, ch, CLUSTER_K, NEV, seed, 3, 30, reference = NULL)
   cm <- cs[cs$check == "median_z", ]
   cm <- vapply(split(abs(cm$value), cm$file)[ids], max, numeric(1), na.rm = TRUE)
   tibble(

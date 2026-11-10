@@ -12,9 +12,7 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(tibble)
 })
-for (f in c("corrector", "anomaly_features", "anomaly_flag", "fcs_signal_audit", "cluster_scores")) {
-  source(file.path("R", paste0(f, ".R")))
-}
+suppressMessages(pkgload::load_all(".", quiet = TRUE))
 
 out_dir <- commandArgs(trailingOnly = TRUE)[[1]]
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -67,7 +65,7 @@ tool_scores <- function(files, seed) {
     a <- aud[aud$check == check, ]
     as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids])
   }
-  cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30)
+  cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30, reference = NULL)
   cm <- cs[cs$check == "median_z", ]
   cm <- vapply(split(abs(cm$value), cm$file)[ids], max, numeric(1), na.rm = TRUE)
   tibble(

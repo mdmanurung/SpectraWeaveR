@@ -180,7 +180,7 @@ test_that("the cluster module adds cluster rows with their cluster in the text",
       n_events = 200,
       seed = 1,
       nstart = 3,
-      min_cluster_events = 10
+      min_cluster_events = 10, reference = NULL
     ),
     relativise = NULL,
     otd = NULL,

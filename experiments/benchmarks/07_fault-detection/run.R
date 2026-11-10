@@ -13,16 +13,7 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(tibble)
 })
-for (f in c(
-  "corrector",
-  "anomaly_features",
-  "anomaly_flag",
-  "fcs_signal_audit",
-  "batch_scores",
-  "cluster_scores"
-)) {
-  source(file.path("R", paste0(f, ".R")))
-}
+suppressMessages(pkgload::load_all(".", quiet = TRUE))
 
 out_dir <- commandArgs(trailingOnly = TRUE)[[1]]
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -173,7 +164,7 @@ file_tool_scores <- function(files, seed) {
   # Cluster-level scores; also need complete data.
   cl_median <- cl_freq <- rep(NA_real_, length(ids))
   if (!any(with_na)) {
-    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30)
+    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30, reference = NULL)
     mx <- function(v) if (all(is.na(v))) NA_real_ else max(abs(v), na.rm = TRUE)
     one <- function(check) {
       a <- cs[cs$check == check, ]

@@ -13,9 +13,7 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(tibble)
 })
-source("R/corrector.R")
-source("R/anomaly_features.R")
-source("R/anomaly_flag.R")
+suppressMessages(pkgload::load_all(".", quiet = TRUE))
 
 args <- commandArgs(trailingOnly = TRUE)
 CANDIDATE <- args[[1]]

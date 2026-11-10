@@ -23,7 +23,8 @@ cs <- function(d, ...) {
     n_events = 500,
     seed = 1,
     nstart = 5,
-    min_cluster_events = 30
+    min_cluster_events = 30,
+    reference = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_cluster_scores, args)
@@ -86,7 +87,7 @@ test_that("clean files give moderate z-scores and share sums to one", {
 
 test_that("small clusters get NA medians and input errors are clear", {
   d <- make_pops()
-  res <- cs(d, min_cluster_events = 500)
+  res <- cs(d, min_cluster_events = 500, reference = NULL)
   expect_true(all(is.na(res$value[res$check == "median_z"])))
   expect_error(cs(d, k = 1), "at least 2")
   expect_error(cs(d, n_events = 5000), "fewer than `n_events`")
@@ -125,7 +126,7 @@ test_that("kmeans warnings are kept in an attribute and re-issued once", {
       n_events = 20000,
       seed = 1,
       nstart = 1,
-      min_cluster_events = 50
+      min_cluster_events = 50, reference = NULL
     ),
     warning = function(w) {
       got <<- c(got, conditionMessage(w))
@@ -138,4 +139,25 @@ test_that("kmeans warnings are kept in an attribute and re-issued once", {
     expect_length(got, 1)
     expect_match(got, "k-means reported")
   }
+})
+
+test_that("reference fits clusters on the given files and assigns the rest", {
+  d <- make_pops()
+  base <- cs(d)
+  # All files as reference gives the same clusters as NULL (converged k-means
+  # labels are the nearest centres).
+  all_ref <- cs(d, reference = names(d))
+  expect_equal(all_ref$value, base$value)
+  # A reference subset still scores every file.
+  sub <- cs(d, reference = paste0("f", 1:7))
+  expect_setequal(unique(sub$file), names(d))
+  expect_equal(nrow(sub), nrow(base))
+  # A file whose rare population moved is still found with clusters fitted on
+  # clean files only.
+  d$f12[d$f12[, "A"] > 2, "B"] <- d$f12[d$f12[, "A"] > 2, "B"] + 1.5
+  r <- cs(d, reference = paste0("f", 1:7))
+  mz <- r[r$check == "median_z" & r$marker == "B", ]
+  expect_equal(mz$file[which.max(abs(mz$value))], "f12")
+  expect_error(cs(d, reference = "nope"), "reference")
+  expect_error(cs(d, reference = c("f1", "f1")), "reference")
 })

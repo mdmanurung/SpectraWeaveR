@@ -45,7 +45,7 @@ dx <- sw_diagnose(
   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL),
   cluster = list(
     markers = chans, k = 6, n_events = 500, seed = 1, nstart = 3,
-    min_cluster_events = 30
+    min_cluster_events = 30, reference = NULL
   ),
   relativise = NULL, # or list(model = <sw_relativise_fit() result>, batch = ..., order = ...)
   otd = list(

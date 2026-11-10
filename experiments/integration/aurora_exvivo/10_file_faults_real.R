@@ -141,7 +141,7 @@ long <- lapply(SEEDS, function(seed) {
     )
     if (fault == "rare_pop") {
       # Cluster checks need complete data; only this fault is scored with them.
-      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30)
+      cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL)
       d <- cs[cs$check == "median_z" & cs$marker == pick[2], ]
       scores$cluster_median_z <- as.numeric(tapply(abs(d$value), d$file, top)[names(files)])
     }

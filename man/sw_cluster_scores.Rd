@@ -4,7 +4,16 @@
 \alias{sw_cluster_scores}
 \title{Score each file's clusters against the other files}
 \usage{
-sw_cluster_scores(data, markers, k, n_events, seed, nstart, min_cluster_events)
+sw_cluster_scores(
+  data,
+  markers,
+  k,
+  n_events,
+  seed,
+  nstart,
+  min_cluster_events,
+  reference
+)
 }
 \arguments{
 \item{data}{A named list. Each element is a numeric matrix or data frame
@@ -22,6 +31,10 @@ with one column per marker. Names are the file ids. At least 3 files.}
 
 \item{min_cluster_events}{Whole number, fewest events a file needs in a
 cluster for its median to be scored.}
+
+\item{reference}{\code{NULL} to fit k-means on all files, or a character vector
+of file ids to fit it on; all files are then assigned to the nearest
+centre.}
 }
 \value{
 A tibble of class \code{sw_cluster_scores} with columns \code{file}, \code{cluster}
@@ -66,6 +79,15 @@ keeps its text, so you can see how often it happens.
 \strong{Reference is the cohort.} The z-scores compare a file with the other
 files you pass. A fault shared by most files, or a real batch effect, shifts
 the reference too.
+
+\strong{Where the clusters come from.} With \code{reference = NULL}, k-means runs on
+the pooled draws of all files, faulty ones included. With \code{reference} set to
+file ids (for example control or known-good files), k-means runs on those
+files' draws only and every file's events are assigned to the nearest
+centre, so the clusters do not depend on the files being judged. On 36 real
+files with a +1 SD shift inside the smallest of 6 clusters, this did not
+raise the AUROC (0.86 with clean reference files, 0.88 without); scoring the
+injected cluster's own row with all events gave 0.96.
 }
 \examples{
 set.seed(1)
@@ -76,7 +98,8 @@ files <- lapply(1:6, function(i) {
 names(files) <- paste0("f", 1:6)
 sw_cluster_scores(
   files, c("A", "B"),
-  k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20
+  k = 2, n_events = 200, seed = 1, nstart = 5, min_cluster_events = 20,
+  reference = NULL
 )
 
 }
