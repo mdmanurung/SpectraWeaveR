@@ -8,7 +8,7 @@ sw_filter_doublets_peacoqc(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
-  nmads = rep(4, length(area_channels)),
+  nmads,
   verbose = TRUE,
   ...
 )
@@ -20,17 +20,21 @@ sw_filter_doublets_peacoqc(
 
 \item{height_channels}{Character vector of height-type channel names.}
 
-\item{nmads}{Numeric vector; MAD bandwidth per channel pair.
-Default: \code{rep(4, length(area_channels))}.}
+\item{nmads}{Numeric vector; required, no default. MAD bandwidth per
+channel pair, passed to \code{PeacoQC::RemoveDoublets()} as \code{nmad}.
+Must have the same length as \code{area_channels}.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints removal statistics.
+\item{verbose}{Logical; if \code{TRUE}, prints removal statistics and one
+message with the number and percent of events removed.
 Default: \code{TRUE}.}
 
 \item{...}{Additional arguments passed to
 \code{PeacoQC::RemoveDoublets()}.}
 }
 \value{
-A \code{flowFrame} with doublets removed.
+A \code{flowFrame} with doublets removed. The attributes
+\code{events_in} and \code{events_removed} hold the event counts
+before filtering and the number removed.
 }
 \description{
 Removes doublet events using \code{PeacoQC::RemoveDoublets()}.

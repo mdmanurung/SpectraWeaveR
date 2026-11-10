@@ -4,7 +4,13 @@
 \alias{sw_filter_debris}
 \title{Remove Debris Using Manual Polygon Gate}
 \usage{
-sw_filter_debris(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A", gate_data)
+sw_filter_debris(
+  ff,
+  fsc_channel = "FSC-A",
+  ssc_channel = "SSC-A",
+  gate_data,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{ff}{A \code{flowCore::flowFrame}.}
@@ -18,10 +24,16 @@ Default: \code{"SSC-A"}.}
 \item{gate_data}{Numeric vector of polygon gate coordinates. The first
 half contains x-coordinates (FSC values), the second half contains
 y-coordinates (SSC values). Must have even length (at least 6 for a
-triangle).}
+triangle). The polygon defines which events are kept, so it is
+always a user choice.}
+
+\item{verbose}{Logical; if \code{TRUE}, prints one message with the
+number and percent of events removed. Default: \code{FALSE}.}
 }
 \value{
-A \code{flowFrame} with debris events removed.
+A \code{flowFrame} with debris events removed. The attributes
+\code{events_in} and \code{events_removed} hold the event counts
+before filtering and the number removed.
 }
 \description{
 Removes debris events using a manual polygon gate in the FSC-A vs SSC-A
@@ -39,6 +51,7 @@ gate_coords <- c(
   47679, 260500, 260500, 113000, 35000     # SSC-A y-coords
 )
 ff_clean <- sw_filter_debris(ff, gate_data = gate_coords)
+attr(ff_clean, "events_removed")
 }
 
 }

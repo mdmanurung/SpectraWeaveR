@@ -72,6 +72,12 @@ given.
 correlation of a channel pair and the median of that pair over all files
 (file level, \code{detail} names the pair). A wrong spillover or unmixing
 matrix changes channel-pair correlations.
+\item \code{corr_pair_z}: the same correlations, one row per file and channel pair
+(\code{channel} is \code{"A ~ B"}): robust z of the file's correlation against all
+files. Rank these rows per pair; \code{corr_shift} keeps only the largest change
+per file, which hides a change in one pair among many (on 36 real files
+with 40 channels, a 0.3 spillover scored AUROC 0.66 with \code{corr_shift}).
+\code{NA} with fewer than 3 files.
 }
 }
 \details{

@@ -9,8 +9,7 @@ sw_gate_run(
   gating_template,
   transform_channels = NULL,
   transform_func = NULL,
-  cofactor = 6000,
-  ...
+  cofactor
 )
 }
 \arguments{
@@ -25,11 +24,12 @@ If \code{NULL}, no transformation is applied.}
 \item{transform_func}{Transformation function to apply (default:
 \code{flowCore::arcsinhTransform} with the specified cofactor).}
 
-\item{cofactor}{Numeric; cofactor for the default arcsinh transformation
-(default: 6000, appropriate for spectral flow cytometry). Ignored if
-\code{transform_func} is provided.}
-
-\item{...}{Additional arguments.}
+\item{cofactor}{Numeric; no default. Cofactor of the arcsinh
+transformation (events are divided by this value before \code{asinh}).
+Required whenever \code{transform_channels} is given and
+\code{transform_func} is \code{NULL}; unused otherwise. For spectral
+flow data a value around 6000 is common, but the choice changes every
+downstream gate, so pass it explicitly.}
 }
 \value{
 A \code{GatingSet} object with gates applied.
@@ -38,12 +38,22 @@ A \code{GatingSet} object with gates applied.
 Full openCyto gating workflow: loads FCS files into a GatingSet, applies
 optional transformation, and runs hierarchical gating using a CSV template.
 }
+\details{
+Per-sample or pooled gating is set in the template, not here. The
+\code{collapseDataForGating} and \code{groupBy} columns of the CSV are
+read by \code{openCyto::gatingTemplate()}; see the \code{pool_samples}
+argument of \code{\link{sw_gate_template}}.
+}
 \examples{
 \dontrun{
 # Build template and apply
 tmpl <- tempfile(fileext = ".csv")
-sw_gate_template(tmpl, "lymphocyte")
-gs <- sw_gate_run(c("sample1.fcs", "sample2.fcs"), gating_template = tmpl)
+sw_gate_template(tmpl, "lymphocyte", debris_min = 50000,
+                 singlet_wider_gate = TRUE, flowclust_k = 2,
+                 flowclust_target = 1, pool_samples = TRUE)
+gs <- sw_gate_run(c("sample1.fcs", "sample2.fcs"), gating_template = tmpl,
+                   transform_channels = c("FSC-A", "FSC-H", "SSC-A"),
+                   cofactor = 6000)
 }
 
 }

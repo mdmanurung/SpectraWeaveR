@@ -18,7 +18,7 @@ sw_gate_singlets(
   filter_id = "Singlets",
   channel1 = "FSC-A",
   channel2 = "FSC-H",
-  nmad = 4,
+  nmad,
   verbose = FALSE
 )
 ```
@@ -31,7 +31,7 @@ sw_gate_singlets(
 | `filter_id` | Gate name (default: `"Singlets"`). |
 | `channel1` | Area channel (default: `"FSC-A"`). |
 | `channel2` | Height channel (default: `"FSC-H"`). |
-| `nmad` | Number of MADs for the parallelogram width (default: 4). |
+| `nmad` | Required, no default. Number of MADs around the median ratio. |
 | `verbose` | Logical; print progress messages. |
 
 ### Details
@@ -58,7 +58,7 @@ sw_filter_doublets(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
-  nmads = rep(4, length(area_channels)),
+  nmads,
   verbose = FALSE
 )
 ```
@@ -70,7 +70,7 @@ sw_filter_doublets(
 | `ff` | A `flowFrame`. |
 | `area_channels` | Character vector of area channels (default: `c("FSC-A", "SSC-A")`). |
 | `height_channels` | Character vector of corresponding height channels (default: `c("FSC-H", "SSC-H")`). |
-| `nmads` | Numeric vector of MAD multipliers, one per channel pair (default: 4 for each). |
+| `nmads` | Numeric vector of MAD multipliers, one per channel pair (required, no default). |
 | `verbose` | Logical; print progress messages. |
 
 ### Details
@@ -96,7 +96,7 @@ sw_filter_doublets_peacoqc(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
-  nmads = rep(4, length(area_channels)),
+  nmads,
   verbose = TRUE,
   ...
 )
@@ -109,7 +109,7 @@ sw_filter_doublets_peacoqc(
 | `ff` | A `flowFrame`. |
 | `area_channels` | Character vector of area channels. |
 | `height_channels` | Character vector of height channels. |
-| `nmads` | Numeric vector of MAD multipliers. |
+| `nmads` | Required, no default. Numeric vector of MAD multipliers, one per channel pair. |
 | `verbose` | Logical; print progress messages (default: `TRUE`). |
 | `...` | Additional arguments passed to `PeacoQC::RemoveDoublets()`. |
 
@@ -132,7 +132,7 @@ Remove debris using a manual polygon gate.
 
 ```r
 sw_filter_debris(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A",
-                      gate_data)
+                      gate_data, verbose = FALSE)
 ```
 
 ### Arguments
@@ -143,6 +143,7 @@ sw_filter_debris(ff, fsc_channel = "FSC-A", ssc_channel = "SSC-A",
 | `fsc_channel` | FSC channel name (default: `"FSC-A"`). |
 | `ssc_channel` | SSC channel name (default: `"SSC-A"`). |
 | `gate_data` | Numeric vector of polygon coordinates: first all x-coordinates (FSC), then all y-coordinates (SSC). |
+| `verbose` | Logical; print events removed (default: `FALSE`). |
 
 ### Details
 
@@ -151,7 +152,8 @@ space. Coordinates define the polygon boundary — events inside are retained.
 
 ### Value
 
-A `flowFrame` with debris events removed.
+A `flowFrame` with debris events removed. Attributes `events_in` and
+`events_removed` hold the counts.
 
 ---
 

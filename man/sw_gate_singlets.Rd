@@ -9,7 +9,7 @@ sw_gate_singlets(
   filter_id = "Singlets",
   channel1 = "FSC-A",
   channel2 = "FSC-H",
-  nmad = 4,
+  nmad,
   verbose = FALSE
 )
 }
@@ -25,8 +25,10 @@ Default: \code{"FSC-A"}.}
 \item{channel2}{Character; the height channel (y-axis).
 Default: \code{"FSC-H"}.}
 
-\item{nmad}{Numeric; number of MADs above the median ratio to allow.
-Default: \code{4}.}
+\item{nmad}{Numeric; required, no default. Number of median absolute
+deviations (MADs) around the median channel ratio that an event may
+deviate before it is called a doublet. Larger values keep more events.
+This choice changes which events are removed, so state it explicitly.}
 
 \item{verbose}{Logical; if \code{TRUE}, prints gate statistics.
 Default: \code{FALSE}.}

@@ -1,11 +1,18 @@
 # tests/testthat/test-gate.R
 # Unit tests for R/gate.R — Automated gating (openCyto)
 
+tmpl_args <- list(debris_min = 50000, singlet_wider_gate = TRUE,
+                  flowclust_k = 2, flowclust_target = 1, pool_samples = TRUE)
+make_template <- function(file, ...) {
+  args <- utils::modifyList(tmpl_args, list(...))
+  do.call(sw_gate_template, c(list(file), args))
+}
+
 test_that("sw_gate_template creates valid CSV", {
   tmp_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_file))
 
-  result <- sw_gate_template(tmp_file)
+  result <- make_template(tmp_file)
 
   expect_true(file.exists(tmp_file))
   expect_equal(result, tmp_file)
@@ -29,12 +36,13 @@ test_that("sw_gate_template creates parent directory", {
   tmp_file <- file.path(tmp_dir, "template.csv")
   on.exit(unlink(file.path(tempdir(), "nested"), recursive = TRUE))
 
-  sw_gate_template(tmp_file)
+  make_template(tmp_file)
   expect_true(file.exists(tmp_file))
 })
 
 test_that("sw_gate_template rejects invalid template_type", {
-  expect_error(sw_gate_template(tempfile(), template_type = "invalid"),
+  expect_error(sw_gate_template(tempfile(), template_type = "invalid", debris_min = 1,
+                                   singlet_wider_gate = TRUE, pool_samples = TRUE),
                "Unknown template_type")
 })
 
@@ -51,7 +59,7 @@ test_that("sw_gate_template creates myeloid template", {
   tmp_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_file))
 
-  sw_gate_template(tmp_file, template_type = "myeloid")
+  make_template(tmp_file, template_type = "myeloid")
   gt <- utils::read.csv(tmp_file, stringsAsFactors = FALSE)
   expect_true(nrow(gt) >= 4)
   expect_true("nonDebris" %in% gt$alias)
@@ -67,7 +75,7 @@ test_that("sw_gate_template creates nk template", {
   tmp_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_file))
 
-  sw_gate_template(tmp_file, template_type = "nk")
+  make_template(tmp_file, template_type = "nk")
   gt <- utils::read.csv(tmp_file, stringsAsFactors = FALSE)
   expect_true(nrow(gt) >= 4)
   expect_true("CD56pos" %in% gt$alias)
@@ -79,7 +87,7 @@ test_that("sw_gate_template creates treg template", {
   tmp_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_file))
 
-  sw_gate_template(tmp_file, template_type = "treg")
+  make_template(tmp_file, template_type = "treg")
   gt <- utils::read.csv(tmp_file, stringsAsFactors = FALSE)
   expect_true(nrow(gt) >= 5)
   expect_true("CD3pos" %in% gt$alias)
@@ -93,7 +101,7 @@ test_that("sw_gate_template creates full_pbmc template", {
   tmp_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_file))
 
-  sw_gate_template(tmp_file, template_type = "full_pbmc")
+  make_template(tmp_file, template_type = "full_pbmc")
   gt <- utils::read.csv(tmp_file, stringsAsFactors = FALSE)
   expect_true(nrow(gt) >= 8)
   # Should have branching: CD3pos and CD3neg both under singlets
@@ -162,9 +170,9 @@ test_that("sw_gate_run runs end-to-end with synthetic FCS", {
   # Build template
   tmp_template <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_template), add = TRUE)
-  sw_gate_template(tmp_template)
+  make_template(tmp_template)
 
-  gs <- sw_gate_run(tmp_fcs, tmp_template)
+  gs <- sw_gate_run(tmp_fcs, tmp_template, transform_channels = NULL)
   expect_true(methods::is(gs, "GatingSet"))
 
   # Verify gate nodes exist
@@ -194,9 +202,9 @@ test_that("sw_gate_extract returns named list of flowFrames", {
 
   tmp_template <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp_template), add = TRUE)
-  sw_gate_template(tmp_template)
+  make_template(tmp_template)
 
-  gs <- sw_gate_run(tmp_fcs, tmp_template)
+  gs <- sw_gate_run(tmp_fcs, tmp_template, transform_channels = NULL)
   nodes <- flowWorkspace::gs_get_pop_paths(gs)
 
   # Extract from first non-root node
@@ -205,4 +213,53 @@ test_that("sw_gate_extract returns named list of flowFrames", {
   expect_true(is.list(ff_list))
   expect_true(length(ff_list) >= 1)
   expect_true(methods::is(ff_list[[1]], "flowFrame"))
+})
+
+test_that("sw_gate_template requires every cutoff argument", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  expect_error(sw_gate_template(tmp), "required")
+  expect_error(sw_gate_template(tmp, debris_min = 1, singlet_wider_gate = TRUE),
+               "pool_samples")
+  expect_error(
+    sw_gate_template(tmp, debris_min = 1, singlet_wider_gate = TRUE,
+                     pool_samples = TRUE),
+    "flowclust_k"
+  )
+  # templates without flowClust do not need K or target
+  expect_no_error(
+    sw_gate_template(tmp, "nk", debris_min = 1, singlet_wider_gate = TRUE,
+                     pool_samples = TRUE)
+  )
+})
+
+test_that("sw_gate_template writes the supplied values into the CSV", {
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp))
+  make_template(tmp, debris_min = 12345, singlet_wider_gate = FALSE,
+                flowclust_k = 3, flowclust_target = 2, pool_samples = FALSE)
+  gt <- utils::read.csv(tmp, stringsAsFactors = FALSE)
+  expect_equal(gt$gating_args[gt$alias == "nonDebris"], "min = 12345")
+  expect_equal(gt$gating_args[gt$alias == "singlets"], "wider_gate = FALSE")
+  expect_equal(gt$gating_args[gt$alias == "lymphocytes"],
+               "K = 3, target = 2")
+  expect_false(any(gt$collapseDataForGating))
+
+  make_template(tmp, pool_samples = TRUE)
+  gt <- utils::read.csv(tmp, stringsAsFactors = FALSE)
+  expect_true(all(gt$collapseDataForGating))
+})
+
+test_that("sw_gate_run needs cofactor when it transforms with arcsinh", {
+  skip_if_not_installed("flowCore")
+  skip_if_not_installed("flowWorkspace")
+  skip_if_not_installed("openCyto")
+  tmpl <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmpl))
+  make_template(tmpl)
+  expect_error(
+    sw_gate_run("x.fcs", tmpl, transform_channels = "FSC-A"),
+    "'cofactor' is required"
+  )
+  expect_false("..." %in% names(formals(sw_gate_run)))
 })

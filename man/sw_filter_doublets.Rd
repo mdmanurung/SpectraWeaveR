@@ -8,7 +8,7 @@ sw_filter_doublets(
   ff,
   area_channels = c("FSC-A", "SSC-A"),
   height_channels = c("FSC-H", "SSC-H"),
-  nmads = rep(4, length(area_channels)),
+  nmads,
   verbose = FALSE
 )
 }
@@ -22,14 +22,19 @@ sw_filter_doublets(
 (e.g., \code{c("FSC-H", "SSC-H")}). Must match length of
 \code{area_channels}.}
 
-\item{nmads}{Numeric vector; MAD bandwidth per channel pair.
-Default: \code{rep(4, length(area_channels))}.}
+\item{nmads}{Numeric vector; required, no default. MAD bandwidth per
+channel pair: number of median absolute deviations around the median
+area/height ratio that an event may deviate before it is removed. Must
+have the same length as \code{area_channels}.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints gate statistics.
+\item{verbose}{Logical; if \code{TRUE}, prints gate statistics and one
+message with the number and percent of events removed.
 Default: \code{FALSE}.}
 }
 \value{
-A \code{flowFrame} with doublets removed.
+A \code{flowFrame} with doublets removed. The attributes
+\code{events_in} and \code{events_removed} hold the event counts
+before filtering and the number removed.
 }
 \description{
 Removes doublet events using the parallelogram singlet gate from

@@ -329,7 +329,7 @@ sw_filter_margins(ff, channel_specs = NULL)
 | Argument | Description |
 |----------|-------------|
 | `ff` | A `flowFrame`. |
-| `channel_specs` | Optional named list of channel-specific margin specifications. |
+| `channel_specs` | Optional named list of `c(lower, upper)` ranges by channel name. Passed to `PeacoQC::RemoveMargins(channel_specifications =)`; only the named channels are checked. |
 
 ### Details
 
@@ -340,7 +340,8 @@ detector limits (floor or ceiling).
 
 ### Value
 
-A `flowFrame` with margin events removed.
+A `flowFrame` with margin events removed. Attributes `events_in` and
+`events_removed` hold the counts.
 
 ---
 
