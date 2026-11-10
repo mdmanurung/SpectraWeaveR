@@ -29,6 +29,15 @@ donor-invariant internal anchors"; reports must say so.
 | A10 | S18 effect sizes: offset SD 0.10 and log-gain SD 0.20 per batch x channel (linear scale) | user 2026-11-10 (unaudited judgement) |
 | inherited | min_cells 10 (G1), anchor batch01 (Q8), asinh cofactor 6000 (Q4), heb_pool_pop_kv_bap settings (F6, F8) | earlier plans |
 
+## Notes found during the build (2026-11-10)
+
+- A10: the asinh-scale effect these sizes produce is SD 0.10 to 0.15 over batches (seed 441 smoke test: CD3
+  0.15 in T cells, about 0.10 elsewhere), smaller than the 0.47 run SD of S13 to S16, not "similar" as proposed.
+- A8 guardrail: heb applies one shift per batch x population to all its samples, so a stimulated-minus-unstimulated
+  contrast within a batch cannot move; the guardrail holds by construction. A real leak check compares, in the
+  stripped batches, the anchor-based effect with the reference-based effect of the unstripped fit. To ask the
+  user before reporting A8.
+
 ## Pass / fail
 
 - Synthetic (S18, S18w): pass = held-out reference RMSE no worse than heb_pool_pop_kv_bap on batches with reference
