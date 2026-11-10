@@ -25,7 +25,9 @@ FAULTS <- tibble::tribble(
   "batch_shift", 0.25, # marker SD units, added in every file of the hit batch
   "batch_shift", 0.5,
   "batch_stretch", 1.3, # width factor around each file's median
-  "batch_drift", 0.5 # SD units, rising linearly over the hit batch's acquisition order
+  "batch_drift", 0.5, # SD units, rising linearly over the hit batch's acquisition order
+  "batch_bimodal", 0.5, # SD units: each event moved by +size or -size at random
+  "batch_bimodal", 1
 )
 
 ev <- readRDS(file.path(run_dir, "events.rds"))
@@ -65,7 +67,8 @@ long <- lapply(SEEDS, function(seed) {
         batch_shift = x[, mk] + size * marker_sd[[mk]],
         batch_stretch = stats::median(x[, mk]) + (x[, mk] - stats::median(x[, mk])) * size,
         batch_drift = x[, mk] +
-          size * marker_sd[[mk]] * (order_in_batch[[f]] - 1) / (length(hit_files) - 1)
+          size * marker_sd[[mk]] * (order_in_batch[[f]] - 1) / (length(hit_files) - 1),
+        batch_bimodal = x[, mk] + sample(c(-size, size), nrow(x), replace = TRUE) * marker_sd[[mk]]
       )
       files[[f]] <- x
     }
@@ -104,6 +107,6 @@ print(as.data.frame(mutate(mat, auroc = round(auroc, 2))[c("case", "check", "aur
 p <- ggplot(mat, aes(auroc, check)) +
   geom_vline(xintercept = 0.5, linetype = 2, colour = "grey60") +
   geom_pointrange(aes(xmin = auroc - ci95_half, xmax = pmin(auroc + ci95_half, 1)), size = 0.2) +
-  facet_wrap(vars(case), nrow = 1) +
+  facet_wrap(vars(case), nrow = 2) +
   labs(x = "AUROC of the hit marker among 40 (mean, 95% CI over 10 seeds; real batches)", y = NULL)
 ggsave(file.path(run_dir, "fig_batch_real.png"), p, width = 200, height = 60, units = "mm", dpi = 200)

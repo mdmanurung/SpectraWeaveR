@@ -72,7 +72,7 @@ no real-file evidence yet.
 
 | Fault class | Best check | Simulation | Real files (injected) |
 |---|---|---|---|
-| Header / keyword mismatch | `sw_fcs_header_audit()` | exact by construction | not tested |
+| Header / keyword mismatch | `sw_fcs_header_audit()` | exact by construction | real, not injected: all 9 Fortessa files flagged on `$CYT`, `$PnR` and `$PnV` (15 channels); 4 Aurora files flagged on `$PnV` and `$DATE` (a later session) |
 | Saturation | `saturation_share` | 1.00 | 1.00 (5% of events at the channel maximum) |
 | Dead channel | `zero_variance` | 1.00 | 1.00 |
 | Missing or infinite values | `nonfinite_share` | 1.00 | 1.00 (2% of events) |
@@ -93,7 +93,7 @@ no real-file evidence yet.
 | Leak into a negative channel | `spill_corr_z` (+ `neg_median_z` if it shifts) | 0.96 at 15% | 0.94 at 15%, 0.68 at 5% |
 | Batch shift (one marker) | `pair_emd` | 1.00 | 0.92 at 0.5 SD, 0.75 at 0.25 SD |
 | Batch stretch (one marker) | `spread_ratio` / `pair_emd` | 1.00 | 0.87 at x1.3 |
-| Batch split into two modes | `spread_ratio` | **0.86 (weak, seeds 0.57 to 1.0)** | not tested |
+| Batch split into two modes | `spread_ratio` | **0.86 (weak, seeds 0.57 to 1.0)** | 0.99 at ±1 SD; ±0.5 SD best `pair_emd` 0.78, below the bar |
 | Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
 | Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | real, not injected: same 9 donors on Aurora and Fortessa; Aurora gains 2.0 to 2.4x the cohort median, Fortessa 0.06 to 0.39x |
 | Instrument batch per marker | `eta2` | see batch rows | real: median 0.88 before CD3 relativisation, 0.07 after (AF700, PB, AA750 keep 0.35 to 0.88) |
@@ -265,6 +265,18 @@ misses the authors' (|log ratio| up to 0.28), and the miss shows as a KrO
 residual in the instrument test above (eta2 0.52 ours, 0.03 authors).
 
 ![Control split separation against the M error, Fortessa](figures/glehr_separation_fortessa.png)
+
+The header audit sees the instrument too. Against donor 1's Aurora file, every
+Fortessa file differs on `$CYT` (LSRII), `$PnR` (262144 against 4194304) and
+`$PnV` on all 15 channels. It also finds that Aurora donors 6 to 9 came from a
+later session: their `$DATE` and some detector voltages differ.
+
+![Header keys that differ from the reference file, per file](figures/glehr_header_real.png)
+
+A batch whose marker splits into two modes is found at ±1 SD (`spread_ratio`
+0.99) but not at ±0.5 SD (best `pair_emd` 0.78).
+
+![Batch faults injected into real batches: AUROC of the hit marker](figures/batch_real.png)
 
 ## What the checks cannot see
 
