@@ -342,6 +342,24 @@ channels are near zero (0.005 and 0.003), so those ratios mean little.
 
 ![Box gate on the unstained files, donor 1](figures/glehr_unstained_gate.png)
 
+The CD3 single stains do not find the rest of the AF700 widening either. We
+gated them with the same box and split CD3- from CD3+ cells by k-means as in
+the reproduction above. In the CD3-AF700 stain, CD3- cells carry the AF700
+reagent and no other dye. On the Fortessa their AF700 SD is 0.13 (0.12 to
+0.20), against 0.09 unstained and 0.53 for the panel negative, so the reagent
+alone adds little. Each other single stain gives that dye's spread into AF700
+as the AF700 SD in CD3+ over CD3- cells. PC5.5, APC, AA750, ECD and PC7 spread
+into AF700, but not more on the Fortessa than on the Aurora: the Fortessa ratio
+is higher only for APC (5.9 against 4.3) and lower for PC5.5 (6.3 against
+16.9), ECD and PC7. So the widening needs the full panel. Untested candidates
+are CD8-dim cells that the Fortessa no longer separates from the negative, the
+sum of several dyes' spread, and background of the CD8 reagent, which the CD3
+controls do not carry.
+
+![AF700 SD of unstained cells, AF700-stain CD3- cells and the panel negative, lines per donor](figures/glehr_af700_stain_sd.png)
+
+![Spread of each single-stain dye into AF700, CD3+ over CD3- SD, per instrument](figures/glehr_af700_single_spread.png)
+
 The spread check finds real spread when it is present. Spread injected into
 25% of real Aurora files (5 seeds) is found by `spread_z` at AUROC 0.98 with
 quantile 0.95 when the added noise equals the target's negative SD at the
