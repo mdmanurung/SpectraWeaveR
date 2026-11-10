@@ -53,14 +53,22 @@ def effect_coverage(eff, obs, truth, meta, markers):
             true = shift.loc[(r.batch, r.population), r.marker] - shift.loc[(anchor, r.population), r.marker]
         except KeyError:
             continue
-        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor, r.df))
+        out.append((r.estimate - true, abs(r.estimate - true) / r.se_donor, r.df, r.n_donors))
     if not out:
         return {"n_effects": 0}
-    err, z, df = np.array(out).T
-    return {"n_effects": len(z), "cov90": float(np.mean(z <= student_t.ppf(0.95, df))),
-            "cov95": float(np.mean(z <= student_t.ppf(0.975, df))),
-            "cov90_normal": float(np.mean(z <= Z90)), "median_df": float(np.median(df)),
-            "effect_rmse": float(np.sqrt(np.mean(err ** 2)))}
+    err, z, df, nd = np.array(out).T
+    hit = z <= student_t.ppf(0.95, df)
+    res = {"n_effects": len(z), "cov90": float(np.mean(hit)),
+           "cov95": float(np.mean(z <= student_t.ppf(0.975, df))),
+           "cov90_normal": float(np.mean(z <= Z90)), "median_df": float(np.median(df)),
+           "effect_rmse": float(np.sqrt(np.mean(err ** 2)))}
+    # Diagnostic only (amendment 2026-11-10, not scored): split by reference donors behind the effect.
+    for name, m in {"nd1": nd <= 1, "nd2p": nd >= 2}.items():
+        res[f"n_{name}"] = int(m.sum())
+        res[f"cov90_{name}"] = float(np.mean(hit[m])) if m.any() else np.nan
+        res[f"rmse_{name}"] = float(np.sqrt(np.mean(err[m] ** 2))) if m.any() else np.nan
+        res[f"medz_{name}"] = float(np.median(z[m])) if m.any() else np.nan
+    return res
 
 
 rows = []

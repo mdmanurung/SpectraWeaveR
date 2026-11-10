@@ -14,7 +14,7 @@ Shift-only stages have x = x_true + offset, so a batch's old offset is exactly m
 S17 is S13 with population-specific shifts: every cell type gets its own independent study and run offset,
 so an effect shared across populations is wrong. Truth offsets then have a cell-type axis (study, type, marker).
 Scenario indices 13 to 17 are registered in LEVELS here; S13b reuses index 13, so S13 and S13b share truth and offsets.
-Seeds 441 to 450 are the development seeds. Test seeds 431 to 440 are never written or read here.
+Seeds 441 to 460 are the development seeds (451 to 460 added by F5, 2026-11-10). Test seeds 431 to 440 are never written or read here.
 """
 import json
 import os
@@ -29,7 +29,7 @@ sys.dont_write_bytecode = True  # keep the read-only bundle free of new files
 # Parameters (user-approved design, 2026-11-09) -----------------------------------
 CELLS_PER_PARTICIPANT = 70  # approved E2
 CELLS_PER_REFERENCE_ALIQUOT = 90  # approved E2
-DEV_SEEDS = range(441, 451)  # test seeds 431 to 440 are never touched
+DEV_SEEDS = range(441, 461)  # F5 adds 451-460; test seeds 431 to 440 are never touched
 SD_RUN, SD_STUDY = 0.10, 0.47  # S13, S13b, S15, S16, S17 (S16 overrides two runs)
 SD_FLAT_RUN = 0.47  # S14: all offset variance sits in the runs
 SD_DISCREPANT_RUN = 0.60  # S16, the two discrepant runs
@@ -149,7 +149,7 @@ out_dir = Path(sys.argv[1])
 seeds = [int(s) for s in sys.argv[2:]]
 for seed in seeds:
     if seed not in DEV_SEEDS:
-        sys.exit(f"seed {seed} is not a development seed (441 to 450)")
+        sys.exit(f"seed {seed} is not a development seed (441 to 460)")
     seed_dir = out_dir / f"seed_{seed}"
     if seed_dir.exists():
         sys.exit(f"{seed_dir} exists; run dirs are never overwritten")

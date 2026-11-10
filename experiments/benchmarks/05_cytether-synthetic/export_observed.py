@@ -14,4 +14,6 @@ import pandas as pd
 for obs_path in sorted(Path(sys.argv[1]).glob("seed_*/S*/observed.npz")):
     obs = np.load(obs_path)
     out = obs_path.with_name("observed_X.csv.gz")
+    if out.exists():
+        continue  # written earlier; never overwritten
     pd.DataFrame(obs["X"], columns=[str(m) for m in obs["markers"]]).to_csv(out, index=False)
