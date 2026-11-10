@@ -15,12 +15,13 @@ those, because a different choice flags different files.
 | Saturation, dead channel, non-finite values, negative share | `sw_fcs_signal_audit()` | share or flag per file and channel |
 | Event-rate instability, clog, gaps in time | `sw_fcs_signal_audit()` | `rate_cv`, `max_gap` |
 | Drift of a marker inside one file | `sw_fcs_signal_audit()` | `time_trend` per channel |
-| One marker shifted, stretched or split in a file | `sw_fcs_signal_audit()` | `median_z`, `sd_z` per channel |
+| One marker shifted, stretched or split in a file | `sw_fcs_signal_audit()` | `median_z`, `sd_z`, `bimodality_z` per channel |
+| A fault most files share | `sw_signal_reference_fit()` + `sw_fcs_signal_audit(reference = )` | `median_z`, `sd_z` against a frozen reference |
 | Wrong spillover or unmixing (channel-pair correlation) | `sw_fcs_signal_audit()` | `corr_shift` and the pair |
 | Change in a rare population, or in a file's composition | `sw_cluster_scores()` | `freq_z`, `median_z` per cluster |
 | File unlike the other files | `sw_anomaly_features()` + `sw_anomaly_flag_outlier()` | forest score per file |
 | File unlike a reference set | `sw_anomaly_features()` + `sw_anomaly_flag_novelty()` | log-density per file |
-| Batch effect per marker | `sw_batch_scores()` | pairwise EMD, median range, eta2, spread ratio, order drift |
+| Batch effect per marker | `sw_batch_scores()` | pairwise EMD, batch-vs-rest EMD and its z, median range, eta2, spread ratio, order drift |
 | Signal stability over time | `sw_qc_run()`, `sw_qc_plot()`, `sw_qc_heatmap()` | PeacoQC result, plot, heatmap |
 | All of the above in one table | `sw_diagnose()`, `sw_diagnosis_top()` | stacked table; top values per check |
 | Browse the result | `sw_qc_app()` | Shiny explorer |
@@ -36,7 +37,8 @@ dx <- sw_diagnose(
     channels = chans, range_max = 4e6, range_min = NULL,
     time_channel = "Time", time_bin = 5,
     area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.99,
-    reference_group = NULL # or a named vector file -> donor, to score within donor
+    reference_group = NULL, # or a named vector file -> donor, to score within donor
+    reference = NULL # or a frozen reference from sw_signal_reference_fit()
   ),
   anomaly = list(
     channels = chans, features = c("quantile", "emd"), quantile_step = 0.1,
@@ -58,7 +60,7 @@ dx <- sw_diagnose(
     seed = 1, max_iter = 500, tol = 1e-5
   ),
   negative = list(channels = chans, n_events = 2000, seed = 1, hyper_k = 4, pairs = "all",
-    spread_quantile = 0.95),
+    spread_quantile = 0.95, min_separation = 3),
   gate = NULL
 )
 sw_diagnosis_top(dx, n = 5)
@@ -90,7 +92,7 @@ no real-file evidence yet.
 | One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
 | All markers widened | `global_sd_z` (file level) | 1.00 (`sd_z`) | 0.88 at x1.2, 0.82 at x1.1 (one marker's `sd_z`: 0.86, 0.61); just below the bar |
-| Split into two modes (one marker) | `emd_z` (anomaly module) | **0.67 (`corr_shift`, weak)** | limit ±1 SD: 0.93 (`sd_z` 0.90); ±1.5 SD ≥ 0.99; ±0.5 SD 0.70, below the bar |
+| Split into two modes (one marker) | `emd_z` (anomaly module) | **0.67 (`corr_shift`, weak); `bimodality_z` 0.58** | limit ±1 SD: 0.93 (`sd_z` 0.90); ±1.5 SD ≥ 0.99; ±0.5 SD 0.70, below the bar; `bimodality_z` 1.00 at ±0.5 SD only on markers that are already bimodal |
 | Change in a rare population | `median_z` (cluster module), the cluster's own row | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | 0.95 at +1 SD, 0.96 at +2 SD on the hit cluster's row (max over clusters: 0.88, 0.84) |
 | Composition change | `freq_z` (cluster module), the cluster's own row | 1.00 | 80% of the largest cluster (31%) removed: 1.00; 50%: 0.82; 80% of the smallest (7%): 0.81 |
 | Negative population shifted | `neg_median_z` | 1.00 at 0.3 SD | 1.00 at 1 SD, 0.84 at 0.3 SD |
@@ -188,6 +190,22 @@ clusters is used (+1 and +2 SD: 0.88 and 0.84, wide intervals).
 
 ![Detection limits on real files: AUROC against fault size](figures/limits_real.png)
 
+`bimodality_z` (the bimodality coefficient per file and channel, as a robust z
+over files) does not close the split gap. In simulation, where each population
+has SD 1, a ±0.5 split stays one peak: it scores 0.58, and a Hartigan dip
+score, tried as the fallback, 0.51 (`figures/bimodal_sim_tools.png`). On real
+files it scores 1.00 at ±0.5 SD, 0.65 at ±1 SD and 0.85 at ±1.5 SD, the dip
+0.85, 0.82 and 0.78 (`figures/bimodal_limits_real.png`). The score does not rise
+with size because each seed hits another marker: most real markers already
+have two populations, the split blurs them and the coefficient drops, so it is
+found there; on markers with one population it is not. Read `bimodality_z` as
+a check for markers with two populations, not as a general split detector. The
+dip is not in the package.
+
+![Two-mode split in simulation: AUROC per tool, with bimodality_z and the dip](figures/bimodal_sim_tools.png)
+
+![Two-mode split on real files: bimodality_z and the dip beside emd_z and sd_z](figures/bimodal_limits_real.png)
+
 The rare-population loss came from that maximum over clusters, not from the
 clustering. Read on the found cluster nearest the injected one, the same
 check scores 0.95 at +1 SD and 0.96 at +2 SD, as good as scoring the injected
@@ -229,6 +247,17 @@ check scores 0.93 to 1.00 and the whole-file checks 0.43 to 0.70
 found at 0.84. These real-file numbers cover only the 10 of 40 channels whose
 mixture separation was 3 or more; read `separation` before trusting the
 negative checks on a channel.
+
+`min_separation` (required) now does that for you. A channel whose median
+separation over files is below it keeps its rows, but the negative checks,
+their z and every pair check that uses it get `NA` and the reason in `detail`;
+`split_ok` says which channels are scored. The gate acts per channel, not per
+file, because a widened negative lowers that file's own separation and a
+per-file gate would hide the fault. At 3, 10 of 40 Aurora channels are scored
+(`figures/negative_gate.png`), and the reruns of 06, 08 and 14 give the same
+AUROCs as before, because those benchmarks only inject into those channels.
+
+![Median separation per channel against min_separation = 3](figures/negative_gate.png)
 
 ![AUROC per check for negative-population faults injected into real files.
 Source data: `figures/negative-faults-real-source.csv`.](figures/negative-faults-real.png)
@@ -495,11 +524,41 @@ no two-way arm, because removing batch removes the effect under test.
 
 ![AUROC without, with one-way and with two-way reference_group, per fault](figures/cbf_reference_group.png)
 
+`pair_emd` takes the largest raw EMD over 153 batch pairs, so markers with wide
+natural batch spread win whichever batch was hit. `rest_emd_z` scores each
+batch by its EMD to all other batches pooled, as a robust z over batches within
+the marker. Over 20 seeds it does not find the batch split either: 0.48 at
+±0.5 SD and 0.60 at ±1 SD, against 0.50 and 0.52 for `pair_emd` and 0.43 to
+0.49 with no fault (`figures/cbf_batch_rest.png`). The 0.68 above came from 5
+seeds; with 20, `pair_emd` sits at chance. One batch of four files among 18 is
+too small against donor and batch variation here, so the batch split on these
+files is a documented limit.
+
+![Batch split: AUROC of rest_emd_z and pair_emd over 20 seeds, with a no-fault null](figures/cbf_batch_rest.png)
+
+### A fault most files share
+
+`median_z` and `sd_z` compare a file with the cohort, so a fault in most files
+moves the cohort centre with it. `sw_signal_reference_fit()` freezes the centre
+and scale (median and MAD over files of each channel's file-level median and
+SD) from clean files; `sw_signal_reference_save()` and `_load()` keep it with a
+digest; `sw_fcs_signal_audit(reference = )` scores new files against it. With
+batches 1 to 9 of the CBF files as the reference and a +1 SD shift in 80% of the
+files of batches 10 to 18, the frozen z scores 0.93 (CI ±0.06) over 10 seeds,
+while the cohort z scores 0.16, because the clean files become the odd ones.
+Both nulls score 0.51 (`figures/frozen_reference.png`). AUROC only ranks files:
+a real offset between the reference and the new batches moves every frozen z
+together and is not tested here, so check the z of known-good files before
+using a fixed cutoff.
+
+![Fault in 80% of files: frozen reference against cohort z, 10 seeds](figures/frozen_reference.png)
+
 ## What the checks cannot see
 
 - The negative checks assume a channel splits into a negative and a positive
   population. In the real Aurora files only 10 of 40 channels did (separation
-  of 3 or more); on the rest the "negative" is half of one population.
+  of 3 or more); `min_separation` sets the rest to `NA`, so they are not
+  checked at all.
 
 These limits come from the benchmarks above and from benchmark v1.
 
@@ -511,6 +570,12 @@ These limits come from the benchmarks above and from benchmark v1.
 - A batch label confounded with biology (all cases in one batch) cannot be
   separated from a batch effect by any score here. Run `sw_design_audit()` first.
 - `median_z`, `sd_z` and the forest compare a file with the other files you pass.
-  If most files share the same fault, the cohort looks normal.
+  If most files share the same fault, the cohort looks normal. A frozen
+  reference (`sw_signal_reference_fit()`) fixes this for `median_z` and `sd_z`
+  only.
+- A marker split into two modes whose halves sit less than about 1 SD apart
+  stays one peak, so no shape score sees it (simulation: `bimodality_z` 0.58,
+  dip 0.51; `figures/bimodal_sim_tools.png`).
+- One faulty batch of four files among 18 (CBF) is not found at ±0.5 or ±1 SD.
 
 ---

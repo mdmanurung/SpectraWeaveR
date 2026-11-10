@@ -140,3 +140,26 @@ files and the reference-only view (W7) is in the report.
 | G17 AF700 stain test | Target AF700 only; single stains gated with the G15 box (5th-95th, FSC-A, SSC-A, FSC-H/FSC-A); CD3 split as in 02 (k-means k = 2 on asinh(x/6000), seed 1, nstart 10, < 200 events per side gives NA); reading as G16. |
 | G18 CD8-dim test | Split CD4 (APC) per panel file with k-means, k = 2 on asinh(x/1000) of relativised values, seed 1, nstart 10; subsets CD4+ T (primary true CD8-negative) and CD4- T; < 200 events gives NA; reading as G16. Revised: the panel files are already CD3+ (lympho-single_cd3), so a CD3 split only halves the T cells. |
 | G19 AF700 compensation test | (E1) MASS::rlm (Huber) of AF700 on APC + AA750 in panel CD4+ T cells (k-means CD4 split, G18), linear relativised values, plus AF700 SD on asinh(x/1000) before and after removing the fit; (E2) AF700 median CD3+ minus CD3- in the APC and AA750 single stains (G15 gate, G17 split, authors map), linear scale. Reading as G16. |
+
+## Decisions answered, round "plan all gaps" (user, 2026-11-10)
+
+D3 and D4 above are answered by G20 and G24. D4's text reference is `reference/diagnostics.qmd` near line 229 (not 189).
+
+| Row | Answer |
+|---|---|
+| G20 bimodal statistic (D3, A1) | Own-code bimodality coefficient (BC); wrap `diptest` from Suggests only if BC misses the bar in 07. |
+| G21 bimodal input and events (A2, A3) | Values as given (as `median_z`/`sd_z`); all events in the file. |
+| G22 bimodal score unit (A4) | Inherited per benchmark: 07 max \|z\| per file; 11 the hit marker's z. Report the new check's own AUROC too. |
+| G23 bimodal real-file run (A7) | Rerun 11 at 0.5, 1 and 1.5 SD, 5 seeds, with a `bimodality_z` arm. |
+| G24 negative gate cutoff (D4, B1) | `min_separation` required, no default; benchmarks use 3 (inherited from 06). |
+| G25 negative gate unit (B2) | Per channel: median separation across files, not per file. |
+| G26 negative gate action (B3) | Gated rows keep the row with value `NA` and the reason in `detail`; `separation` always kept; new per-channel check `split_ok`. |
+| G27 negative gate scope (B4) | `neg_*`, `hyper_negative_share`, their z, and pair checks where either channel is gated. |
+| G28 CBF batch score (C1) | New check `rest_emd_z`: EMD of each batch to all other batches pooled, robust z over batches within each marker. |
+| G29 CBF AUROC unit (C2) | Inherited from 04: hit marker among markers. |
+| G30 CBF seeds and sizes (C3, C4) | Time 1 seed, then 20 seeds; sizes 0.5 SD and 1 SD. |
+| G31 CBF stop rule (C7) | If `rest_emd_z` stays below the bar at 0.5 SD, record a limit and close the gap. |
+| G32 frozen reference scope (D0, D1) | CBF counts as the real multi-batch dataset (lifts the ROADMAP freeze for this test); reference B01-B09, scored B10-B18. |
+| G33 frozen reference content (D2, D3) | Per-marker median and MAD of file-level medians and SDs, S3 list with digest (as `sw_frozen_model`); `median_z` and `sd_z` only, via a new `reference` argument on `sw_fcs_signal_audit`. |
+| G34 frozen reference fault (D4) | 1 SD shift on one marker in 80% of scored files; 10 seeds. Runs after G20-G23. |
+| G35 G20 fallback triggered | BC missed the bar in 07 (0.58). User: run the `diptest` fallback anyway ("Do all"). Hartigan dip per file and channel, robust z over files, as benchmark arms in 07 and 11 (`dip_z`); moved into the package only if it meets the bar. |

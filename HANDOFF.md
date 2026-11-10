@@ -1,17 +1,20 @@
 # Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
 
-**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 118/150
+**Written:** 2026-11-11 (after the four-gap round) · **Branch:** worktree-cytoscan-diagnostics @ d326cad + uncommitted round G20–G35 · **Status:** plans A–D run; ledger 122/150
 
 ## Check first
-Run `git log --oneline c16607f..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
+Run `git log --oneline d326cad..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
 
 ## Goal
 Active /goal: "work autonomously until we can consistently diagnose for any technical problems including but not limited to batch effects extensively". Bar per fault class: real-file AUROC mean >= 0.90, lower 95% CI >= 0.80 (D1). tusoskill ledger target 150 (G4); stop gate: `/usr/bin/python3.12 /home/mdmanurung/.claude/skills/tusoskill/scripts/biomni_method_state.py stop-check --root experiments/runs/2026-11-09_tusoskill`.
 
 ## Next action
-Pick the next gap from Open items with the user. Nothing is running.
+Commit the G20–G35 round when the user asks (nothing committed yet). Then pick the next gap from Open items with the user. Nothing is running.
 
 ## State
+- Round G20–G35 (2026-11-10/11), uncommitted: (A) `bimodality`/`bimodality_z` in `sw_fcs_signal_audit` — 07 split 0.58, dip fallback 0.51 (not packaged); real 1.00/0.65/0.85 at 0.5/1/1.5 SD, only on already-bimodal markers — `reference/figures/bimodal_sim_tools.png`, `reference/figures/bimodal_limits_real.png`; runs `experiments/runs/2026-11-10_{bimodal-07,bimodal-limits-real,dip-07,dip-limits-real}`. (B) `min_separation` gate in `sw_negative_audit` (per-channel median, `split_ok`), 10 of 40 Aurora channels scored, 06/08/14 AUROC identical — `reference/figures/negative_gate.png`; run `experiments/runs/2026-11-10_negative-gate`. (C) `rest_emd`/`rest_emd_z` in `sw_batch_scores` — CBF batch split 0.48/0.60 at 0.5/1 SD, `pair_emd` 0.50 at 20 seeds (the 0.68 was 5-seed noise) — `reference/figures/cbf_batch_rest.png`; run `experiments/runs/2026-11-10_cbf-batch-rest`. (D) `sw_signal_reference_fit/save/load` + required `reference` arg on `sw_fcs_signal_audit` — 80% faulty: frozen 0.93 ± 0.06 vs cohort 0.16, nulls 0.51 — `reference/figures/frozen_reference.png`; run `experiments/runs/2026-11-10_frozen-reference`.
+- Tests after the round: signal_reference 36, fcs_signal_audit 80, diagnose 38, negative_audit 62, batch_scores 40, 0 fail.
+- `min_separation = 3` was added to Glehr 08/09 and benchmark 10 so they still run; they were not rerun, and a rerun gates channels below 3 (e.g. Aurora PB-A).
 - All work committed through c16607f: two-way residual (G10), FAUST forest depth (G11), G13, `match_by = "marker_state"` (G14), FAUST script and results.
 - Tests: anomaly_features 43, batch_scores 33, cluster_scores 41, fcs_signal_audit 68, faust_wrap 54, 0 fail (via `pkgload::load_all`; `devtools` fails on an rlang 1.1.5 vs >= 1.1.7 clash in the scratchpad rlib).
 - Runs finished: FAUST `experiments/runs/2026-11-10_faust` (exit 0, ~1 h 50 min; its compare used exact match and is superseded); compare redone from its labels in `experiments/runs/2026-11-10_faust-markerstate-v2` (`-markerstate` without v2 has wrong panel labels). Two-way benchmark `experiments/runs/2026-11-10_cbf-refgroup-v2`.
@@ -29,7 +32,7 @@ Pick the next gap from Open items with the user. Nothing is running.
 - Results: APC→AF700 under-compensation on the Fortessa (+1374 vs -142 in the CD3-APC single stain) predicts ~407 of the 536-unit AF700 offset in CD4+ T (table fallback); linear fit does not narrow AF700 (0.51 → 0.54) — `reference/figures/glehr_af700_comp_shift.png`, `reference/figures/glehr_af700_comp_slope.png`; run `experiments/runs/2026-11-10_glehr-af700-comp-v2` (same numbers as the run without v2; only a label changed).
 
 ## Locked decisions
-- G1–G13 in `plans/2026-11-10_diagnostics-next.md` (last section): spread SD ratio; reference_group; FAUST conventions; keep 150; median over groups; group EMD pool; FAUST rank norm; 37 markers; confirm refgroup details; two-way residual; forest depth 3; prop_by_batch range; correct on 37 — user, 2026-11-10.
+- G20–G35 (four-gap round) and G1–G19 in `plans/2026-11-10_diagnostics-next.md`; G1–G13: spread SD ratio; reference_group; FAUST conventions; keep 150; median over groups; group EMD pool; FAUST rank norm; 37 markers; confirm refgroup details; two-way residual; forest depth 3; prop_by_batch range; correct on 37 — user, 2026-11-10.
 - Earlier rows D1–D11, GI1–GI9 in `plans/2026-11-10_diagnostics-next.md`, `plans/2026-11-10_gating.md` — user.
 - Standing: impactful choices are required args (no default) and the user's; GPL/AGPL wrapped never copied; plot-first; no sample IDs or data committed (rename f1.., d1..); real data read-only in `/exports/para-lipg-hpc/mdmanurung/sw_data`; never edit a running script; absolute script paths in background runs; commits end with the Co-Authored-By and Claude-Session lines; no bare git stash.
 
@@ -41,6 +44,8 @@ Pick the next gap from Open items with the user. Nothing is running.
 - More events for the ±0.5 SD two-mode split — 5000 events gave 0.69, donor variation is the limit.
 - Two-way (donor × batch medpolish) residual for small file faults on CBF — best 0.68, below one-way on both faults where one-way helped (`reference/figures/cbf_reference_group.png`); code kept, committed 2026-11-10.
 - Two-way residual for the batch-split fault — removes the effect under test; sw_batch_scores must stop on a data-frame reference_group.
+- Shape scores (bimodality coefficient, Hartigan dip) for a ±0.5 split in simulation — the mix stays one peak; 0.58 and 0.51 (`reference/figures/bimodal_sim_tools.png`).
+- `rest_emd_z` and more seeds for the CBF batch split — 20 seeds: at chance at 0.5 SD, 0.60 at 1 SD (`reference/figures/cbf_batch_rest.png`); closed by stop rule G31.
 
 ## Read first
 - `plans/2026-11-10_diagnostics-next.md` — decisions and plan.
@@ -49,6 +54,8 @@ Pick the next gap from Open items with the user. Nothing is running.
 - `experiments/runs/2026-11-09_tusoskill/reports/final_round2.md` — outdated; write `final_round3.md` at the end.
 
 ## Open items
-- Ledger 118 → 150: 32 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
-- Batch split ±0.5 SD (0.68) — stays a documented limit unless the user wants another design. lean (not a decision): document.
+- Ledger 122 → 150: 28 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
+- Frozen reference: z calibration under a real reference-vs-test batch offset is untested (AUROC cannot see it). lean (not a decision): next candidate.
+- `spread_z` is not in the signed-check list of `sw_diagnosis_top` (ranks by raw value) — parked from plan B.
+- `fig_batch_rest.png` and `fig_frozen_reference.png` have a clipped x label (cosmetic).
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.
