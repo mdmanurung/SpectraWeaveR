@@ -108,6 +108,18 @@ test_that("heb effects match an lme4 REML fit on the same summaries", {
   expect_equal(eff$estimate[eff$batch == "s1_r1"], 0)
 })
 
+test_that("heb fits a design with one reference donor", {
+  s <- heb_sim()
+  keep <- s$meta$donor == "D1"
+  s1 <- s
+  s1$meta <- s$meta[keep, ]
+  s1$x <- s$x[s$x$sample_id %in% s1$meta$sample_id, ]
+  s1$manifest <- s$manifest[s$manifest$sample_id %in% s1$meta$sample_id, ]
+  eff <- heb_fit(s1)$effects
+  expect_equal(nrow(eff), 6)
+  expect_true(all(is.finite(eff$estimate)))
+})
+
 test_that("heb Satterthwaite df reduces to the residual df without shrinkage", {
   # With batch variances far above the noise, the contrast variance is proportional to
   # sigma^2, so df = 2 / Var(log sigma^2). REML gives Var(log sigma^2) = 2 / df_resid, and

@@ -92,7 +92,8 @@ NULL
   }
   list(
     d = d, batches = batches, y = d$value,
-    X = stats::model.matrix(~ 0 + factor(d$reference_id)),
+    # Donor indicators; outer() also covers a design with one donor, which model.matrix refuses.
+    X = outer(d$reference_id, sort(unique(d$reference_id)), `==`) * 1,
     Z = Z, K1 = K1, K2 = K2, L = L,
     M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z)
   )
