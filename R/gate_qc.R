@@ -23,9 +23,12 @@
 #'   the MAD is 0.
 #' * `kept_share_log_ratio`: `log(kept_share / kept_share of the reference)`.
 #'   Only with `reference`. Defined even when every sample keeps the same
-#'   share, where `kept_share_z` is `NA`: on real data a shift-only gate moved
-#'   from an Aurora to a Fortessa kept 100% of events in all nine samples
-#'   (reference about 15-40%, F1 0.24-0.51 against an expert gate).
+#'   share, where `kept_share_z` is `NA`. Meaningful when the parent population
+#'   has the same make-up as in the reference (same instrument and parent
+#'   gate). Across instruments it measures make-up differences too: on the
+#'   Glehr BAD data a failed shift-only Aurora-to-Fortessa transfer scored
+#'   +0.45 and the good scaled one -0.46 to -1.46. There the failed gate was
+#'   visible as `kept_share` = 1 in every sample (a gate that keeps all).
 #' * `centroid_shift`: in-gate median of a gate channel minus the same median
 #'   in the `reference` sample (signed, one row per channel).
 #' * `centroid_dist`: Euclidean length of the `centroid_shift` values of a

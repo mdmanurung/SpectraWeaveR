@@ -82,7 +82,7 @@ no real-file evidence yet.
 | Spillover between two channels | `corr_pair_z` (per pair row) | 1.00 (`corr_shift`) | 0.99 at slope 0.3 (`corr_shift` 0.66; the max over pairs 0.62) |
 | One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
-| All markers widened | `sd_z` | 1.00 | 0.86 at x1.2, 0.61 at x1.1 (one marker's row; below the bar) |
+| All markers widened | `global_sd_z` (file level) | 1.00 (`sd_z`) | 0.88 at x1.2, 0.82 at x1.1 (one marker's `sd_z`: 0.86, 0.61); just below the bar |
 | Split into two modes (one marker) | `emd_z` (anomaly module) | **0.67 (`corr_shift`, weak)** | limit ±1 SD: 0.93 (`sd_z` 0.90); ±1.5 SD ≥ 0.99; ±0.5 SD 0.70, below the bar |
 | Change in a rare population | `median_z` (cluster module), the cluster's own row | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | 0.95 at +1 SD, 0.96 at +2 SD on the hit cluster's row (max over clusters: 0.88, 0.84) |
 | Composition change | `freq_z` (cluster module), the cluster's own row | 1.00 | 80% of the largest cluster (31%) removed: 1.00; 50%: 0.82; 80% of the smallest (7%): 0.81 |
@@ -97,6 +97,7 @@ no real-file evidence yet.
 | Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
 | Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | real, not injected: same 9 donors on Aurora and Fortessa; Aurora gains 2.0 to 2.4x the cohort median, Fortessa 0.06 to 0.39x |
 | Instrument batch per marker | `eta2` | see batch rows | real, two studies: median 0.88 / 0.82 before CD3 relativisation, 0.07 / 0.017 after; AF700 and PB keep 0.5 to 0.9 in both |
+| Gate misplaced or failed transfer | `sw_gate_qc()` `kept_share`, `centroid_shift` | unit tests | real: density gate F1 0.999 (FORT), 0.955-0.969 (BAD); failed shift-only transfer keeps 100% of events (F1 0.31) |
 | Batch effect, biology fixed | `eta2` | see batch rows | real: same 4 controls in 18 batches; eta2 0.22 to 0.95 per marker |
 | Instrument gain drift over dates | `gain_order_rho` (relativise) | see relativisation | real: CD3 gain rho -0.52 over two years; one batch-wide jump |
 | Weak CD3 anchor in a control | `separation` (relativise) | 1 test case | real: Fortessa KrO-A 1.13 to 1.21, others 2.2 to 3.2; only KrO-A's M is off (up to 0.28 log) |
@@ -323,6 +324,26 @@ A batch whose marker splits into two modes is found at ±1 SD (`spread_ratio`
 0.99) but not at ±0.5 SD (best `pair_emd` 0.78).
 
 ![Batch faults injected into real batches: AUROC of the hit marker](figures/batch_real.png)
+
+## Gating against an expert gate
+
+The Glehr authors' relativised files hold exactly their lymphocyte, singlet,
+CD3+ events, so they are a real expert gate. Our per-sample valley gate on CD3
+(Silverman bandwidth, peaks at least 5% of the tallest and two bandwidths
+apart; user choices) and landmark transfer were scored by per-event F1
+against it, inside an approximate scatter box (`06_gate_benchmark.R`).
+
+On FORT (14 samples on a Fortessa, an LX and a Navios) every method scores F1
+0.999. On BAD it scores 0.955 to 0.969; there the approximate box caps
+precision (1.9 to 5.4% of above-cut events lie outside the authors' gate). On
+6 of 9 BAD Fortessa samples the valley rule found one CD3 peak and returned
+`NA` with that reason; transferring the gate from the first Fortessa sample
+with a cut filled all six (F1 0.965 to 0.969). Across instruments a gate must
+be rescaled: Aurora to Fortessa scores 0.31 with a shift only and 0.97 with
+`allow_scale`. The failed shift-only gate kept every event in all nine
+samples; `kept_share` = 1 shows it, while `kept_share_z` is `NA` (no spread).
+
+![F1 against the authors' CD3+ gate, per sample and method](figures/glehr_gate_f1.png)
 
 ## Eighteen batches of the same four controls
 

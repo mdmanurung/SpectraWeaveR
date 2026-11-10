@@ -44,9 +44,12 @@ cuts through dense events, so a small shift moves many events in or out.
 the MAD is 0.
 \item \code{kept_share_log_ratio}: \verb{log(kept_share / kept_share of the reference)}.
 Only with \code{reference}. Defined even when every sample keeps the same
-share, where \code{kept_share_z} is \code{NA}: on real data a shift-only gate moved
-from an Aurora to a Fortessa kept 100\% of events in all nine samples
-(reference about 15-40\%, F1 0.24-0.51 against an expert gate).
+share, where \code{kept_share_z} is \code{NA}. Meaningful when the parent population
+has the same make-up as in the reference (same instrument and parent
+gate). Across instruments it measures make-up differences too: on the
+Glehr BAD data a failed shift-only Aurora-to-Fortessa transfer scored
++0.45 and the good scaled one -0.46 to -1.46. There the failed gate was
+visible as \code{kept_share} = 1 in every sample (a gate that keeps all).
 \item \code{centroid_shift}: in-gate median of a gate channel minus the same median
 in the \code{reference} sample (signed, one row per channel).
 \item \code{centroid_dist}: Euclidean length of the \code{centroid_shift} values of a
