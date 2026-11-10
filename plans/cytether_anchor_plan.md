@@ -43,7 +43,10 @@ donor-invariant internal anchors"; reports must say so.
 - Synthetic (S18, S18w): pass = held-out reference RMSE no worse than heb_pool_pop_kv_bap on batches with reference
   donors, coverage >= 0.85 on anchor-only effects, and anchor-only batches better than abstaining. Fail = coverage
   < 0.85, or worse than abstaining under the S18w wobble.
-- T6 (A8): pass = EMD below abstaining on surface markers in the stripped batches and the contrast guardrail holds.
+- T6 (A8): pass = EMD below abstaining on surface markers in the stripped batches, and the leak check holds.
+- A8 leak check (user 2026-11-10, replaces the contrast guardrail): in the stripped batches, at least 85% of the
+  reference-based effects of the unstripped heb_kv_bap fit fall inside the anchor-based 90% t intervals
+  (estimate +/- qt(0.95, df) * se_donor) of heb_kv_bap_anc, pooled over folds.
 
 ## Steps
 
