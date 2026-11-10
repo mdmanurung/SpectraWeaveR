@@ -6,6 +6,7 @@
 
 source("experiments/benchmarks/05_cytether-synthetic/adapters.R")
 source("experiments/benchmarks/_common/adapter_cytofin.R")
+source("experiments/benchmarks/_common/adapter_cycombine_ref.R")
 
 # Parameters (approved, plan T6) -------------------------------------------------
 ANCHOR <- "batch01" # Q8
@@ -17,7 +18,8 @@ CYTOFIN_MODE <- "meanshift" # N7
 MIN_BATCHES <- 2
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift"
 T6_TRANSFORM <- list(name = "asinh", cofactor = 6000) # Q4
-T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap", "heb_kv", "heb_bap") # cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4
+T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap", "heb_kv", "heb_bap", "cycombine_ref")
+# cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4; cycombine_ref: F11 (fit on reference cells only)
 
 correct_t6 <- function(x, meta, population, method, markers) {
   if (method == "none") {
@@ -25,6 +27,7 @@ correct_t6 <- function(x, meta, population, method, markers) {
   }
   if (method == "cycombine") return(run_cycombine(x, meta, markers, ANCHOR))
   if (method == "cytonorm") return(run_cytonorm(x, meta, markers))
+  if (method == "cycombine_ref") return(run_cycombine_ref(x, meta, markers, ANCHOR))
   if (method == "cytofin") return(run_cytofin(x, meta, markers, ANCHOR, mode = CYTOFIN_MODE))
   if (method == "cytofin_pop") {
     # F2 (adapted, not the published method): CytofIn within each population. A (batch, population)
