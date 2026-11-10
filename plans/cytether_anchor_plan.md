@@ -27,6 +27,8 @@ donor-invariant internal anchors"; reports must say so.
 | A8 | T6 check: remove the reference role of all 4 controls in 3 batches (seed 1); compare anchor-corrected vs abstained EMD on surface markers; guardrail: stimulated-minus-unstimulated contrast moves <= 0.05 asinh | user 2026-11-10 |
 | A9 | An anchor joins the designs of populations whose anchor-batch median for that marker falls in the anchor's k-means cluster | user 2026-11-10 |
 | A10 | S18 effect sizes: offset SD 0.10 and log-gain SD 0.20 per batch x channel (linear scale) | user 2026-11-10 (unaudited judgement) |
+| A11 | Anchor discrepancy (option d, after the S17 mismatch diagnostic, slope -0.95): anchor rows get a per-batch random effect d_b ~ N(0, tau_d^2) inside each population x marker design, tau_d pooled like the other components, plain REML (no prior) with variance_floor; required argument anchor_discrepancy = "none" or "batch" and a new arm heb_pool_pop_kv_bap_anc_d (old anc arm kept). Pass on f6_dev, shrink, S17: paired difference to the lead, 95% CI upper <= +0.01 asinh; S17 nd1 cov90 >= 0.85; S18/S18w rules as above. Tests: tau_d -> infinity equals the no-anchor fit (analytic), direction checks for shared vs mismatched shifts | user 2026-11-10 (C1-C7) |
+| A12 | HEB audit: a batch with used anchor rows counts as bridged when anchors are supplied | user 2026-11-10 |
 | inherited | min_cells 10 (G1), anchor batch01 (Q8), asinh cofactor 6000 (Q4), heb_pool_pop_kv_bap settings (F6, F8) | earlier plans |
 
 ## Notes found during the build (2026-11-10)

@@ -27,6 +27,12 @@
 #' \code{residual_model} (required) is \code{"estimated"} for one residual
 #' variance, or \code{"known_plus_extra"}: each summary's residual is its known
 #' sampling variance, var(cells) / n, plus one estimated extra variance.
+#' \code{anchors} (required) is \code{NULL} or the result of
+#' \code{sw_corrector_anchors()}; internal anchors enter as extra rows.
+#' \code{anchor_discrepancy} (required) is \code{"none"} or \code{"batch"}:
+#' with \code{"batch"}, the anchor rows of each batch share a random
+#' discrepancy \eqn{d_b \sim N(0, \tau_d^2)} that is not part of the batch
+#' effect, so anchors that disagree with the reference donors lose weight.
 #' \code{se_donor} holds the posterior standard error of the effect, from the
 #' prediction error covariance; \code{df} holds its Satterthwaite degrees of
 #' freedom from the inverse REML information, with components at the floor
@@ -41,11 +47,16 @@ NULL
 
 # Negative REML log-likelihood (up to a constant) for log variance components.
 # V = th1 * M1 + th2 * M2 + th3 * I + diag(D), with M1 = Z K1 Z' and M2 = Z K2 Z'.
+# With anchor_discrepancy = "batch" (plan A11), V gains th5 * M3, M3 = Z K3 Z': the anchor rows of one
+# batch share d_b ~ N(0, th5), which never enters the batch contrast.
 # D holds known sampling variances of the summaries (residual_model = "known_plus_extra"), else 0.
 # ra marks internal-anchor rows (plan A6): their extra residual variance is th4, donor rows keep th3.
-.sw_heb_reml <- function(log_theta, y, X, M1, M2, D = 0, ra = 0) {
+.sw_heb_reml <- function(log_theta, y, X, M1, M2, D = 0, ra = 0, M3 = NULL) {
   th <- exp(log_theta)
   V <- th[[1]] * M1 + th[[2]] * M2 + diag(.sw_heb_resid(th, D, ra), length(y))
+  if (!is.null(M3)) {
+    V <- V + th[[5]] * M3 # plan A11: per-batch anchor discrepancy
+  }
   R <- tryCatch(chol(V), error = function(e) NULL)
   if (is.null(R)) {
     return(1e10)
@@ -75,7 +86,8 @@ NULL
 # anchor_effect = "fixed": the anchor-relative effects b_b = beta_b - beta_anchor are the random
 #   effects, b_anchor = 0 exactly, with covariance
 #   tau_s^2 (S_ij - S_ia - S_ja + 1) + tau_b^2 (delta_ij + 1), S = same-study indicator (derivation v1).
-.sw_heb_design <- function(d, hier, anchor, anchor_effect, residual_model, anchor_rows = NULL) {
+.sw_heb_design <- function(d, hier, anchor, anchor_effect, residual_model, anchor_rows = NULL,
+                           anchor_discrepancy = "none") {
   # Internal anchors (plan A0): extra rows with their own intercept, same batch random effects.
   na <- if (is.null(anchor_rows)) 0L else nrow(anchor_rows)
   b_all <- c(d$batch, if (na > 0) anchor_rows$batch)
@@ -116,11 +128,28 @@ NULL
     X <- rbind(cbind(X, 0), cbind(matrix(0, na, ncol(X)), 1))
     D <- c(D, anchor_rows$var_mean)
   }
+  ra <- c(rep(0, nrow(d)), rep(1, na))
+  # Plan A11: one discrepancy d_b per batch for its anchor rows, kept out of the contrast L.
+  K3 <- NULL
+  if (na > 0 && anchor_discrepancy == "batch") {
+    q <- ncol(Z)
+    pad <- function(K) {
+      out <- matrix(0, q + nb, q + nb)
+      out[seq_len(q), seq_len(q)] <- K
+      out
+    }
+    Z <- cbind(Z, outer(b_all, batches, `==`) * ra)
+    K1 <- pad(K1)
+    K2 <- pad(K2)
+    K3 <- diag(c(rep(0, q), rep(1, nb)))
+    L <- cbind(L, matrix(0, nrow(L), nb))
+  }
   list(
     d = d, batches = batches, y = c(d$value, if (na > 0) anchor_rows$value), X = X,
-    Z = Z, K1 = K1, K2 = K2, L = L,
+    Z = Z, K1 = K1, K2 = K2, K3 = K3, L = L,
     M1 = Z %*% K1 %*% t(Z), M2 = Z %*% K2 %*% t(Z),
-    D = D, ra = c(rep(0, nrow(d)), rep(1, na)), anchor_rows = anchor_rows
+    M3 = if (is.null(K3)) NULL else Z %*% K3 %*% t(Z),
+    D = D, ra = ra, anchor_rows = anchor_rows
   )
 }
 
@@ -135,13 +164,21 @@ NULL
   scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
   penalty <- if (variance_prior == "boundary_avoiding") function(lt) -0.5 * (lt[[1]] + lt[[2]]) else function(lt) 0
   obj <- function(lt) {
-    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2, z$D, z$ra), numeric(1))) + penalty(lt)
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2, z$D, z$ra, z$M3), numeric(1))) +
+      penalty(lt)
   }
   # A 4th component (anchor-row extra variance) only when a design in this set has anchor rows.
-  k <- if (any(vapply(designs, function(z) any(z$ra > 0), logical(1)))) 4 else 3
+  # A 5th (anchor discrepancy, plan A11) only when a design carries M3; no prior on it.
+  k <- if (any(vapply(designs, function(z) !is.null(z$M3), logical(1)))) {
+    5
+  } else if (any(vapply(designs, function(z) any(z$ra > 0), logical(1)))) {
+    4
+  } else {
+    3
+  }
   lo <- rep(log(variance_floor), k)
   fit <- stats::optim(
-    log(rep(scale, k) * c(0.1, 0.1, 0.5, 0.5)[seq_len(k)]), obj,
+    log(rep(scale, k) * c(0.1, 0.1, 0.5, 0.5, 0.1)[seq_len(k)]), obj,
     method = "L-BFGS-B", lower = lo, upper = lo + 40
   )
   # Covariance of the log components from the inverse observed REML information.
@@ -168,6 +205,9 @@ NULL
 # unscaled equations are used: C = W' R^-1 W + [0, 0; 0, G^-1], PEV(u) = (C^-1)_uu.
 .sw_heb_pev <- function(z, th) {
   G <- th[[1]] * z$K1 + th[[2]] * z$K2
+  if (!is.null(z$K3)) {
+    G <- G + th[[5]] * z$K3
+  }
   p <- ncol(z$X)
   W <- cbind(z$X, z$Z)
   if (any(z$D > 0) || any(z$ra > 0)) {
@@ -218,7 +258,7 @@ NULL
 }
 
 .sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
-                        variance_prior, residual_model, anchors, ...) {
+                        variance_prior, residual_model, anchors, anchor_discrepancy, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -240,6 +280,9 @@ NULL
   if (missing(anchors) || !(is.null(anchors) || (is.list(anchors) && is.data.frame(anchors$modes)))) {
     stop("heb needs anchors = NULL or the result of sw_corrector_anchors() (no default).", call. = FALSE)
   }
+  if (missing(anchor_discrepancy) || !(identical(anchor_discrepancy, "none") || identical(anchor_discrepancy, "batch"))) {
+    stop("heb needs anchor_discrepancy = 'none' or 'batch' (no default; plan A11).", call. = FALSE)
+  }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
     stop("No reference summary has at least min_cells cells.", call. = FALSE)
@@ -258,7 +301,8 @@ NULL
   designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
     d <- s$summ[ii, , drop = FALSE]
     .sw_heb_design(d, hierarchy, anchor, anchor_effect, residual_model,
-                   anchor_rows = anchor_for(d$population[[1]], d$marker[[1]]))
+                   anchor_rows = anchor_for(d$population[[1]], d$marker[[1]]),
+                   anchor_discrepancy = anchor_discrepancy)
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
   # Which designs share variance components.

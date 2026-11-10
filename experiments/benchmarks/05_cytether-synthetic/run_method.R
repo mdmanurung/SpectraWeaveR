@@ -29,7 +29,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "heb_pool_all_kv_bap", "heb_afix_pop_kv_bap", "heb_pool_pop_kv_bap_anc", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "heb_pool_all_kv_bap", "heb_afix_pop_kv_bap", "heb_pool_pop_kv_bap_anc", "heb_pool_pop_kv_bap_anc_d", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -118,12 +118,12 @@ correct_stage <- function(stage_dir) {
                 heb_bap = "none", heb_pool_pop_bap = "population",
                 heb_pool_pop_kv = "population", heb_pool_pop_kv_bap = "population",
                 heb_pool_all_kv_bap = "all", heb_afix_pop_kv_bap = "population",
-                heb_pool_pop_kv_bap_anc = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
+                heb_pool_pop_kv_bap_anc = "population", heb_pool_pop_kv_bap_anc_d = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
   hierarchy <- if (engine %in% c("heb", "heb_shared")) distinct(meta, batch, study) else NULL
   # Plan A0-A9 (*_anc): internal anchors from every sample that may calibrate an anchor: initial and not a
   # held-out reference. Participant samples count, so batches without reference donors get anchor rows.
   anc_rows <- fit_rows
-  heb_anchors <- if (endsWith(method, "_anc")) {
+  heb_anchors <- if (grepl("_anc", method, fixed = TRUE)) { # *_anc and *_anc_d (plan A11)
     sw_corrector_anchors(x[anc_rows, , drop = FALSE], meta$sample_id[anc_rows], meta$batch[anc_rows], markers,
                          positive_markers = ANCHOR_POSITIVE, min_separation = ANCHOR_MIN_SEPARATION, seed = ANCHOR_SEED)
   } else {
@@ -141,7 +141,8 @@ correct_stage <- function(stage_dir) {
     anchor_effect = if (engine == "heb") (if (startsWith(method, "heb_afix")) "fixed" else "random") else NULL,
     variance_prior = if (engine == "heb") (if (grepl("_bap", method, fixed = TRUE)) "boundary_avoiding" else "none") else NULL,
     residual_model = if (engine == "heb") (if (grepl("_kv", method, fixed = TRUE)) "known_plus_extra" else "estimated") else NULL,
-    anchors = if (engine == "heb") heb_anchors else NULL
+    anchors = if (engine == "heb") heb_anchors else NULL,
+    anchor_discrepancy = if (engine == "heb") (if (endsWith(method, "_anc_d")) "batch" else "none") else NULL # plan A11
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.
@@ -176,7 +177,11 @@ correct_stage <- function(stage_dir) {
 
 # All stages ----------------------------------------------------------------------
 out_root <- file.path(args[[2]], method)
-stages <- list.files(seed_dir, pattern = "^S[0-9]+b?$") # S13b is a stage too
+stages <- list.files(seed_dir, pattern = "^S[0-9]+[bw]?$") # S13b and S18w are stages too
+# SW_STAGES="S18w" runs only the listed stages, so a missed stage can run beside finished ones.
+if (nzchar(Sys.getenv("SW_STAGES"))) {
+  stages <- intersect(stages, strsplit(Sys.getenv("SW_STAGES"), ",")[[1]])
+}
 for (stage in stages) {
   out_dir <- file.path(out_root, stage)
   stopifnot("output dir must not exist yet" = !dir.exists(out_dir))
