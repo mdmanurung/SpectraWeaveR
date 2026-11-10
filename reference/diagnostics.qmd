@@ -78,7 +78,7 @@ no real-file evidence yet.
 | Clog / event-rate drop | `rate_cv` | 1.00 | 1.00 (80% drop over 30% of the run) |
 | Drift within a file | `time_trend` | 1.00 | 1.00 (1 SD over the run) |
 | Debris spike | `corr_shift` | 1.00 | 1.00 (10% of events) |
-| Spillover between two channels | `corr_shift` | 1.00 | **0.66 at slope 0.3 (fails the bar)** |
+| Spillover between two channels | `corr_pair_z` (per pair row) | 1.00 (`corr_shift`) | 0.99 at slope 0.3 (`corr_shift` 0.66; the max over pairs 0.62) |
 | One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
 | All markers widened | `sd_z` | 1.00 | not tested |
@@ -94,7 +94,9 @@ no real-file evidence yet.
 | Batch stretch (one marker) | `spread_ratio` / `pair_emd` | 1.00 | 0.87 at x1.3 |
 | Batch split into two modes | `spread_ratio` | **0.86 (weak, seeds 0.57 to 1.0)** | not tested |
 | Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
-| Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | not tested (needs linear data and controls) |
+| Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | real, not injected: same 9 donors on Aurora and Fortessa; Aurora gains 2.0 to 2.4x the cohort median, Fortessa 0.06 to 0.39x |
+| Instrument batch per marker | `eta2` | see batch rows | real: median 0.88 before CD3 relativisation, 0.07 after (AF700, PB, AA750 keep 0.35 to 0.88) |
+| Weak CD3 anchor in a control | `separation` (relativise) | 1 test case | real: Fortessa KrO-A 1.13 to 1.21, others 2.2 to 3.2; only KrO-A's M is off (up to 0.28 log) |
 
 Real-file numbers come from one Aurora dataset (36 to 144 donor files, 40
 markers, OMIQ-transformed). The negative-population numbers cover only the 10
@@ -223,6 +225,37 @@ stability at your `k` before reading `cluster_median_z` or `cluster_freq_z`.
 
 ![Seed and subsample agreement of k-means on real files, by k. Source data:
 `figures/cluster-stability-real-source.csv`.](figures/cluster-stability-real.png)
+
+## A real instrument batch and its CD3 correction
+
+The Glehr et al. (2026) BAD study stained 9 donors once and acquired each
+sample on an Aurora and a Fortessa, with a CD3 single-stain control per
+channel. The instrument is then a known batch with identical biology. The
+scripts are in `experiments/integration/glehr2026/`.
+
+Our relativisation reproduces the authors' own. Their relativised files are
+an exact linear map of the originals (R² = 1 on every donor and channel), so
+their m and M can be read back. On the Aurora, our m and M from the controls
+match theirs on all 9 donors and 10 channels: median |log M ratio| 0.0011,
+worst 0.0056.
+
+![Our M and gain against the authors', Aurora, one point per donor](figures/glehr_cd3_reproduce_aurora.png)
+
+`eta2` finds the instrument batch, and relativisation removes most of it. The
+instrument explains a median 88% of the variance of file medians before
+relativisation. After it, the instrument explains 5% (authors) or 7% (ours).
+AF700, PB and AA750 keep 35% to 88%, so on those channels CD3 does not anchor
+the two instruments alike.
+
+![Instrument eta2 per marker before and after CD3 relativisation](figures/glehr_instrument_eta2.png)
+
+`separation` flags a CD3 control whose split cannot be trusted. On the
+Fortessa, the KrO-A control's CD3- and CD3+ sides overlap (separation 1.13 to
+1.21; all other channels 2.2 to 3.2). That channel is the only one where our M
+misses the authors' (|log ratio| up to 0.28), and the miss shows as a KrO
+residual in the instrument test above (eta2 0.52 ours, 0.03 authors).
+
+![Control split separation against the M error, Fortessa](figures/glehr_separation_fortessa.png)
 
 ## What the checks cannot see
 
