@@ -360,6 +360,21 @@ controls do not carry.
 
 ![Spread of each single-stain dye into AF700, CD3+ over CD3- SD, per instrument](figures/glehr_af700_single_spread.png)
 
+CD8-dim cells do not cause it either: on the Fortessa, the truly CD8-negative
+cells are wide themselves. The authors' panel files hold CD3+ cells only, so we
+split them by k-means on CD4. CD4+ T cells carry no CD8. Their AF700 SD is 0.51
+(0.45 to 0.57) on the Fortessa, as wide as the panel negative (0.53), against
+0.094 on the Aurora. On the Fortessa their AF700 also sits higher and is broad,
+while on the Aurora it is a narrow peak at 0. The CD4- T cells mix CD8+ and
+double-negative cells, so their SD is not a negative's. A wide and shifted
+negative in CD4+ T cells fits APC (CD4) to AF700 under-compensation on the
+Fortessa, or spread from CD4-APC and CD3-AA750 together; this test does not
+separate the two.
+
+![AF700 SD per sample type and T-cell subset, lines per donor](figures/glehr_af700_subset_sd.png)
+
+![AF700 density of CD4+ and CD4- T cells per instrument, donors pooled](figures/glehr_af700_subset_density.png)
+
 The spread check finds real spread when it is present. Spread injected into
 25% of real Aurora files (5 seeds) is found by `spread_z` at AUROC 0.98 with
 quantile 0.95 when the added noise equals the target's negative SD at the
