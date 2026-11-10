@@ -106,7 +106,7 @@ test_that("a population dropped by min_cells in a batch borrows the shared effec
   expect_gt(q$se_donor, p$se_donor)
   # The single-population engine has no effect there.
   v0 <- hebs_fit(s, engine = "heb", pool = "none", anchor_effect = "random", variance_prior = "none",
-                 residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none")$effects
+                 residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none")$effects
   expect_equal(nrow(v0[v0$population == "Q" & v0$batch == "s2_r2", ]), 0)
 })
 

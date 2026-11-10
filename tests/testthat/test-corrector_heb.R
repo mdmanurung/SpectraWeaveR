@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1, ...
   )
 }
 
@@ -83,7 +83,7 @@ test_that("heb needs pool and pooled variance runs", {
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -115,7 +115,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-      anchor_effect = "random", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", seed = 1
+      anchor_effect = "random", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
     ),
     "variance_prior"
   )
@@ -129,7 +129,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
     s1$x, s1$manifest, s1$audit, population = rep("T", nrow(s1$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s1$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", seed = 1
+    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
   )$effects
   se <- bap$se_donor[bap$batch != "s1_r1"]
   expect_true(all(se > 1e-3))
@@ -145,7 +145,7 @@ test_that("known sampling variance sets the one-donor, one-aliquot SE", {
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none", seed = 1
+    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
   )$effects
   # Each contrast is a difference of two batch means of 40 cells (sd 0.4 before asinh): the SE
   # cannot fall below the sampling SE of that difference, about sqrt(2) * 0.4 / sqrt(40) on asinh/5.
@@ -208,7 +208,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", seed = 1
+    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
   )$effects
   expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
   expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)
@@ -265,7 +265,7 @@ test_that("internal anchors give a batch without reference donors an effect near
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
       anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "known_plus_extra",
-      anchors = anc, anchor_discrepancy = "none", anchor_batches = anchor_batches, seed = 1
+      anchors = anc, anchor_discrepancy = "none", scale_model = "none", anchor_batches = anchor_batches, seed = 1
     )
   }
   full <- fit(s$x, NULL)$effects
@@ -353,6 +353,51 @@ test_that("anchor discrepancy is near the floor for a shared shift and above it 
   se_mism <- .sw_heb_blup(z, mism$theta, "s1_r1")
   i <- se_shared$batch == "s3_r2"
   expect_gt(se_mism$se[i], se_shared$se[i])
+})
+
+# Plan F12: scale term on log SD -------------------------------------------------------------------
+# heb_sim with batch s2_r1's cells spread by `spread` around each sample's true mean.
+scale_sim <- function(spread) {
+  s <- heb_sim()
+  mu <- s$meta$mu[match(s$x$sample_id, s$meta$sample_id)]
+  b <- s$meta$batch[match(s$x$sample_id, s$meta$sample_id)]
+  f <- ifelse(b == "s2_r1", spread, 1)
+  s$x$m1 <- mu + f * (s$x$m1 - mu)
+  s
+}
+scale_fit <- function(s, scale_model) {
+  sw_corrector_fit(
+    s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+    transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random",
+    variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none",
+    scale_model = scale_model, seed = 1
+  )
+}
+
+test_that("log_sd scale is about 1 without a spread effect and recovers a 1.5x spread", {
+  none <- scale_fit(scale_sim(1), "log_sd")$effects
+  expect_true(all(abs(log(none$scale)) < 0.1))
+  sp <- scale_fit(scale_sim(1.5), "log_sd")$effects
+  e <- sp[sp$batch == "s2_r1", ]
+  # scale is the factor applied to the deviations, 1 / spread.
+  expect_lt(abs(-log(e$scale) - log(1.5)), 3 * e$scale_se)
+  expect_equal(sp$scale[sp$batch == "s1_r1"], 1)
+})
+
+test_that("log_sd correction evens the spread, and scale_model = 'none' is the plain shift", {
+  s <- scale_sim(1.5)
+  fit <- scale_fit(s, "log_sd")
+  out <- sw_corrector_integrate(fit, s$x, s$manifest, population = rep("T", nrow(s$x)),
+                                transform = list(name = "asinh", cofactor = 5), unsupported = "abstain")
+  b <- s$meta$batch[match(s$x$sample_id, s$meta$sample_id)]
+  sd_ratio <- stats::sd(out$x$m1[b == "s2_r1"] - ave(out$x$m1[b == "s2_r1"], s$x$sample_id[b == "s2_r1"])) /
+    stats::sd(out$x$m1[b == "s1_r1"] - ave(out$x$m1[b == "s1_r1"], s$x$sample_id[b == "s1_r1"]))
+  expect_lt(abs(sd_ratio - 1), 0.15)
+  plain <- scale_fit(s, "none")
+  expect_false("scale" %in% names(plain$effects) && any(!is.na(plain$effects$scale)))
+  expect_equal(plain$effects$estimate, fit$effects$estimate)
+  expect_error(scale_fit(s, "sd"), "scale_model = 'none' or 'log_sd'")
 })
 
 test_that("heb needs a valid anchor_discrepancy", {

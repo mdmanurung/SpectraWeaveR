@@ -980,7 +980,9 @@ sw_corrector_integrate <- function(
     marker = rep(markers, nrow(groups)),
     n_cells = n_cells[idx]
   )
-  eff <- model$effects[, .sw_effect_cols]
+  # Optional scale columns (heb scale_model = "log_sd", plan F12) travel with the effect.
+  scale_cols <- intersect(c("scale", "scale_centre"), names(model$effects))
+  eff <- model$effects[, c(.sw_effect_cols, scale_cols)]
   actions <- dplyr::left_join(
     actions,
     eff,
@@ -1014,6 +1016,10 @@ sw_corrector_integrate <- function(
     is_new ~ "New batch has no reference shared with the anchor (after min_cells); original values kept.",
     .default = "Batch is in the model but has no effect for this population; original values kept. Refit to change this."
   )
+  # Scale vectors, row-aligned with actions (the column subset below keeps the rows).
+  has_scale <- length(scale_cols) == 2
+  scale <- if (has_scale) ifelse(actions$action == "apply", actions$scale, NA_real_) else NULL
+  centre <- if (has_scale) actions$scale_centre else NULL
   actions <- actions[, c(
     "batch",
     "population",
@@ -1039,13 +1045,21 @@ sw_corrector_integrate <- function(
     sep = "\r"
   )
   shift <- ifelse(actions$action == "apply", actions$estimate, NA_real_)
+  # Scale: deviations from the shifted centre are multiplied by `scale`; NA keeps the plain shift.
   for (m in markers) {
-    s <- shift[match(
+    i <- match(
       paste(cells$batch, cells$population, m, sep = "\r"),
       act_key
-    )]
+    )
+    s <- shift[i]
     ok <- !is.na(s)
     out[ok, m] <- xm[ok, m] - s[ok]
+    if (has_scale) {
+      sc <- scale[i]
+      cc <- centre[i]
+      ok_sc <- ok & !is.na(sc) & !is.na(cc)
+      out[ok_sc, m] <- cc[ok_sc] + sc[ok_sc] * (out[ok_sc, m] - cc[ok_sc])
+    }
   }
   list(xm = out, actions = actions)
 }

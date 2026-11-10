@@ -38,6 +38,15 @@
 #' (population, marker) design keeps anchor rows only in batches without a
 #' reference row and in the anchor batch, so batches with reference donors are
 #' fitted from their donors alone.
+#' \code{scale_model} (required) is \code{"none"} for a pure shift, or
+#' \code{"log_sd"}: the same mixed model is fitted to the log standard
+#' deviation of each reference aliquot summary (known variance
+#' \eqn{1/(2(n-1))}), and the cells of batch \eqn{b} become
+#' \eqn{c + e^{-\delta_b}(x - \mathrm{shift} - c)}, where \eqn{\delta_b} is the
+#' log-SD contrast to the anchor and \eqn{c} the batch's shifted reference
+#' median. The effects gain \code{scale}, \code{scale_se} (of \eqn{\delta_b})
+#' and \code{scale_centre}; a batch without reference cells in a population
+#' keeps the shift only. New batches at integrate time get the shift only.
 #' \code{se_donor} holds the posterior standard error of the effect, from the
 #' prediction error covariance; \code{df} holds its Satterthwaite degrees of
 #' freedom from the inverse REML information, with components at the floor
@@ -263,7 +272,8 @@ NULL
 }
 
 .sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
-                        variance_prior, residual_model, anchors, anchor_discrepancy, anchor_batches = NULL, ...) {
+                        variance_prior, residual_model, anchors, anchor_discrepancy, anchor_batches = NULL,
+                        scale_model, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -293,6 +303,9 @@ NULL
     !(identical(anchor_batches, "all") || identical(anchor_batches, "unreferenced"))) {
     stop("heb with anchors needs anchor_batches = 'all' or 'unreferenced' (no default; plan A13).", call. = FALSE)
   }
+  if (missing(scale_model) || !(identical(scale_model, "none") || identical(scale_model, "log_sd"))) {
+    stop("heb needs scale_model = 'none' or 'log_sd' (no default; plan F12).", call. = FALSE)
+  }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
     stop("No reference summary has at least min_cells cells.", call. = FALSE)
@@ -321,19 +334,10 @@ NULL
                    anchor_rows = ar, anchor_discrepancy = anchor_discrepancy)
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
-  # Which designs share variance components.
-  pool_key <- switch(pool,
-    none = names(designs),
-    population = vapply(designs, function(z) z$d$marker[[1]], character(1)),
-    all = rep("all", length(designs))
-  )
-  names(pool_key) <- names(designs)
-  theta <- lapply(split(designs, pool_key), .sw_heb_theta,
-                  variance_floor = variance_floor, variance_prior = variance_prior)
+  blups <- .sw_heb_fit_designs(designs, pool, anchor, variance_floor, variance_prior)
   rows <- lapply(names(designs), function(nm) {
     z <- designs[[nm]]
-    tk <- theta[[pool_key[[nm]]]]
-    r <- .sw_heb_blup(z, tk$theta, anchor, tk$cov_log)
+    r <- blups[[nm]]
     d <- z$d
     n_don <- vapply(r$batch, function(b) length(unique(d$reference_id[d$batch == b])), integer(1))
     n_aliq <- vapply(r$batch, function(b) length(unique(d$aliquot[d$batch == b])), integer(1))
@@ -349,7 +353,77 @@ NULL
     )
   })
   effects <- dplyr::bind_rows(rows)
+  if (scale_model == "log_sd") {
+    effects <- .sw_heb_scale(effects, xm, cells, s$summ, hierarchy, anchor, anchor_effect, residual_model,
+                             pool, variance_floor, variance_prior)
+  }
   list(effects = effects, targets = targets, excluded = s$excluded)
+}
+
+# Fit pooled variance components, then the BLUP contrasts of every design (a named list by design).
+.sw_heb_fit_designs <- function(designs, pool, anchor, variance_floor, variance_prior) {
+  # Which designs share variance components.
+  pool_key <- switch(pool,
+    none = names(designs),
+    population = vapply(designs, function(z) z$d$marker[[1]], character(1)),
+    all = rep("all", length(designs))
+  )
+  names(pool_key) <- names(designs)
+  theta <- lapply(split(designs, pool_key), .sw_heb_theta,
+                  variance_floor = variance_floor, variance_prior = variance_prior)
+  lapply(stats::setNames(names(designs), names(designs)), function(nm) {
+    tk <- theta[[pool_key[[nm]]]]
+    .sw_heb_blup(designs[[nm]], tk$theta, anchor, tk$cov_log)
+  })
+}
+
+# Plan F12, scale_model = "log_sd": the same mixed model on the log SD of each reference aliquot summary
+# (known sampling variance 1 / (2 (n - 1))), no internal anchors. delta_b is the BLUP log-SD contrast to
+# the anchor; the correction multiplies deviations from the batch's shifted reference median by
+# scale = exp(-delta_b). Batches without reference cells in a population get no scale (NA).
+.sw_heb_scale <- function(effects, xm, cells, summ, hierarchy, anchor, anchor_effect, residual_model,
+                          pool, variance_floor, variance_prior) {
+  ref <- cells[cells$is_reference, , drop = FALSE]
+  ref_key <- paste(ref$reference_id, ref$aliquot, ref$batch, ref$population, sep = "\r")
+  rows_of <- split(ref$row, ref_key)
+  summ_key <- paste(summ$reference_id, summ$aliquot, summ$batch, summ$population, sep = "\r")
+  ls <- summ
+  ls$value <- vapply(seq_len(nrow(summ)), function(i) {
+    log(stats::sd(xm[rows_of[[summ_key[[i]]]], summ$marker[[i]]]))
+  }, numeric(1))
+  ls$var_mean <- 1 / (2 * (summ$n_cells - 1))
+  ls <- ls[is.finite(ls$value), , drop = FALSE]
+  key <- paste(ls$population, ls$marker, sep = "\r")
+  designs <- lapply(split(seq_len(nrow(ls)), key), function(ii) {
+    .sw_heb_design(ls[ii, , drop = FALSE], hierarchy, anchor, anchor_effect, residual_model)
+  })
+  designs <- designs[!vapply(designs, is.null, logical(1))]
+  blups <- .sw_heb_fit_designs(designs, pool, anchor, variance_floor, variance_prior)
+  sc <- dplyr::bind_rows(lapply(names(designs), function(nm) {
+    tibble::tibble(
+      batch = blups[[nm]]$batch, population = designs[[nm]]$d$population[[1]],
+      marker = designs[[nm]]$d$marker[[1]], log_sd_effect = blups[[nm]]$estimate, scale_se = blups[[nm]]$se
+    )
+  }))
+  # Centre: median of the batch's reference cells for that population, minus the location effect.
+  grp <- split(ref$row, paste(ref$batch, ref$population, sep = "\r"))
+  centre <- dplyr::bind_rows(lapply(names(grp), function(k) {
+    tibble::tibble(
+      batch = ref$batch[match(k, paste(ref$batch, ref$population, sep = "\r"))],
+      population = ref$population[match(k, paste(ref$batch, ref$population, sep = "\r"))],
+      marker = colnames(xm), ref_median = apply(xm[grp[[k]], , drop = FALSE], 2, stats::median)
+    )
+  }))
+  out <- dplyr::left_join(effects, sc, by = c("batch", "population", "marker"), relationship = "one-to-one")
+  out <- dplyr::left_join(out, centre, by = c("batch", "population", "marker"), relationship = "one-to-one")
+  ok <- !is.na(out$log_sd_effect) & !is.na(out$ref_median)
+  out$scale <- unname(ifelse(ok, exp(-out$log_sd_effect), NA_real_))
+  out$scale_centre <- unname(ifelse(ok, out$ref_median - out$estimate, NA_real_))
+  out$scale_se <- unname(out$scale_se)
+  out$scale_se[!ok] <- NA_real_
+  out$log_sd_effect <- NULL
+  out$ref_median <- NULL
+  out
 }
 
 if_else_chr <- function(cond, yes, no) ifelse(cond, yes, no)
