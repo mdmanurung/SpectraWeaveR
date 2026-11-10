@@ -212,7 +212,8 @@ modes_one_seed <- function(seed) {
     residual_model = "known_plus_extra",
     anchors = anchors,
     anchor_discrepancy = ANCHOR_DISCREPANCY,
-    anchor_batches = ANCHOR_BATCHES
+    anchor_batches = ANCHOR_BATCHES,
+    scale_model = "none"
   )
   list(
     modes = list_rbind(log_env$rows) |>

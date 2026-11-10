@@ -50,6 +50,8 @@ stopifnot(
       "heb_pool_pop_kv_bap_anc",
       "heb_pool_pop_kv_bap_anc_d",
       "heb_pool_pop_kv_bap_anc_u",
+      "heb_pool_pop_kv_bap_sc",
+      "heb_pool_pop_kv_bap_anc_u_sc",
       "reversed_shift",
       "cycombine",
       "cytonorm"
@@ -212,7 +214,9 @@ correct_stage <- function(stage_dir) {
     heb_afix_pop_kv_bap = "population",
     heb_pool_pop_kv_bap_anc = "population",
     heb_pool_pop_kv_bap_anc_d = "population",
-    heb_pool_pop_kv_bap_anc_u = "population"
+    heb_pool_pop_kv_bap_anc_u = "population",
+    heb_pool_pop_kv_bap_sc = "population", # plan F12
+    heb_pool_pop_kv_bap_anc_u_sc = "population" # F12 on S18, where the lead abstains
   )[method] # *_bap: F6 prior; *_kv: F8 known variance
   hierarchy <- if (engine %in% c("heb", "heb_shared")) {
     distinct(meta, batch, study)
@@ -279,10 +283,15 @@ correct_stage <- function(stage_dir) {
       NULL
     }, # plan A11
     anchor_batches = if (engine == "heb") {
-      (if (endsWith(method, "_anc_u")) "unreferenced" else "all")
+      (if (grepl("_anc_u", method, fixed = TRUE)) "unreferenced" else "all")
     } else {
       NULL
-    } # plan A13
+    }, # plan A13
+    scale_model = if (engine == "heb") {
+      (if (endsWith(method, "_sc")) "log_sd" else "none")
+    } else {
+      NULL
+    } # plan F12
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.

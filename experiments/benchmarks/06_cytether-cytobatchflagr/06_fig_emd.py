@@ -17,13 +17,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-ORDER = ["none", "cytofin", "cytofin_pop", "paired_shift", "heb", "heb_kv_bap", "cytonorm", "cycombine_ref", "cycombine"]
+ORDER = ["none", "cytofin", "cytofin_pop", "paired_shift", "heb", "heb_kv_bap", "heb_kv_bap_sc", "cytonorm", "cycombine_ref", "cycombine"]
 FOLD_COLOURS = {"tcu1": "#1b9e77", "tcu2": "#d95f02", "tcs3": "#7570b3", "tcs4": "#e7298a"}
 
 root = Path(sys.argv[1])
 summ = pd.read_csv(root / "emd_summary.csv")
 status = pd.read_csv(root / "status_all.csv")
 long = pd.read_csv(root / "emd_long.csv")
+ORDER = [m for m in ORDER if m in set(summ.method)]  # methods present in this run
 
 # Panel frames -------------------------------------------------------------------------
 a = summ.merge(status[["method", "fold", "fits_on_heldout"]], on=["method", "fold"], validate="1:1")
