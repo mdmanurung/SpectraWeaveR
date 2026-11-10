@@ -66,8 +66,9 @@ long <- lapply(SEEDS, function(seed) {
     files[bad] <- lapply(files[bad], function(x) {
       if (startsWith(fault, "composition")) {
         target <- if (fault == "composition_smallest") smallest else largest
-        hit <- which(nearest(x[, ch]) == target)
-        x[-hit[stats::runif(length(hit)) < size], , drop = FALSE]
+        # Logical mask: x[-integer(0), ] would drop every row when nothing is removed.
+        drop_event <- nearest(x[, ch]) == target & stats::runif(nrow(x)) < size
+        x[!drop_event, , drop = FALSE]
       } else {
         med <- apply(x[, ch], 2, stats::median)
         x[, ch] <- sweep(sweep(x[, ch], 2, med) * size, 2, med, "+")
