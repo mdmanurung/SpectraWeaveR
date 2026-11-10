@@ -133,3 +133,4 @@ files and the reference-only view (W7) is in the report.
 | G10 next for the four limits | Two-way residual: robust z of the value after removing donor and batch medians (median polish); test on the CBF donor-by-batch design. |
 | G11 FAUST annotationForestDepth | 3 (FAUST default), passed explicitly. |
 | G12 FAUST prop_by_batch | Range over batches of the per-batch median share, before and after correction. |
+| G13 FAUST correction markers | Batch correction uses the same 37 markers as FAUST (AF and dead dye excluded). |
