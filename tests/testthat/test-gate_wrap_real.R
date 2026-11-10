@@ -78,11 +78,12 @@ test_that("sw_gate_flowmagic_train and sw_gate_flowmagic run on real flowMagic",
 test_that("sw_gate_read_flowjo reads a real FlowJo workspace", {
   skip_if_not_installed("CytoML")
   skip_if_not_installed("flowWorkspace")
+  # CytoML ships no .wsp; FlowSOM ships extdata/gating.wsp (read with execute = FALSE).
   wsp <- list.files(
-    system.file("extdata", package = "CytoML"),
+    c(system.file("extdata", package = "CytoML"), system.file("extdata", package = "FlowSOM")),
     pattern = "[.]wsp$", recursive = TRUE, full.names = TRUE
   )
-  skip_if(length(wsp) == 0, "CytoML ships no .wsp file")
+  skip_if(length(wsp) == 0, "no .wsp file found in CytoML or FlowSOM")
   ws <- CytoML::open_flowjo_xml(wsp[[1]])
   grp <- CytoML::fj_ws_get_sample_groups(ws)
   grp_name <- unique(grp$groupName)[[1]]
