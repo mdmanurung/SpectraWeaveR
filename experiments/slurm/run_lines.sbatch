@@ -19,4 +19,5 @@ last=$(((SLURM_ARRAY_TASK_ID + 1) * k))
 
 cd /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR/.claude/worktrees/cytether-benchmark
 export OMP_NUM_THREADS=1
-sed -n "${first},${last}p" "$commands" | xargs -P "${SLURM_CPUS_PER_TASK:-1}" -I{} bash -c '{}'
+# -d '\n': one line is one command, quotes intact (plain xargs strips them and splits quoted lists).
+sed -n "${first},${last}p" "$commands" | xargs -d '\n' -P "${SLURM_CPUS_PER_TASK:-1}" -I{} bash -c '{}'
