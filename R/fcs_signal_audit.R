@@ -41,6 +41,12 @@
 #'   correlation of a channel pair and the median of that pair over all files
 #'   (file level, `detail` names the pair). A wrong spillover or unmixing
 #'   matrix changes channel-pair correlations.
+#' * `corr_pair_z`: the same correlations, one row per file and channel pair
+#'   (`channel` is `"A ~ B"`): robust z of the file's correlation against all
+#'   files. Rank these rows per pair; `corr_shift` keeps only the largest change
+#'   per file, which hides a change in one pair among many (on 36 real files
+#'   with 40 channels, a 0.3 spillover scored AUROC 0.66 with `corr_shift`).
+#'   `NA` with fewer than 3 files.
 #'
 #' @details
 #' **Scale is yours.** Saturation and floor limits must be on the same scale as
@@ -240,7 +246,8 @@ sw_fcs_signal_audit <- function(
   # (value - median over files) / (1.4826 * MAD over files). NA with fewer than
   # 3 files or when the spread over files is 0.
   robust_z <- function(x) {
-    s <- 1.4826 * stats::mad(x, na.rm = TRUE)
+    # stats::mad() scales by 1.4826 by default; constant = 1 keeps the raw MAD.
+    s <- 1.4826 * stats::mad(x, constant = 1, na.rm = TRUE)
     if (sum(!is.na(x)) < 3 || is.na(s) || s == 0) {
       return(rep(NA_real_, length(x)))
     }
@@ -278,7 +285,21 @@ sw_fcs_signal_audit <- function(
     }
   }
 
-  out <- dplyr::bind_rows(rows)
+  # The same pairs one row each: robust z of the file's correlation against the
+  # other files, per pair. Built in one step (pairs x files can be large).
+  pair_z <- t(apply(pair_vals, 1, robust_z))
+  if (nrow(idx) == 1) {
+    pair_z <- matrix(pair_z, nrow = 1)
+  }
+  pair_rows <- tibble::tibble(
+    file = rep(files, each = nrow(idx)),
+    check = "corr_pair_z",
+    channel = rep(pair_name, times = length(files)),
+    value = as.numeric(pair_z),
+    detail = NA_character_
+  )
+
+  out <- dplyr::bind_rows(c(rows, list(pair_rows)))
   class(out) <- c("sw_fcs_signal_audit", class(out))
   out
 }

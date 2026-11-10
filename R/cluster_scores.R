@@ -178,7 +178,8 @@ sw_cluster_scores <- function(
   cl <- split(km$cluster, rep(files, each = n_events))[files]
 
   robust_z <- function(x) {
-    s <- 1.4826 * stats::mad(x, na.rm = TRUE)
+    # stats::mad() scales by 1.4826 by default; constant = 1 keeps the raw MAD.
+    s <- 1.4826 * stats::mad(x, constant = 1, na.rm = TRUE)
     if (sum(!is.na(x)) < 3 || is.na(s) || s == 0) {
       return(rep(NA_real_, length(x)))
     }

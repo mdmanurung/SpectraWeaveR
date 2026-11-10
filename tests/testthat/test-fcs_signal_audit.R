@@ -57,7 +57,8 @@ test_that("clean files give the base checks only", {
       "negative_share",
       "median_z",
       "sd_z",
-      "corr_shift"
+      "corr_shift",
+      "corr_pair_z"
     )
   )
   expect_equal(val(res, "f1", "n_events"), 400)
@@ -160,4 +161,20 @@ test_that("limits can be per channel and must cover every channel", {
   expect_true("saturation_share" %in% res$check)
   expect_error(audit(d, time_channel = "Time"), "time_bin")
   expect_error(audit(d, time_channel = "T2", time_bin = 1), "lacks column")
+})
+
+test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has one row per pair", {
+  set.seed(21)
+  meds <- c(0, 1, 2, 3, 10)
+  files <- lapply(meds, \(m) {
+    cbind(A = m + stats::rnorm(1001, 0, 1e-9), B = stats::rnorm(1001), C = stats::rnorm(1001))
+  })
+  names(files) <- paste0("f", 1:5)
+  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL)
+  z <- au$value[au$check == "median_z" & au$channel == "A"]
+  # Median of the file medians is 2 and their raw MAD is 1, so z = (m - 2) / 1.4826.
+  expect_equal(z, (meds - 2) / 1.4826, tolerance = 1e-6)
+  pz <- au[au$check == "corr_pair_z", ]
+  expect_equal(nrow(pz), 5 * 3)
+  expect_setequal(unique(pz$channel), c("A ~ B", "A ~ C", "B ~ C"))
 })

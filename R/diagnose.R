@@ -293,6 +293,7 @@ sw_diagnose <- function(
   "neg_sd_z",
   "neg_corr",
   "neg_corr_z",
+  "corr_pair_z",
   "spill_corr",
   "spill_corr_z"
 )
