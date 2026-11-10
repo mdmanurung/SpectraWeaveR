@@ -21,6 +21,11 @@
 #' * `kept_share_z`: robust z of `kept_share` across samples,
 #'   `(v - median) / (1.4826 * MAD)`. `NA` with fewer than 3 samples or when
 #'   the MAD is 0.
+#' * `kept_share_log_ratio`: `log(kept_share / kept_share of the reference)`.
+#'   Only with `reference`. Defined even when every sample keeps the same
+#'   share, where `kept_share_z` is `NA`: on real data a shift-only gate moved
+#'   from an Aurora to a Fortessa kept 100% of events in all nine samples
+#'   (reference about 15-40%, F1 0.24-0.51 against an expert gate).
 #' * `centroid_shift`: in-gate median of a gate channel minus the same median
 #'   in the `reference` sample (signed, one row per channel).
 #' * `centroid_dist`: Euclidean length of the `centroid_shift` values of a
@@ -40,7 +45,8 @@
 #'   list with one such list per sample (for example adapted gates from
 #'   [sw_gate_transfer()]).
 #' @param reference `NULL`, or the name of one sample in `data`. When given,
-#'   the `centroid_shift` and `centroid_dist` checks are added.
+#'   the `kept_share_log_ratio`, `centroid_shift` and `centroid_dist` checks
+#'   are added.
 #' @param edge_width A positive number in channel units, or a named numeric
 #'   vector with one value per gate channel. A polygon needs one width, so its
 #'   two channels must carry the same value.
@@ -122,6 +128,19 @@ sw_gate_qc <- function(data, gates, reference, edge_width) {
   out <- rbind(out, do.call(rbind, z_rows))
 
   if (!is.null(reference)) {
+    # Kept share against the reference sample, as a log ratio. Unlike
+    # kept_share_z it is defined when every sample keeps the same share: a
+    # transferred gate that keeps all events in every sample (MAD 0) shows here.
+    ref_ks <- ks[ks$sample == reference, c("gate", "value")]
+    ratio <- merge(ks[c("sample", "gate", "value")], ref_ks, by = "gate", suffixes = c("", "_ref"))
+    if (nrow(ratio) > 0) {
+      out <- rbind(out, data.frame(
+        sample = ratio$sample, gate = ratio$gate, check = "kept_share_log_ratio",
+        channel = NA_character_,
+        value = ifelse(ratio$value > 0 & ratio$value_ref > 0, log(ratio$value / ratio$value_ref), NA_real_),
+        stringsAsFactors = FALSE
+      ))
+    }
     cen <- list()
     for (s in samples) {
       for (id in names(per_sample[[s]])) {
@@ -146,7 +165,7 @@ sw_gate_qc <- function(data, gates, reference, edge_width) {
     if (length(cen) > 0) out <- rbind(out, do.call(rbind, cen))
   }
 
-  lev <- c("n_parent", "kept_share", "edge_share", "kept_share_z", "centroid_shift", "centroid_dist")
+  lev <- c("n_parent", "kept_share", "edge_share", "kept_share_z", "kept_share_log_ratio", "centroid_shift", "centroid_dist")
   out <- out[order(match(out$sample, samples), match(out$gate, unique(out$gate)), match(out$check, lev)), ]
   rownames(out) <- NULL
   tibble::as_tibble(out)

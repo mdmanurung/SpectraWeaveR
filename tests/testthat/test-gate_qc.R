@@ -99,3 +99,23 @@ test_that("sw_gate_qc stops on bad input", {
   orphan <- sw_gate_range("o", "A", 0, 5, parent = "nope")
   expect_error(sw_gate_qc(list(s = m), list(orphan), reference = NULL, edge_width = 1), "Parent gate")
 })
+
+test_that("kept_share_log_ratio flags a gate that keeps everything when kept_share_z cannot", {
+  set.seed(8)
+  # Reference: two populations, the gate keeps the upper one (about 30%).
+  ref <- cbind(A = c(stats::rnorm(700, 0, 0.3), stats::rnorm(300, 3, 0.3)))
+  # Three samples where a mis-placed gate keeps every event.
+  others <- lapply(1:3, function(i) cbind(A = stats::rnorm(500, 5, 0.3)))
+  data <- c(list(r = ref), stats::setNames(others, c("a", "b", "c")))
+  g <- sw_gate_range("pos", "A", 1.5, Inf, parent = NA)
+  out <- sw_gate_qc(data, list(g), reference = "r", edge_width = 0.2)
+  ks <- out[out$check == "kept_share", ]
+  expect_equal(ks$value[ks$sample != "r"], c(1, 1, 1))
+  z <- out[out$check == "kept_share_z", ]
+  expect_true(all(is.na(z$value)))
+  lr <- out[out$check == "kept_share_log_ratio", ]
+  expect_equal(lr$value[lr$sample == "r"], 0)
+  ref_share <- mean(ref[, "A"] >= 1.5)
+  expect_equal(lr$value[lr$sample == "a"], log(1 / ref_share))
+  expect_gt(min(lr$value[lr$sample != "r"]), 1)
+})

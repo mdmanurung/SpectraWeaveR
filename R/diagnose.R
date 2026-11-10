@@ -352,6 +352,7 @@ sw_diagnose <- function(
   "spill_corr",
   "spill_corr_z",
   "kept_share_z",
+  "kept_share_log_ratio",
   "centroid_shift"
 )
 # Novelty log-density: low is unusual. GMM separation: a small value means the

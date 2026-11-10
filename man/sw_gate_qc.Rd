@@ -15,7 +15,8 @@ list with one such list per sample (for example adapted gates from
 \code{\link[=sw_gate_transfer]{sw_gate_transfer()}}).}
 
 \item{reference}{\code{NULL}, or the name of one sample in \code{data}. When given,
-the \code{centroid_shift} and \code{centroid_dist} checks are added.}
+the \code{kept_share_log_ratio}, \code{centroid_shift} and \code{centroid_dist} checks
+are added.}
 
 \item{edge_width}{A positive number in channel units, or a named numeric
 vector with one value per gate channel. A polygon needs one width, so its
@@ -41,6 +42,11 @@ cuts through dense events, so a small shift moves many events in or out.
 \item \code{kept_share_z}: robust z of \code{kept_share} across samples,
 \code{(v - median) / (1.4826 * MAD)}. \code{NA} with fewer than 3 samples or when
 the MAD is 0.
+\item \code{kept_share_log_ratio}: \verb{log(kept_share / kept_share of the reference)}.
+Only with \code{reference}. Defined even when every sample keeps the same
+share, where \code{kept_share_z} is \code{NA}: on real data a shift-only gate moved
+from an Aurora to a Fortessa kept 100\% of events in all nine samples
+(reference about 15-40\%, F1 0.24-0.51 against an expert gate).
 \item \code{centroid_shift}: in-gate median of a gate channel minus the same median
 in the \code{reference} sample (signed, one row per channel).
 \item \code{centroid_dist}: Euclidean length of the \code{centroid_shift} values of a
