@@ -1,0 +1,92 @@
+---
+title: "FAUST annotation before and after correction"
+---
+
+Annotate the same events with FAUST (Greene et al. 2021) before and after batch
+correction, then compare the labels. The question is whether correction kept
+the biology. The functions return numbers. They do not mark a file or a
+phenotype as bad, and none has a default for a value that changes a result.
+
+FAUST is GPL (>= 3). The package never copies its code. It calls `faust::faust()`
+from `Suggests` and reads the files FAUST writes.
+
+## Functions
+
+| Step | Function | What it does |
+|---|---|---|
+| 1 | `sw_faust_gatingset()` | subsample each file, build a `GatingSet` with marker names in `desc` |
+| 2 | `sw_faust_run()` | run FAUST into a new project folder; echo every setting and the faust version |
+| 3 | `sw_faust_labels()` | read the phenotype of every kept event and the share per file |
+| 4 | `sw_faust_compare()` | ARI, shares, marker medians per phenotype, share spread across batches |
+
+## Install
+
+```r
+remotes::install_github("RGLab/scamp")
+remotes::install_github("RGLab/FAUST")
+```
+
+## Use
+
+```r
+gs_before <- sw_faust_gatingset(
+  data = events_before, # named list of matrices, already arcsinh (cofactor 6000)
+  markers = markers, # c(<column name> = <marker name>)
+  sample_table = tbl, # sample, batch, donor, role
+  n_events = 5000, subsample_seed = 1
+)
+run_before <- sw_faust_run(
+  gs_before, project_path = "faust_before", starting_pop = "root",
+  markers = unname(markers), depth_score_threshold = 0.01, selection_quantile = 0.5,
+  experimental_unit = "", imputation_hierarchy = "", channel_bounds = "",
+  name_occurrence_num = 0, supervised_list = NA, seed = 1, threads = 8,
+  density_subsample_threshold = 1e6, density_subsample_size = 1e6,
+  density_subsample_iterations = 1, annotations_approved = TRUE,
+  draw_histograms = FALSE
+)
+labels_before <- sw_faust_labels(run_before, events_before)
+# repeat for the corrected data with the same settings, then:
+cmp <- sw_faust_compare(
+  labels_before, labels_after, events_before, events_after,
+  batch = batch, role = role, markers = colnames(events_before[[1]]),
+  match_by = "exact", ari_scope = "file", median_scope = "file"
+)
+```
+
+The values above are FAUST's own conventions, shown for syntax. They are not
+package defaults.
+
+## What to know before you read the result
+
+- **Same events.** Both runs must keep the same rows. Give both data sets the
+  same `n_events` and `subsample_seed`. `sw_faust_compare()` stops when the kept
+  rows differ.
+- **Row order.** The corrected data must keep the row order of the input. Check
+  this on your own correction before you trust a median.
+- **Experimental unit.** Per-cell labels are read back by row order, which was
+  checked only for `experimental_unit = ""`. Other values stop
+  `sw_faust_labels()`. A batch unit would also standardise thresholds inside
+  each batch and hide part of the effect under test.
+- **Phenotype strings.** Labels are FAUST's per-cell tokens, for example
+  `CD3~2~2~` (level 2 of 2). A phenotype found on one side only gets `NA` on the
+  other side. FAUST may drop a marker by depth score on one side, which changes
+  every string; `match_by = "exact"` then shows `NA` and not a wrong match.
+- **Unclassified bin.** The all-zero label stays in the table as its own phenotype.
+- **Batch and donor.** If donors nest in batches, a phenotype that differs by
+  batch among donor files is confounded with donor. `prop_by_batch_*` is split by
+  `role` so reference files read apart from donor files.
+- **Review step.** `annotations_approved = FALSE` stops after the thresholds. Check
+  `plotData/scoreLines.*`, then run again in a new folder.
+- **Left at the FAUST default.** `annotationForestDepth` (3) is not exposed.
+
+## Output table
+
+`sw_faust_compare()` returns one long tibble: `module` (`"faust"`), `subject`,
+`check`, `item`, `phenotype`, `value`, `text`.
+
+| `check` | `subject` | `item` | `value` |
+|---|---|---|---|
+| `ari` | file or `pooled` | | adjusted Rand index between the two label sets |
+| `prop_before`, `prop_after`, `prop_diff` | file | phenotype | share of the file's events |
+| `median_before`, `median_after`, `median_diff` | file or `pooled` | marker | median over the phenotype's events |
+| `prop_by_batch_before`, `prop_by_batch_after` | role | phenotype | range over batches of the per-batch median share |
