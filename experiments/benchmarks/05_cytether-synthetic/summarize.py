@@ -118,6 +118,6 @@ for i, method in enumerate(order):
 ax.set_xticks(range(len(order)))
 ax.set_xticklabels(order, rotation=45, ha="right", fontsize=7)
 ax.set_ylim(bottom=0)
-ax.set_ylabel("held-out reference RMSE to truth\n(mean over S4, S9, S10, S11)", fontsize=7)
+ax.set_ylabel(f"held-out reference RMSE to truth\n(mean over {', '.join(PRIMARY_STAGES)})", fontsize=7)
 fig.tight_layout()
 fig.savefig(out / "primary.png", dpi=200)
