@@ -174,11 +174,13 @@ test_that("sw_filter_doublets_peacoqc rejects mismatched channels", {
 test_that("sw_filter_doublets_peacoqc handles empty flowFrame", {
   skip_if_not_installed("PeacoQC")
   skip_if_not_installed("flowCore")
-  mat <- matrix(numeric(0), ncol = 4,
+  # flowCore's constructor cannot build a 0-event frame (it round-trips an FCS
+  # file and $TOT = 0 reads as corrupt), so subset a 1-event frame instead.
+  mat <- matrix(1, nrow = 1, ncol = 4,
                 dimnames = list(NULL, c("FSC-A", "FSC-H", "SSC-A", "SSC-H")))
-  ff <- flowCore::flowFrame(mat)
+  ff <- flowCore::flowFrame(mat)[integer(0), ]
   result <- sw_filter_doublets_peacoqc(ff, nmads = c(4, 4))
-  expect_equal(nrow(result), 0)
+  expect_equal(unname(nrow(result)), 0) # flowCore's nrow() is named "events"
   expect_equal(attr(result, "events_removed"), 0L)
 })
 

@@ -314,8 +314,9 @@ one Aurora. With biology fixed, every batch difference is technical. Scripts:
 `experiments/integration/cytobatchflagr/`.
 
 Batch explains 22% (CD8) to 95% (CD14) of the variance of file medians, over
-the 26 named markers present in every file. CD14 is high because the files
-are pre-gated CD14-, so its median sits near the background.
+the 26 named markers present in every file. The files are pre-gated CD14-,
+so CD14's high value likely reflects shifts in its background rather than in
+CD14+ cells (not checked with a figure).
 
 ![Batch eta2 per marker, before and after internal CD3 relativisation](figures/cbf_eta2.png)
 
