@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", seed = 1, ...
   )
 }
 
@@ -83,7 +83,7 @@ test_that("heb needs pool and pooled variance runs", {
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -106,6 +106,33 @@ test_that("heb effects match an lme4 REML fit on the same summaries", {
   got <- eff$estimate[match(s$hierarchy$batch, eff$batch)]
   expect_equal(unname(got), unname(want), tolerance = 1e-3)
   expect_equal(eff$estimate[eff$batch == "s1_r1"], 0)
+})
+
+test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs off zero", {
+  s <- heb_sim()
+  expect_error(
+    sw_corrector_fit(
+      s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
+      transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
+      anchor_effect = "random", seed = 1
+    ),
+    "variance_prior"
+  )
+  # One donor per batch: REML cannot split run variance from residual.
+  s1 <- s
+  keep <- s$meta$donor == "D1"
+  s1$meta <- s$meta[keep, ]
+  s1$x <- s$x[s$x$sample_id %in% s1$meta$sample_id, ]
+  s1$manifest <- s$manifest[s$manifest$sample_id %in% s1$meta$sample_id, ]
+  bap <- sw_corrector_fit(
+    s1$x, s1$manifest, s1$audit, population = rep("T", nrow(s1$x)), markers = "m1",
+    transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+    min_cells = 10, hierarchy = s1$hierarchy, variance_floor = 1e-8, pool = "none",
+    anchor_effect = "random", variance_prior = "boundary_avoiding", seed = 1
+  )$effects
+  se <- bap$se_donor[bap$batch != "s1_r1"]
+  expect_true(all(se > 1e-3))
 })
 
 test_that("heb fits a design with one reference donor", {
@@ -162,7 +189,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "fixed", seed = 1
+    anchor_effect = "fixed", variance_prior = "none", seed = 1
   )$effects
   expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
   expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)

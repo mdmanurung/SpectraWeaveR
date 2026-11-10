@@ -20,6 +20,10 @@
 #' \code{hierarchy} is a data frame with columns \code{batch} and
 #' \code{study}, one row per batch. It has no default. Variance components
 #' are bounded below by \code{variance_floor} (also required, no default).
+#' \code{variance_prior} (required) is \code{"none"} for plain REML or
+#' \code{"boundary_avoiding"} for the gamma(2) prior of Chung et al. (2013) on
+#' the study and run standard deviations, which keeps them off zero when one
+#' donor per batch cannot separate them from the residual.
 #' \code{se_donor} holds the posterior standard error of the effect, from the
 #' prediction error covariance; \code{df} holds its Satterthwaite degrees of
 #' freedom from the inverse REML information, with components at the floor
@@ -101,10 +105,16 @@ NULL
 
 # Variance components by REML. Several designs share one set of components when pooled:
 # the objective is the sum of their REML criteria.
-.sw_heb_theta <- function(designs, variance_floor) {
+#
+# variance_prior = "boundary_avoiding" adds Chung et al. (2013, PMID 24092484) gamma(shape 2, rate -> 0)
+# priors on the study and run SDs: -log p(sigma_k) = -log sigma_k = -0.5 log theta_k, once per pooled set.
+# It keeps those components off zero when the data cannot separate them from the residual (one donor per
+# batch). The residual variance is not penalised. "none" is plain REML.
+.sw_heb_theta <- function(designs, variance_floor, variance_prior) {
   scale <- max(mean(vapply(designs, function(z) stats::var(z$y), numeric(1))), 1e-6)
+  penalty <- if (variance_prior == "boundary_avoiding") function(lt) -0.5 * (lt[[1]] + lt[[2]]) else function(lt) 0
   obj <- function(lt) {
-    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2), numeric(1)))
+    sum(vapply(designs, function(z) .sw_heb_reml(lt, z$y, z$X, z$M1, z$M2), numeric(1))) + penalty(lt)
   }
   lo <- rep(log(variance_floor), 3)
   fit <- stats::optim(
@@ -171,7 +181,8 @@ NULL
   )
 }
 
-.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect, ...) {
+.sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
+                        variance_prior, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -183,6 +194,9 @@ NULL
   }
   if (missing(anchor_effect) || !anchor_effect %in% c("random", "fixed")) {
     stop("heb needs anchor_effect = 'random' or 'fixed' (no default).", call. = FALSE)
+  }
+  if (missing(variance_prior) || !variance_prior %in% c("none", "boundary_avoiding")) {
+    stop("heb needs variance_prior = 'none' or 'boundary_avoiding' (no default).", call. = FALSE)
   }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
@@ -209,7 +223,8 @@ NULL
     all = rep("all", length(designs))
   )
   names(pool_key) <- names(designs)
-  theta <- lapply(split(designs, pool_key), .sw_heb_theta, variance_floor = variance_floor)
+  theta <- lapply(split(designs, pool_key), .sw_heb_theta,
+                  variance_floor = variance_floor, variance_prior = variance_prior)
   rows <- lapply(names(designs), function(nm) {
     z <- designs[[nm]]
     tk <- theta[[pool_key[[nm]]]]
