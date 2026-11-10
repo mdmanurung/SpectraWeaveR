@@ -1,9 +1,11 @@
 # experiments/integration/cytobatchflagr/04_reference_group.R
-# Purpose: does reference_group (robust z within the same donor) close the donor-limited gaps on
-#          real files? The same four control samples were acquired in 18 batches, so `control` is
+# Purpose: does reference_group (robust z within the same donor, or on the residuals of a
+#          two-way median polish over donor and batch) close the donor-limited gaps on real files? The same four control samples were acquired in 18 batches, so `control` is
 #          the donor and each donor has 18 files. Faults go into 25% of files (batch faults into
 #          all four files of one batch). Each fault is scored twice on the same injected files:
-#          without reference_group (z over all 72 files) and with reference_group = control.
+#          without reference_group (z over all 72 files), with reference_group = control (one-way,
+#          arm "with") and with a data frame of file, control and batch (two-way, arm "two_way",
+#          file-level faults only: a two-way design would remove the batch effect the batch fault is).
 #          AUROC ranks faulty files above clean ones; the hit marker's own row is scored, as a
 #          user ranks per marker. The batch fault is scored as the hit marker among all markers.
 # Run:     Rscript experiments/integration/cytobatchflagr/04_reference_group.R <extract_run_dir> <run_dir>
@@ -62,7 +64,8 @@ markers <- intersect(names(marker_names)[!is.na(marker_names)], shared)
 base <- lapply(ev, \(m) asinh(m[, markers] / COFACTOR))
 donor <- setNames(as.character(info$control), ids)
 batch <- setNames(as.character(info$batch), ids)
-ARMS <- list(without = NULL, with = donor)
+TWO_WAY <- data.frame(file = ids, donor = as.character(info$control), batch = as.character(info$batch))
+ARMS <- list(without = NULL, with = donor, two_way = TWO_WAY)
 
 marker_sd <- apply(do.call(rbind, base), 2, sd)
 pooled <- do.call(rbind, base)
@@ -87,11 +90,18 @@ auroc <- function(score, pos) {
   n1 <- sum(p)
   (sum(r[p]) - n1 * (n1 + 1) / 2) / (n1 * sum(!p))
 }
-# Robust z over all files (g = NULL) or within group g.
+# Robust z over all files (g = NULL), within group g, or (g a data frame) on the residuals of a
+# two-way median polish over its two factor columns (maxiter 10; one file per cell here).
 robust_z <- function(x, g) {
   z <- function(v) (v - median(v)) / (1.4826 * mad(v, constant = 1))
   if (is.null(g)) {
     return(z(x))
+  }
+  if (is.data.frame(g)) {
+    tab <- tapply(x, list(g$donor, g$batch), mean)
+    mp <- stats::medpolish(tab, maxiter = 10, trace.iter = FALSE, na.rm = TRUE)
+    resid <- x - mp$overall - mp$row[g$donor] - mp$col[g$batch]
+    return(z(resid))
   }
   out <- numeric(length(x))
   for (lv in unique(g)) out[g == lv] <- z(x[g == lv])
@@ -140,7 +150,8 @@ long <- lapply(SEEDS, function(seed) {
       })
     }
     bad <- setNames(bad, names(files))
-    lapply(names(ARMS), function(arm) {
+    arms <- if (fault == "batch_split") names(ARMS)[1:2] else names(ARMS)
+    lapply(arms, function(arm) {
       grp <- ARMS[[arm]]
       if (fault == "batch_split") {
         sc <- sw_batch_scores(files, batch, markers, BATCH_EVENTS, seed, order = NULL, reference_group = grp)
@@ -171,7 +182,7 @@ long <- lapply(SEEDS, function(seed) {
         emd <- af[[paste0(mk, "_emd")]][match(names(files), af$file)]
         res <- c(
           sd_z = auroc(abs(sd_z$value[match(names(files), sd_z$file)]), bad),
-          emd_z = auroc(abs(robust_z(emd, grp[names(files)])), bad)
+          emd_z = auroc(abs(robust_z(emd, if (is.data.frame(grp)) grp[match(names(files), grp$file), ] else grp[names(files)])), bad)
         )
       } else if (fault == "all_widened") {
         sa <- sw_fcs_signal_audit(files, markers, NULL, NULL, time_channel = NULL, time_bin = NULL,
@@ -206,7 +217,7 @@ mat <- long |>
   ) |>
   mutate(
     case = paste(fault, size),
-    arm = factor(arm, levels = c("without", "with")),
+    arm = factor(arm, levels = c("without", "with", "two_way")),
     meets_bar = auroc >= 0.9 & auroc - ci95_half >= 0.8
   )
 write.csv(mat, file.path(run_dir, "figure_source_data_reference_group.csv"), row.names = FALSE)
@@ -215,7 +226,7 @@ print(as.data.frame(mutate(mat, across(c(auroc, ci95_half), \(x) round(x, 3)))[c
 p <- ggplot(mat, aes(auroc, check, colour = arm)) +
   geom_vline(xintercept = c(0.5, 0.9), linetype = 2, colour = "grey60") +
   geom_point(
-    data = mutate(long, case = paste(fault, size), arm = factor(arm, levels = c("without", "with"))),
+    data = mutate(long, case = paste(fault, size), arm = factor(arm, levels = c("without", "with", "two_way"))),
     position = position_dodge(width = 0.6), size = 0.4, alpha = 0.5
   ) +
   geom_pointrange(
@@ -223,11 +234,11 @@ p <- ggplot(mat, aes(auroc, check, colour = arm)) +
     position = position_dodge(width = 0.6), size = 0.2
   ) +
   facet_wrap(vars(case), scales = "free_y", ncol = 2) +
-  scale_colour_manual(values = c(without = "grey40", with = "#D55E00")) +
+  scale_colour_manual(values = c(without = "grey40", with = "#D55E00", two_way = "#0072B2")) +
   labs(
     x = "AUROC on 72 real files (mean and 95% CI over 5 seeds; dots = seeds)",
     y = NULL,
     colour = "reference_group"
   )
-ggsave(file.path(run_dir, "fig_reference_group.png"), p, width = 150, height = 110, units = "mm", dpi = 200)
+ggsave(file.path(run_dir, "fig_reference_group.png"), p, width = 150, height = 130, units = "mm", dpi = 200)
 writeLines(capture.output(sessionInfo()), file.path(run_dir, "session_info.txt"))

@@ -189,3 +189,16 @@ test_that("batch reference_group is required, covers every file and needs 2 batc
     "at least two batches"
   )
 })
+
+# reference_group, two-way (data frame) --------------------------------------------------
+
+test_that("a two-way reference_group is an error for batch scores", {
+  x <- make_donor_batches()
+  design <- data.frame(
+    file = names(x$data),
+    donor = unname(x$donor),
+    batch = unname(x$batch),
+    stringsAsFactors = FALSE
+  )
+  expect_error(scores(x, reference_group = design), "remove the batch effect")
+})

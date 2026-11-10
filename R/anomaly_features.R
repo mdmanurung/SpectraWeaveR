@@ -101,7 +101,9 @@ sw_emd_1d <- function(x, y) {
 #'   pooled events of its own group only (`aggregate_from = "reference"` pools
 #'   the `reference` files of that group, and every group needs at least one),
 #'   and `agg_size` is the pool size per group. `NULL` pools over all files.
-#'   Quantile features do not change.
+#'   Quantile features do not change. With the data-frame (two-way) form, the
+#'   pool is over all files; the median polish is applied later, to the EMD
+#'   values, in [sw_diagnose()]. See [sw_fcs_signal_audit()] for the form.
 #'
 #' @return A tibble of class `sw_anomaly_features` with `file` and one column
 #'   per feature: `<channel>_q<probability>` and `<channel>_emd`. Attribute
@@ -254,7 +256,8 @@ sw_anomaly_features <- function(
     if ("emd" %in% features) {
       # One pool for all files, or one pool per reference group: a file is then
       # measured against the pooled events of its own group.
-      pool_groups <- if (is.null(grp)) list(files) else split(files, grp)
+      # A two-way design pools all files; the medpolish comes later, on the EMD values.
+      pool_groups <- if (is.null(.sw_one_way(grp))) list(files) else split(files, grp)
       pools <- lapply(pool_groups, function(gf) {
         pooled <- if (aggregate_from == "all") gf else sort(intersect(reference, gf))
         if (length(pooled) == 0) {
@@ -289,7 +292,7 @@ sw_anomaly_features <- function(
   }
   if ("emd" %in% features) {
     # The plan depends only on the sizes, and each pool is sorted once per channel.
-    pool_of <- if (is.null(grp)) rep(1L, length(files)) else match(grp, names(pools))
+    pool_of <- if (is.null(.sw_one_way(grp))) rep(1L, length(files)) else match(grp, names(pools))
     plans <- lapply(pools, function(p) .sw_emd_plan(n_events, nrow(p)))
     for (ch in channels) {
       pool_sorted <- lapply(pools, function(p) sort(p[, ch]))

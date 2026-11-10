@@ -28,7 +28,8 @@ from that group's files only, across batches, and the groups are combined
 per row (marker and batch, or batch pair) by the median over groups. This
 removes donor differences from the batch scores. A group with files from
 fewer than two batches is skipped. \code{n_files} is the sum over groups.
-\code{NULL} scores all files together.}
+\code{NULL} scores all files together. A data frame (two-way form) is an
+error here, because removing the batch effect would remove what is measured.}
 }
 \value{
 A tibble of class \code{sw_batch_scores} with columns \code{check}, \code{marker},

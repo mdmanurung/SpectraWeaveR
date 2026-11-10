@@ -70,6 +70,11 @@
 #'   MAD of the file's own group only. The clusters are still fitted as set by
 #'   `reference`. A group with fewer than 3 files (or 3 scored medians), or
 #'   with MAD 0, gives `NA`.
+#'   Or a data frame with a `file` column (every file once) and exactly two
+#'   more character columns, for example donor and batch: for each value, a
+#'   two-way `stats::medpolish()` (`maxiter = 10`) removes both effects, and the
+#'   z is the robust z of the residuals over all files. Fewer than 3 finite
+#'   residuals, or MAD 0, gives `NA`.
 #'
 #' @return A tibble of class `sw_cluster_scores` with columns `file`, `cluster`
 #'   (integer), `marker` (`NA` for `freq_z`), `check`, `value`, `n_events`

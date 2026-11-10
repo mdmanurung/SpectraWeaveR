@@ -53,7 +53,8 @@
 #'   per row (marker and batch, or batch pair) by the median over groups. This
 #'   removes donor differences from the batch scores. A group with files from
 #'   fewer than two batches is skipped. `n_files` is the sum over groups.
-#'   `NULL` scores all files together.
+#'   `NULL` scores all files together. A data frame (two-way form) is an
+#'   error here, because removing the batch effect would remove what is measured.
 #'
 #' @return A tibble of class `sw_batch_scores` with columns `check`, `marker`,
 #'   `batch` (the batch, or `"b1 ~ b2"` for a pair, or `NA` for the all-batch
@@ -130,6 +131,14 @@ sw_batch_scores <- function(
     stop("`batch` has missing labels.", call. = FALSE)
   }
   grp <- .sw_check_reference_group(reference_group, files)
+  if (inherits(grp, "sw_two_way")) {
+    stop(
+      "A two-way (data-frame) `reference_group` would remove the batch effect ",
+      "that sw_batch_scores() measures. Pass a named vector (for example the ",
+      "donor) or NULL.",
+      call. = FALSE
+    )
+  }
   batches <- sort(unique(batch))
   if (length(batches) < 2) {
     stop("Need at least two batches.", call. = FALSE)

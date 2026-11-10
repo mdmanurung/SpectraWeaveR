@@ -413,7 +413,16 @@ lower here than on the single-batch Aurora files. The likely cause, not
 tested: each donor's 18 files come from 18 batches, so batch-to-batch
 variation stays inside every group's reference.
 
-![AUROC with and without reference_group, per fault](figures/cbf_reference_group.png)
+A two-way `reference_group` (a data frame of file, donor and batch) removes
+both effects by median polish and takes the robust z of the residuals. It
+does not help either: no fault reaches the bar, and the best score is 0.68
+(50% of the largest cluster). It scores below the one-way form on the two
+faults where that form helped (0.61 vs 0.71 at x1.2; 0.68 vs 0.71), and all
+confidence intervals overlap. With few files per design, many residuals are
+exactly zero, so the MAD shrinks and noise gets large z. The batch split has
+no two-way arm, because removing batch removes the effect under test.
+
+![AUROC without, with one-way and with two-way reference_group, per fault](figures/cbf_reference_group.png)
 
 ## What the checks cannot see
 

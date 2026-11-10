@@ -42,7 +42,12 @@ label per file (names = file ids, covering every file in \code{data}), for
 example the donor. With groups, \code{freq_z} and \code{median_z} use the median and
 MAD of the file's own group only. The clusters are still fitted as set by
 \code{reference}. A group with fewer than 3 files (or 3 scored medians), or
-with MAD 0, gives \code{NA}.}
+with MAD 0, gives \code{NA}.
+Or a data frame with a \code{file} column (every file once) and exactly two
+more character columns, for example donor and batch: for each value, a
+two-way \code{stats::medpolish()} (\code{maxiter = 10}) removes both effects, and the
+z is the robust z of the residuals over all files. Fewer than 3 finite
+residuals, or MAD 0, gives \code{NA}.}
 }
 \value{
 A tibble of class \code{sw_cluster_scores} with columns \code{file}, \code{cluster}

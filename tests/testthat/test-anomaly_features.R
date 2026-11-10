@@ -232,3 +232,56 @@ test_that("sw_diagnose takes emd_z within groups", {
   all_files <- ez(NULL)
   expect_false(all_files$subject[which.max(abs(all_files$value))] == "d2_4")
 })
+
+# reference_group, two-way (data frame) --------------------------------------------------
+
+test_that("a two-way reference_group pools all files and medpolishes the EMD values in sw_diagnose", {
+  skip_if_not_installed("isotree")
+  x <- make_donor_files(per = 6)
+  design <- data.frame(
+    file = names(x$data),
+    donor = unname(x$donor),
+    batch = rep(paste0("b", 1:6), 3),
+    stringsAsFactors = FALSE
+  )
+  # Features are the same as with NULL: the EMD reference is the pool of all files.
+  expect_equal(
+    feat(x$data, features = "emd", agg_size = 600, reference_group = design),
+    feat(x$data, features = "emd", agg_size = 600, reference_group = NULL),
+    ignore_attr = TRUE
+  )
+  an <- list(
+    channels = c("A", "B"), features = "emd", quantile_step = NULL, n_events = 200,
+    seed = 1, scale = "test", aggregate_from = "all", agg_size = 600,
+    reference = NULL, ntrees = 50, sample_size = 8, ndim = 1
+  )
+  dx <- sw_diagnose(
+    x$data, NULL, NULL, c(an, list(reference_group = design)),
+    NULL, NULL, NULL, NULL, NULL, NULL
+  )
+  ez <- dx[dx$check == "emd_z" & dx$item == "A", ]
+  emd <- feat(x$data, features = "emd", agg_size = 600, n_events = 200, reference_group = NULL)
+  expected <- .sw_robust_z(
+    emd$A_emd,
+    structure(
+      list(a = design$donor[match(emd$file, design$file)], b = design$batch[match(emd$file, design$file)]),
+      class = "sw_two_way"
+    )
+  )
+  expect_equal(ez$value[match(emd$file, ez$subject)], expected)
+  expect_error(
+    feat(x$data, reference_group = design[c("donor", "batch")]),
+    "file. column"
+  )
+  expect_error(feat(x$data, reference_group = design[-1, ]), "covers every file")
+})
+
+test_that("medpolish residual z is NA with fewer than 3 finite values and handles empty cells", {
+  a <- c("d1", "d1", "d2", "d2", "d3")
+  b <- c("b1", "b2", "b1", "b3", "b2")
+  tw <- structure(list(a = a, b = b), class = "sw_two_way")
+  z <- .sw_robust_z(c(1, 2, 3.1, 4, 5.2), tw)
+  expect_length(z, 5)
+  expect_true(any(is.finite(z)))
+  expect_true(all(is.na(.sw_robust_z(c(1, 2, NA, NA, NA), tw))))
+})

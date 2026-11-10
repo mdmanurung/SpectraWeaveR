@@ -49,7 +49,9 @@ example the donor. With groups, the EMD of a file is measured against the
 pooled events of its own group only (\code{aggregate_from = "reference"} pools
 the \code{reference} files of that group, and every group needs at least one),
 and \code{agg_size} is the pool size per group. \code{NULL} pools over all files.
-Quantile features do not change.}
+Quantile features do not change. With the data-frame (two-way) form, the
+pool is over all files; the median polish is applied later, to the EMD
+values, in \code{\link[=sw_diagnose]{sw_diagnose()}}. See \code{\link[=sw_fcs_signal_audit]{sw_fcs_signal_audit()}} for the form.}
 }
 \value{
 A tibble of class \code{sw_anomaly_features} with \code{file} and one column

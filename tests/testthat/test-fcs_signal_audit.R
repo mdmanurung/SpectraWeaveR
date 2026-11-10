@@ -296,3 +296,53 @@ test_that("reference_group is required and must cover every file", {
     "label for every file"
   )
 })
+
+# reference_group, two-way (data frame) --------------------------------------------------
+
+# Three donors x four batches, one file per cell. The median of A carries a donor
+# effect (0, 4, 8) and a batch effect (0, 3, 6, 9). File d2_b3 is shifted by 1 more.
+make_two_way <- function(seed = 8) {
+  set.seed(seed)
+  g <- expand.grid(donor = paste0("d", 1:3), batch = paste0("b", 1:4), stringsAsFactors = FALSE)
+  g$file <- paste(g$donor, g$batch, sep = "_")
+  d <- lapply(seq_len(nrow(g)), function(i) {
+    cbind(
+      A = stats::rnorm(400) + c(0, 4, 8)[as.integer(substr(g$donor[i], 2, 2))] +
+        c(0, 3, 6, 9)[as.integer(substr(g$batch[i], 2, 2))] + if (g$file[i] == "d2_b3") 1 else 0,
+      B = stats::rnorm(400),
+      C = stats::rnorm(400)
+    )
+  })
+  names(d) <- g$file
+  list(data = d, design = g[c("file", "donor", "batch")], donor = stats::setNames(g$donor, g$file))
+}
+
+test_that("a two-way reference_group finds a file unusual only after donor and batch effects", {
+  x <- make_two_way()
+  top <- function(res) {
+    r <- res[res$check == "median_z" & res$channel == "A", ]
+    c(file = r$file[which.max(abs(r$value))], z = max(abs(r$value)))
+  }
+  none <- top(audit(x$data))
+  one_way <- top(audit(x$data, reference_group = x$donor))
+  two_way <- top(audit(x$data, reference_group = x$design))
+  expect_false(none[["file"]] == "d2_b3")
+  expect_false(one_way[["file"]] == "d2_b3")
+  expect_equal(two_way[["file"]], "d2_b3")
+  expect_gt(as.numeric(two_way[["z"]]), 5)
+  # The row order of the design does not matter.
+  shuffled <- audit(x$data, reference_group = x$design[rev(seq_len(nrow(x$design))), ])
+  expect_equal(shuffled$value, audit(x$data, reference_group = x$design)$value)
+})
+
+test_that("a two-way reference_group needs a file column, two character columns and every file", {
+  x <- make_two_way()
+  expect_error(audit(x$data, reference_group = x$design[c("donor", "batch")]), "file. column")
+  expect_error(audit(x$data, reference_group = x$design["file"]), "exactly two more")
+  expect_error(audit(x$data, reference_group = cbind(x$design, extra = "e")), "exactly two more")
+  expect_error(audit(x$data, reference_group = x$design[-1, ]), "covers every file")
+  expect_error(audit(x$data, reference_group = rbind(x$design, x$design[1, ])), "once")
+  num <- x$design
+  num$batch <- 1
+  expect_error(audit(x$data, reference_group = num), "character")
+})

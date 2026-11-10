@@ -209,3 +209,45 @@ test_that("cluster reference_group is required and must cover every file", {
   expect_error(cs(x$data, k = 2, reference_group = x$donor[-1]), "label for every file")
   expect_error(cs(x$data, k = 2, reference_group = unname(x$donor)), "label for every file")
 })
+
+# reference_group, two-way (data frame) --------------------------------------------------
+
+# Three donors x four batches, one file per cell, two populations. The share of
+# the right-hand population is 0.2 + donor (0, 0.1, 0.2) + batch (0 to 0.3); file
+# d2_b3 has 0.2 more. With only 12 files a median polish leaves many exact-zero
+# residuals, so noise rows score high too: the fault must be large.
+make_two_way_shares <- function(seed = 9, n = 1000) {
+  set.seed(seed)
+  g <- expand.grid(donor = paste0("d", 1:3), batch = paste0("b", 1:4), stringsAsFactors = FALSE)
+  g$file <- paste(g$donor, g$batch, sep = "_")
+  d <- lapply(seq_len(nrow(g)), function(i) {
+    p <- 0.2 + c(0, 0.1, 0.2)[as.integer(substr(g$donor[i], 2, 2))] +
+      c(0, 0.1, 0.2, 0.3)[as.integer(substr(g$batch[i], 2, 2))] + if (g$file[i] == "d2_b3") 0.2 else 0
+    right <- stats::runif(n) < p
+    cbind(A = stats::rnorm(n, ifelse(right, 4, -4)), B = stats::rnorm(n))
+  })
+  names(d) <- g$file
+  list(data = d, design = g[c("file", "donor", "batch")], donor = stats::setNames(g$donor, g$file))
+}
+
+test_that("a two-way reference_group finds a composition change hidden by donor and batch", {
+  x <- make_two_way_shares()
+  top <- function(res) {
+    r <- res[res$check == "freq_z", ]
+    c(file = r$file[which.max(abs(r$value))], z = max(abs(r$value[r$file == "d2_b3"])))
+  }
+  none <- top(cs(x$data, k = 2))
+  one_way <- top(cs(x$data, k = 2, reference_group = x$donor))
+  two_way <- top(cs(x$data, k = 2, reference_group = x$design))
+  expect_false(none[["file"]] == "d2_b3")
+  expect_false(one_way[["file"]] == "d2_b3")
+  expect_equal(two_way[["file"]], "d2_b3")
+  expect_gt(as.numeric(two_way[["z"]]), 5)
+})
+
+test_that("cluster two-way reference_group is validated", {
+  x <- make_two_way_shares()
+  expect_error(cs(x$data, k = 2, reference_group = x$design[c("donor", "batch")]), "file. column")
+  expect_error(cs(x$data, k = 2, reference_group = x$design["file"]), "exactly two more")
+  expect_error(cs(x$data, k = 2, reference_group = x$design[-1, ]), "covers every file")
+})

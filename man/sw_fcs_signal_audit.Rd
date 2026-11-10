@@ -49,7 +49,12 @@ With groups, each z uses only the files of the same group: median and MAD
 come from the group, and the cohort SD behind \code{global_sd_z} too. A group
 with fewer than 3 files, or with MAD 0, gives \code{NA}. \code{corr_shift} still
 uses all files. Use groups when files of one donor differ from other
-donors for biological reasons.}
+donors for biological reasons.
+Or a data frame with a \code{file} column (every file once) and exactly two
+more character columns, for example donor and batch: for each value, a
+two-way \code{stats::medpolish()} (\code{maxiter = 10}) removes both effects, and the
+z is the robust z of the residuals over all files. Fewer than 3 finite
+residuals, or MAD 0, gives \code{NA}.}
 }
 \value{
 A tibble of class \code{sw_fcs_signal_audit} with columns \code{file},

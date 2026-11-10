@@ -94,6 +94,11 @@
 #'   with fewer than 3 files, or with MAD 0, gives `NA`. `corr_shift` still
 #'   uses all files. Use groups when files of one donor differ from other
 #'   donors for biological reasons.
+#'   Or a data frame with a `file` column (every file once) and exactly two
+#'   more character columns, for example donor and batch: for each value, a
+#'   two-way `stats::medpolish()` (`maxiter = 10`) removes both effects, and the
+#'   z is the robust z of the residuals over all files. Fewer than 3 finite
+#'   residuals, or MAD 0, gives `NA`.
 #'
 #' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
 #'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
@@ -303,10 +308,11 @@ sw_fcs_signal_audit <- function(
   # With groups, the cohort SD of a channel is the median over the file's own group.
   cohort_sd <- apply(sd_mat, 2, stats::median, na.rm = TRUE)
   cohort_sd_by_file <- matrix(cohort_sd, nrow(sd_mat), ncol(sd_mat), byrow = TRUE)
-  for (g in unique(grp)) {
-    cohort_sd_by_file[grp == g, ] <- matrix(
-      apply(sd_mat[grp == g, , drop = FALSE], 2, stats::median, na.rm = TRUE),
-      sum(grp == g),
+  grp1 <- .sw_one_way(grp)
+  for (g in unique(grp1)) {
+    cohort_sd_by_file[grp1 == g, ] <- matrix(
+      apply(sd_mat[grp1 == g, , drop = FALSE], 2, stats::median, na.rm = TRUE),
+      sum(grp1 == g),
       ncol(sd_mat),
       byrow = TRUE
     )
