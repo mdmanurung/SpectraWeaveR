@@ -100,6 +100,10 @@ unlockBinding(".sw_heb_theta", ns)
 assign(".sw_heb_theta", theta_recorder, envir = ns)
 # A11 setting for this diagnostic; A9 modes do not depend on it.
 ANCHOR_DISCREPANCY <- Sys.getenv("SW_DIAG_ANCHOR_DISCREPANCY", "none")
+# SW_DIAG_ANCHORS = "0" refits the lead arm (no anchors) to record its variance components (plan A13 step 1).
+USE_ANCHORS <- Sys.getenv("SW_DIAG_ANCHORS", "1") == "1"
+# SW_DIAG_ANCHOR_BATCHES = "all" (default) or "unreferenced" sets plan A13.
+ANCHOR_BATCHES <- Sys.getenv("SW_DIAG_ANCHOR_BATCHES", "all")
 
 # One seed: the run_method.R setup for the anchor arm, fit only ----------------------
 modes_one_seed <- function(seed) {
@@ -171,15 +175,19 @@ modes_one_seed <- function(seed) {
     require_shared_reference = TRUE,
     anchor = anchor
   )
-  anchors <- sw_corrector_anchors(
-    x[fit_rows, , drop = FALSE],
-    meta$sample_id[fit_rows],
-    meta$batch[fit_rows],
-    markers,
-    positive_markers = ANCHOR_POSITIVE,
-    min_separation = ANCHOR_MIN_SEPARATION,
-    seed = ANCHOR_SEED
-  )
+  anchors <- if (USE_ANCHORS) {
+    sw_corrector_anchors(
+      x[fit_rows, , drop = FALSE],
+      meta$sample_id[fit_rows],
+      meta$batch[fit_rows],
+      markers,
+      positive_markers = ANCHOR_POSITIVE,
+      min_separation = ANCHOR_MIN_SEPARATION,
+      seed = ANCHOR_SEED
+    )
+  } else {
+    NULL
+  }
   xt <- as_tibble(x) |>
     mutate(sample_id = meta$sample_id, .before = 1)
 
@@ -203,7 +211,8 @@ modes_one_seed <- function(seed) {
     variance_prior = "boundary_avoiding",
     residual_model = "known_plus_extra",
     anchors = anchors,
-    anchor_discrepancy = ANCHOR_DISCREPANCY
+    anchor_discrepancy = ANCHOR_DISCREPANCY,
+    anchor_batches = ANCHOR_BATCHES
   )
   list(
     modes = list_rbind(log_env$rows) |>
@@ -211,6 +220,7 @@ modes_one_seed <- function(seed) {
     theta = list_rbind(log_env$theta) |>
       mutate(
         seed = as.integer(seed),
+        anchors = USE_ANCHORS,
         anchor_discrepancy = ANCHOR_DISCREPANCY,
         .before = 1
       )
