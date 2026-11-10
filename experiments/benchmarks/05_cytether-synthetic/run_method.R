@@ -26,7 +26,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "heb_pool_all_kv_bap", "heb_afix_pop_kv_bap", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -113,7 +113,8 @@ correct_stage <- function(stage_dir) {
   engine <- if (method == "reversed_shift") "paired_shift" else if (method == "heb_shared") "heb_shared" else if (startsWith(method, "heb")) "heb" else method
   heb_pool <- c(heb = "none", heb_afix = "none", heb_flat = "none", heb_pool_pop = "population", heb_pool_all = "all", heb_shared = NA,
                 heb_bap = "none", heb_pool_pop_bap = "population",
-                heb_pool_pop_kv = "population", heb_pool_pop_kv_bap = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
+                heb_pool_pop_kv = "population", heb_pool_pop_kv_bap = "population",
+                heb_pool_all_kv_bap = "all", heb_afix_pop_kv_bap = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
   hierarchy <- if (engine %in% c("heb", "heb_shared")) distinct(meta, batch, study) else NULL
   if (method == "heb_flat") {
     hierarchy$study <- hierarchy$batch # flat arm: one random effect per batch, no study level
@@ -124,7 +125,7 @@ correct_stage <- function(stage_dir) {
     anchor = anchor, engine = engine, min_cells = MIN_CELLS, seed = SEED,
     hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (engine == "heb") unname(heb_pool) else NULL,
-    anchor_effect = if (engine == "heb") (if (method == "heb_afix") "fixed" else "random") else NULL,
+    anchor_effect = if (engine == "heb") (if (startsWith(method, "heb_afix")) "fixed" else "random") else NULL,
     variance_prior = if (engine == "heb") (if (endsWith(method, "_bap")) "boundary_avoiding" else "none") else NULL,
     residual_model = if (engine == "heb") (if (grepl("_kv", method, fixed = TRUE)) "known_plus_extra" else "estimated") else NULL
   )

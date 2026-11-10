@@ -17,7 +17,7 @@ CYTOFIN_MODE <- "meanshift" # N7
 MIN_BATCHES <- 2
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift"
 T6_TRANSFORM <- list(name = "asinh", cofactor = 6000) # Q4
-T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap") # cytofin_pop: F2; heb_kv_bap: F9
+T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop", "heb_kv_bap", "heb_kv", "heb_bap") # cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4
 
 correct_t6 <- function(x, meta, population, method, markers) {
   if (method == "none") {
@@ -60,7 +60,7 @@ correct_t6 <- function(x, meta, population, method, markers) {
     require_shared_reference = TRUE, anchor = ANCHOR
   )
   # N4: flat hierarchy, one random effect per batch. heb_kv_bap (F9) adds F6 and F8 to the same model.
-  is_heb <- method %in% c("heb", "heb_kv_bap")
+  is_heb <- method %in% c("heb", "heb_kv_bap", "heb_kv", "heb_bap")
   engine <- if (is_heb) "heb" else method
   hierarchy <- if (is_heb) dplyr::mutate(dplyr::distinct(meta, batch), study = batch) else NULL
   xt <- tibble::as_tibble(x) |> dplyr::mutate(sample_id = meta$sample_id, .before = 1)
@@ -71,8 +71,8 @@ correct_t6 <- function(x, meta, population, method, markers) {
     min_cells = MIN_CELLS, seed = 1, hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (is_heb) HEB_POOL else NULL,
     anchor_effect = if (is_heb) "random" else NULL,
-    variance_prior = if (is_heb) (if (method == "heb_kv_bap") "boundary_avoiding" else "none") else NULL,
-    residual_model = if (is_heb) (if (method == "heb_kv_bap") "known_plus_extra" else "estimated") else NULL
+    variance_prior = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_bap")) "boundary_avoiding" else "none") else NULL,
+    residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv")) "known_plus_extra" else "estimated") else NULL
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")
