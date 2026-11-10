@@ -55,8 +55,8 @@ long <- lapply(SEEDS, function(seed) {
         LEAK[[i]] * (x[leak, pick[1]] - stats::median(x[leak, pick[1]]))
       x
     })
-    na <- sw_negative_audit(files, pick, N_EVENTS, seed, HYPER_K, pairs = matrix(pick, 1), spread_quantile = NULL)
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
+    na <- sw_negative_audit(files, pick, N_EVENTS, seed, HYPER_K, pairs = matrix(pick, 1), spread_quantile = NULL, min_separation = 3) # G24
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL)
     row_of <- function(tab, check, item) {
       d <- tab[tab$check == check & tab$channel %in% item, ]
       # A file whose rows are all NA (too few events) stays NA, not -Inf.

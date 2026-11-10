@@ -3,10 +3,11 @@
 #          one size in 10_file_faults_real.R: a marker split into two modes, and a shift inside
 #          the smallest cluster. Sweeps the fault size and scores sd_z, a per-channel EMD to the
 #          pooled cohort (robust z over files) and, for the rare population, cluster_median_z.
-# Run:     Rscript experiments/integration/aurora_exvivo/11_limits_real.R <run_dir>
+# Run:     Rscript experiments/integration/aurora_exvivo/11_limits_real.R <run_dir> [<out_dir>]
 # Inputs:  <run_dir>/events.rds, files.csv   from 01_extract.R
-# Outputs: <run_dir>/limits_real_long.csv
-#          <run_dir>/fig_limits_real.png, figure_source_data_limits_real.csv
+# Outputs: <out_dir>/limits_real_long.csv     (<out_dir> defaults to <run_dir>; must not exist if given)
+#          <out_dir>/fig_limits_real.png, figure_source_data_limits_real.csv
+#          bimodality_z arm added for G20-G23.
 #
 # Every value below is illustrative; none is a package default.
 
@@ -17,7 +18,13 @@ suppressPackageStartupMessages({
 })
 theme_set(ggpubr::theme_pubr(base_size = 8))
 
-run_dir <- commandArgs(trailingOnly = TRUE)[[1]]
+args <- commandArgs(trailingOnly = TRUE)
+run_dir <- args[[1]]
+out_dir <- if (length(args) > 1) args[[2]] else run_dir
+if (out_dir != run_dir) {
+  if (dir.exists(out_dir)) stop("out dir exists: ", out_dir, call. = FALSE)
+  dir.create(out_dir, recursive = TRUE)
+}
 BATCH <- "Batch1"
 SEEDS <- 1:5
 FRACTION_BAD <- 0.25
@@ -77,8 +84,9 @@ long <- lapply(SEEDS, function(seed) {
       }
       x
     })
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL)
     sd_z <- sa[sa$check == "sd_z" & sa$channel == b, ]
+    bz <- sa[sa$check == "bimodality_z" & sa$channel == b, ]
     af <- sw_anomaly_features(
       lapply(files, \(x) x[, b, drop = FALSE]),
       channels = b,
@@ -93,6 +101,14 @@ long <- lapply(SEEDS, function(seed) {
     )
     scores <- list(
       sd_z = abs(sd_z$value[match(names(files), sd_z$file)]),
+      bimodality_z = abs(bz$value[match(names(files), bz$file)]),
+      # G20 fallback: Hartigan dip of the hit marker (diptest, GPL, called not copied), robust z.
+      # diptest is not a package dependency; without it the arm is NA.
+      dip_z = if (requireNamespace("diptest", quietly = TRUE)) {
+        abs(robust_z(vapply(files, \(x) diptest::dip(x[, b]), numeric(1))))
+      } else {
+        rep(NA_real_, length(files))
+      },
       emd_z = abs(robust_z(af[[paste0(b, "_emd")]][match(names(files), af$file)]))
     )
     if (fault == "rare_pop") {
@@ -108,7 +124,7 @@ long <- lapply(SEEDS, function(seed) {
   unlist(recursive = FALSE) |>
   unname() |>
   bind_rows()
-write.csv(long, file.path(run_dir, paste0("limits_real_long", SUFFIX, ".csv")), row.names = FALSE)
+write.csv(long, file.path(out_dir, paste0("limits_real_long", SUFFIX, ".csv")), row.names = FALSE)
 
 mat <- long |>
   summarise(
@@ -116,7 +132,7 @@ mat <- long |>
     auroc = mean(auroc, na.rm = TRUE),
     .by = c(fault, size, check)
   )
-write.csv(mat, file.path(run_dir, paste0("figure_source_data_limits_real", SUFFIX, ".csv")), row.names = FALSE)
+write.csv(mat, file.path(out_dir, paste0("figure_source_data_limits_real", SUFFIX, ".csv")), row.names = FALSE)
 print(as.data.frame(mutate(mat, across(c(auroc, ci95_half), \(x) round(x, 2)))))
 p <- ggplot(mat, aes(size, auroc, colour = check)) +
   geom_hline(yintercept = c(0.5, 0.9), linetype = 2, colour = "grey60") +
@@ -124,4 +140,4 @@ p <- ggplot(mat, aes(size, auroc, colour = check)) +
   geom_line() +
   facet_wrap(vars(fault), scales = "free_x") +
   labs(x = "Fault size (marker SD)", y = "AUROC on real files (mean, 95% CI over 5 seeds)", colour = NULL)
-ggsave(file.path(run_dir, paste0("fig_limits_real", SUFFIX, ".png")), p, width = 150, height = 70, units = "mm", dpi = 200)
+ggsave(file.path(out_dir, paste0("fig_limits_real", SUFFIX, ".png")), p, width = 150, height = 70, units = "mm", dpi = 200)

@@ -17,7 +17,7 @@
 #
 # Choices reused from earlier scripts (approved by the user): fault sizes and seeds of
 # aurora_exvivo/11_limits_real.R and 12_composition_real.R; cluster settings of
-# 12_composition_real.R; 30 shared named markers and asinh(x / 6000) as in 02_batch_cd3.R;
+# 12_composition_real.R; 25 shared named markers (G9 says 30; the code keeps the 25 named ones) and asinh(x / 6000) as in 02_batch_cd3.R;
 # 2000 events per file for the batch scores as in 02_batch_cd3.R; batch fault as in
 # aurora_exvivo/09_batch_real.R. Marker SD for the fault sizes is taken over all files.
 # The bar from the user: mean AUROC >= 0.90 and lower CI >= 0.80.
@@ -164,7 +164,7 @@ long <- lapply(SEEDS, function(seed) {
         res <- vapply(per_marker, \(d) auroc(d$v[match(markers, d$marker)], markers == mk), numeric(1))
       } else if (fault == "two_mode_split") {
         sa <- sw_fcs_signal_audit(files, markers, NULL, NULL, time_channel = NULL, time_bin = NULL,
-          area_height = NULL, area_height_quantile = NULL, reference_group = grp)
+          area_height = NULL, area_height_quantile = NULL, reference_group = grp, reference = NULL)
         sd_z <- sa[sa$check == "sd_z" & sa$channel == mk, ]
         af <- sw_anomaly_features(
           lapply(files, \(x) x[, mk, drop = FALSE]),
@@ -186,7 +186,7 @@ long <- lapply(SEEDS, function(seed) {
         )
       } else if (fault == "all_widened") {
         sa <- sw_fcs_signal_audit(files, markers, NULL, NULL, time_channel = NULL, time_bin = NULL,
-          area_height = NULL, area_height_quantile = NULL, reference_group = grp)
+          area_height = NULL, area_height_quantile = NULL, reference_group = grp, reference = NULL)
         gz <- sa[sa$check == "global_sd_z", ]
         res <- c(global_sd_z = auroc(abs(gz$value[match(names(files), gz$file)]), bad))
       } else {

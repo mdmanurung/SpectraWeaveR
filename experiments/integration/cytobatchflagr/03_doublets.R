@@ -60,7 +60,7 @@ long <- lapply(SEEDS, function(seed) {
     files[bad] <- lapply(files[bad], add_doublets, share = share)
     lapply(QUANTILES, function(q) {
       sa <- sw_fcs_signal_audit(files, markers, NULL, NULL, time_channel = NULL, time_bin = NULL,
-        area_height = AREA_HEIGHT, area_height_quantile = q, reference_group = NULL)
+        area_height = AREA_HEIGHT, area_height_quantile = q, reference_group = NULL, reference = NULL)
       z <- sa[sa$check == "area_height_z", ]
       fsc_sd <- sa[sa$check == "sd_z" & sa$channel == markers[1], ]
       gz <- sa[sa$check == "global_sd_z", ]

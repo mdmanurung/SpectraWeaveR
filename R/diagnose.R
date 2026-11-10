@@ -45,7 +45,7 @@
 #' @param header `NULL` or a list with `paths`, `keywords`, `reference`.
 #' @param signal `NULL` or a list with `channels`, `range_max`, `range_min`,
 #'   `time_channel`, `time_bin`, `area_height`, `area_height_quantile`,
-#'   `reference_group`.
+#'   `reference_group`, `reference`.
 #' @param anomaly `NULL` or a list with `channels`, `features`,
 #'   `quantile_step`, `n_events`, `seed`, `scale`, `aggregate_from`,
 #'   `agg_size`, `reference` (when needed), `reference_group`, `ntrees`,
@@ -60,7 +60,7 @@
 #' @param otd `NULL` or a list with `markers`, `n_events`, `reference_events`,
 #'   `blur`, `seed`, `max_iter`, `tol`.
 #' @param negative `NULL` or a list with `channels`, `n_events`, `seed`,
-#'   `hyper_k`, `pairs`, `spread_quantile`.
+#'   `hyper_k`, `pairs`, `spread_quantile`, `min_separation`.
 #' @param gate `NULL` or a list with `gates`, `reference`, `edge_width`. The
 #'   `item` column is the gate id, with the channel after a `/` for
 #'   per-channel checks.
@@ -80,7 +80,7 @@
 #'   signal = list(channels = chans, range_max = 6, range_min = NULL,
 #'                 time_channel = NULL, time_bin = NULL,
 #'                 area_height = NULL, area_height_quantile = NULL,
-#'                 reference_group = NULL),
+#'                 reference_group = NULL, reference = NULL),
 #'   anomaly = NULL,
 #'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
 #'                reference_group = NULL),
@@ -214,7 +214,10 @@ sw_diagnose <- function(
     if (length(emd_cols) > 0) {
       # With reference_group, the EMD is already measured against the file's own
       # group pool, and the z is taken within the group.
-      emd_group <- .sw_check_reference_group(anomaly$reference_group, feats$file)
+      emd_group <- .sw_check_reference_group(
+        anomaly$reference_group,
+        feats$file
+      )
       emd_z <- lapply(emd_cols, function(col) {
         z <- .sw_robust_z(feats[[col]], emd_group)
         tibble::tibble(
@@ -324,7 +327,11 @@ sw_diagnose <- function(
       module = "gate",
       subject = gq$sample,
       check = gq$check,
-      item = ifelse(is.na(gq$channel), gq$gate, paste0(gq$gate, "/", gq$channel)),
+      item = ifelse(
+        is.na(gq$channel),
+        gq$gate,
+        paste0(gq$gate, "/", gq$channel)
+      ),
       value = gq$value,
       text = NA_character_
     )

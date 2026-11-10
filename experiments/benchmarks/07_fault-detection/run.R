@@ -156,7 +156,8 @@ file_tool_scores <- function(files, seed) {
       seed,
       "simulated",
       "all",
-      AGG, reference_group = NULL
+      AGG,
+      reference_group = NULL
     )
     fl <- sw_anomaly_flag_outlier(feat, NTREES, FOREST_SAMPLE, 1, 0.5, seed)
     forest <- fl$score[match(ids, fl$file)]
@@ -164,7 +165,17 @@ file_tool_scores <- function(files, seed) {
   # Cluster-level scores; also need complete data.
   cl_median <- cl_freq <- rep(NA_real_, length(ids))
   if (!any(with_na)) {
-    cs <- sw_cluster_scores(files, CHANNELS, CLUSTER_K, NEV, seed, 3, 30, reference = NULL, reference_group = NULL)
+    cs <- sw_cluster_scores(
+      files,
+      CHANNELS,
+      CLUSTER_K,
+      NEV,
+      seed,
+      3,
+      30,
+      reference = NULL,
+      reference_group = NULL
+    )
     mx <- function(v) if (all(is.na(v))) NA_real_ else max(abs(v), na.rm = TRUE)
     one <- function(check) {
       a <- cs[cs$check == check, ]
@@ -179,7 +190,11 @@ file_tool_scores <- function(files, seed) {
     range_max = RANGE_MAX,
     range_min = NULL,
     time_channel = "Time",
-    time_bin = 5, area_height = NULL, area_height_quantile = NULL, reference_group = NULL
+    time_bin = 5,
+    area_height = NULL,
+    area_height_quantile = NULL,
+    reference_group = NULL,
+    reference = NULL
   )
   by <- function(check) {
     a <- aud[aud$check == check, ]
@@ -190,9 +205,26 @@ file_tool_scores <- function(files, seed) {
     a <- aud[aud$check == check, ]
     tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids]
   }
+  # G20 fallback: Hartigan dip per file and channel (diptest, GPL, called not copied),
+  # robust z over files per channel, then the largest |z| per file. diptest is not a
+  # package dependency; without it the arm is NA.
+  dip_z <- NULL
+  if (requireNamespace("diptest", quietly = TRUE)) {
+    dip <- vapply(
+      CHANNELS,
+      \(ch) {
+        vapply(files, \(m) diptest::dip(m[is.finite(m[, ch]), ch]), numeric(1))
+      },
+      numeric(length(ids))
+    )
+    dip_z <- apply(dip, 2, \(v) {
+      abs(v - median(v)) / (1.4826 * mad(v, constant = 1))
+    })
+  }
   tibble(
     file = ids,
     forest = forest,
+    dip_z = if (is.null(dip_z)) NA_real_ else apply(dip_z, 1, max),
     saturation_share = as.numeric(by("saturation_share")),
     zero_variance = as.numeric(by("zero_variance")),
     nonfinite_share = as.numeric(by("nonfinite_share")),
@@ -202,6 +234,7 @@ file_tool_scores <- function(files, seed) {
     time_trend = as.numeric(by_abs("time_trend")),
     median_z = as.numeric(by_abs("median_z")),
     sd_z = as.numeric(by_abs("sd_z")),
+    bimodality_z = as.numeric(by_abs("bimodality_z")), # G20-G22
     cluster_median_z = as.numeric(cl_median),
     cluster_freq_z = as.numeric(cl_freq)
   )
@@ -259,7 +292,15 @@ batch_level <- function(seed) {
       )
       files[[hit[k]]] <- x
     }
-    sc <- sw_batch_scores(files, batch, CHANNELS, NEV, seed, order = ord, reference_group = NULL)
+    sc <- sw_batch_scores(
+      files,
+      batch,
+      CHANNELS,
+      NEV,
+      seed,
+      order = ord,
+      reference_group = NULL
+    )
     pe <- sc[sc$check == "pair_emd", ] |>
       summarise(v = max(value), .by = marker)
     mr <- sc[sc$check == "median_range", ]

@@ -13,7 +13,8 @@ sw_fcs_signal_audit(
   time_bin,
   area_height,
   area_height_quantile,
-  reference_group
+  reference_group,
+  reference
 )
 }
 \arguments{
@@ -43,7 +44,7 @@ pass \code{NULL}.}
 
 \item{reference_group}{\code{NULL}, or a named character vector with one group
 label per file (names = file ids, covering every file in \code{data}), for
-example the donor. With \code{NULL}, every robust z (\code{median_z}, \code{sd_z},
+example the donor. With \code{NULL}, every robust z (\code{median_z}, \code{sd_z}, \code{bimodality_z},
 \code{global_sd_z}, \code{area_height_z}, \code{corr_pair_z}) is taken over all files.
 With groups, each z uses only the files of the same group: median and MAD
 come from the group, and the cohort SD behind \code{global_sd_z} too. A group
@@ -55,6 +56,16 @@ more character columns, for example donor and batch: for each value, a
 two-way \code{stats::medpolish()} (\code{maxiter = 10}) removes both effects, and the
 z is the robust z of the residuals over all files. Fewer than 3 finite
 residuals, or MAD 0, gives \code{NA}.}
+
+\item{reference}{\code{NULL}, or an \code{sw_signal_reference} from
+\code{\link[=sw_signal_reference_fit]{sw_signal_reference_fit()}}. With \code{NULL}, \code{median_z} and \code{sd_z} are taken
+over the files in \code{data}. With a reference, each is
+\verb{(value - reference centre) / reference scale}, where centre and scale
+are the median and \code{1.4826 * MAD} of the reference files' file-level
+medians (or SDs); a fault that hits every file in \code{data} then still
+shows. Every other check, \code{bimodality_z} included, is unchanged. Not
+allowed together with a non-\code{NULL} \code{reference_group}. Every channel must
+be in the reference. A scale of 0 gives \code{NA}.}
 }
 \value{
 A tibble of class \code{sw_fcs_signal_audit} with columns \code{file},
@@ -88,7 +99,16 @@ a channel against all files, \code{(value - median) / (1.4826 * MAD)} over
 files. A shift of one marker shows in \code{median_z}; a stretch or a split
 into two modes widens the SD and shows in \code{sd_z}. The reference is the
 cohort you pass, batch effects included, so a whole batch that differs
-shifts the reference too. \code{NA} with fewer than 3 files.
+shifts the reference too (see \code{reference} for a frozen one). \code{NA} with
+fewer than 3 files.
+\item \code{bimodality}, \code{bimodality_z}: per file and channel, the bimodality
+coefficient \code{BC = (g^2 + 1) / (k + 3 (n - 1)^2 / ((n - 2) (n - 3)))}, with
+\code{g} the bias-adjusted sample skewness and \code{k} the bias-adjusted sample
+excess kurtosis (SAS form, Pfister et al. 2013), on all finite events as
+given. A normal sample gives about 1/3; values above 5/9 point to two
+modes. \code{bimodality_z} is the robust z of \code{bimodality} over files, as for
+\code{median_z}. Two modes less than about 1 SD apart each way barely move BC.
+\code{bimodality} is \code{NA} with fewer than 4 finite events or no variance.
 \item \code{global_sd_z}: per file, the median over channels of
 \verb{log(file SD / cohort median SD)}, as a robust z over files (file level).
 A fault that widens or narrows every channel a little (a gain or focus
@@ -136,7 +156,8 @@ sw_fcs_signal_audit(
   files,
   channels = c("A", "B"),
   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
-  area_height = NULL, area_height_quantile = NULL, reference_group = NULL
+  area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
+  reference = NULL
 )
 
 }

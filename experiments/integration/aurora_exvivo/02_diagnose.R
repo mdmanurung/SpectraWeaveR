@@ -77,7 +77,8 @@ dx <- sw_diagnose(
     range_min = NULL,
     time_channel = "Time",
     time_bin = time_bin, area_height = NULL, area_height_quantile = NULL,
-    reference_group = NULL
+    reference_group = NULL,
+    reference = NULL
   ),
   anomaly = list(
     channels = channels,

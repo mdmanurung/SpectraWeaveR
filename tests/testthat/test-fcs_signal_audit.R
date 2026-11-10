@@ -25,7 +25,8 @@ audit <- function(d, ...) {
     time_bin = NULL,
     area_height = NULL,
     area_height_quantile = NULL,
-    reference_group = NULL
+    reference_group = NULL,
+    reference = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_fcs_signal_audit, args)
@@ -43,7 +44,14 @@ test_that("required arguments have no default", {
   expect_error(sw_fcs_signal_audit(), "no default")
   d <- make_sig()
   expect_error(
-    sw_fcs_signal_audit(d, channels = c("A", "B"), area_height = NULL, area_height_quantile = NULL, reference_group = NULL),
+    sw_fcs_signal_audit(
+      d,
+      channels = c("A", "B"),
+      area_height = NULL,
+      area_height_quantile = NULL,
+      reference_group = NULL,
+      reference = NULL
+    ),
     "range_max"
   )
 })
@@ -60,6 +68,8 @@ test_that("clean files give the base checks only", {
       "negative_share",
       "median_z",
       "sd_z",
+      "bimodality",
+      "bimodality_z",
       "corr_shift",
       "corr_pair_z",
       "global_sd_z"
@@ -116,7 +126,18 @@ test_that("rate_cv counts events per bin, so thinning a window raises it", {
   # Exact value on a hand-made file: bins of 1 unit hold 3, 1, 0, 2 events.
   m <- cbind(Time = c(0.1, 0.2, 0.3, 1.5, 3.2, 3.9), A = 1:6, B = 6:1)
   d2 <- list(x = m, y = m)
-  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
+  r2 <- sw_fcs_signal_audit(
+    d2,
+    c("A", "B"),
+    NULL,
+    NULL,
+    "Time",
+    1,
+    area_height = NULL,
+    area_height_quantile = NULL,
+    reference_group = NULL,
+    reference = NULL
+  )
   counts <- c(3, 1, 0, 2)
   expect_equal(
     r2$value[r2$check == "rate_cv"][1],
@@ -181,15 +202,36 @@ test_that("area_height_z finds the file with more doublets", {
     cbind(`FSC-A` = a, `FSC-H` = h, X = stats::rnorm(n), Y = stats::rnorm(n))
   })
   names(files) <- paste0("f", 1:10)
-  au <- sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, time_channel = NULL, time_bin = NULL,
-    area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.95, reference_group = NULL)
+  au <- sw_fcs_signal_audit(
+    files,
+    c("X", "Y"),
+    NULL,
+    NULL,
+    time_channel = NULL,
+    time_bin = NULL,
+    area_height = c(`FSC-A` = "FSC-H"),
+    area_height_quantile = 0.95,
+    reference_group = NULL,
+    reference = NULL
+  )
   z <- au[au$check == "area_height_z", ]
   expect_equal(nrow(z), 10)
   expect_equal(z$file[which.max(z$value)], "f4")
   expect_gt(max(z$value), 5)
   expect_equal(unique(z$detail), "FSC-A / FSC-H")
   expect_error(
-    sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, NULL, NULL, c(`FSC-A` = "FSC-H"), NULL, reference_group = NULL),
+    sw_fcs_signal_audit(
+      files,
+      c("X", "Y"),
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      c(`FSC-A` = "FSC-H"),
+      NULL,
+      reference_group = NULL,
+      reference = NULL
+    ),
     "area_height_quantile"
   )
 })
@@ -203,7 +245,18 @@ test_that("global_sd_z finds a file widened a little in every channel", {
     m
   })
   names(files) <- paste0("f", 1:12)
-  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
+  au <- sw_fcs_signal_audit(
+    files,
+    paste0("c", 1:6),
+    NULL,
+    NULL,
+    time_channel = NULL,
+    time_bin = NULL,
+    area_height = NULL,
+    area_height_quantile = NULL,
+    reference_group = NULL,
+    reference = NULL
+  )
   g <- au[au$check == "global_sd_z", ]
   expect_equal(nrow(g), 12)
   expect_true(all(is.na(g$channel)))
@@ -215,10 +268,25 @@ test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has on
   set.seed(21)
   meds <- c(0, 1, 2, 3, 10)
   files <- lapply(meds, \(m) {
-    cbind(A = m + stats::rnorm(1001, 0, 1e-9), B = stats::rnorm(1001), C = stats::rnorm(1001))
+    cbind(
+      A = m + stats::rnorm(1001, 0, 1e-9),
+      B = stats::rnorm(1001),
+      C = stats::rnorm(1001)
+    )
   })
   names(files) <- paste0("f", 1:5)
-  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL)
+  au <- sw_fcs_signal_audit(
+    files,
+    c("A", "B", "C"),
+    NULL,
+    NULL,
+    time_channel = NULL,
+    time_bin = NULL,
+    area_height = NULL,
+    area_height_quantile = NULL,
+    reference_group = NULL,
+    reference = NULL
+  )
   z <- au$value[au$check == "median_z" & au$channel == "A"]
   # Median of the file medians is 2 and their raw MAD is 1, so z = (m - 2) / 1.4826.
   expect_equal(z, (meds - 2) / 1.4826, tolerance = 1e-6)
@@ -273,7 +341,9 @@ test_that("a group with fewer than 3 files gives NA z-scores", {
   g <- x$donor
   g[names(g) %in% c("d3_1", "d3_2")] <- "other"
   res <- audit(x$data, reference_group = g)
-  zrows <- res[res$check %in% c("median_z", "sd_z", "global_sd_z", "corr_pair_z"), ]
+  zrows <- res[
+    res$check %in% c("median_z", "sd_z", "global_sd_z", "corr_pair_z"),
+  ]
   small <- zrows$file %in% c("d3_1", "d3_2")
   expect_true(all(is.na(zrows$value[small])))
   expect_false(all(is.na(zrows$value[!small])))
@@ -282,17 +352,44 @@ test_that("a group with fewer than 3 files gives NA z-scores", {
 test_that("reference_group is required and must cover every file", {
   x <- make_donors()
   expect_error(
-    sw_fcs_signal_audit(x$data, c("A", "B"), NULL, NULL, NULL, NULL, NULL, NULL),
+    sw_fcs_signal_audit(
+      x$data,
+      c("A", "B"),
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    ),
     "no default"
   )
   expect_error(
-    sw_fcs_signal_audit(x$data, c("A", "B"), NULL, NULL, NULL, NULL, NULL, NULL),
+    sw_fcs_signal_audit(
+      x$data,
+      c("A", "B"),
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    ),
     "reference_group"
   )
-  expect_error(audit(x$data, reference_group = x$donor[-1]), "label for every file")
-  expect_error(audit(x$data, reference_group = unname(x$donor)), "label for every file")
   expect_error(
-    audit(x$data, reference_group = stats::setNames(rep(1, 12), names(x$donor))),
+    audit(x$data, reference_group = x$donor[-1]),
+    "label for every file"
+  )
+  expect_error(
+    audit(x$data, reference_group = unname(x$donor)),
+    "label for every file"
+  )
+  expect_error(
+    audit(
+      x$data,
+      reference_group = stats::setNames(rep(1, 12), names(x$donor))
+    ),
     "label for every file"
   )
 })
@@ -303,18 +400,28 @@ test_that("reference_group is required and must cover every file", {
 # effect (0, 4, 8) and a batch effect (0, 3, 6, 9). File d2_b3 is shifted by 1 more.
 make_two_way <- function(seed = 8) {
   set.seed(seed)
-  g <- expand.grid(donor = paste0("d", 1:3), batch = paste0("b", 1:4), stringsAsFactors = FALSE)
+  g <- expand.grid(
+    donor = paste0("d", 1:3),
+    batch = paste0("b", 1:4),
+    stringsAsFactors = FALSE
+  )
   g$file <- paste(g$donor, g$batch, sep = "_")
   d <- lapply(seq_len(nrow(g)), function(i) {
     cbind(
-      A = stats::rnorm(400) + c(0, 4, 8)[as.integer(substr(g$donor[i], 2, 2))] +
-        c(0, 3, 6, 9)[as.integer(substr(g$batch[i], 2, 2))] + if (g$file[i] == "d2_b3") 1 else 0,
+      A = stats::rnorm(400) +
+        c(0, 4, 8)[as.integer(substr(g$donor[i], 2, 2))] +
+        c(0, 3, 6, 9)[as.integer(substr(g$batch[i], 2, 2))] +
+        if (g$file[i] == "d2_b3") 1 else 0,
       B = stats::rnorm(400),
       C = stats::rnorm(400)
     )
   })
   names(d) <- g$file
-  list(data = d, design = g[c("file", "donor", "batch")], donor = stats::setNames(g$donor, g$file))
+  list(
+    data = d,
+    design = g[c("file", "donor", "batch")],
+    donor = stats::setNames(g$donor, g$file)
+  )
 }
 
 test_that("a two-way reference_group finds a file unusual only after donor and batch effects", {
@@ -331,18 +438,92 @@ test_that("a two-way reference_group finds a file unusual only after donor and b
   expect_equal(two_way[["file"]], "d2_b3")
   expect_gt(as.numeric(two_way[["z"]]), 5)
   # The row order of the design does not matter.
-  shuffled <- audit(x$data, reference_group = x$design[rev(seq_len(nrow(x$design))), ])
+  shuffled <- audit(
+    x$data,
+    reference_group = x$design[rev(seq_len(nrow(x$design))), ]
+  )
   expect_equal(shuffled$value, audit(x$data, reference_group = x$design)$value)
 })
 
 test_that("a two-way reference_group needs a file column, two character columns and every file", {
   x <- make_two_way()
-  expect_error(audit(x$data, reference_group = x$design[c("donor", "batch")]), "file. column")
-  expect_error(audit(x$data, reference_group = x$design["file"]), "exactly two more")
-  expect_error(audit(x$data, reference_group = cbind(x$design, extra = "e")), "exactly two more")
-  expect_error(audit(x$data, reference_group = x$design[-1, ]), "covers every file")
-  expect_error(audit(x$data, reference_group = rbind(x$design, x$design[1, ])), "once")
+  expect_error(
+    audit(x$data, reference_group = x$design[c("donor", "batch")]),
+    "file. column"
+  )
+  expect_error(
+    audit(x$data, reference_group = x$design["file"]),
+    "exactly two more"
+  )
+  expect_error(
+    audit(x$data, reference_group = cbind(x$design, extra = "e")),
+    "exactly two more"
+  )
+  expect_error(
+    audit(x$data, reference_group = x$design[-1, ]),
+    "covers every file"
+  )
+  expect_error(
+    audit(x$data, reference_group = rbind(x$design, x$design[1, ])),
+    "once"
+  )
   num <- x$design
   num$batch <- 1
   expect_error(audit(x$data, reference_group = num), "character")
+})
+
+test_that("the bimodality coefficient is 1/3 for a normal sample and above 5/9 for a two-mode mix", {
+  set.seed(11)
+  # Normal: skewness and excess kurtosis are 0, so BC = 1 / 3. At n = 1e5 the
+  # SD of BC is about 0.002; 0.01 is five SD.
+  expect_equal(.sw_bimodality(stats::rnorm(1e5)), 1 / 3, tolerance = 0.01)
+  # Equal mix of N(-2, 1) and N(+2, 1): population BC is about 0.60. At
+  # n = 2000 the SD of BC is about 0.01, so 5 / 9 is cleared by several SD.
+  mix <- c(stats::rnorm(1000, -2), stats::rnorm(1000, 2))
+  expect_gt(.sw_bimodality(mix), 5 / 9)
+  # Too few values, or no variance: NA.
+  expect_true(is.na(.sw_bimodality(c(1, 2, 3))))
+  expect_true(is.na(.sw_bimodality(rep(1, 50))))
+})
+
+test_that("bimodality_z is largest for the one file with a bimodal channel", {
+  d <- make_sig(n_files = 8, n = 800)
+  set.seed(5)
+  d$f3[, "B"] <- c(stats::rnorm(400, -2), stats::rnorm(400, 2))
+  res <- audit(d)
+  b <- res[res$check == "bimodality_z" & res$channel == "B", ]
+  expect_equal(nrow(b), 8)
+  expect_identical(b$file[which.max(b$value)], "f3")
+  expect_gt(max(b$value), 3)
+  # One row per file and channel for the raw coefficient too.
+  expect_equal(sum(res$check == "bimodality"), 8 * 3)
+  expect_gt(val(res, "f3", "bimodality", "B"), 5 / 9)
+  # Fewer than 3 files: no z-score.
+  two <- audit(make_sig(n_files = 2))
+  expect_true(all(is.na(two$value[two$check == "bimodality_z"])))
+})
+
+# reference (frozen) -------------------------------------------------------------
+
+test_that("reference = NULL keeps the cohort z and is required", {
+  d <- make_sig(6, seed = 4)
+  res <- audit(d)
+  med <- vapply(d, \(m) stats::median(m[, "A"]), numeric(1))
+  hand <- (med - stats::median(med)) / (1.4826 * stats::mad(med, constant = 1))
+  r <- res[res$check == "median_z" & res$channel == "A", ]
+  expect_equal(stats::setNames(r$value, r$file)[names(d)], hand)
+  expect_error(
+    sw_fcs_signal_audit(
+      d,
+      c("A", "B"),
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      reference_group = NULL
+    ),
+    "'reference'"
+  )
 })

@@ -25,7 +25,7 @@ analysis scale), or \code{NULL} when only \code{header} is used.}
 
 \item{signal}{\code{NULL} or a list with \code{channels}, \code{range_max}, \code{range_min},
 \code{time_channel}, \code{time_bin}, \code{area_height}, \code{area_height_quantile},
-\code{reference_group}.}
+\code{reference_group}, \code{reference}.}
 
 \item{anomaly}{\code{NULL} or a list with \code{channels}, \code{features},
 \code{quantile_step}, \code{n_events}, \code{seed}, \code{scale}, \code{aggregate_from},
@@ -46,7 +46,7 @@ batches); it does not use \code{data}.}
 \code{blur}, \code{seed}, \code{max_iter}, \code{tol}.}
 
 \item{negative}{\code{NULL} or a list with \code{channels}, \code{n_events}, \code{seed},
-\code{hyper_k}, \code{pairs}, \code{spread_quantile}.}
+\code{hyper_k}, \code{pairs}, \code{spread_quantile}, \code{min_separation}.}
 
 \item{gate}{\code{NULL} or a list with \code{gates}, \code{reference}, \code{edge_width}. The
 \code{item} column is the gate id, with the channel after a \code{/} for
@@ -100,7 +100,7 @@ dx <- sw_diagnose(
   signal = list(channels = chans, range_max = 6, range_min = NULL,
                 time_channel = NULL, time_bin = NULL,
                 area_height = NULL, area_height_quantile = NULL,
-                reference_group = NULL),
+                reference_group = NULL, reference = NULL),
   anomaly = NULL,
   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
                reference_group = NULL),

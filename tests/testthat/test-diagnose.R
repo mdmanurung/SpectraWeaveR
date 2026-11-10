@@ -23,8 +23,11 @@ signal_set <- list(
   range_max = 6,
   range_min = NULL,
   time_channel = "Time",
-  time_bin = 5, area_height = NULL, area_height_quantile = NULL,
-  reference_group = NULL
+  time_bin = 5,
+  area_height = NULL,
+  area_height_quantile = NULL,
+  reference_group = NULL,
+  reference = NULL
 )
 
 test_that("every argument must be given", {
@@ -35,11 +38,33 @@ test_that("every argument must be given", {
     "at least one module"
   )
   expect_error(
-    sw_diagnose(NULL, NULL, signal_set, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    sw_diagnose(
+      NULL,
+      NULL,
+      signal_set,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    ),
     "`data` is needed"
   )
   expect_error(
-    sw_diagnose(x$data, "paths", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+    sw_diagnose(
+      x$data,
+      "paths",
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    ),
     "must be NULL or a list"
   )
 })
@@ -104,8 +129,26 @@ test_that("the anomaly module keeps forest scores, and novelty when asked", {
   # With EMD features, one emd_z row per file and channel; a split marker tops it.
   d3 <- x$data
   d3$f7[, "B"] <- d3$f7[, "B"] + sample(c(-2, 2), nrow(d3$f7), replace = TRUE)
-  an_emd <- an[c("channels", "n_events", "seed", "scale", "ntrees", "sample_size", "ndim")]
-  an_emd <- c(an_emd, list(features = "emd", quantile_step = NULL, aggregate_from = "all", agg_size = 1500, reference = NULL, reference_group = NULL))
+  an_emd <- an[c(
+    "channels",
+    "n_events",
+    "seed",
+    "scale",
+    "ntrees",
+    "sample_size",
+    "ndim"
+  )]
+  an_emd <- c(
+    an_emd,
+    list(
+      features = "emd",
+      quantile_step = NULL,
+      aggregate_from = "all",
+      agg_size = 1500,
+      reference = NULL,
+      reference_group = NULL
+    )
+  )
   dx3 <- sw_diagnose(d3, NULL, NULL, an_emd, NULL, NULL, NULL, NULL, NULL, NULL)
   ez <- dx3[dx3$check == "emd_z", ]
   expect_equal(nrow(ez), 15 * 3)
@@ -148,7 +191,18 @@ test_that("the header module reads FCS headers", {
 
 test_that("sw_diagnosis_top ranks per check and needs n", {
   x <- make_dx()
-  dx <- sw_diagnose(x$data, NULL, signal_set, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+  dx <- sw_diagnose(
+    x$data,
+    NULL,
+    signal_set,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  )
   expect_error(sw_diagnosis_top(dx), "n")
   expect_error(sw_diagnosis_top(data.frame(), n = 2), "must come from")
   top <- sw_diagnosis_top(dx, n = 2)
@@ -162,7 +216,18 @@ test_that("signed checks rank by size, so a large negative z comes first", {
   x <- make_dx()
   # Lower marker B of one file by 3 SD: its median_z is large and negative.
   x$data$f7[, "B"] <- x$data$f7[, "B"] - 3
-  dx <- sw_diagnose(x$data, NULL, signal_set, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+  dx <- sw_diagnose(
+    x$data,
+    NULL,
+    signal_set,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  )
   z <- dx[dx$check == "median_z" & dx$item == "B", ]
   expect_lt(z$value[z$subject == "f7"], -3)
   top <- sw_diagnosis_top(dx, n = 1)
@@ -207,7 +272,13 @@ test_that("the cluster module ranks each marker and cluster as its own item", {
 
 test_that("ranking keys: signed, low-first and ratio checks, without spurious warnings", {
   key <- .sw_diag_key(
-    c("neg_corr", "separation", "gain_batch_ratio", "offset", "novelty_log_density"),
+    c(
+      "neg_corr",
+      "separation",
+      "gain_batch_ratio",
+      "offset",
+      "novelty_log_density"
+    ),
     c(-0.9, 0.5, 0.5, -3, -10)
   )
   expect_equal(key, c(0.9, -0.5, abs(log(0.5)), -3, 10))
