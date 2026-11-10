@@ -4,6 +4,7 @@
 test_that("sw_pipeline_run_all rejects non-existent directory", {
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = "/nonexistent/dir",
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
       markers = "CD3",
@@ -17,6 +18,7 @@ test_that("sw_pipeline_run_all rejects non-data.frame sample_meta", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = "not_a_df",
       markers = "CD3",
@@ -30,6 +32,7 @@ test_that("sw_pipeline_run_all rejects missing sample_meta columns", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(sample = "S1"),
       markers = "CD3",
@@ -43,6 +46,7 @@ test_that("sw_pipeline_run_all rejects empty markers", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -57,6 +61,7 @@ test_that("sw_pipeline_run_all rejects lineage_markers not in markers", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -70,6 +75,7 @@ test_that("sw_pipeline_run_all rejects lineage_markers not in markers", {
 test_that("sw_pipeline_run_all rejects non-character fcs_dir", {
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = 42,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -84,6 +90,7 @@ test_that("sw_pipeline_run_all rejects duplicate sample names in metadata", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(
         file = c("a.fcs", "b.fcs"),
@@ -95,6 +102,19 @@ test_that("sw_pipeline_run_all rejects duplicate sample names in metadata", {
     ),
     "duplicate sample name"
   )
+})
+
+test_that("sw_pipeline_run_all requires cofactor", {
+  expect_error(
+    sw_pipeline_run_all(
+      fcs_dir = tempdir(),
+      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
+      markers = "CD3",
+      lineage_markers = "CD3"
+    ),
+    "'cofactor' is required"
+  )
+  expect_null(formals(sw_pipeline_run_all)$cofactor |> (\(x) if (identical(x, quote(expr = ))) NULL else x)())
 })
 
 test_that("sw_pipeline_run_all function signature has expected parameters", {
@@ -151,6 +171,7 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
   )
 
   result <- sw_pipeline_run_all(
+    cofactor = 6000,
     fcs_dir = tmp_dir,
     sample_meta = sample_meta,
     markers = c("CD3", "CD4", "CD8"),
