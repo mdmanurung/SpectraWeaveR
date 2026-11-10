@@ -116,3 +116,14 @@ files and the reference-only view (W7) is in the report.
 | D2 size per class | The smallest size already tested on real files; smaller sizes are listed as limits. |
 | D5 second dataset | Search public repositories; download only after the user approves a specific dataset. |
 | D8 faust | Install faust and scamp (GPL-3) now; then ask the FAUST choice rows F1 to F19. |
+
+## Decisions answered, round "fix all gaps" (user, 2026-11-10)
+
+| Row | Answer |
+|---|---|
+| G1 spillover-spread check | Per channel pair i -> j: SD of j-negative events where i is above a required quantile, over SD of j-negative events where i is below its median. Log ratio, robust z across files. One required knob (`spread_quantile`). |
+| G2 same-donor reference | New required argument `reference_group` (NULL = today). Robust z taken within each group. Re-benchmark the four donor-limited gaps on CytoBatchFlagR. |
+| G3 FAUST rows F1-F19 | FAUST conventions: all shared fluorescent markers; `root`; depth 0.01; quantile 0.5; experimental unit and imputation `""`; empirical bounds; name occurrence 0; supervised `NA`; seed 1; FAUST density-subsample defaults; annotations approved; 5000 events, subsample seed 1; 8 threads; arcsinh 6000; after = `sw_correct_run()` as tested; exact phenotype match; ARI per file; median per phenotype per file. |
+| G4 ledger | Keep target 150. |
+| G5 batch scores with groups | Per donor across batches, combined by the median over donors. |
+| G6 emd_z with groups | EMD to the pooled events of the file's own group; z within the group. |
