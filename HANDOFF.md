@@ -1,6 +1,6 @@
 # Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
 
-**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 117/150
+**Written:** 2026-11-10 (updated after FAUST) · **Branch:** worktree-cytoscan-diagnostics @ c16607f · **Status:** gap round; two-way and FAUST done and committed; ledger 118/150
 
 ## Check first
 Run `git log --oneline c16607f..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
@@ -26,6 +26,7 @@ Pick the next gap from Open items with the user. Nothing is running.
 - Results: detector noise floor accounts for PB (unstained/panel ratio 1.23) but only part of AF700 (0.55; unstained SD 0.09 vs panel 0.53) — `reference/figures/glehr_unstained_noise.png`; run `experiments/runs/2026-11-10_glehr-unstained-noise-v2` (the run without v2 used a 1–99% gate that kept granulocytes; discarded).
 - Results: AF700 single stains — Fortessa AF700 SD unstained 0.09, AF700-stain CD3- 0.13, panel negative 0.53; no single dye spreads more on the Fortessa (APC 5.9 vs 4.3 only) — `reference/figures/glehr_af700_stain_sd.png`, `reference/figures/glehr_af700_single_spread.png`; run `experiments/runs/2026-11-10_glehr-af700-stain`.
 - Results: CD8-dim refuted — Fortessa CD4+ T cells (true CD8 negatives) have AF700 SD 0.51 vs panel negative 0.53 (Aurora 0.094), shifted up — `reference/figures/glehr_af700_subset_sd.png`, `reference/figures/glehr_af700_subset_density.png`; run `experiments/runs/2026-11-10_glehr-af700-cd8dim-v2` (the run without v2 split CD3 inside CD3+ files; discarded).
+- Results: APC→AF700 under-compensation on the Fortessa (+1374 vs -142 in the CD3-APC single stain) predicts ~407 of the 536-unit AF700 offset in CD4+ T (table fallback); linear fit does not narrow AF700 (0.51 → 0.54) — `reference/figures/glehr_af700_comp_shift.png`, `reference/figures/glehr_af700_comp_slope.png`; run `experiments/runs/2026-11-10_glehr-af700-comp-v2` (same numbers as the run without v2; only a label changed).
 
 ## Locked decisions
 - G1–G13 in `plans/2026-11-10_diagnostics-next.md` (last section): spread SD ratio; reference_group; FAUST conventions; keep 150; median over groups; group EMD pool; FAUST rank norm; 37 markers; confirm refgroup details; two-way residual; forest depth 3; prop_by_batch range; correct on 37 — user, 2026-11-10.
@@ -33,6 +34,7 @@ Pick the next gap from Open items with the user. Nothing is running.
 - Standing: impactful choices are required args (no default) and the user's; GPL/AGPL wrapped never copied; plot-first; no sample IDs or data committed (rename f1.., d1..); real data read-only in `/exports/para-lipg-hpc/mdmanurung/sw_data`; never edit a running script; absolute script paths in background runs; commits end with the Co-Authored-By and Claude-Session lines; no bare git stash.
 
 ## Dead ends — do not redo
+- Further AF700 width tests on Glehr BAD — thread closed by the user 2026-11-10 after noise floor, single stains, CD8-dim and compensation (`reference/diagnostics.qmd`); reopen only with new data (e.g. a CD8-AF700 control).
 - One-way within-donor z for small file faults on CBF — 0.47–0.71 (`reference/figures/cbf_reference_group.png`); batch variation stays inside each donor.
 - `reference` clusters to fix the rare-population gap — 0.86, no gain; the cause was the max over clusters.
 - Spread as the AF700/PB cause — refuted above.
@@ -47,6 +49,6 @@ Pick the next gap from Open items with the user. Nothing is running.
 - `experiments/runs/2026-11-09_tusoskill/reports/final_round2.md` — outdated; write `final_round3.md` at the end.
 
 ## Open items
-- Ledger 117 → 150: 33 iterations left; replenish from diagnosis (candidate: APC→AF700 under-compensation on the Fortessa vs summed APC/AA750 spread, e.g. slope of AF700 on APC within CD4+ T cells). lean (not a decision): ask before any new impactful choice.
+- Ledger 118 → 150: 32 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
 - Batch split ±0.5 SD (0.68) — stays a documented limit unless the user wants another design. lean (not a decision): document.
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.

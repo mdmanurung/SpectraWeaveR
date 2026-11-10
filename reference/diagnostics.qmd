@@ -375,6 +375,24 @@ separate the two.
 
 ![AF700 density of CD4+ and CD4- T cells per instrument, donors pooled](figures/glehr_af700_subset_density.png)
 
+APC is under-compensated into AF700 on the Fortessa, which fits most of the
+shift but not the width. In the CD3-APC single stain, CD3+ cells sit 1374
+relativised AF700 units (1169 to 1678) above CD3- cells on the Fortessa,
+against -142 on the Aurora; AA750 leaves 193 against 88. At the CD4+ T cells'
+APC level (median about 2960 units on both instruments) that error predicts an
+AF700 offset of about 407 units on the Fortessa, against an observed median of
+536 (correlation over donors 0.98; table fallback: one check over 9 donors, in
+`single_shift.csv` and the panel files, not plotted). Inside the CD4+ T cells,
+AF700 rises only slightly with APC and AA750 (Huber slopes 0.026 and 0.017 on
+the Fortessa), because CD4 varies little there, and removing that fit does not
+narrow AF700 (SD 0.51 before, 0.54 after). So the wider negative still needs
+another cause; APC's spread into AF700 in the single stains is a candidate,
+not tested at the panel's CD4 level.
+
+![Huber slopes of AF700 on APC and AA750 in CD4+ T cells, and AF700 SD before and after removing the fit](figures/glehr_af700_comp_slope.png)
+
+![AF700 median shift, CD3+ minus CD3-, in the APC and AA750 single stains](figures/glehr_af700_comp_shift.png)
+
 The spread check finds real spread when it is present. Spread injected into
 25% of real Aurora files (5 seeds) is found by `spread_z` at AUROC 0.98 with
 quantile 0.95 when the added noise equals the target's negative SD at the
