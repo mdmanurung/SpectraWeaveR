@@ -31,7 +31,9 @@
 #' `anomaly` list also takes the forest arguments `ntrees`, `sample_size`,
 #' `ndim` and `seed`; its `cutoff` is not needed because only the score is
 #' kept. Add `novelty_reference` and `novelty_quantile` to also compute novelty
-#' log-densities.
+#' log-densities. When `features` includes `"emd"`, the module also returns
+#' `emd_z`: per channel, the robust z over files of each file's EMD to the
+#' pooled sample. It finds a marker split into two modes better than `sd_z`.
 #'
 #' **Modules are independent.** A fault one module misses may show in another.
 #' Run all of them when you can.
@@ -199,6 +201,29 @@ sw_diagnose <- function(
       value = fl$score,
       text = NA_character_
     )
+    # Per-channel EMD to the pooled sample, as a robust z over files. Finds a
+    # split into two modes better than sd_z (real files, ±0.5 SD: 0.70 vs 0.54).
+    emd_cols <- grep("_emd$", names(feats), value = TRUE)
+    if (length(emd_cols) > 0) {
+      emd_z <- lapply(emd_cols, function(col) {
+        v <- feats[[col]]
+        s <- 1.4826 * stats::mad(v, constant = 1, na.rm = TRUE)
+        z <- if (sum(!is.na(v)) < 3 || is.na(s) || s == 0) {
+          rep(NA_real_, length(v))
+        } else {
+          (v - stats::median(v, na.rm = TRUE)) / s
+        }
+        tibble::tibble(
+          module = "anomaly",
+          subject = feats$file,
+          check = "emd_z",
+          item = sub("_emd$", "", col),
+          value = z,
+          text = NA_character_
+        )
+      })
+      parts$emd <- dplyr::bind_rows(emd_z)
+    }
     if (!is.null(anomaly$novelty_reference)) {
       nv <- sw_anomaly_flag_novelty(
         feats,

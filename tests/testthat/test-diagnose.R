@@ -98,6 +98,16 @@ test_that("the anomaly module keeps forest scores, and novelty when asked", {
   an$novelty_quantile <- 0.05
   dx2 <- sw_diagnose(x$data, NULL, NULL, an, NULL, NULL, NULL, NULL, NULL, NULL)
   expect_setequal(unique(dx2$check), c("outlier_score", "novelty_log_density"))
+  # With EMD features, one emd_z row per file and channel; a split marker tops it.
+  d3 <- x$data
+  d3$f7[, "B"] <- d3$f7[, "B"] + sample(c(-2, 2), nrow(d3$f7), replace = TRUE)
+  an_emd <- an[c("channels", "n_events", "seed", "scale", "ntrees", "sample_size", "ndim")]
+  an_emd <- c(an_emd, list(features = "emd", quantile_step = NULL, aggregate_from = "all", agg_size = 1500, reference = NULL))
+  dx3 <- sw_diagnose(d3, NULL, NULL, an_emd, NULL, NULL, NULL, NULL, NULL, NULL)
+  ez <- dx3[dx3$check == "emd_z", ]
+  expect_equal(nrow(ez), 15 * 3)
+  expect_equal(ez$subject[which.max(ez$value)], "f7")
+  expect_equal(ez$item[which.max(ez$value)], "B")
 })
 
 test_that("the header module reads FCS headers", {

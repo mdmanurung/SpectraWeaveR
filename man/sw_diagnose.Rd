@@ -81,7 +81,9 @@ module. A missing argument stops with the module's own message. The
 \code{anomaly} list also takes the forest arguments \code{ntrees}, \code{sample_size},
 \code{ndim} and \code{seed}; its \code{cutoff} is not needed because only the score is
 kept. Add \code{novelty_reference} and \code{novelty_quantile} to also compute novelty
-log-densities.
+log-densities. When \code{features} includes \code{"emd"}, the module also returns
+\code{emd_z}: per channel, the robust z over files of each file's EMD to the
+pooled sample. It finds a marker split into two modes better than \code{sd_z}.
 
 \strong{Modules are independent.} A fault one module misses may show in another.
 Run all of them when you can.
