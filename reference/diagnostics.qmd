@@ -97,6 +97,8 @@ no real-file evidence yet.
 | Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
 | Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | real, not injected: same 9 donors on Aurora and Fortessa; Aurora gains 2.0 to 2.4x the cohort median, Fortessa 0.06 to 0.39x |
 | Instrument batch per marker | `eta2` | see batch rows | real: median 0.88 before CD3 relativisation, 0.07 after (AF700, PB, AA750 keep 0.35 to 0.88) |
+| Batch effect, biology fixed | `eta2` | see batch rows | real: same 4 controls in 18 batches; eta2 0.22 to 0.95 per marker |
+| Instrument gain drift over dates | `gain_order_rho` (relativise) | see relativisation | real: CD3 gain rho -0.52 over two years; one batch-wide jump |
 | Weak CD3 anchor in a control | `separation` (relativise) | 1 test case | real: Fortessa KrO-A 1.13 to 1.21, others 2.2 to 3.2; only KrO-A's M is off (up to 0.28 log) |
 
 Real-file numbers come from one Aurora dataset (36 to 144 donor files, 40
@@ -277,6 +279,29 @@ A batch whose marker splits into two modes is found at ±1 SD (`spread_ratio`
 0.99) but not at ±0.5 SD (best `pair_emd` 0.78).
 
 ![Batch faults injected into real batches: AUROC of the hit marker](figures/batch_real.png)
+
+## Eighteen batches of the same four controls
+
+The CytoBatchFlagR data (Zenodo 15388817) hold the same four control samples
+(two unstimulated, two stimulated) acquired in 18 batches over two years on
+one Aurora. With biology fixed, every batch difference is technical. Scripts:
+`experiments/integration/cytobatchflagr/`.
+
+Batch explains 22% (CD8) to 95% (CD14) of the variance of file medians, over
+the 26 named markers present in every file. CD14 is high because the files
+are pre-gated CD14-, so its median sits near the background.
+
+![Batch eta2 per marker, before and after internal CD3 relativisation](figures/cbf_eta2.png)
+
+An internal CD3 reference (each file's own CD3 split, no separate controls)
+lowers CD3's batch eta2 from 0.73 to 0.43 only. Its split is weaker than with
+the Glehr controls (separation median 1.7 to 1.9, lowest 1.02), probably
+because no lymphocyte gate exists here. The CD3 gain itself is a diagnostic:
+it falls over the two years (`gain_order_rho` -0.52), jumps for all four
+samples in one batch (January 2023), and jumps for single samples inside a
+batch.
+
+![CD3 gain per file over acquisition dates](figures/cbf_cd3_gain.png)
 
 ## What the checks cannot see
 
