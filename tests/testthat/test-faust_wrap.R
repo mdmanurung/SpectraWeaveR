@@ -88,6 +88,7 @@ run_args <- function(gs, path, ...) {
     density_subsample_threshold = 1e6,
     density_subsample_size = 1e6,
     density_subsample_iterations = 1,
+    annotation_forest_depth = 3,
     annotations_approved = TRUE,
     draw_histograms = FALSE
   )

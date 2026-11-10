@@ -41,7 +41,8 @@ run_before <- sw_faust_run(
   experimental_unit = "", imputation_hierarchy = "", channel_bounds = "",
   name_occurrence_num = 0, supervised_list = NA, seed = 1, threads = 8,
   density_subsample_threshold = 1e6, density_subsample_size = 1e6,
-  density_subsample_iterations = 1, annotations_approved = TRUE,
+  density_subsample_iterations = 1, annotation_forest_depth = 3,
+  annotations_approved = TRUE,
   draw_histograms = FALSE
 )
 labels_before <- sw_faust_labels(run_before, events_before)
@@ -77,7 +78,7 @@ package defaults.
   `role` so reference files read apart from donor files.
 - **Review step.** `annotations_approved = FALSE` stops after the thresholds. Check
   `plotData/scoreLines.*`, then run again in a new folder.
-- **Left at the FAUST default.** `annotationForestDepth` (3) is not exposed.
+- **Forest depth.** `annotation_forest_depth` passes `annotationForestDepth`; the runs here use 3, the FAUST default (user decision G11).
 
 ## Output table
 

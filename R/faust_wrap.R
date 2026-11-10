@@ -204,9 +204,7 @@ sw_faust_gatingset <- function(
 #' new folder.
 #'
 #' **Fixed inside.** `plottingDevice = "png"`, `debugFlag = FALSE` and
-#' `archDescriptionList = list(targetArch = "singleCPU")`. The argument
-#' `annotationForestDepth` is left at the FAUST default (3) and is not
-#' exposed; it is recorded as such in the echoed parameters.
+#' `archDescriptionList = list(targetArch = "singleCPU")`.
 #'
 #' **Experimental unit.** Per-cell labels are read back by file row order,
 #' which was checked for `experimental_unit = ""` only. [sw_faust_labels()]
@@ -229,6 +227,9 @@ sw_faust_gatingset <- function(
 #'   changes results is unverified.
 #' @param density_subsample_threshold,density_subsample_size,density_subsample_iterations
 #'   Numbers passed to the `densitySubSample*` arguments.
+#' @param annotation_forest_depth Whole number >= 1, FAUST
+#'   `annotationForestDepth` (its default is 3). It sets how deep the
+#'   annotation forest grows, so which phenotypes FAUST can find.
 #' @param annotations_approved `TRUE` runs on to phenotype discovery. `FALSE`
 #'   stops after the thresholds so you can review `plotData/scoreLines.*`.
 #' @param draw_histograms `TRUE` or `FALSE`, passed to
@@ -248,7 +249,8 @@ sw_faust_gatingset <- function(
 #'   experimental_unit = "", imputation_hierarchy = "", channel_bounds = "",
 #'   name_occurrence_num = 0, supervised_list = NA, seed = 1, threads = 8,
 #'   density_subsample_threshold = 1e6, density_subsample_size = 1e6,
-#'   density_subsample_iterations = 1, annotations_approved = TRUE,
+#'   density_subsample_iterations = 1, annotation_forest_depth = 3,
+#'   annotations_approved = TRUE,
 #'   draw_histograms = FALSE
 #' )
 #' }
@@ -271,6 +273,7 @@ sw_faust_run <- function(
   density_subsample_threshold,
   density_subsample_size,
   density_subsample_iterations,
+  annotation_forest_depth,
   annotations_approved,
   draw_histograms
 ) {
@@ -291,6 +294,7 @@ sw_faust_run <- function(
     density_subsample_threshold = missing(density_subsample_threshold),
     density_subsample_size = missing(density_subsample_size),
     density_subsample_iterations = missing(density_subsample_iterations),
+    annotation_forest_depth = missing(annotation_forest_depth),
     annotations_approved = missing(annotations_approved),
     draw_histograms = missing(draw_histograms)
   ))
@@ -364,6 +368,7 @@ sw_faust_run <- function(
     stop("`name_occurrence_num` must be one whole number >= 0.", call. = FALSE)
   }
   .sw_check_count(threads, "threads")
+  .sw_check_count(annotation_forest_depth, "annotation_forest_depth")
   for (nm in c(
     "density_subsample_threshold",
     "density_subsample_size",
@@ -401,6 +406,7 @@ sw_faust_run <- function(
     densitySubSampleThreshold = density_subsample_threshold,
     densitySubSampleSize = density_subsample_size,
     densitySubSampleIterations = density_subsample_iterations,
+    annotationForestDepth = annotation_forest_depth,
     archDescriptionList = list(targetArch = "singleCPU"),
     plottingDevice = "png"
   )
@@ -429,7 +435,7 @@ sw_faust_run <- function(
     density_subsample_iterations = density_subsample_iterations,
     annotations_approved = annotations_approved,
     draw_histograms = draw_histograms,
-    annotation_forest_depth = "faust default",
+    annotation_forest_depth = annotation_forest_depth,
     faust_version = tryCatch(
       as.character(utils::packageVersion("faust")),
       error = \(e) NA_character_

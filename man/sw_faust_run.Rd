@@ -21,6 +21,7 @@ sw_faust_run(
   density_subsample_threshold,
   density_subsample_size,
   density_subsample_iterations,
+  annotation_forest_depth,
   annotations_approved,
   draw_histograms
 )
@@ -56,6 +57,10 @@ changes results is unverified.}
 
 \item{density_subsample_threshold, density_subsample_size, density_subsample_iterations}{Numbers passed to the \verb{densitySubSample*} arguments.}
 
+\item{annotation_forest_depth}{Whole number >= 1, FAUST
+\code{annotationForestDepth} (its default is 3). It sets how deep the
+annotation forest grows, so which phenotypes FAUST can find.}
+
 \item{annotations_approved}{\code{TRUE} runs on to phenotype discovery. \code{FALSE}
 stops after the thresholds so you can review \verb{plotData/scoreLines.*}.}
 
@@ -83,9 +88,7 @@ check-points its intermediates there, so a re-run with new settings needs a
 new folder.
 
 \strong{Fixed inside.} \code{plottingDevice = "png"}, \code{debugFlag = FALSE} and
-\code{archDescriptionList = list(targetArch = "singleCPU")}. The argument
-\code{annotationForestDepth} is left at the FAUST default (3) and is not
-exposed; it is recorded as such in the echoed parameters.
+\code{archDescriptionList = list(targetArch = "singleCPU")}.
 
 \strong{Experimental unit.} Per-cell labels are read back by file row order,
 which was checked for \code{experimental_unit = ""} only. \code{\link[=sw_faust_labels]{sw_faust_labels()}}
@@ -99,7 +102,8 @@ run <- sw_faust_run(
   experimental_unit = "", imputation_hierarchy = "", channel_bounds = "",
   name_occurrence_num = 0, supervised_list = NA, seed = 1, threads = 8,
   density_subsample_threshold = 1e6, density_subsample_size = 1e6,
-  density_subsample_iterations = 1, annotations_approved = TRUE,
+  density_subsample_iterations = 1, annotation_forest_depth = 3,
+  annotations_approved = TRUE,
   draw_histograms = FALSE
 )
 }
