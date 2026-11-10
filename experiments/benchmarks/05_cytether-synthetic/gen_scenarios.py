@@ -14,6 +14,12 @@ Shift-only stages have x = x_true + offset, so a batch's old offset is exactly m
 S17 is S13 with population-specific shifts: every cell type gets its own independent study and run offset,
 so an effect shared across populations is wrong. Truth offsets then have a cell-type axis (study, type, marker).
 Scenario indices 13 to 17 are registered in LEVELS here; S13b reuses index 13, so S13 and S13b share truth and offsets.
+
+S18 (plan A4, A5, A10) has no additive offsets. Each batch x channel gets an affine instrument effect on the linear
+scale, x = asinh(exp(g) * sinh(truth) + o), g ~ N(0, 0.20), o ~ N(0, 0.10), zero in the anchor batch, so the
+asinh-scale effect depends on intensity. 3 batches per seed (seeded) keep no training reference donor; REF_2
+(held out) stays everywhere. S18w is S18 plus one participant sample per batch whose T cells get a CD3 truth
+shift N(0, 0.3) (biology, not batch): the internal CD3 anchor wobbles there. Run with S18_ONLY=1.
 Seeds 441 to 460 are the development seeds (451 to 460 added by F5, 2026-11-10). Test seeds 431 to 440 are never written or read here.
 """
 import json
@@ -34,6 +40,10 @@ SD_RUN, SD_STUDY = 0.10, 0.47  # S13, S13b, S15, S16, S17 (S16 overrides two run
 SD_FLAT_RUN = 0.47  # S14: all offset variance sits in the runs
 SD_DISCREPANT_RUN = 0.60  # S16, the two discrepant runs
 DISCREPANT_RUNS = ["ST2_RUN1", "ST4_RUN2"]
+SD_AFFINE_OFFSET, SD_AFFINE_LOGGAIN = 0.10, 0.20  # S18: A10
+N_REFLESS_S18 = 3  # S18: A5
+SD_ANCHOR_WOBBLE = 0.30  # S18w: A4
+WOBBLE_TYPES = ["CD4_T", "CD8_T"]  # T cells carry the CD3+ anchor
 TRAINING_DONORS = ["REF_0", "REF_1"]  # REF_2 is the held-out donor and is never dropped
 ANCHOR = "ST0_RUN0"  # keeps both training donors in the thin design
 REFLESS_KNOWN_RUN = "ST4_RUN3"  # S15: known study, new run, no non-holdout reference rows
@@ -49,7 +59,8 @@ LEVELS["S14"] = dict(title="flat_large_runs", studies=6, runs=3, shift=1, scale=
 LEVELS["S15"] = dict(title="new_run_vs_new_study", studies=6, runs=4, shift=1, scale=0, refs=3)
 LEVELS["S16"] = dict(title="discrepant_runs", studies=6, runs=3, shift=1, scale=0, refs=3)
 LEVELS["S17"] = dict(title="population_specific_shift", studies=6, runs=3, shift=1, scale=0, refs=3)
-SCENARIO_INDEX = {"S13": 13, "S14": 14, "S15": 15, "S16": 16, "S17": 17}
+LEVELS["S18"] = dict(title="affine_instrument_anchor_only_batches", studies=6, runs=3, shift=0, scale=0, refs=3)
+SCENARIO_INDEX = {"S13": 13, "S14": 14, "S15": 15, "S16": 16, "S17": 17, "S18": 18}
 
 
 # Post-hoc layer --------------------------------------------------------------------
@@ -96,6 +107,36 @@ def thin_reference_rows(meta, refless=()):
     return keep
 
 
+def affine_s18(true, meta, seed, wobble):
+    """S18 / S18w: affine per batch x channel on the linear scale; S18w adds the CD3 wobble to truth first."""
+    rng = np.random.default_rng(seed + 1000 + SCENARIO_INDEX["S18"])
+    batches = sorted(meta.batch.unique())
+    n_markers = true.shape[1]
+    gain = rng.normal(0, SD_AFFINE_LOGGAIN, (len(batches), n_markers))
+    offset = rng.normal(0, SD_AFFINE_OFFSET, (len(batches), n_markers))
+    gain[batches.index(ANCHOR)] = 0
+    offset[batches.index(ANCHOR)] = 0
+    true = true.astype("float64").copy()
+    if wobble:
+        wrng = np.random.default_rng(seed + 3000 + SCENARIO_INDEX["S18"])
+        cd3 = MARKERS.index("CD3")
+        for b in batches:
+            samples = sorted(meta.sample_id[(meta.batch == b) & ~meta.is_reference].unique())
+            pick = samples[wrng.integers(len(samples))]
+            rows = ((meta.sample_id == pick) & meta.cell_type.isin(WOBBLE_TYPES)).to_numpy()
+            true[rows, cd3] += wrng.normal(0, SD_ANCHOR_WOBBLE)
+    bi = pd.Categorical(meta.batch, categories=batches).codes
+    x = np.arcsinh(np.exp(gain[bi]) * np.sinh(true) + offset[bi])
+    return x.astype("float32"), true.astype("float32"), gain, offset
+
+
+def refless_s18(meta, seed):
+    """A5: N_REFLESS_S18 non-anchor batches without training reference donors, seeded."""
+    rng = np.random.default_rng(seed + 2000 + SCENARIO_INDEX["S18"])
+    others = sorted(b for b in meta.batch.unique() if b != ANCHOR)
+    return tuple(sorted(rng.choice(others, N_REFLESS_S18, replace=False)))
+
+
 def build(base_stage, seed):
     """Return x, true, meta, cfg, offsets for the full (not thinned) data of one base scenario."""
     cfg = LEVELS[base_stage]
@@ -140,9 +181,11 @@ def write_stage(seed_dir, stage, x, true, meta, cfg, offsets, extra, seed, desig
 
 
 stage_titles = {"S13": "shrink_thin_nested", "S13b": "shrink_balanced_twin", "S14": "flat_large_runs",
-                "S15": "new_run_vs_new_study", "S16": "discrepant_runs", "S17": "population_specific_shift"}
+                "S15": "new_run_vs_new_study", "S16": "discrepant_runs", "S17": "population_specific_shift",
+                "S18": "affine_instrument_anchor_only_batches", "S18w": "affine_instrument_cd3_wobble"}
 
-BASE_STAGES = ["S17"] if os.environ.get("S17_ONLY") else ["S13", "S14", "S15", "S16", "S17"]
+BASE_STAGES = (["S17"] if os.environ.get("S17_ONLY") else ["S18"] if os.environ.get("S18_ONLY")
+               else ["S13", "S14", "S15", "S16", "S17"])
 
 # Generate --------------------------------------------------------------------------
 out_dir = Path(sys.argv[1])
@@ -154,6 +197,16 @@ for seed in seeds:
     if seed_dir.exists():
         sys.exit(f"{seed_dir} exists; run dirs are never overwritten")
     for base in BASE_STAGES:
+        if base == "S18":
+            _, true0, meta, cfg = simulate("S18", seed, CELLS_PER_PARTICIPANT, CELLS_PER_REFERENCE_ALIQUOT)
+            refless = refless_s18(meta, seed)
+            keep = thin_reference_rows(meta, refless)
+            for stage, wobble in (("S18", False), ("S18w", True)):
+                x, true, gain, offset = affine_s18(true0, meta, seed, wobble)
+                extra = dict(refless_batches=list(refless), anchor_wobble_sd=SD_ANCHOR_WOBBLE if wobble else 0.0)
+                write_stage(seed_dir, stage, x[keep], true[keep], meta[keep].reset_index(drop=True), cfg,
+                            dict(study=offset, run=gain), extra, seed, "thin", base)
+            continue
         x, true, meta, cfg, offsets, extra = build(base, seed)
         refless = (REFLESS_KNOWN_RUN,) if base == "S15" else ()
         keep = thin_reference_rows(meta, refless)

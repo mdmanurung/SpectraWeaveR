@@ -66,6 +66,7 @@ correct_t6 <- function(x, meta, population, method, markers) {
   is_heb <- method %in% c("heb", "heb_kv_bap", "heb_kv", "heb_bap")
   engine <- if (is_heb) "heb" else method
   hierarchy <- if (is_heb) dplyr::mutate(dplyr::distinct(meta, batch), study = batch) else NULL
+  heb_anchors <- NULL # T6 anchor arm (plan A8) is added with its own strip-controls script
   xt <- tibble::as_tibble(x) |> dplyr::mutate(sample_id = meta$sample_id, .before = 1)
   fit_rows <- meta$is_reference
   model <- sw_corrector_fit(
@@ -75,7 +76,8 @@ correct_t6 <- function(x, meta, population, method, markers) {
     pool = if (is_heb) HEB_POOL else NULL,
     anchor_effect = if (is_heb) "random" else NULL,
     variance_prior = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_bap")) "boundary_avoiding" else "none") else NULL,
-    residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv")) "known_plus_extra" else "estimated") else NULL
+    residual_model = if (is_heb) (if (method %in% c("heb_kv_bap", "heb_kv")) "known_plus_extra" else "estimated") else NULL,
+    anchors = if (is_heb) heb_anchors else NULL
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")

@@ -63,7 +63,8 @@ def effect_coverage(eff, obs, truth, meta, markers):
            "cov90_normal": float(np.mean(z <= Z90)), "median_df": float(np.median(df)),
            "effect_rmse": float(np.sqrt(np.mean(err ** 2)))}
     # Diagnostic only (amendment 2026-11-10, not scored): split by reference donors behind the effect.
-    for name, m in {"nd1": nd <= 1, "nd2p": nd >= 2}.items():
+    # nd0: internal-anchor-only effects (plan A0); before anchors every effect had >= 1 donor, so nd1 is unchanged.
+    for name, m in {"nd0": nd == 0, "nd1": nd == 1, "nd2p": nd >= 2}.items():
         res[f"n_{name}"] = int(m.sum())
         res[f"cov90_{name}"] = float(np.mean(hit[m])) if m.any() else np.nan
         res[f"rmse_{name}"] = float(np.sqrt(np.mean(err[m] ** 2))) if m.any() else np.nan

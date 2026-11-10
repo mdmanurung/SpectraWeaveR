@@ -19,6 +19,9 @@ source("experiments/benchmarks/05_cytether-synthetic/adapters.R")
 MIN_CELLS <- as.integer(Sys.getenv("SW_MIN_CELLS", "10")) # G1: approved value 10; the env override is for labelled diagnostics only
 SEED <- 1L # paired_shift draws no random numbers; recorded in the model only
 TRANSFORM <- list(name = "asinh", cofactor = 5) # nominal label: simulated data are already on one scale
+ANCHOR_POSITIVE <- "CD3" # plan A1: CD3+ is the only positive-mode anchor
+ANCHOR_MIN_SEPARATION <- 3 # plan A2: pooled SDs
+ANCHOR_SEED <- 1 # plan A7: k-means seed
 VARIANCE_FLOOR <- 1e-8 # numerical floor on variance components (heb only); sensitivity to be ablated
 MIN_BATCHES <- 2 # logical minimum to estimate a shift; gates eligibility only
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic harness)"
@@ -26,7 +29,7 @@ MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift (synthetic 
 args <- commandArgs(trailingOnly = TRUE)
 seed_dir <- args[[1]]
 method <- args[[3]]
-stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "heb_pool_all_kv_bap", "heb_afix_pop_kv_bap", "reversed_shift", "cycombine", "cytonorm"))
+stopifnot("unknown method" = method %in% c("none", "naive_batch_center", "paired_shift", "heb", "heb_afix", "heb_shared", "heb_flat", "heb_pool_pop", "heb_pool_all", "heb_bap", "heb_pool_pop_bap", "heb_pool_pop_kv", "heb_pool_pop_kv_bap", "heb_pool_all_kv_bap", "heb_afix_pop_kv_bap", "heb_pool_pop_kv_bap_anc", "reversed_shift", "cycombine", "cytonorm"))
 
 # One stage ------------------------------------------------------------------------
 correct_stage <- function(stage_dir) {
@@ -114,8 +117,18 @@ correct_stage <- function(stage_dir) {
   heb_pool <- c(heb = "none", heb_afix = "none", heb_flat = "none", heb_pool_pop = "population", heb_pool_all = "all", heb_shared = NA,
                 heb_bap = "none", heb_pool_pop_bap = "population",
                 heb_pool_pop_kv = "population", heb_pool_pop_kv_bap = "population",
-                heb_pool_all_kv_bap = "all", heb_afix_pop_kv_bap = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
+                heb_pool_all_kv_bap = "all", heb_afix_pop_kv_bap = "population",
+                heb_pool_pop_kv_bap_anc = "population")[method] # *_bap: F6 prior; *_kv: F8 known variance
   hierarchy <- if (engine %in% c("heb", "heb_shared")) distinct(meta, batch, study) else NULL
+  # Plan A0-A9 (*_anc): internal anchors from every sample that may calibrate an anchor: initial and not a
+  # held-out reference. Participant samples count, so batches without reference donors get anchor rows.
+  anc_rows <- fit_rows
+  heb_anchors <- if (endsWith(method, "_anc")) {
+    sw_corrector_anchors(x[anc_rows, , drop = FALSE], meta$sample_id[anc_rows], meta$batch[anc_rows], markers,
+                         positive_markers = ANCHOR_POSITIVE, min_separation = ANCHOR_MIN_SEPARATION, seed = ANCHOR_SEED)
+  } else {
+    NULL
+  }
   if (method == "heb_flat") {
     hierarchy$study <- hierarchy$batch # flat arm: one random effect per batch, no study level
   }
@@ -126,8 +139,9 @@ correct_stage <- function(stage_dir) {
     hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (engine == "heb") unname(heb_pool) else NULL,
     anchor_effect = if (engine == "heb") (if (startsWith(method, "heb_afix")) "fixed" else "random") else NULL,
-    variance_prior = if (engine == "heb") (if (endsWith(method, "_bap")) "boundary_avoiding" else "none") else NULL,
-    residual_model = if (engine == "heb") (if (grepl("_kv", method, fixed = TRUE)) "known_plus_extra" else "estimated") else NULL
+    variance_prior = if (engine == "heb") (if (grepl("_bap", method, fixed = TRUE)) "boundary_avoiding" else "none") else NULL,
+    residual_model = if (engine == "heb") (if (grepl("_kv", method, fixed = TRUE)) "known_plus_extra" else "estimated") else NULL,
+    anchors = if (engine == "heb") heb_anchors else NULL
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.
