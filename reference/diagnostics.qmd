@@ -72,18 +72,18 @@ no real-file evidence yet.
 | Fault class | Best check | Simulation | Real files (injected) |
 |---|---|---|---|
 | Header / keyword mismatch | `sw_fcs_header_audit()` | exact by construction | not tested |
-| Saturation | `saturation_share` | 1.00 | not tested |
-| Dead channel | `zero_variance` | 1.00 | not tested |
-| Missing or infinite values | `nonfinite_share` | 1.00 | not tested |
-| Clog / event-rate drop | `rate_cv` | 1.00 | not tested |
-| Drift within a file | `time_trend` | 1.00 | not tested |
-| Debris spike | `corr_shift` | 1.00 | not tested |
-| Spillover between two channels | `corr_shift` | 1.00 | not tested |
+| Saturation | `saturation_share` | 1.00 | 1.00 (5% of events at the channel maximum) |
+| Dead channel | `zero_variance` | 1.00 | 1.00 |
+| Missing or infinite values | `nonfinite_share` | 1.00 | 1.00 (2% of events) |
+| Clog / event-rate drop | `rate_cv` | 1.00 | 1.00 (80% drop over 30% of the run) |
+| Drift within a file | `time_trend` | 1.00 | 1.00 (1 SD over the run) |
+| Debris spike | `corr_shift` | 1.00 | 1.00 (10% of events) |
+| Spillover between two channels | `corr_shift` | 1.00 | **0.66 at slope 0.3 (fails the bar)** |
 | One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
 | All markers widened | `sd_z` | 1.00 | not tested |
-| Split into two modes (one marker) | `corr_shift` | **0.67 (weak)** | not tested |
-| Change in a rare population | `cluster_median_z` | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | not tested |
+| Split into two modes (one marker) | `corr_shift` | **0.67 (weak)** | **0.65 (`sd_z`; fails the bar)** |
+| Change in a rare population | `cluster_median_z` | 1.00 at 20% of events; 0.95 at 10%; 0.49 at 2% | **0.81 (smallest of k = 6 clusters, +1 SD; fails the bar)** |
 | Composition change | forest, `cluster_freq_z` | 1.00 | not tested |
 | Negative population shifted | `neg_median_z` | 1.00 at 0.3 SD | 1.00 at 1 SD, 0.84 at 0.3 SD |
 | Negative population widened | `neg_sd_z` | 1.00 at x1.5, 0.96 at x1.2 | 1.00 at x1.5 |
@@ -100,6 +100,9 @@ Real-file numbers come from one Aurora dataset (36 to 144 donor files, 40
 markers, OMIQ-transformed). The negative-population numbers cover only the 10
 of 40 channels whose mixture split cleanly. The batch numbers sit on top of
 real batch differences that are confounded with donor.
+
+![File-level faults injected into 36 real donor files: AUROC per check.
+Source data: `figures/file-faults-real-source.csv`.](figures/file-faults-real.png)
 
 ![Batch faults injected into one of four real batches: AUROC of the hit marker
 among 40. Source data: `figures/batch-faults-real-source.csv`.](figures/batch-faults-real.png)
