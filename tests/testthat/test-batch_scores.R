@@ -42,7 +42,14 @@ test_that("required arguments have no default", {
   x <- make_batches()
   expect_error(sw_batch_scores(), "no default")
   expect_error(
-    sw_batch_scores(x$data, x$batch, c("A", "B"), n_events = 100, seed = 1, reference_group = NULL),
+    sw_batch_scores(
+      x$data,
+      x$batch,
+      c("A", "B"),
+      n_events = 100,
+      seed = 1,
+      reference_group = NULL
+    ),
     "order"
   )
 })
@@ -138,7 +145,20 @@ test_that("results do not depend on file order and keep the RNG state", {
 # carries a real shift of 0.5 in A for every donor.
 make_donor_batches <- function(seed = 5, n = 300) {
   set.seed(seed)
-  donor_of <- c("D1", "D1", "D2", "D2", "D2", "D3", "D3", "D3", "D1", "D1", "D2", "D3")
+  donor_of <- c(
+    "D1",
+    "D1",
+    "D2",
+    "D2",
+    "D2",
+    "D3",
+    "D3",
+    "D3",
+    "D1",
+    "D1",
+    "D2",
+    "D3"
+  )
   batch_of <- rep(c("b1", "b2", "b3", "b4"), each = 3)
   ids <- paste0("f", seq_along(donor_of))
   d <- lapply(seq_along(ids), function(i) {
@@ -178,7 +198,14 @@ test_that("reference_group finds a batch effect hidden by donor differences", {
 test_that("batch reference_group is required, covers every file and needs 2 batches in a group", {
   x <- make_donor_batches()
   expect_error(
-    sw_batch_scores(x$data, x$batch, c("A", "B"), n_events = 100, seed = 1, order = NULL),
+    sw_batch_scores(
+      x$data,
+      x$batch,
+      c("A", "B"),
+      n_events = 100,
+      seed = 1,
+      order = NULL
+    ),
     "no default"
   )
   expect_error(scores(x, reference_group = x$donor[-1]), "label for every file")
@@ -201,4 +228,48 @@ test_that("a two-way reference_group is an error for batch scores", {
     stringsAsFactors = FALSE
   )
   expect_error(scores(x, reference_group = design), "remove the batch effect")
+})
+
+# 18 batches of 2 files; marker A is shifted by `shift` in batch "b07".
+make_many <- function(shift = 1, n = 1000, seed = 2) {
+  set.seed(seed)
+  ids <- paste0("f", 1:36)
+  b <- stats::setNames(rep(sprintf("b%02d", 1:18), each = 2), ids)
+  d <- lapply(ids, function(i) {
+    cbind(
+      A = stats::rnorm(n) + if (b[[i]] == "b07") shift else 0,
+      B = stats::rnorm(n)
+    )
+  })
+  names(d) <- ids
+  list(data = d, batch = b)
+}
+
+test_that("rest_emd of a shifted batch is about the shift", {
+  x <- make_many(shift = 1)
+  res <- scores(x, n_events = 1000)
+  expect_equal(get(res, "rest_emd", "A", "b07"), 1, tolerance = 0.1)
+  expect_lt(get(res, "rest_emd", "B", "b07"), 0.2)
+})
+
+test_that("rest_emd_z is finite for every marker and largest for the shifted batch", {
+  x <- make_many(shift = 1)
+  res <- scores(x, n_events = 1000)
+  z <- res[res$check == "rest_emd_z", ]
+  expect_false(anyNA(z$value))
+  expect_equal(nrow(z), 2 * 18)
+  za <- z[z$marker == "A", ]
+  expect_equal(za$batch[which.max(za$value)], "b07")
+})
+
+test_that("rest_emd_z works with reference_group and is NA below 3 batches", {
+  x <- make_many(shift = 1)
+  donor <- stats::setNames(rep(c("d1", "d2"), 18), names(x$data))
+  res <- scores(x, n_events = 1000, reference_group = donor)
+  za <- res[res$check == "rest_emd_z" & res$marker == "A", ]
+  expect_equal(za$batch[which.max(za$value)], "b07")
+  two <- make_batches()
+  keep <- two$batch %in% c("b1", "b2")
+  small <- scores(list(data = two$data[keep], batch = two$batch[keep]))
+  expect_true(all(is.na(small$value[small$check == "rest_emd_z"])))
 })

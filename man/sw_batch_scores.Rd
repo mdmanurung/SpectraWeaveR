@@ -44,6 +44,13 @@ a batch label. The result is numbers only; no batch or marker is marked bad.
 \item \code{pair_emd}: exact 1D earth mover's distance (\code{\link[=sw_emd_1d]{sw_emd_1d()}}) between the
 pooled events of two batches, for each batch pair. It is in the units of
 the marker scale.
+\item \code{rest_emd}: per batch, exact 1D EMD between that batch's pooled events and
+the pooled events of all other batches. \code{rest_emd_z} is its robust z over
+batches within the marker (\code{.sw_robust_z()}), so one odd batch stands out
+even when every pair involving it looks alike. It needs at least 3
+batches (fewer give \code{NA}) and is \code{NA} when the batch spread is 0. With
+\code{reference_group}, both are computed within each group across batches,
+then combined by the median over groups like every other row.
 \item \code{median_range}: highest minus lowest batch median of the marker. A batch
 median is the median over its files of each file's median.
 \item \code{eta2}: share of the variance of file medians that the batch label

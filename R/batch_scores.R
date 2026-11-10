@@ -12,6 +12,13 @@
 #' * `pair_emd`: exact 1D earth mover's distance ([sw_emd_1d()]) between the
 #'   pooled events of two batches, for each batch pair. It is in the units of
 #'   the marker scale.
+#' * `rest_emd`: per batch, exact 1D EMD between that batch's pooled events and
+#'   the pooled events of all other batches. `rest_emd_z` is its robust z over
+#'   batches within the marker (`.sw_robust_z()`), so one odd batch stands out
+#'   even when every pair involving it looks alike. It needs at least 3
+#'   batches (fewer give `NA`) and is `NA` when the batch spread is 0. With
+#'   `reference_group`, both are computed within each group across batches,
+#'   then combined by the median over groups like every other row.
 #' * `median_range`: highest minus lowest batch median of the marker. A batch
 #'   median is the median over its files of each file's median.
 #' * `eta2`: share of the variance of file medians that the batch label
@@ -200,7 +207,10 @@ sw_batch_scores <- function(
     })
     per_group <- dplyr::bind_rows(per_group)
     if (nrow(per_group) == 0) {
-      stop("No reference group has files from at least two batches.", call. = FALSE)
+      stop(
+        "No reference group has files from at least two batches.",
+        call. = FALSE
+      )
     }
     out <- per_group |>
       dplyr::summarise(
@@ -209,7 +219,12 @@ sw_batch_scores <- function(
         .by = c(check, marker, batch)
       )
     # Keep the row order of the all-files result: check, marker order as first seen.
-    out <- out[order(match(out$check, unique(per_group$check)), match(out$marker, markers)), ]
+    out <- out[
+      order(
+        match(out$check, unique(per_group$check)),
+        match(out$marker, markers)
+      ),
+    ]
     out <- tibble::as_tibble(out)
   }
   class(out) <- c("sw_batch_scores", class(out))
@@ -270,6 +285,26 @@ sw_batch_scores <- function(
         plan
       )
       add("pair_emd", mk, paste(p, collapse = " ~ "), v, min(n_by_batch[p]))
+    }
+  }
+
+  # One batch against all other batches pooled, then robust z over batches.
+  for (mk in markers) {
+    rest <- vapply(
+      batches,
+      function(b) {
+        mine <- sort(pooled[[b]][, mk])
+        others <- sort(unlist(lapply(pooled[setdiff(batches, b)], \(m) {
+          m[, mk]
+        })))
+        .sw_emd_sorted(mine, others, .sw_emd_plan(length(mine), length(others)))
+      },
+      numeric(1)
+    )
+    rest_z <- .sw_robust_z(rest)
+    for (i in seq_along(batches)) {
+      add("rest_emd", mk, batches[i], rest[[i]], n_by_batch[[batches[i]]])
+      add("rest_emd_z", mk, batches[i], rest_z[[i]], n_by_batch[[batches[i]]])
     }
   }
 
