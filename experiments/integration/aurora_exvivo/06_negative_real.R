@@ -102,7 +102,7 @@ long <- lapply(SEEDS, function(seed) {
       hyper_k = HYPER_K,
       pairs = matrix(pick, 1)
     )
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
     row_of <- function(tab, check, item) {
       d <- tab[tab$check == check & tab$channel == item, ]
       abs(d$value)[match(names(files), d$file)]

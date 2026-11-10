@@ -179,7 +179,7 @@ file_tool_scores <- function(files, seed) {
     range_max = RANGE_MAX,
     range_min = NULL,
     time_channel = "Time",
-    time_bin = 5
+    time_bin = 5, area_height = NULL, area_height_quantile = NULL
   )
   by <- function(check) {
     a <- aud[aud$check == check, ]

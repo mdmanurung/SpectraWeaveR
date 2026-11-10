@@ -10,7 +10,9 @@ sw_fcs_signal_audit(
   range_max,
   range_min,
   time_channel,
-  time_bin
+  time_bin,
+  area_height,
+  area_height_quantile
 )
 }
 \arguments{
@@ -30,6 +32,13 @@ lowest value counted as a floor event.}
 
 \item{time_bin}{Number, width of a time bin in the units of the time
 channel. Needed when \code{time_channel} is given; otherwise pass \code{NULL}.}
+
+\item{area_height}{\code{NULL}, or a named character vector of area = height
+channel pairs, for example \code{c("FSC-A" = "FSC-H")}, for the doublet check.}
+
+\item{area_height_quantile}{Number in (0, 1), the upper quantile of area /
+height reported per file. Needed when \code{area_height} is given; otherwise
+pass \code{NULL}.}
 }
 \value{
 A tibble of class \code{sw_fcs_signal_audit} with columns \code{file},
@@ -70,6 +79,11 @@ A fault that widens or narrows every channel a little (a gain or focus
 change) shows here even when no single channel's \code{sd_z} stands out. It is
 a check of its own, not a summary of the other rows. \code{NA} with fewer than
 3 files.
+\item \code{area_height_q}, \code{area_height_z}: for each \code{area_height} pair, the
+file's \code{area_height_quantile} quantile of area / height (\code{channel} is the
+area channel, \code{detail} names the pair), and its robust z over files.
+Doublets have a larger area than their height implies, so a file with
+more doublets has a higher upper tail. Only when \code{area_height} is given.
 \item \code{time_trend}: Spearman correlation of a channel with time, per channel. A
 steady drift of a marker inside one acquisition (laser, fluidics or
 detector drift) gives a value far from 0. Only when \code{time_channel} is
@@ -105,7 +119,8 @@ names(files) <- paste0("f", 1:4)
 sw_fcs_signal_audit(
   files,
   channels = c("A", "B"),
-  range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL
+  range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
+  area_height = NULL, area_height_quantile = NULL
 )
 
 }

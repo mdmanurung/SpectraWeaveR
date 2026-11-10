@@ -56,7 +56,7 @@ long <- lapply(SEEDS, function(seed) {
       x
     })
     na <- sw_negative_audit(files, pick, N_EVENTS, seed, HYPER_K, pairs = matrix(pick, 1))
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
     row_of <- function(tab, check, item) {
       d <- tab[tab$check == check & tab$channel %in% item, ]
       # A file whose rows are all NA (too few events) stays NA, not -Inf.

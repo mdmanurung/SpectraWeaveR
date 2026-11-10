@@ -23,7 +23,7 @@ signal_set <- list(
   range_max = 6,
   range_min = NULL,
   time_channel = "Time",
-  time_bin = 5
+  time_bin = 5, area_height = NULL, area_height_quantile = NULL
 )
 
 test_that("every argument must be given", {

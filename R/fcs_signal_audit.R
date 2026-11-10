@@ -39,6 +39,11 @@
 #'   change) shows here even when no single channel's `sd_z` stands out. It is
 #'   a check of its own, not a summary of the other rows. `NA` with fewer than
 #'   3 files.
+#' * `area_height_q`, `area_height_z`: for each `area_height` pair, the
+#'   file's `area_height_quantile` quantile of area / height (`channel` is the
+#'   area channel, `detail` names the pair), and its robust z over files.
+#'   Doublets have a larger area than their height implies, so a file with
+#'   more doublets has a higher upper tail. Only when `area_height` is given.
 #' * `time_trend`: Spearman correlation of a channel with time, per channel. A
 #'   steady drift of a marker inside one acquisition (laser, fluidics or
 #'   detector drift) gives a value far from 0. Only when `time_channel` is
@@ -75,6 +80,11 @@
 #' @param time_channel `NULL`, or the name of the time column in each file.
 #' @param time_bin Number, width of a time bin in the units of the time
 #'   channel. Needed when `time_channel` is given; otherwise pass `NULL`.
+#' @param area_height `NULL`, or a named character vector of area = height
+#'   channel pairs, for example `c("FSC-A" = "FSC-H")`, for the doublet check.
+#' @param area_height_quantile Number in (0, 1), the upper quantile of area /
+#'   height reported per file. Needed when `area_height` is given; otherwise
+#'   pass `NULL`.
 #'
 #' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
 #'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
@@ -91,7 +101,8 @@
 #' sw_fcs_signal_audit(
 #'   files,
 #'   channels = c("A", "B"),
-#'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL
+#'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
+#'   area_height = NULL, area_height_quantile = NULL
 #' )
 #'
 #' @export
@@ -101,7 +112,9 @@ sw_fcs_signal_audit <- function(
   range_max,
   range_min,
   time_channel,
-  time_bin
+  time_bin,
+  area_height,
+  area_height_quantile
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -109,8 +122,19 @@ sw_fcs_signal_audit <- function(
     range_max = missing(range_max),
     range_min = missing(range_min),
     time_channel = missing(time_channel),
-    time_bin = missing(time_bin)
+    time_bin = missing(time_bin),
+    area_height = missing(area_height),
+    area_height_quantile = missing(area_height_quantile)
   ))
+  if (!is.null(area_height)) {
+    if (!is.character(area_height) || is.null(names(area_height)) || any(names(area_height) == "")) {
+      stop("`area_height` must be NULL or a named character vector, area = height.", call. = FALSE)
+    }
+    if (!is.numeric(area_height_quantile) || length(area_height_quantile) != 1 ||
+      is.na(area_height_quantile) || area_height_quantile <= 0 || area_height_quantile >= 1) {
+      stop("`area_height_quantile` must be one number in (0, 1) when `area_height` is given.", call. = FALSE)
+    }
+  }
   if (
     !is.list(data) ||
       is.null(names(data)) ||
@@ -144,7 +168,7 @@ sw_fcs_signal_audit <- function(
   files <- sort(names(data))
   mats <- lapply(files, function(f) {
     m <- as.matrix(data[[f]])
-    need <- c(channels, time_channel)
+    need <- c(channels, time_channel, names(area_height), unname(area_height))
     if (!all(need %in% colnames(m))) {
       stop(
         "File '",
@@ -278,6 +302,23 @@ sw_fcs_signal_audit <- function(
   zg <- robust_z(global)
   for (j in seq_along(files)) {
     add(files[j], "global_sd_z", NA_character_, zg[j])
+  }
+
+  # Doublets (user decision 2026-11-10): a doublet has a larger area than its
+  # height suggests, so the upper tail of area / height rises. Per area-height
+  # pair, the file's area_height_quantile of the ratio, raw and as a robust z.
+  for (a in names(area_height)) {
+    h <- area_height[[a]]
+    q <- vapply(files, function(f) {
+      m <- mats[[f]]
+      ok <- is.finite(m[, a]) & is.finite(m[, h]) & m[, h] > 0
+      if (!any(ok)) NA_real_ else unname(stats::quantile(m[ok, a] / m[ok, h], area_height_quantile))
+    }, numeric(1))
+    zq <- robust_z(q)
+    for (j in seq_along(files)) {
+      add(files[j], "area_height_q", a, q[j], paste(a, "/", h))
+      add(files[j], "area_height_z", a, zq[j], paste(a, "/", h))
+    }
   }
 
   # Channel-pair Spearman correlation against the cohort median per pair.

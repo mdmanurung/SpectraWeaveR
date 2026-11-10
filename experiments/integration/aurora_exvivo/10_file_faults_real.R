@@ -117,7 +117,7 @@ long <- lapply(SEEDS, function(seed) {
       range_max = cohort_max,
       range_min = NULL,
       time_channel = "Time",
-      time_bin = time_bin
+      time_bin = time_bin, area_height = NULL, area_height_quantile = NULL
     )
     # Hit channel's row for channel checks; the file's single row for file-level checks.
     row_of <- function(check, item) {

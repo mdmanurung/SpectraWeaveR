@@ -22,7 +22,9 @@ audit <- function(d, ...) {
     range_max = NULL,
     range_min = NULL,
     time_channel = NULL,
-    time_bin = NULL
+    time_bin = NULL,
+    area_height = NULL,
+    area_height_quantile = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_fcs_signal_audit, args)
@@ -40,7 +42,7 @@ test_that("required arguments have no default", {
   expect_error(sw_fcs_signal_audit(), "no default")
   d <- make_sig()
   expect_error(
-    sw_fcs_signal_audit(d, channels = c("A", "B")),
+    sw_fcs_signal_audit(d, channels = c("A", "B"), area_height = NULL, area_height_quantile = NULL),
     "range_max"
   )
 })
@@ -113,7 +115,7 @@ test_that("rate_cv counts events per bin, so thinning a window raises it", {
   # Exact value on a hand-made file: bins of 1 unit hold 3, 1, 0, 2 events.
   m <- cbind(Time = c(0.1, 0.2, 0.3, 1.5, 3.2, 3.9), A = 1:6, B = 6:1)
   d2 <- list(x = m, y = m)
-  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1)
+  r2 <- sw_fcs_signal_audit(d2, c("A", "B"), NULL, NULL, "Time", 1, area_height = NULL, area_height_quantile = NULL)
   counts <- c(3, 1, 0, 2)
   expect_equal(
     r2$value[r2$check == "rate_cv"][1],
@@ -164,6 +166,33 @@ test_that("limits can be per channel and must cover every channel", {
   expect_error(audit(d, time_channel = "T2", time_bin = 1), "lacks column")
 })
 
+test_that("area_height_z finds the file with more doublets", {
+  set.seed(41)
+  files <- lapply(1:10, function(i) {
+    n <- 2000
+    h <- stats::rlnorm(n, log(1e5), 0.2)
+    a <- h * stats::rnorm(n, 1.2, 0.03)
+    if (i == 4) {
+      # 15% doublets: two cells pass together, area adds up, height barely rises.
+      k <- sample.int(n, 0.15 * n)
+      a[k] <- a[k] + a[sample.int(n, length(k))]
+    }
+    cbind(`FSC-A` = a, `FSC-H` = h, X = stats::rnorm(n), Y = stats::rnorm(n))
+  })
+  names(files) <- paste0("f", 1:10)
+  au <- sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, time_channel = NULL, time_bin = NULL,
+    area_height = c(`FSC-A` = "FSC-H"), area_height_quantile = 0.95)
+  z <- au[au$check == "area_height_z", ]
+  expect_equal(nrow(z), 10)
+  expect_equal(z$file[which.max(z$value)], "f4")
+  expect_gt(max(z$value), 5)
+  expect_equal(unique(z$detail), "FSC-A / FSC-H")
+  expect_error(
+    sw_fcs_signal_audit(files, c("X", "Y"), NULL, NULL, NULL, NULL, c(`FSC-A` = "FSC-H"), NULL),
+    "area_height_quantile"
+  )
+})
+
 test_that("global_sd_z finds a file widened a little in every channel", {
   set.seed(31)
   files <- lapply(1:12, function(i) {
@@ -173,7 +202,7 @@ test_that("global_sd_z finds a file widened a little in every channel", {
     m
   })
   names(files) <- paste0("f", 1:12)
-  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL)
+  au <- sw_fcs_signal_audit(files, paste0("c", 1:6), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
   g <- au[au$check == "global_sd_z", ]
   expect_equal(nrow(g), 12)
   expect_true(all(is.na(g$channel)))
@@ -188,7 +217,7 @@ test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has on
     cbind(A = m + stats::rnorm(1001, 0, 1e-9), B = stats::rnorm(1001), C = stats::rnorm(1001))
   })
   names(files) <- paste0("f", 1:5)
-  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL)
+  au <- sw_fcs_signal_audit(files, c("A", "B", "C"), NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL)
   z <- au$value[au$check == "median_z" & au$channel == "A"]
   # Median of the file medians is 2 and their raw MAD is 1, so z = (m - 2) / 1.4826.
   expect_equal(z, (meds - 2) / 1.4826, tolerance = 1e-6)

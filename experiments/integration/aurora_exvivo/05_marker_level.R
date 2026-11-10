@@ -80,7 +80,7 @@ long <- lapply(SEEDS, \(sd) {
       range_max = NULL,
       range_min = NULL,
       time_channel = "Time",
-      time_bin = time_bin
+      time_bin = time_bin, area_height = NULL, area_height_quantile = NULL
     )
     a <- aud[aud$check == j$check, ]
     mx <- as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[names(files)])

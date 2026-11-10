@@ -34,7 +34,7 @@ dx <- sw_diagnose(
   header = NULL,
   signal = list(
     channels = chans, range_max = 4e6, range_min = NULL,
-    time_channel = "Time", time_bin = 5
+    time_channel = "Time", time_bin = 5, area_height = NULL, area_height_quantile = NULL
   ),
   anomaly = list(
     channels = chans, features = c("quantile", "emd"), quantile_step = 0.1,

@@ -76,7 +76,7 @@ dx <- sw_diagnose(
     range_max = NULL, # instrument maximum on the transformed scale is not known
     range_min = NULL,
     time_channel = "Time",
-    time_bin = time_bin
+    time_bin = time_bin, area_height = NULL, area_height_quantile = NULL
   ),
   anomaly = list(
     channels = channels,
