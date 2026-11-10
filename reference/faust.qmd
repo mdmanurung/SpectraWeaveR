@@ -50,7 +50,7 @@ labels_before <- sw_faust_labels(run_before, events_before)
 cmp <- sw_faust_compare(
   labels_before, labels_after, events_before, events_after,
   batch = batch, role = role, markers = colnames(events_before[[1]]),
-  match_by = "exact", ari_scope = "file", median_scope = "file"
+  match_by = "marker_state", ari_scope = "file", median_scope = "file"
 )
 ```
 
@@ -72,6 +72,9 @@ package defaults.
   `CD3~2~2~` (level 2 of 2). A phenotype found on one side only gets `NA` on the
   other side. FAUST may drop a marker by depth score on one side, which changes
   every string; `match_by = "exact"` then shows `NA` and not a wrong match.
+  FAUST also orders the markers per run, so the same phenotype can get a
+  different string. `match_by = "marker_state"` sorts the tokens by marker
+  before matching; a changed marker set still gives `NA`.
 - **Unclassified bin.** The all-zero label stays in the table as its own phenotype.
 - **Batch and donor.** If donors nest in batches, a phenotype that differs by
   batch among donor files is confounded with donor. `prop_by_batch_*` is split by
@@ -91,3 +94,27 @@ package defaults.
 | `prop_before`, `prop_after`, `prop_diff` | file | phenotype | share of the file's events |
 | `median_before`, `median_after`, `median_diff` | file or `pooled` | marker | median over the phenotype's events |
 | `prop_by_batch_before`, `prop_by_batch_after` | role | phenotype | range over batches of the per-batch median share |
+
+## Result on the Aurora ex vivo files
+
+149 files (4 batches, 4 reference files), 5000 events each, 37 markers, cyCombine
+with `norm_method = "rank"`. FAUST ran once on the data before correction and
+once after, with the same settings. It found 43 phenotypes before and 48 after;
+about 52% of events stay unclassified both times. Run:
+`experiments/integration/aurora_exvivo/15_faust_before_after.R`.
+
+Correction kept most labels. The per-file ARI between the two label sets has a
+median of 0.77 (range 0.19 to 0.89), and the batch medians lie between 0.73 and
+0.79. Two reference files score low: 0.49 in B3 and 0.28 in B4.
+
+![ARI before vs after correction, one point per file](figures/faust_ari.png)
+
+The two FAUST runs list the same markers in a different order, so
+`match_by = "exact"` matched only the unclassified bin. With
+`match_by = "marker_state"` all 43 phenotypes found before correction match one
+found after. In the eight largest phenotypes, the donor median share per batch
+moves by at most 2.7 percentage points (unclassified, B1); the median move is
+0.4 points. The reference files sit apart from the
+donors in several phenotypes.
+
+![Phenotype shares per batch before and after correction](figures/faust_prop_by_batch.png)

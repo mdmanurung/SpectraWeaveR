@@ -134,3 +134,4 @@ files and the reference-only view (W7) is in the report.
 | G11 FAUST annotationForestDepth | 3 (FAUST default), passed explicitly. |
 | G12 FAUST prop_by_batch | Range over batches of the per-batch median share, before and after correction. |
 | G13 FAUST correction markers | Batch correction uses the same 37 markers as FAUST (AF and dead dye excluded). |
+| G14 FAUST phenotype match (F17) | `match_by = "marker_state"`: sort each phenotype's marker tokens before matching. FAUST orders markers per run, so exact strings matched only the unclassified bin. |
