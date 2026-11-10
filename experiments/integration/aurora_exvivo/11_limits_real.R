@@ -25,8 +25,10 @@ SPLIT_SD <- c(0.5, 1, 1.5) # half-distance between the two modes, in marker SD
 RARE_SD <- c(1, 2, 3) # shift inside the smallest cluster, in marker SD
 CLUSTER_K <- 6 # as in 10_file_faults_real.R
 CLUSTER_EVENTS <- 2000
-EMD_EVENTS <- 2000
+EMD_EVENTS <- as.integer(Sys.getenv("SW_EMD_EVENTS", "2000")) # files hold 5000 events
 EMD_POOL <- 20000
+ONLY_FAULT <- Sys.getenv("SW_ONLY_FAULT", "") # "" = all faults
+SUFFIX <- if (EMD_EVENTS == 2000 && ONLY_FAULT == "") "" else paste0("_emd", EMD_EVENTS, ONLY_FAULT)
 
 ev <- readRDS(file.path(run_dir, "events.rds"))
 info <- read.csv(file.path(run_dir, "files.csv"))
@@ -57,6 +59,7 @@ grid <- bind_rows(
   tibble(fault = "bimodal", size = SPLIT_SD),
   tibble(fault = "rare_pop", size = RARE_SD)
 )
+if (ONLY_FAULT != "") grid <- grid[grid$fault == ONLY_FAULT, ]
 long <- lapply(SEEDS, function(seed) {
   lapply(seq_len(nrow(grid)), function(g) {
     fault <- grid$fault[g]
@@ -105,7 +108,7 @@ long <- lapply(SEEDS, function(seed) {
   unlist(recursive = FALSE) |>
   unname() |>
   bind_rows()
-write.csv(long, file.path(run_dir, "limits_real_long.csv"), row.names = FALSE)
+write.csv(long, file.path(run_dir, paste0("limits_real_long", SUFFIX, ".csv")), row.names = FALSE)
 
 mat <- long |>
   summarise(
@@ -113,7 +116,7 @@ mat <- long |>
     auroc = mean(auroc, na.rm = TRUE),
     .by = c(fault, size, check)
   )
-write.csv(mat, file.path(run_dir, "figure_source_data_limits_real.csv"), row.names = FALSE)
+write.csv(mat, file.path(run_dir, paste0("figure_source_data_limits_real", SUFFIX, ".csv")), row.names = FALSE)
 print(as.data.frame(mutate(mat, across(c(auroc, ci95_half), \(x) round(x, 2)))))
 p <- ggplot(mat, aes(size, auroc, colour = check)) +
   geom_hline(yintercept = c(0.5, 0.9), linetype = 2, colour = "grey60") +
@@ -121,4 +124,4 @@ p <- ggplot(mat, aes(size, auroc, colour = check)) +
   geom_line() +
   facet_wrap(vars(fault), scales = "free_x") +
   labs(x = "Fault size (marker SD)", y = "AUROC on real files (mean, 95% CI over 5 seeds)", colour = NULL)
-ggsave(file.path(run_dir, "fig_limits_real.png"), p, width = 150, height = 70, units = "mm", dpi = 200)
+ggsave(file.path(run_dir, paste0("fig_limits_real", SUFFIX, ".png")), p, width = 150, height = 70, units = "mm", dpi = 200)
