@@ -25,7 +25,7 @@ Imports:
     openCyto (>= 2.6.0),
     PeacoQC (>= 1.4.0),
     kohonen (>= 3.0.0),
-    cyCombine (>= 0.2.7),
+    cyCombine (>= 0.3.0),
     dplyr (>= 1.1.0),
     tibble (>= 3.1.0),
     methods,

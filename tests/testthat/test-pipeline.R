@@ -146,15 +146,19 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
     unlink(out_dir, recursive = TRUE)
   })
 
-  make_fcs <- function(filename, n = 300, batch_shift = 0) {
+  # PeacoQC bins events over time and smooths the bins, so each file needs a
+  # Time channel and enough events for several bins (300 events gave fewer
+  # than four and stopped smooth.spline).
+  make_fcs <- function(filename, n = 6000, batch_shift = 0) {
     mat <- matrix(
-      c(abs(rnorm(n, 150000, 30000)),       # FSC-A
+      c(sort(runif(n, 0, 1000)),             # Time
+        abs(rnorm(n, 150000, 30000)),       # FSC-A
         abs(rnorm(n, 50000, 15000)),         # SSC-A
         abs(rnorm(n, 1000 + batch_shift, 300)),  # CD3
         abs(rnorm(n, 2000 + batch_shift, 500)),  # CD4
         abs(rnorm(n, 500 + batch_shift, 200))),   # CD8
-      ncol = 5,
-      dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8"))
+      ncol = 6,
+      dimnames = list(NULL, c("Time", "FSC-A", "SSC-A", "CD3", "CD4", "CD8"))
     )
     storage.mode(mat) <- "double"
     ff <- flowCore::flowFrame(mat)

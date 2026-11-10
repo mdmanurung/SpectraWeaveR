@@ -242,6 +242,18 @@ sw_pipeline_run_all <- function(fcs_dir,
                                                 "condition")),
                                   drop = FALSE]
 
+  # The cleaned frames are named by file; batch correction looks samples up
+  # by the `sample` column, so rename file -> sample (they differ in general).
+  sample_of_file <- sample_meta$sample[match(names(ff_list_clean), sample_meta$file)]
+  if (anyNA(sample_of_file)) {
+    stop(
+      "No sample_meta row for file(s): ",
+      paste(names(ff_list_clean)[is.na(sample_of_file)], collapse = ", "),
+      call. = FALSE
+    )
+  }
+  names(ff_list_clean) <- sample_of_file
+
   uncorrected <- sw_correct_prepare(
     ff_list_clean,
     sample_meta = correction_meta,
