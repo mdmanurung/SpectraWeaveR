@@ -33,6 +33,11 @@
 #' with \code{"batch"}, the anchor rows of each batch share a random
 #' discrepancy \eqn{d_b \sim N(0, \tau_d^2)} that is not part of the batch
 #' effect, so anchors that disagree with the reference donors lose weight.
+#' \code{anchor_batches} (required when \code{anchors} is given) is
+#' \code{"all"} or \code{"unreferenced"}: with \code{"unreferenced"}, a
+#' (population, marker) design keeps anchor rows only in batches without a
+#' reference row and in the anchor batch, so batches with reference donors are
+#' fitted from their donors alone.
 #' \code{se_donor} holds the posterior standard error of the effect, from the
 #' prediction error covariance; \code{df} holds its Satterthwaite degrees of
 #' freedom from the inverse REML information, with components at the floor
@@ -258,7 +263,7 @@ NULL
 }
 
 .sw_heb_fit <- function(xm, cells, anchor, min_cells, hierarchy, seed, variance_floor, pool, anchor_effect,
-                        variance_prior, residual_model, anchors, anchor_discrepancy, ...) {
+                        variance_prior, residual_model, anchors, anchor_discrepancy, anchor_batches = NULL, ...) {
   if (!is.data.frame(hierarchy) || !all(c("batch", "study") %in% names(hierarchy))) {
     stop("heb needs hierarchy = data frame with columns 'batch' and 'study'.", call. = FALSE)
   }
@@ -283,6 +288,11 @@ NULL
   if (missing(anchor_discrepancy) || !(identical(anchor_discrepancy, "none") || identical(anchor_discrepancy, "batch"))) {
     stop("heb needs anchor_discrepancy = 'none' or 'batch' (no default; plan A11).", call. = FALSE)
   }
+  # Plan A13: needed only when anchors are supplied; NULL stands for "not given".
+  if (!is.null(anchors) &&
+    !(identical(anchor_batches, "all") || identical(anchor_batches, "unreferenced"))) {
+    stop("heb with anchors needs anchor_batches = 'all' or 'unreferenced' (no default; plan A13).", call. = FALSE)
+  }
   s <- .sw_ps_summaries(xm, cells, min_cells)
   if (nrow(s$summ) == 0) {
     stop("No reference summary has at least min_cells cells.", call. = FALSE)
@@ -300,9 +310,15 @@ NULL
   anchor_for <- .sw_heb_anchor_rows(anchors, anc, anchor, hierarchy)
   designs <- lapply(split(seq_len(nrow(s$summ)), key), function(ii) {
     d <- s$summ[ii, , drop = FALSE]
+    ar <- anchor_for(d$population[[1]], d$marker[[1]])
+    # Plan A13 "unreferenced": anchor rows only in batches without a reference row in this design, plus the
+    # anchor batch that ties the anchor intercept; none at all when no such batch has anchor rows.
+    if (!is.null(ar) && identical(anchor_batches, "unreferenced")) {
+      ar <- ar[ar$batch == anchor | !ar$batch %in% d$batch, , drop = FALSE]
+      if (!any(ar$batch != anchor)) ar <- NULL
+    }
     .sw_heb_design(d, hierarchy, anchor, anchor_effect, residual_model,
-                   anchor_rows = anchor_for(d$population[[1]], d$marker[[1]]),
-                   anchor_discrepancy = anchor_discrepancy)
+                   anchor_rows = ar, anchor_discrepancy = anchor_discrepancy)
   })
   designs <- designs[!vapply(designs, is.null, logical(1))]
   # Which designs share variance components.

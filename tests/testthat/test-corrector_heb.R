@@ -259,13 +259,13 @@ test_that("internal anchors give a batch without reference donors an effect near
     m2, minimum_batches = 2, minimum_batches_origin = "test", require_shared_reference = TRUE,
     anchor = "s1_r1"
   )
-  fit <- function(x, anc, manifest = s$manifest, audit = s$audit) {
+  fit <- function(x, anc, manifest = s$manifest, audit = s$audit, anchor_batches = "all") {
     sw_corrector_fit(
       x, manifest, audit, population = rep("T", nrow(x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
       anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "known_plus_extra",
-      anchors = anc, anchor_discrepancy = "none", seed = 1
+      anchors = anc, anchor_discrepancy = "none", anchor_batches = anchor_batches, seed = 1
     )
   }
   full <- fit(s$x, NULL)$effects
@@ -289,6 +289,19 @@ test_that("internal anchors give a batch without reference donors an effect near
   truth <- -0.4 + run_eff[6] - run_eff[1]
   expect_lt(abs(e$estimate - truth), 3 * e$se_donor)
   expect_true("s3_r2" %in% with$known_batches)
+
+  # Plan A13: anchor_batches = "unreferenced" keeps anchor rows only in the anchor batch and in batches
+  # without reference donors. With every batch referenced, the fit is exactly the fit without anchors.
+  unref_full <- fit(s$x, anchors, anchor_batches = "unreferenced")$effects
+  expect_equal(unref_full$estimate, full$estimate, tolerance = 1e-10)
+  expect_equal(unref_full$se_donor, full$se_donor, tolerance = 1e-10)
+  # The batch without reference donors still gets its anchor-based effect.
+  unref <- fit(s$x, anchors, man2, audit2, anchor_batches = "unreferenced")$effects
+  e2 <- unref[unref$batch == "s3_r2", ]
+  expect_equal(e2$support, "joint_reml_internal_anchor")
+  expect_lt(abs(e2$estimate - truth), 3 * e2$se_donor)
+  # Required (no default) once anchors are supplied.
+  expect_error(fit(s$x, anchors, anchor_batches = NULL), "anchor_batches = 'all' or 'unreferenced'")
 })
 
 # Plan A11: anchor discrepancy d_b ~ N(0, tau_d^2) on anchor rows ------------------------------
