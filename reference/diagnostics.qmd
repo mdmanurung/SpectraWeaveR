@@ -79,6 +79,7 @@ no real-file evidence yet.
 | Clog / event-rate drop | `rate_cv` | 1.00 | 1.00 (80% drop over 30% of the run) |
 | Drift within a file | `time_trend` | 1.00 | 1.00 (1 SD over the run) |
 | Debris spike | `corr_shift` | 1.00 | 1.00 (10% of events) |
+| Doublets | `area_height_z` (`FSC-A / FSC-H`) | unit test | 1.00 at 2% with quantile 0.99; 0.99 at 5% with 0.95 (72 CytoBatchFlagR files) |
 | Spillover between two channels | `corr_pair_z` (per pair row) | 1.00 (`corr_shift`) | 0.99 at slope 0.3 (`corr_shift` 0.66; the max over pairs 0.62) |
 | One-marker shift | `median_z` | 0.99 at 0.5 SD; ~0.6 at 0.2 SD | 0.95 at 1 SD, 0.82 at 0.3 SD (hit marker's row) |
 | One-marker stretch | `sd_z` | 1.00 at x1.2; 0.57 at x1.05 | 0.94 at x1.5, 0.80 at x1.3 (hit marker's row) |
@@ -368,6 +369,15 @@ samples in one batch (January 2023), and jumps for single samples inside a
 batch.
 
 ![CD3 gain per file over acquisition dates](figures/cbf_cd3_gain.png)
+
+Doublets were injected into 18 of the 72 files (2%, 5% or 10% of events, 5
+seeds): an injected event adds a partner's area channels and keeps the larger
+height. `area_height_z` on `FSC-A / FSC-H` finds them at AUROC 1.00 from 2%
+with quantile 0.99, and from 5% with quantile 0.95 (0.68 at 2%). The SD
+checks stay near chance. The files were gated to singlets before upload, so
+their own doublet rate is low; real doublets also differ from this ideal sum.
+
+![Doublet AUROC per injected share and quantile](figures/cbf_doublets.png)
 
 ## What the checks cannot see
 
