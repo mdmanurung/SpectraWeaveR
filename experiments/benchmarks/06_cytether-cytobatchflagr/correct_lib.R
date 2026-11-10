@@ -17,6 +17,7 @@ CYTOFIN_MODE <- "meanshift" # N7
 MIN_BATCHES <- 2
 MIN_BATCHES_ORIGIN <- "two batches are the least that define a shift"
 T6_TRANSFORM <- list(name = "asinh", cofactor = 6000) # Q4
+T6_METHODS <- c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin", "cytofin_pop") # cytofin_pop: F2
 
 correct_t6 <- function(x, meta, population, method, markers) {
   if (method == "none") {
@@ -25,6 +26,23 @@ correct_t6 <- function(x, meta, population, method, markers) {
   if (method == "cycombine") return(run_cycombine(x, meta, markers, ANCHOR))
   if (method == "cytonorm") return(run_cytonorm(x, meta, markers))
   if (method == "cytofin") return(run_cytofin(x, meta, markers, ANCHOR, mode = CYTOFIN_MODE))
+  if (method == "cytofin_pop") {
+    # F2 (adapted, not the published method): CytofIn within each population. A (batch, population)
+    # anchor needs MIN_CELLS calibrating cells (G1, as for the cyTether engines); otherwise its cells stay raw.
+    calibrates <- meta$is_reference & !meta$is_holdout_reference
+    n_cal <- stats::ave(as.numeric(calibrates), meta$batch, population, FUN = sum)
+    meta_p <- dplyr::mutate(meta, is_reference = is_reference & n_cal >= MIN_CELLS)
+    out <- x
+    abstained <- 0L
+    for (p in sort(unique(population))) {
+      rows <- which(population == p)
+      r <- run_cytofin(x[rows, , drop = FALSE], meta_p[rows, ], markers, ANCHOR, mode = CYTOFIN_MODE)
+      if (isTRUE(r$supported)) out[rows, ] <- r$x else r$abstained <- length(rows)
+      abstained <- abstained + r$abstained
+    }
+    return(list(x = out, supported = TRUE, abstained = abstained, fits_on_heldout = FALSE,
+                reason = paste0("cytofin mode=", CYTOFIN_MODE, " within each population; abstained = raw cells")))
+  }
   # cyTether engines: fit on reference cells, integrate every cell with abstention.
   samples <- meta |>
     dplyr::distinct(sample_id, batch, donor_id, is_reference) |>
@@ -50,7 +68,8 @@ correct_t6 <- function(x, meta, population, method, markers) {
     transform = T6_TRANSFORM, anchor = ANCHOR, engine = method,
     min_cells = MIN_CELLS, seed = 1, hierarchy = hierarchy, variance_floor = VARIANCE_FLOOR,
     pool = if (method == "heb") HEB_POOL else NULL,
-    anchor_effect = if (method == "heb") "random" else NULL
+    anchor_effect = if (method == "heb") "random" else NULL,
+    variance_prior = if (method == "heb") "none" else NULL # N4 as approved; F6 is tested on synthetic dev first
   )
   out <- sw_corrector_integrate(model, xt, manifest, population = population,
                                 transform = T6_TRANSFORM, unsupported = "abstain")

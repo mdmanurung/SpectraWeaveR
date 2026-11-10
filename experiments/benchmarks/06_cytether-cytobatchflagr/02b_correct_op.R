@@ -21,7 +21,7 @@ prep_dir <- args[[1]]
 method <- args[[3]]
 fold <- args[[4]]
 split_k <- as.integer(args[[5]])
-stopifnot("unknown method" = method %in% c("none", "paired_shift", "heb", "cycombine", "cytonorm", "cytofin"))
+stopifnot("unknown method" = method %in% T6_METHODS)
 out_dir <- file.path(args[[2]], method, fold, paste0("split_", split_k))
 if (dir.exists(out_dir)) stop(sprintf("%s exists; use a new out_dir.", out_dir), call. = FALSE)
 
