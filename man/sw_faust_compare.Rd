@@ -28,7 +28,11 @@ and the role (for example reference or donor) of each file.}
 
 \item{markers}{Character vector of columns of the matrices for the medians.}
 
-\item{match_by}{\code{"exact"}: phenotype strings must be equal.}
+\item{match_by}{\code{"exact"}: phenotype strings must be equal.
+\code{"marker_state"}: the \verb{marker~level~levels~} tokens of each phenotype are
+sorted by marker before matching, so the same marker states match
+whatever order each FAUST run lists them in. Phenotypes whose marker sets
+differ still get \code{NA}. The output then holds the sorted strings.}
 
 \item{ari_scope}{\code{"file"} or \code{"pooled"}.}
 

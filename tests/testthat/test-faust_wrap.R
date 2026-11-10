@@ -375,6 +375,47 @@ test_that("sw_faust_compare stops on a missing argument", {
   expect_error(do.call(sw_faust_compare, args), "'median_scope'")
   expect_error(
     do.call(sw_faust_compare, compare_args(lab, lab, match_by = "fuzzy")),
-    "exact"
+    "marker_state"
+  )
+})
+
+test_that("match_by marker_state matches the same states listed in another order", {
+  gs <- make_gs()
+  lab_b <- sw_faust_labels(
+    make_run(gs, c("M1~1~2~M2~2~2~", "M1~2~2~M2~1~2~", "0_0"), "b"),
+    faust_data()
+  )
+  lab_a <- sw_faust_labels(
+    make_run(gs, c("M2~2~2~M1~1~2~", "M2~1~2~M1~2~2~", "0_0"), "a"),
+    faust_data()
+  )
+  exact <- do.call(sw_faust_compare, compare_args(lab_b, lab_a))
+  expect_true(all(is.na(exact$value[
+    exact$check == "prop_diff" & exact$phenotype != "0_0"
+  ])))
+  out <- do.call(
+    sw_faust_compare,
+    compare_args(lab_b, lab_a, match_by = "marker_state")
+  )
+  expect_setequal(
+    unique(out$phenotype[out$check == "prop_before"]),
+    c("M1~1~2~M2~2~2~", "M1~2~2~M2~1~2~", "0_0")
+  )
+  expect_true(all(out$value[out$check %in% c("prop_diff", "median_diff")] == 0))
+  expect_equal(out$value[out$check == "ari"], rep(1, 4), ignore_attr = TRUE)
+})
+
+test_that("match_by marker_state stops when two phenotypes collapse", {
+  gs <- make_gs()
+  lab <- sw_faust_labels(
+    make_run(gs, c("M1~1~2~M2~2~2~", "M2~2~2~M1~1~2~"), "b"),
+    faust_data()
+  )
+  expect_error(
+    do.call(
+      sw_faust_compare,
+      compare_args(lab, lab, match_by = "marker_state")
+    ),
+    "same marker states"
   )
 })

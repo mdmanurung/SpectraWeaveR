@@ -558,6 +558,44 @@ sw_faust_labels <- function(run, data) {
   )
 }
 
+# Rewrite each phenotype with its marker~level~levels~ tokens sorted by
+# marker, so two runs that list markers in a different order match. The
+# unclassified bin is kept as is. Stops if two phenotypes of one run collapse
+# to the same sorted string.
+.sw_faust_sort_tokens <- function(labels) {
+  phenos <- unique(labels$cells$phenotype)
+  sorted <- vapply(
+    phenos,
+    \(p) {
+      if (.sw_faust_is_unclassified(p)) {
+        return(p)
+      }
+      tok <- regmatches(p, gregexpr("[^~]+~[0-9]+~[0-9]+~", p))[[1]]
+      if (!identical(paste(tok, collapse = ""), p)) {
+        stop(
+          sprintf(
+            "Phenotype `%s` is not a run of marker~level~levels~ tokens.",
+            p
+          ),
+          call. = FALSE
+        )
+      }
+      marker <- sub("~.*$", "", tok)
+      paste(tok[order(marker, method = "radix")], collapse = "")
+    },
+    character(1)
+  )
+  if (anyDuplicated(sorted)) {
+    stop(
+      "Two phenotypes of one run share the same marker states after sorting.",
+      call. = FALSE
+    )
+  }
+  labels$cells$phenotype <- unname(sorted[labels$cells$phenotype])
+  labels$proportions$phenotype <- unname(sorted[labels$proportions$phenotype])
+  labels
+}
+
 # Median of each marker over the cells of one phenotype, per file or pooled.
 .sw_faust_medians <- function(labels, data, markers, scope) {
   cells <- labels$cells
@@ -616,6 +654,10 @@ sw_faust_labels <- function(run, data) {
 #'   and the role (for example reference or donor) of each file.
 #' @param markers Character vector of columns of the matrices for the medians.
 #' @param match_by `"exact"`: phenotype strings must be equal.
+#'   `"marker_state"`: the `marker~level~levels~` tokens of each phenotype are
+#'   sorted by marker before matching, so the same marker states match
+#'   whatever order each FAUST run lists them in. Phenotypes whose marker sets
+#'   differ still get `NA`. The output then holds the sorted strings.
 #' @param ari_scope `"file"` or `"pooled"`.
 #' @param median_scope `"file"` (per phenotype per file) or `"pooled"` (per
 #'   phenotype over all files).
@@ -671,8 +713,12 @@ sw_faust_compare <- function(
       call. = FALSE
     )
   }
-  if (!identical(match_by, "exact")) {
-    stop("`match_by` must be \"exact\".", call. = FALSE)
+  if (length(match_by) != 1 || !match_by %in% c("exact", "marker_state")) {
+    stop("`match_by` must be \"exact\" or \"marker_state\".", call. = FALSE)
+  }
+  if (match_by == "marker_state") {
+    before <- .sw_faust_sort_tokens(before)
+    after <- .sw_faust_sort_tokens(after)
   }
   if (!ari_scope %in% c("file", "pooled") || length(ari_scope) != 1) {
     stop("`ari_scope` must be \"file\" or \"pooled\".", call. = FALSE)
