@@ -30,7 +30,7 @@ make_cohort <- function(...) {
 test_that("a widened negative in one file has the largest neg_sd_z", {
   set.seed(1)
   files <- make_cohort(neg_sd = 1)
-  na <- sw_negative_audit(files, c("A", "B", "C"), 1000, seed = 1, hyper_k = 4, pairs = NULL)
+  na <- sw_negative_audit(files, c("A", "B", "C"), 1000, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   expect_s3_class(na, "sw_negative_audit")
   z <- na[na$check == "neg_sd_z" & na$channel == "B", ]
   expect_equal(z$file[which.max(z$value)], "f10")
@@ -42,13 +42,13 @@ test_that("a widened negative in one file has the largest neg_sd_z", {
 test_that("a shifted negative and hyper-negatives are found", {
   set.seed(2)
   files <- make_cohort(neg_shift = 0.4)
-  na <- sw_negative_audit(files, c("A", "B"), 1000, seed = 1, hyper_k = 4, pairs = NULL)
+  na <- sw_negative_audit(files, c("A", "B"), 1000, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   z <- na[na$check == "neg_median_z" & na$channel == "B", ]
   expect_equal(z$file[which.max(abs(z$value))], "f10")
 
   set.seed(3)
   files <- make_cohort(hyper = 0.05)
-  na <- sw_negative_audit(files, c("A", "B"), 1000, seed = 1, hyper_k = 4, pairs = NULL)
+  na <- sw_negative_audit(files, c("A", "B"), 1000, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   h <- na[na$check == "hyper_negative_share" & na$channel == "B", ]
   expect_equal(h$file[which.max(h$value)], "f10")
   expect_gt(max(h$value), 0.01)
@@ -57,7 +57,7 @@ test_that("a shifted negative and hyper-negatives are found", {
 test_that("an angled negative shows in neg_corr_z for that pair", {
   set.seed(4)
   files <- make_cohort(angle = 0.4)
-  na <- sw_negative_audit(files, c("A", "B", "C"), 1000, seed = 1, hyper_k = 4, pairs = "all")
+  na <- sw_negative_audit(files, c("A", "B", "C"), 1000, seed = 1, hyper_k = 4, pairs = "all", spread_quantile = NULL)
   z <- na[na$check == "neg_corr_z" & na$channel == "A ~ B", ]
   expect_equal(z$file[which.max(z$value)], "f10")
   expect_setequal(unique(na$channel[na$check == "neg_corr"]), c("A ~ B", "A ~ C", "B ~ C"))
@@ -67,25 +67,25 @@ test_that("negative audit restores the RNG state and checks its input", {
   set.seed(5)
   files <- make_cohort()
   before <- .Random.seed
-  sw_negative_audit(files, "A", 500, seed = 1, hyper_k = 4, pairs = NULL)
+  sw_negative_audit(files, "A", 500, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   expect_identical(.Random.seed, before)
-  expect_error(sw_negative_audit(files, "A", 500, 1, 0, NULL), "hyper_k")
-  expect_error(sw_negative_audit(files, "Z", 500, 1, 4, NULL), "lacks")
-  expect_error(sw_negative_audit(files, "A", 5000, 1, 4, NULL), "fewer")
-  expect_error(sw_negative_audit(files, "A", 500, 1, 4, "all"), "two channels")
-  expect_error(sw_negative_audit(files, c("A", "B"), 500, 1, 4, matrix(c("A", "Q"), 1)), "not in")
+  expect_error(sw_negative_audit(files, "A", 500, 1, 0, NULL, spread_quantile = NULL), "hyper_k")
+  expect_error(sw_negative_audit(files, "Z", 500, 1, 4, NULL, spread_quantile = NULL), "lacks")
+  expect_error(sw_negative_audit(files, "A", 5000, 1, 4, NULL, spread_quantile = NULL), "fewer")
+  expect_error(sw_negative_audit(files, "A", 500, 1, 4, "all", spread_quantile = NULL), "two channels")
+  expect_error(sw_negative_audit(files, c("A", "B"), 500, 1, 4, matrix(c("A", "Q"), 1), spread_quantile = NULL), "not in")
 })
 
 test_that("a constant channel gives NA with a reason, not an error", {
   set.seed(6)
   files <- make_cohort()
   files$f1[, "C"] <- 0
-  na <- sw_negative_audit(files, c("A", "C"), 500, seed = 1, hyper_k = 4, pairs = NULL)
+  na <- sw_negative_audit(files, c("A", "C"), 500, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   row <- na[na$file == "f1" & na$channel == "C" & na$check == "neg_median", ]
   expect_true(is.na(row$value))
   expect_equal(row$detail, "constant channel")
   files$f2[1, "A"] <- NA
-  na <- sw_negative_audit(files, c("A", "C"), 1500, seed = 1, hyper_k = 4, pairs = NULL)
+  na <- sw_negative_audit(files, c("A", "C"), 1500, seed = 1, hyper_k = 4, pairs = NULL, spread_quantile = NULL)
   row <- na[na$file == "f2" & na$channel == "A" & na$check == "neg_median", ]
   expect_true(is.na(row$value))
   expect_match(row$detail, "non-finite")
@@ -103,11 +103,11 @@ test_that("sw_diagnose runs the negative module", {
     cluster = NULL,
     relativise = NULL,
     otd = NULL,
-    negative = list(channels = c("A", "B"), n_events = 500, seed = 1, hyper_k = 4, pairs = "all"),
+    negative = list(channels = c("A", "B"), n_events = 500, seed = 1, hyper_k = 4, pairs = "all", spread_quantile = 0.9),
     gate = NULL
   )
   expect_equal(attr(dx, "modules"), "negative")
-  expect_true(all(c("neg_sd_z", "neg_corr_z", "hyper_negative_share") %in% dx$check))
+  expect_true(all(c("neg_sd_z", "neg_corr_z", "hyper_negative_share", "spread_z") %in% dx$check))
 })
 
 test_that("cluster stability: identical runs score 1, and well-separated clusters are stable", {
@@ -171,8 +171,36 @@ test_that("spill_corr finds a leak from a bright channel into one that should be
   x[leak, "B"] <- x[leak, "B"] + 0.15 * x[leak, "A"]
   files[[10]] <- x
   names(files) <- paste0("f", 1:10)
-  na <- sw_negative_audit(files, c("A", "B"), 1500, seed = 1, hyper_k = 4, pairs = "all")
+  na <- sw_negative_audit(files, c("A", "B"), 1500, seed = 1, hyper_k = 4, pairs = "all", spread_quantile = NULL)
   z <- na[na$check == "spill_corr_z" & na$channel == "A > B", ]
   expect_equal(z$file[which.max(z$value)], "f10")
   expect_setequal(unique(na$channel[na$check == "spill_corr"]), c("A > B", "B > A"))
+})
+
+test_that("spread_z finds a file whose negative widens with the source signal", {
+  set.seed(12)
+  files <- lapply(1:10, \(i) make_neg_file())
+  # Spread in f10: B-negative events get zero-mean noise growing with A, so the
+  # median and the correlation stay put while the width rises with A.
+  x <- files[[10]]
+  neg_b <- x[, "B"] < 1.5
+  x[neg_b, "B"] <- x[neg_b, "B"] + stats::rnorm(sum(neg_b)) * 0.3 * pmax(x[neg_b, "A"], 0)
+  files[[10]] <- x
+  names(files) <- paste0("f", 1:10)
+  na <- sw_negative_audit(files, c("A", "B"), 1500, seed = 1, hyper_k = 4, pairs = "all", spread_quantile = 0.9)
+  z <- na[na$check == "spread_z" & na$channel == "A > B", ]
+  expect_equal(nrow(z), 10)
+  expect_equal(z$file[which.max(z$value)], "f10")
+  expect_gt(max(z$value), 3)
+  r <- na[na$check == "spread_log_ratio" & na$channel == "A > B", ]
+  expect_gt(r$value[r$file == "f10"], log(1.5))
+  expect_error(
+    sw_negative_audit(files, c("A", "B"), 1500, 1, 4, NULL, spread_quantile = 0.9),
+    "needs `pairs`"
+  )
+  expect_error(
+    sw_negative_audit(files, c("A", "B"), 1500, 1, 4, "all", spread_quantile = 0.4),
+    "spread_quantile"
+  )
+  expect_error(sw_negative_audit(files, c("A", "B"), 1500, 1, 4, "all"), "no default")
 })

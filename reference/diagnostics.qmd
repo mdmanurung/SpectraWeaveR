@@ -52,7 +52,8 @@ dx <- sw_diagnose(
     markers = chans, n_events = 1000, reference_events = 10000, blur = 0.75,
     seed = 1, max_iter = 500, tol = 1e-5
   ),
-  negative = list(channels = chans, n_events = 2000, seed = 1, hyper_k = 4, pairs = "all"),
+  negative = list(channels = chans, n_events = 2000, seed = 1, hyper_k = 4, pairs = "all",
+    spread_quantile = 0.95),
   gate = NULL
 )
 sw_diagnosis_top(dx, n = 5)
@@ -91,6 +92,7 @@ no real-file evidence yet.
 | Negative population widened | `neg_sd_z` | 1.00 at x1.5, 0.96 at x1.2 | 1.00 at x1.5 |
 | Hyper-negative events | `hyper_negative_share` | 1.00 at 1% | 1.00 at 3% |
 | Angled negative | `neg_corr_z` | 1.00 at slope 0.3 | 0.93 at slope 0.3 |
+| Spillover spread into a negative | `spread_z` (negative audit, per directed pair) | unit test | 0.98 at 1 negative SD with quantile 0.95; 0.76 at 0.5 SD; real Glehr instruments: no source spreads more on the Fortessa |
 | Leak into a negative channel | `spill_corr_z` (+ `neg_median_z` if it shifts) | 0.96 at 15% | 0.94 at 15%, 0.68 at 5% |
 | Batch shift (one marker) | `pair_emd` | 1.00 | 0.92 at 0.5 SD, 0.75 at 0.25 SD |
 | Batch stretch (one marker) | `spread_ratio` / `pair_emd` | 1.00 | 0.87 at x1.3 |
@@ -301,10 +303,27 @@ population sits higher (median 0.08 to 0.50) and is 5.6 times wider (SD 0.09
 to 0.53) in every donor; PB's negative is 2.8 times wider and lower. Other
 channels widen about 2 times but keep their median. A two-point linear map
 from a CD3 single stain cannot correct a negative population that differs in
-the full stain. Spillover spread from the panel's other dyes is a likely
-reason but was not tested.
+the full stain.
 
 ![Negative-population median, SD and separation per instrument](figures/glehr_af700_pb_negative.png)
+
+Spillover spread from the other nine dyes does not explain the wider
+negatives. `spread_log_ratio` compares the AF700 (or PB) negative's SD where a
+source dye is bright with its SD where that dye is dim. On every source it sits
+near 1 on both instruments; no source spreads more on the Fortessa (AA750 into
+AF700: 1.28 on the Aurora, 1.03 on the Fortessa, quantile 0.9). The widening
+is the same at low and high source signal, which fits a wider noise floor in
+the Fortessa's AF700 and PB detectors; that cause was not tested.
+
+![Target-negative SD ratio, source high over low, per donor and instrument](figures/glehr_spread_af700_pb.png)
+
+The spread check finds real spread when it is present. Spread injected into
+25% of real Aurora files (5 seeds) is found by `spread_z` at AUROC 0.98 with
+quantile 0.95 when the added noise equals the target's negative SD at the
+source's 90th percentile, and at 0.76 when it is half that. `neg_sd_z` (0.61
+to 0.72) and `spill_corr_z` (0.45 to 0.48) miss it.
+
+![Injected spread: AUROC per check, size and quantile](figures/aurora_spread_real.png)
 
 `separation` flags a CD3 control whose split cannot be trusted. On the
 Fortessa, the KrO-A control's CD3- and CD3+ sides overlap (separation 1.13 to

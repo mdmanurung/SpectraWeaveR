@@ -40,12 +40,21 @@
 #'   breakdown into its parent (for example PE-Cy7 into PE) and dye-dye
 #'   interactions (for example Spark UV 387 into RB670), as described in O.
 #'   Burton's Colibri Cytometry posts. Pass those pairs in `pairs`.
+#' * `spread_log_ratio`, `spread_z`: spillover spread, for each pair in both
+#'   directions (`"A > B"`), when `spread_quantile` is given. Among the events
+#'   negative in the target B, the robust SD of B where the source A is at or
+#'   above its `spread_quantile` quantile, over the robust SD of B where A is
+#'   at or below its median, as a natural log; and its robust z across files.
+#'   Spread widens the target's negative in proportion to the source signal, so
+#'   a file (or instrument) with more spread from A into B has a higher ratio.
+#'   Fewer than 10 events on either side gives `NA`.
 #'
 #' @details
 #' **Scale is yours.** `data` must be on the analysis scale. The mixture is fit
 #' on those values; a transform changes which events are negative.
 #'
-#' **No defaults.** `n_events`, `seed`, `hyper_k` and `pairs` change the
+#' **No defaults.** `n_events`, `seed`, `hyper_k`, `pairs` and
+#' `spread_quantile` change the
 #' numbers, so each must be passed. Events are drawn per file without
 #' replacement with `seed`; a file with fewer events is an error. The caller's
 #' RNG state is restored. mclust itself is deterministic.
@@ -65,6 +74,9 @@
 #' @param pairs `NULL` (no pair checks), the string `"all"` (every pair of
 #'   `channels`), or a two-column character matrix of channel pairs. Each
 #'   pair gives `neg_corr` once and `spill_corr` in both directions.
+#' @param spread_quantile `NULL` (no spread check), or one number in (0.5, 1):
+#'   the source-channel quantile above which events count as high for
+#'   `spread_log_ratio`. Needs `pairs`.
 #'
 #' @return A tibble of class `sw_negative_audit` with columns `file`, `check`,
 #'   `channel` (a channel, `"A ~ B"` for a pair, or `"A > B"` for a directed
@@ -83,13 +95,36 @@
 #'   x
 #' })
 #' names(files) <- paste0("f", 1:6)
-#' sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all")
+#' sw_negative_audit(files, c("A", "B"), n_events = 1000, seed = 1, hyper_k = 4, pairs = "all",
+#'   spread_quantile = 0.9)
 #' }
 #'
 #' @export
-sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
+sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs, spread_quantile) {
+  .sw_stop_missing(c(
+    data = missing(data),
+    channels = missing(channels),
+    n_events = missing(n_events),
+    seed = missing(seed),
+    hyper_k = missing(hyper_k),
+    pairs = missing(pairs),
+    spread_quantile = missing(spread_quantile)
+  ))
   if (!requireNamespace("mclust", quietly = TRUE)) {
     stop("Package 'mclust' is required for sw_negative_audit().", call. = FALSE)
+  }
+  if (
+    !is.null(spread_quantile) &&
+      (!is.numeric(spread_quantile) ||
+        length(spread_quantile) != 1 ||
+        !is.finite(spread_quantile) ||
+        spread_quantile <= 0.5 ||
+        spread_quantile >= 1)
+  ) {
+    stop("`spread_quantile` must be NULL or one number in (0.5, 1).", call. = FALSE)
+  }
+  if (!is.null(spread_quantile) && is.null(pairs)) {
+    stop("`spread_quantile` needs `pairs`.", call. = FALSE)
   }
   if (!is.list(data) || is.null(names(data)) || length(data) < 2) {
     stop("`data` must be a named list of at least two matrices.", call. = FALSE)
@@ -154,12 +189,36 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
           } else {
             suppressWarnings(stats::cor(x[keep, st[1]], x[keep, st[2]], method = "spearman"))
           }
-          tibble::tibble(
+          row <- tibble::tibble(
             file = f,
             check = "spill_corr",
             channel = paste(st[1], st[2], sep = " > "),
             value = v,
             detail = paste0("events=", if (anyNA(keep)) NA else sum(keep))
+          )
+          if (is.null(spread_quantile)) {
+            return(row)
+          }
+          # Spread: target-negative width where the source is high vs low.
+          s <- x[, st[1]]
+          hi <- tgt & s >= stats::quantile(s, spread_quantile)
+          lo <- tgt & s <= stats::median(s)
+          ratio <- if (anyNA(tgt) || sum(hi) < 10 || sum(lo) < 10) {
+            NA_real_
+          } else {
+            sd_hi <- stats::mad(x[hi, st[2]])
+            sd_lo <- stats::mad(x[lo, st[2]])
+            if (sd_hi > 0 && sd_lo > 0) log(sd_hi / sd_lo) else NA_real_
+          }
+          dplyr::bind_rows(
+            row,
+            tibble::tibble(
+              file = f,
+              check = "spread_log_ratio",
+              channel = paste(st[1], st[2], sep = " > "),
+              value = ratio,
+              detail = paste0("high=", if (anyNA(tgt)) NA else sum(hi), ", low=", if (anyNA(tgt)) NA else sum(lo))
+            )
           )
         })
         dplyr::bind_rows(
@@ -189,7 +248,8 @@ sw_negative_audit <- function(data, channels, n_events, seed, hyper_k, pairs) {
       c("neg_median", "neg_median_z"),
       c("neg_sd", "neg_sd_z"),
       c("neg_corr", "neg_corr_z"),
-      c("spill_corr", "spill_corr_z")
+      c("spill_corr", "spill_corr_z"),
+      c("spread_log_ratio", "spread_z")
     ),
     function(ck) {
       d <- out[out$check == ck[[1]], ]
