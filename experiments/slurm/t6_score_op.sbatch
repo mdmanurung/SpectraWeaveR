@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Purpose: run 04_score_op.py for one (fold, set) of the T6 OpenProblems track; a job array over 36.
-# Run:     sbatch --array=0-35%5 experiments/slurm/t6_score_op.sbatch <prep_dir> <results_dir> <score_dir>
-#          index i -> fold FOLDS[i / 9], set SETS[i % 9]; %5 caps concurrent jobs. Then run 05_scale_op.py.
+# Purpose: run 04_score_op.py for one (fold, set) of the T6 OpenProblems track; a job array over 40 (10 sets per fold; jobs before 2026-11-10 21h used 9 sets).
+# Run:     sbatch --array=0-39%5 experiments/slurm/t6_score_op.sbatch <prep_dir> <results_dir> <score_dir>
+#          index i -> fold FOLDS[i / 10], set SETS[i % 10]; %5 caps concurrent jobs. Then run 05_scale_op.py.
 # Inputs:  <prep_dir> from 01b_prep_op.R; <results_dir> from t6_correct_op.sbatch
 # Outputs: <score_dir>/<fold>/<set>/scores_raw.csv and slurm-<jobid>_<index>.out in the submit directory
 #SBATCH --job-name=sw_t6sc
@@ -16,9 +16,9 @@ prep_dir=${1:?usage: sbatch t6_score_op.sbatch <prep_dir> <results_dir> <score_d
 results_dir=${2:?}
 score_dir=${3:?}
 FOLDS=(op_tcu1_tcs3 op_tcu1_tcs4 op_tcu2_tcs3 op_tcu2_tcs4)
-SETS=(no_integration perfect_integration shuffle_integration_globally none paired_shift heb cycombine cytonorm cytofin)
-fold=${FOLDS[$((SLURM_ARRAY_TASK_ID / 9))]}
-set=${SETS[$((SLURM_ARRAY_TASK_ID % 9))]}
+SETS=(no_integration perfect_integration shuffle_integration_globally none paired_shift heb cycombine cytonorm cytofin cytofin_pop)
+fold=${FOLDS[$((SLURM_ARRAY_TASK_ID / 10))]}
+set=${SETS[$((SLURM_ARRAY_TASK_ID % 10))]}
 
 cd /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR/.claude/worktrees/cytether-benchmark
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
