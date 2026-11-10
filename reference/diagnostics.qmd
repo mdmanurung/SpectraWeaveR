@@ -96,7 +96,7 @@ no real-file evidence yet.
 | Batch split into two modes | `spread_ratio` | **0.86 (weak, seeds 0.57 to 1.0)** | 0.99 at ±1 SD; ±0.5 SD best `pair_emd` 0.78, below the bar |
 | Drift across a batch | `order_rho` / `pair_emd` | 1.00 | 0.86 at 0.5 SD |
 | Instrument offset and gain per batch | `sw_relativise_diagnose()` gain | gain recovered (cor 0.93 to 1.00) | real, not injected: same 9 donors on Aurora and Fortessa; Aurora gains 2.0 to 2.4x the cohort median, Fortessa 0.06 to 0.39x |
-| Instrument batch per marker | `eta2` | see batch rows | real: median 0.88 before CD3 relativisation, 0.07 after (AF700, PB, AA750 keep 0.35 to 0.88) |
+| Instrument batch per marker | `eta2` | see batch rows | real, two studies: median 0.88 / 0.82 before CD3 relativisation, 0.07 / 0.017 after; AF700 and PB keep 0.5 to 0.9 in both |
 | Batch effect, biology fixed | `eta2` | see batch rows | real: same 4 controls in 18 batches; eta2 0.22 to 0.95 per marker |
 | Instrument gain drift over dates | `gain_order_rho` (relativise) | see relativisation | real: CD3 gain rho -0.52 over two years; one batch-wide jump |
 | Weak CD3 anchor in a control | `separation` (relativise) | 1 test case | real: Fortessa KrO-A 1.13 to 1.21, others 2.2 to 3.2; only KrO-A's M is off (up to 0.28 log) |
@@ -268,6 +268,16 @@ AF700, PB and AA750 keep 35% to 88%, so on those channels CD3 does not anchor
 the two instruments alike.
 
 ![Instrument eta2 per marker before and after CD3 relativisation](figures/glehr_instrument_eta2.png)
+
+The same holds in the study's second arm, FORT: 14 samples on a Fortessa, an
+LX and a Navios. Instrument eta2 falls from a median of 0.82 to 0.013 (authors)
+and 0.017 (ours), and our values overlap the authors' on every marker. AF700
+and PB again keep 0.76 and 0.51. So in two studies and four instruments, CD3
+does not anchor those two channels alike. The authors rescaled scatter and
+time in these files, so their events were matched back through a per-file
+linear map (all 42 files matched exactly).
+
+![FORT: instrument eta2 per marker over three instruments](figures/glehr_fort_instrument_eta2.png)
 
 `separation` flags a CD3 control whose split cannot be trusted. On the
 Fortessa, the KrO-A control's CD3- and CD3+ sides overlap (separation 1.13 to
