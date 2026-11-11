@@ -291,7 +291,8 @@ correct_stage <- function(stage_dir) {
       (if (endsWith(method, "_sc")) "log_sd" else "none")
     } else {
       NULL
-    } # plan F12
+    }, # plan F12
+    unbridged = if (engine == "heb") "stop" else NULL # plan A15: keeps the audit gate, as before
   )
 
   # New batches first, without holdout cells, so holdout cells never calibrate.

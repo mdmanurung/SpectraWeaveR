@@ -234,7 +234,8 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
       (if (endsWith(method, "_sc")) "log_sd" else "none")
     } else {
       NULL
-    } # plan F12
+    }, # plan F12
+    unbridged = if (is_heb) "stop" else NULL # plan A15: keeps the audit gate, as before
   )
   out <- sw_corrector_integrate(
     model,

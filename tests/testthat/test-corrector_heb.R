@@ -45,7 +45,7 @@ heb_fit <- function(s, x = s$x, ...) {
   sw_corrector_fit(
     x, s$manifest, s$audit, population = rep("T", nrow(x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1, ...
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1, ...
   )
 }
 
@@ -56,7 +56,7 @@ test_that("heb is registered and needs its required arguments", {
     sw_corrector_fit(
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-      min_cells = 10, hierarchy = NULL, seed = 1, variance_floor = 1e-8
+      min_cells = 10, hierarchy = NULL, seed = 1, variance_floor = 1e-8, unbridged = "stop"
     ),
     "hierarchy"
   )
@@ -64,7 +64,7 @@ test_that("heb is registered and needs its required arguments", {
     sw_corrector_fit(
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-      min_cells = 10, hierarchy = s$hierarchy, seed = 1
+      min_cells = 10, hierarchy = s$hierarchy, seed = 1, unbridged = "stop"
     ),
     "variance_floor"
   )
@@ -76,14 +76,14 @@ test_that("heb needs pool and pooled variance runs", {
     sw_corrector_fit(
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, seed = 1
+      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, seed = 1, unbridged = "stop"
     ),
     "pool"
   )
   eff_pop <- sw_corrector_fit(
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
-    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
+    min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "population", anchor_effect = "random", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1
   )$effects
   # One population and one marker: pooling over populations changes nothing.
   expect_equal(eff_pop$estimate, heb_fit(s)$effects$estimate, tolerance = 1e-6)
@@ -115,7 +115,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
       s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-      anchor_effect = "random", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
+      anchor_effect = "random", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1
     ),
     "variance_prior"
   )
@@ -129,7 +129,7 @@ test_that("heb needs variance_prior, and the boundary prior keeps one-donor SEs 
     s1$x, s1$manifest, s1$audit, population = rep("T", nrow(s1$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s1$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
+    anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1
   )$effects
   se <- bap$se_donor[bap$batch != "s1_r1"]
   expect_true(all(se > 1e-3))
@@ -145,7 +145,7 @@ test_that("known sampling variance sets the one-donor, one-aliquot SE", {
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
+    anchor_effect = "random", variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1
   )$effects
   # Each contrast is a difference of two batch means of 40 cells (sd 0.4 before asinh): the SE
   # cannot fall below the sampling SE of that difference, about sqrt(2) * 0.4 / sqrt(40) on asinh/5.
@@ -208,7 +208,7 @@ test_that("anchor_effect = 'fixed' pins the anchor at zero and reduces to paired
     s$x, s$manifest, s$audit, population = rep("T", nrow(s$x)), markers = "m1",
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
-    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", seed = 1
+    anchor_effect = "fixed", variance_prior = "none", residual_model = "estimated", anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = "stop", seed = 1
   )$effects
   expect_equal(fixed$estimate[fixed$batch == "s1_r1"], 0)
   expect_equal(fixed$se_donor[fixed$batch == "s1_r1"], 0)
@@ -265,7 +265,7 @@ test_that("internal anchors give a batch without reference donors an effect near
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
       anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "known_plus_extra",
-      anchors = anc, anchor_discrepancy = "none", scale_model = "none", anchor_batches = anchor_batches, seed = 1
+      anchors = anc, anchor_discrepancy = "none", scale_model = "none", anchor_batches = anchor_batches, unbridged = "stop", seed = 1
     )
   }
   full <- fit(s$x, NULL)$effects
@@ -302,6 +302,46 @@ test_that("internal anchors give a batch without reference donors an effect near
   expect_lt(abs(e2$estimate - truth), 3 * e2$se_donor)
   # Required (no default) once anchors are supplied.
   expect_error(fit(s$x, anchors, anchor_batches = NULL), "anchor_batches = 'all' or 'unreferenced'")
+})
+
+test_that("unbridged = 'abstain' fits the bridged batches and leaves an unbridged batch raw (plan A15)", {
+  s <- heb_sim()
+  # Batch s3_r2 keeps its cells, but its samples are not references, so no reference bridges it.
+  m2 <- s$meta
+  no_ref <- m2$batch == "s3_r2"
+  m2$reference_role[no_ref] <- "none"
+  m2$reference_id[no_ref] <- NA
+  m2$aliquot[no_ref] <- NA
+  man2 <- sw_sample_manifest(
+    m2, sample_id = "sample_id", batch = "batch", donor = "donor", aliquot = "aliquot",
+    reference_role = "reference_role", reference_id = "reference_id"
+  )
+  audit2 <- sw_design_audit(
+    m2, minimum_batches = 2, minimum_batches_origin = "test", require_shared_reference = TRUE,
+    anchor = "s1_r1"
+  )
+  fit <- function(unbridged) {
+    sw_corrector_fit(
+      s$x, man2, audit2, population = rep("T", nrow(s$x)), markers = "m1",
+      transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
+      min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
+      anchor_effect = "random", variance_prior = "boundary_avoiding", residual_model = "known_plus_extra",
+      anchors = NULL, anchor_discrepancy = "none", scale_model = "none", unbridged = unbridged, seed = 1
+    )
+  }
+  expect_error(fit("stop"), "ineligible")
+  expect_error(fit(NULL), "unbridged = 'abstain' or 'stop'")
+  model <- fit("abstain")
+  expect_false("s3_r2" %in% model$effects$batch)
+  expect_setequal(model$effects$batch, setdiff(s$hierarchy$batch, "s3_r2"))
+  out <- sw_corrector_integrate(
+    model, s$x, man2, population = rep("T", nrow(s$x)),
+    transform = list(name = "asinh", cofactor = 5), unsupported = "abstain"
+  )
+  in_b <- s$meta$batch[match(s$x$sample_id, s$meta$sample_id)] == "s3_r2"
+  expect_equal(out$x$m1[in_b], s$x$m1[in_b])
+  expect_true(all(out$actions$action[out$actions$batch == "s3_r2"] == "abstain"))
+  expect_false(isTRUE(all.equal(out$x$m1[!in_b], s$x$m1[!in_b])))
 })
 
 # Plan A11: anchor discrepancy d_b ~ N(0, tau_d^2) on anchor rows ------------------------------
@@ -371,7 +411,7 @@ scale_fit <- function(s, scale_model) {
     transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
     min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none", anchor_effect = "random",
     variance_prior = "none", residual_model = "known_plus_extra", anchors = NULL, anchor_discrepancy = "none",
-    scale_model = scale_model, seed = 1
+    scale_model = scale_model, unbridged = "stop", seed = 1
   )
 }
 
@@ -408,7 +448,7 @@ test_that("heb needs a valid anchor_discrepancy", {
       transform = list(name = "asinh", cofactor = 5), anchor = "s1_r1", engine = "heb",
       min_cells = 10, hierarchy = s$hierarchy, variance_floor = 1e-8, pool = "none",
       anchor_effect = "random", variance_prior = "none", residual_model = "estimated",
-      anchors = NULL, anchor_discrepancy = "sometimes", seed = 1
+      anchors = NULL, anchor_discrepancy = "sometimes", unbridged = "stop", seed = 1
     ),
     "anchor_discrepancy = 'none' or 'batch'"
   )

@@ -27,8 +27,21 @@
 #' \code{residual_model} (required) is \code{"estimated"} for one residual
 #' variance, or \code{"known_plus_extra"}: each summary's residual is its known
 #' sampling variance, var(cells) / n, plus one estimated extra variance.
+#' \code{unbridged} (required) is \code{"stop"} or \code{"abstain"}. With
+#' \code{"stop"}, a batch that shares no reference with the anchor batch makes
+#' the design audit refuse the fit. With \code{"abstain"}, the bridged batches
+#' are fitted and an unbridged batch gets no effect, so
+#' \code{sw_corrector_integrate(unsupported = "abstain")} leaves its cells raw
+#' and flags them.
 #' \code{anchors} (required) is \code{NULL} or the result of
 #' \code{sw_corrector_anchors()}; internal anchors enter as extra rows.
+#' Anchors are experimental. A batch with anchors but no reference donor is
+#' fitted from anchor rows that hold one value per sample and marker for all
+#' populations, so population-specific batch effects are not identified. On
+#' real spectral data (CytoBatchFlagR, 3 batches stripped of their references)
+#' only 61-66\% of anchor-based effects fell inside their own 90\% intervals
+#' around the reference-based effects. Prefer \code{anchors = NULL} with
+#' \code{unbridged = "abstain"}.
 #' \code{anchor_discrepancy} (required) is \code{"none"} or \code{"batch"}:
 #' with \code{"batch"}, the anchor rows of each batch share a random
 #' discrepancy \eqn{d_b \sim N(0, \tau_d^2)} that is not part of the batch

@@ -213,7 +213,8 @@ modes_one_seed <- function(seed) {
     anchors = anchors,
     anchor_discrepancy = ANCHOR_DISCREPANCY,
     anchor_batches = ANCHOR_BATCHES,
-    scale_model = "none"
+    scale_model = "none",
+    unbridged = "stop" # plan A15: keeps the audit gate, as before
   )
   list(
     modes = list_rbind(log_env$rows) |>
