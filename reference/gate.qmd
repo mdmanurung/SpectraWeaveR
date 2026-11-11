@@ -26,7 +26,7 @@ sw_gate_template(output_file, template_type = "lymphocyte",
 | `singlet_wider_gate` | Required. `wider_gate` of the singletGate method. |
 | `flowclust_k` | Required for `"lymphocyte"` and `"treg"`. Number of flowClust clusters `K`. |
 | `flowclust_target` | Required for `"lymphocyte"` and `"treg"`. flowClust `target` cluster index. |
-| `pool_samples` | Required. `TRUE` pools all samples to fit one gate; `FALSE` fits a gate per sample (`collapseDataForGating`). |
+| `pool_samples` | Required. `TRUE` pools all samples to fit one gate; `FALSE` fits a gate per sample. Written to `collapseDataForGating`; `groupBy` stays empty in the CSV, and `sw_gate_run()` sets it to the number of samples when it reads the template (openCyto pools only when `groupBy` is not empty). |
 
 ### Details
 
@@ -66,6 +66,13 @@ sw_gate_run(fcs_files, gating_template, transform_channels = NULL,
 
 Full openCyto gating workflow: loads FCS files into a GatingSet, applies
 optional transformation, and runs hierarchical gating using a CSV template.
+
+openCyto pools events for a gate only when `collapseDataForGating` is `TRUE`
+and `groupBy` is not empty. For every template row with `collapseDataForGating`
+`TRUE` and an empty or `NA` `groupBy`, `sw_gate_run()` sets `groupBy` to the
+number of samples, so the gate is fitted once on all samples and applied to
+each. It reports this with a message and works on a temporary copy of the
+template. Rows with an explicit `groupBy` are not touched.
 
 ### Value
 

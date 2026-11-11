@@ -46,6 +46,15 @@ Per-sample or pooled gating is set in the template, not here. The
 \code{collapseDataForGating} and \code{groupBy} columns of the CSV are
 read by \code{openCyto::gatingTemplate()}; see the \code{pool_samples}
 argument of \code{\link{sw_gate_template}}.
+
+openCyto 2.18.0 pools events for a gate only when
+\code{collapseDataForGating} is \code{TRUE} and \code{groupBy} is not
+empty. For every template row with \code{collapseDataForGating} \code{TRUE}
+and an empty or \code{NA} \code{groupBy}, \code{sw_gate_run()} sets
+\code{groupBy} to the number of samples in \code{fcs_files}, so the gate is
+fitted once on all samples and applied to each. It reports this with a
+message and works on a temporary copy; your template file is not changed.
+Rows with an explicit \code{groupBy} are not touched.
 }
 \examples{
 \dontrun{

@@ -263,3 +263,128 @@ test_that("sw_gate_run needs cofactor when it transforms with arcsinh", {
   )
   expect_false("..." %in% names(formals(sw_gate_run)))
 })
+
+# =========================================================================
+# Pooling: sw_gate_run sets groupBy when collapseDataForGating is TRUE
+# =========================================================================
+
+# Three samples whose FSC-A peaks sit at different places, so the valley of
+# each sample differs. Debris (low FSC-A) and doublets (low FSC-H) give the
+# nonDebris and singlets gates something to cut.
+pooling_fs <- function() {
+  one <- function(seed, scale) {
+    set.seed(seed)
+    n_cells <- 3000
+    n_debris <- 200
+    n_doublet <- 200
+    a <- abs(c(
+      rnorm(n_cells, 6e5 * scale, 3e4),
+      rnorm(n_debris, 5e4 * scale, 1.5e4),
+      rnorm(n_doublet, 6e5 * scale, 3e4)
+    ))
+    h <- a * 0.8 + rnorm(length(a), 0, 8000)
+    h[length(a) - n_doublet + seq_len(n_doublet)] <-
+      a[length(a) - n_doublet + seq_len(n_doublet)] * 0.45
+    flowCore::flowFrame(cbind(
+      "FSC-A" = a,
+      "FSC-H" = h,
+      "SSC-A" = abs(rnorm(length(a), 1e5, 2e4))
+    ))
+  }
+  fs <- flowCore::flowSet(list(one(1, 0.9), one(2, 1), one(3, 1.1)))
+  flowCore::sampleNames(fs) <- c("a", "b", "c")
+  fs
+}
+
+# Template with the first two rows of sw_gate_template() (nonDebris,
+# singlets), after edit() has changed the data frame.
+pooling_template <- function(pool_samples, edit = identity) {
+  file <- tempfile(fileext = ".csv")
+  suppressMessages(sw_gate_template(
+    file,
+    template_type = "myeloid",
+    debris_min = 1e4,
+    singlet_wider_gate = TRUE,
+    pool_samples = pool_samples
+  ))
+  tmpl <- utils::read.csv(file, stringsAsFactors = FALSE)
+  tmpl <- edit(tmpl[tmpl$alias %in% c("nonDebris", "singlets"), ])
+  utils::write.csv(tmpl, file, row.names = FALSE)
+  file
+}
+
+# One entry per sample: the nonDebris cut and the singlets polygon.
+pooling_gates <- function(file) {
+  gs <- suppressMessages(sw_gate_run(pooling_fs(), file))
+  sn <- flowWorkspace::sampleNames(gs)
+  gate_of <- function(node) {
+    lapply(sn, function(s) {
+      g <- flowWorkspace::gh_pop_get_gate(gs[[s]], node)
+      if (methods::is(g, "rectangleGate")) unname(g@min) else g@boundaries
+    })
+  }
+  list(
+    cut = unlist(gate_of("nonDebris")),
+    singlets = gate_of("singlets")
+  )
+}
+
+skip_if_no_gate_stack <- function() {
+  for (p in c("flowCore", "flowWorkspace", "openCyto")) {
+    skip_if_not_installed(p)
+  }
+}
+
+test_that("sw_gate_run pools when pool_samples is TRUE in the template", {
+  skip_if_no_gate_stack()
+  file <- pooling_template(TRUE)
+  on.exit(unlink(file))
+  # The template from sw_gate_template() leaves groupBy empty.
+  expect_true(all(is.na(utils::read.csv(file)$groupBy)))
+  gates <- pooling_gates(file)
+  expect_length(unique(gates$cut), 1)
+  expect_length(unique(gates$singlets), 1)
+})
+
+test_that("sw_gate_run fits one gate per sample when pool_samples is FALSE", {
+  skip_if_no_gate_stack()
+  file <- pooling_template(FALSE)
+  on.exit(unlink(file))
+  gates <- pooling_gates(file)
+  expect_length(unique(gates$cut), 3)
+  expect_length(unique(gates$singlets), 3)
+})
+
+test_that("sw_gate_run leaves an explicit groupBy alone", {
+  skip_if_no_gate_stack()
+  # groupBy = 1 puts each sample in its own group, so the cuts differ although
+  # collapseDataForGating is TRUE. Setting it to 3 would pool them.
+  file <- pooling_template(TRUE, function(tmpl) {
+    tmpl$groupBy <- 1L
+    tmpl
+  })
+  on.exit(unlink(file))
+  expect_identical(.sw_gate_pool_template(file, 3L), file)
+  gates <- pooling_gates(file)
+  expect_length(unique(gates$cut), 3)
+})
+
+test_that(".sw_gate_pool_template changes only rows that pool with an empty groupBy", {
+  tmpl <- data.frame(
+    alias = c("one", "two", "three", "four"),
+    collapseDataForGating = c(TRUE, FALSE, TRUE, TRUE),
+    groupBy = c(NA, NA, "2", ""),
+    stringsAsFactors = FALSE
+  )
+  file <- tempfile(fileext = ".csv")
+  on.exit(unlink(c(file, out)))
+  utils::write.csv(tmpl, file, row.names = FALSE)
+  out <- suppressMessages(.sw_gate_pool_template(file, 5L))
+  expect_false(identical(out, file))
+  got <- utils::read.csv(out, stringsAsFactors = FALSE, colClasses = "character")
+  expect_equal(got$groupBy, c("5", NA, "2", "5"))
+  expect_equal(got$collapseDataForGating, c("TRUE", "FALSE", "TRUE", "TRUE"))
+  # The input file is not edited.
+  kept <- utils::read.csv(file, stringsAsFactors = FALSE, colClasses = "character")
+  expect_equal(kept$groupBy, c(NA, NA, "2", ""))
+})
