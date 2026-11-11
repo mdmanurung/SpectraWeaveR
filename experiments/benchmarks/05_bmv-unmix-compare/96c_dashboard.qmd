@@ -1,0 +1,208 @@
+---
+title: "BMV Unmix Dashboard"
+subtitle: "AutoSpectral 1.0.2 vs 1.8.8 on 3-day CD3/CD28-stimulated BMV cells, 5 donors: common SpectroFlo gates"
+date: today
+format:
+  html:
+    output-file: dashboard_common.html
+    embed-resources: true
+    theme: none
+    css: dashboard/dashboard_common.css
+    include-before-body: dashboard/header_common.html
+    include-after-body: dashboard/footer.html
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    fig-align: center
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: params
+# Banner:  dashboard/header_common.html (header band plus the rerun banner, linked to the changes table).
+# Purpose: one-page dashboard of the BMV unmix comparison rerun on common SpectroFlo gates (cut arcsinh 1.5,
+#          2026-11-11). Sections follow the new INDEX; every figure the INDEX cites is shown as its 300-dpi PNG,
+#          the Conclusions bullets carry theirs, and a cited figure with no file stops the render.
+# Run:     pixi run quarto render experiments/benchmarks/05_bmv-unmix-compare/96c_dashboard.qmd   (repo root)
+#          then mv the rendered dashboard_common.html to OUT_DIR/dashboard.html (the render creates OUT_DIR).
+# Inputs:  experiments/runs/2026-11-11_bmv-summary-common/INDEX.md     text, verbatim
+#          experiments/runs/2026-11-11_bmv-summary-common/CHANGES.md   the "What changed" table
+#          dashboard/figs_common.py                                    figure list, resolved through MANIFEST_restyle_common.csv
+#          dashboard/artifact/cards_common.json                        headline cards
+#          <figure>.csv beside every cited PNG                         plotted data
+# Outputs: <OUT_DIR>/figures.csv       section, figure, kind (restyled, cited, run-dir), caption
+#          <OUT_DIR>/sessionInfo.txt
+# Parameters --------------------------------------------------------------------
+RUNS_DIR <- "experiments/runs"
+INDEX_MD <- "experiments/runs/2026-11-11_bmv-summary-common/INDEX.md"
+CHANGES_MD <- "experiments/runs/2026-11-11_bmv-summary-common/CHANGES.md"
+FIGS_PY <- "experiments/benchmarks/05_bmv-unmix-compare/dashboard/figs_common.py"
+CARDS_JSON <- "experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact/cards_common.json"
+OUT_DIR <- file.path("experiments/runs", Sys.getenv("SW_OUT_NAME", "2026-11-11_bmv-dashboard-common")) # set SW_OUT_NAME to render into a new dir
+SKIP_SECTIONS <- "^08" # 08 points at the superseded offline dashboard this page replaces
+MAX_ROWS <- 500 # rows shown per data table; larger tables show the first MAX_ROWS
+```
+
+```{r}
+#| label: setup
+knitr::opts_knit$set(root.dir = normalizePath("../../.."))
+```
+
+```{r}
+#| label: libraries
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(purrr)
+  library(readr)
+  library(stringr)
+  library(tibble)
+  library(reactable)
+})
+```
+
+```{r}
+#| label: figures
+# Figures cited by the INDEX -----------------------------------------------------------------------
+# figs_common.py resolves each citation (restyled copy first, run-dir path otherwise) and exits non-zero
+# when a cited figure has no file. The PNGs are already 300 dpi, so they are linked, not copied.
+stopifnot("output dir is new" = !dir.exists(OUT_DIR))
+dir.create(OUT_DIR, recursive = TRUE)
+figs_csv <- file.path(OUT_DIR, "figures.csv")
+status <- system2("python3", c(FIGS_PY, figs_csv))
+stopifnot("a cited figure has no file (see the message above)" = status == 0)
+figures <- read_csv(figs_csv, show_col_types = FALSE) |>
+  mutate(src = file.path(RUNS_DIR, path), line_no = line_no + 1L) # python line numbers are 0-based
+stopifnot("every cited figure exists" = all(file.exists(figures$src)))
+
+# One row per "## " section of the INDEX; section_idx counts them from 0 like figs_common.py.
+index <- read_lines(INDEX_MD)
+heading_at <- which(str_detect(index, "^## "))
+sections <- tibble(
+  section_idx = seq_along(heading_at) - 1L,
+  start = heading_at,
+  end = c(heading_at[-1] - 1, length(index)),
+  heading = str_remove(index[heading_at], "^## ")
+)
+```
+
+```{r}
+#| label: helpers
+# The plotted data of one figure: the source CSV saved beside the PNG.
+data_table <- \(png) {
+  csv <- str_replace(png, "\\.png$", ".csv")
+  if (!file.exists(csv)) {
+    return(list(widget = NULL, note = "No source table was saved beside this figure; it is drawn from per-event data."))
+  }
+  d <- read_csv(csv, show_col_types = FALSE, guess_max = 5000)
+  n <- nrow(d)
+  d <- d |>
+    head(MAX_ROWS) |>
+    mutate(across(where(is.double), \(x) signif(x, 3)))
+  note <- if (n > MAX_ROWS) sprintf("First %d of %d rows; full table: `%s`.", MAX_ROWS, n, csv) else sprintf("%d rows; file: `%s`.", n, csv)
+  list(
+    widget = reactable(
+      d,
+      searchable = TRUE,
+      sortable = TRUE,
+      compact = TRUE,
+      striped = TRUE,
+      defaultPageSize = 10,
+      wrap = FALSE,
+      resizable = TRUE
+    ),
+    note = note
+  )
+}
+
+# Image line of one figure; the alt text is escaped so a "[...]" in a caption does not end it.
+image_md <- \(caption, path, src) {
+  alt <- str_replace_all(sprintf("%s `%s`", caption, path), "([\\[\\]])", "\\\\\\1")
+  sprintf("![%s](%s){width=100%%}\n", alt, file.path("../../..", src))
+}
+```
+
+```{r}
+#| label: cards
+#| results: asis
+# Headline cards ----------------------------------------------------------------------------------
+# The card values come from INDEX text (cards_common.json).
+cards <- jsonlite::read_json(CARDS_JSON)
+card_html <- map_chr(cards, \(c) {
+  sprintf(
+    '  <div class="verdict %s">\n    <div class="v-label">%s</div>\n    <div class="v-value">%s</div>\n    <div class="v-note">%s</div>\n  </div>',
+    c$state, htmltools::htmlEscape(c$label), htmltools::htmlEscape(c$value), htmltools::htmlEscape(c$note)
+  )
+})
+cat(
+  '\n```{=html}\n<div class="verdict-row">\n', paste(card_html, collapse = "\n"), "\n</div>\n```\n",
+  sep = ""
+)
+```
+
+> **How to read this page.** Each section states the finding, then shows its figures (300-dpi PNG, Nature spec) and the data behind each figure (sortable and searchable). Conclusions carry their figures under each bullet. Arms are the unmixing setups compared; donors (A3, A6, B11, B2, D1) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell. The tab "What changed" lists every old claim against its new value.
+
+```{r}
+#| label: intro
+#| results: asis
+# The status paragraphs of INDEX.md above its first section, verbatim.
+cat(index[2:(heading_at[1] - 1)], sep = "\n")
+```
+
+```{r}
+#| label: body
+#| results: asis
+# One section per INDEX heading ------------------------------------------------------------------------------
+# Built as child markdown so each reactable keeps its HTML dependencies. Conclusions put each bullet's figures
+# right under it; other sections show the prose, then tabs for the figures and their data.
+render_section <- \(sec) {
+  body <- index[(sec$start + 1):sec$end]
+  figs <- filter(figures, section_idx == sec$section_idx)
+  lines <- c(sprintf("## %s", sec$heading), "")
+  if (sec$heading == "Conclusions") {
+    first <- which(str_detect(body, "^- "))
+    ends <- c(first[-1] - 1, length(body))
+    lines <- c(lines, body[seq_len(first[1] - 1)])
+    for (k in seq_along(first)) {
+      lines <- c(lines, body[first[k]:ends[k]], "")
+      in_bullet <- between(figs$line_no, sec$start + first[k], sec$start + ends[k])
+      lines <- c(lines, pmap_chr(figs[in_bullet, ], \(caption, path, src, ...) image_md(caption, path, src)))
+    }
+  } else {
+    lines <- c(lines, body, "")
+    if (nrow(figs) > 0) {
+      lines <- c(lines, "::: {.panel-tabset}", "", "### Figures", "")
+      lines <- c(lines, pmap_chr(figs, \(caption, path, src, ...) image_md(caption, path, src)))
+      lines <- c(lines, "### Data", "")
+      for (i in seq_len(nrow(figs))) {
+        lines <- c(
+          lines,
+          sprintf("**%s**", basename(figs$path[i])),
+          "",
+          sprintf("```{r, results='asis'}\ntab <- data_table(%s)\ncat(tab$note)\n```\n", deparse(figs$src[i])),
+          "```{r}\ntab$widget\n```\n"
+        )
+      }
+      lines <- c(lines, ":::", "")
+    }
+  }
+  knitr::knit_child(text = lines, envir = environment(), quiet = TRUE)
+}
+out <- pmap_chr(filter(sections, !str_detect(heading, SKIP_SECTIONS)), \(...) render_section(tibble(...)))
+cat(out, sep = "\n\n")
+```
+
+```{r}
+#| label: what-changed
+#| results: asis
+# CHANGES.md as a table; its title line is dropped because the section heading names it.
+cat("## What changed {#what-changed}\n\n")
+cat(read_lines(CHANGES_MD)[-1], sep = "\n")
+```
+
+```{r}
+#| label: session
+writeLines(capture.output(sessionInfo()), file.path(OUT_DIR, "sessionInfo.txt"))
+```

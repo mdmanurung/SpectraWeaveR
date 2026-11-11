@@ -1,0 +1,8 @@
+[
+  {"state": "good", "label": "Final setting", "value": "1.8.8 zip (as188_joint)", "note": "README row 113, confirmed on the common gates (INDEX §24)"},
+  {"state": "good", "label": "CD8T TNF spike, % cells losing most", "value": "2.3% vs 15.4% (1.0.2 zip)", "note": "INDEX §18 · 2026-11-11_bmv-spike-in-cg/fig_spike_TNF.png"},
+  {"state": "warn", "label": "CD8T Th2 spike, % cells losing most", "value": "14.0% vs 48.8% (1.0.2 zip)", "note": "INDEX §18 · Th2 is analysed in CD4T"},
+  {"state": "good", "label": "9 more markers, CD4T and CD8T", "value": "≤1.2% lose most (1.8.8 zip)", "note": "INDEX §20 · CS reads 4% high"},
+  {"state": "bad", "label": "CD3− GLUT1 spike, refined AF rejected", "value": "1.1% vs 15.1% (refined AF)", "note": "INDEX §22 · 1.8.8 zip vs refined AF, donor medians"},
+  {"state": "good", "label": "Passes 5 vs 1: CD8T Th2 spike loss", "value": "14.0–14.4%, settings overlap", "note": "INDEX §25 · final stays 1/1 passes"}
+]
