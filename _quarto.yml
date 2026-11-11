@@ -19,6 +19,8 @@ website:
             href: vignettes/spectral-unmixing.qmd
           - text: "Unmixing Diagnostics"
             href: vignettes/unmix-diagnostics.qmd
+          - text: "Cleaning Stage"
+            href: vignettes/cleaning-gate.qmd
           - text: "Batch Correction"
             href: vignettes/batch-correction.qmd
           - text: "LLM Pipeline Builder"

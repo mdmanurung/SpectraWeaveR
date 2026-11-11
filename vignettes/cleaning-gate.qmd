@@ -1,0 +1,237 @@
+---
+title: "Cleaning stage: margins, arcsinh, PeacoQC and gates in one call"
+vignette: >
+  %\VignetteIndexEntry{Cleaning stage: margins, arcsinh, PeacoQC and gates in one call}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+#| label: load
+suppressPackageStartupMessages({
+  library(SpectraWeaveR)
+  library(flowCore)
+})
+```
+
+## Step order
+
+`sw_clean_run()` runs the cleaning stage of the validated pipeline order in
+one call. It takes FCS paths, a flowFrame, a flowSet or a list of
+flowFrames, and runs these steps in this order:
+
+1. Margin events are removed on the raw scale.
+2. All fluorescence channels get an arcsinh transformation. Scatter stays raw.
+3. PeacoQC removes unstable signal.
+4. The `nonDebris` gate removes the low FSC-A cloud.
+5. The `singlets` gate keeps events on the FSC-A against FSC-H diagonal.
+6. The `live` gate keeps events below the viability cut.
+
+Nothing runs after the live gate: there is no CD3 or lymphocyte gate.
+A sample with no events left after any step stops the run, with the sample
+and the step named.
+
+### Missing arguments stop the run
+
+Nine values change the counts and the cuts, so all nine are required
+arguments with no default. A call that leaves any out stops once, before any
+step runs. The message lists every missing value with what it controls, how to
+choose it and the benchmark 05 reference value. The reference is a test
+value, not a recommendation. This chunk calls the function with only the data
+and prints the message it returns.
+
+```{r}
+#| label: clean-synthetic-frame
+# Synthetic cells, debris (low FSC-A), doublets (low FSC-H for their FSC-A)
+# and dead cells (high viability dye), in one in-memory flowFrame.
+set.seed(1)
+syn_n_cells <- 8000
+syn_n_debris <- 600
+syn_n_doublet <- 600
+syn_n_dead <- 800
+
+syn_fsc_a <- c(
+  rnorm(syn_n_cells, 6e5, 3e4),
+  rnorm(syn_n_debris, 5e4, 1.5e4),
+  rnorm(syn_n_doublet, 6e5, 3e4),
+  rnorm(syn_n_dead, 6e5, 3e4)
+)
+syn_n <- length(syn_fsc_a)
+syn_fsc_h <- syn_fsc_a * 0.8 + rnorm(syn_n, 0, 8000)
+syn_is_doublet <- seq_len(syn_n) %in%
+  (syn_n_cells + syn_n_debris + seq_len(syn_n_doublet))
+syn_fsc_h[syn_is_doublet] <- syn_fsc_a[syn_is_doublet] * 0.45
+syn_viability <- c(
+  rnorm(syn_n - syn_n_dead, 1000, 600),
+  rnorm(syn_n_dead, 3e5, 5e4)
+)
+
+syn_mat <- cbind(
+  "FSC-A" = syn_fsc_a,
+  "FSC-H" = syn_fsc_h,
+  "SSC-A" = abs(rnorm(syn_n, 1e5, 2e4)),
+  "Time" = seq_len(syn_n) / 100,
+  "BV421-A" = rnorm(syn_n, 2000, 800),
+  "PE-A" = rnorm(syn_n, 3000, 900),
+  "LIVE DEAD NIR-A" = syn_viability
+)
+# Mix the classes along the run, then restore a monotone Time.
+syn_mat <- syn_mat[sample(syn_n), ]
+syn_mat[, "Time"] <- seq_len(syn_n) / 100
+
+syn_ff <- flowFrame(syn_mat)
+syn_pd <- pData(parameters(syn_ff))
+syn_pd$minRange <- -1e6
+syn_pd$maxRange <- 4e6
+pData(parameters(syn_ff)) <- syn_pd
+
+# A named list gives the sample a stable name in the output tables.
+syn_samples <- list(synthetic = syn_ff)
+```
+
+```{r}
+#| label: clean-missing-args
+# conditionMessage() returns the text of the error that sw_clean_run() raised.
+clean_msg <- tryCatch(
+  sw_clean_run(syn_samples),
+  error = function(e) conditionMessage(e)
+)
+cat(clean_msg)
+```
+
+### Run it on the synthetic frame
+
+The run below needs a value for each of the nine arguments. Every value in
+the `clean_args` list is a placeholder that lets this synthetic frame run. It
+is not a recommendation, and nothing in the package fills it in for you.
+Choose each value for your own data, as the message above describes.
+
+```{r}
+#| label: clean-run
+clean_args <- list(
+  debris_window = c(1e4, 1.5e6), # placeholder for this synthetic frame
+  singlet_wider_gate = TRUE, # placeholder: TRUE or FALSE
+  pool_samples = TRUE, # placeholder: TRUE or FALSE
+  viability_channel = "LIVE DEAD NIR-A", # placeholder: your dye channel
+  viability_method = "mindensity", # placeholder: "mindensity" or "boundary"
+  viability_cut = NULL, # NULL goes with "mindensity"
+  IT_limit = 0.55, # placeholder: between 0 and 1
+  MAD = 6, # placeholder: positive number
+  cofactor = 6000 # placeholder: positive number
+)
+
+# The progress lines below come from PeacoQC and openCyto. PeacoQC warns that
+# this small frame has too few bins for its isolation tree analysis; real
+# files have more events.
+clean_res <- do.call(sw_clean_run, c(list(x = syn_samples), clean_args))
+names(clean_res)
+```
+
+### Audit table and gates
+
+`audit` has one row per sample and step. `n_removed` is the number of events
+that step removed, and `NA` for `raw`. The margin step removes the events at
+the observed minimum and maximum of every scatter and fluorescence channel,
+so it removes a few events even when none reach the instrument range.
+
+```{r}
+#| label: clean-audit
+as.data.frame(clean_res$audit)
+```
+
+`gates` has one row per sample and gate. `definition` holds the rectangle
+limits or the polygon vertices that were applied. `keeps` says whether the
+gate keeps events inside or outside that shape: the `live` gate keeps events
+outside the rectangle. `cut_at_window_floor` is filled for `nonDebris` rows
+only.
+
+```{r}
+#| label: clean-gates
+as.data.frame(clean_res$gates)
+```
+
+The per-sample PeacoQC summary and the arguments the run used are stored with
+the result, so the run can be repeated from them.
+
+```{r}
+#| label: clean-qc-parameters
+clean_res$qc
+str(clean_res$parameters)
+```
+
+### What `debris_window` does
+
+`debris_window = c(min, max)` sets the range of FSC-A values (raw scale) that
+the `nonDebris` density is built from. openCyto drops the events outside
+`[min, max]` before it looks for peaks and valleys. The cut is therefore a
+valley of the density of the events inside the window, and it lies inside the
+window. The cut is the deepest valley between the two highest peaks, or the
+deepest valley overall if none lies between them.
+
+The gate keeps events at or above the cut. Events below `min` are always
+debris. Events above `max` are never removed by this gate. `max = Inf` means
+no upper limit.
+
+If the window holds one peak or no valley, openCyto puts the cut on the
+lowest event inside the window. That removes nothing at or above `min`.
+`sw_clean_run()` warns in this case and sets `cut_at_window_floor` to `TRUE`
+in the `gates` table. A window that leaves out the valley you want can also
+put the cut at a different valley inside it. So check the `nonDebris`
+`definition` in `$gates` against the FSC-A density, as in the figure below.
+
+```{r}
+#| label: clean-debris-figure
+#| eval: !expr requireNamespace("ggplot2", quietly = TRUE)
+#| fig-width: 6
+#| fig-height: 3
+#| fig-format: png
+#| fig-dpi: 150
+#| fig-cap: "Synthetic data. Raw FSC-A density of all synthetic events, with the debris_window limits and the nonDebris cut from $gates."
+#| fig-alt: "Density of raw FSC-A with a small low-FSC debris peak and a large cell peak. Dashed lines mark the debris_window limits and a solid line marks the nonDebris cut, which lies between the two peaks."
+library(ggplot2)
+
+# The cut is the lower limit in the nonDebris definition, e.g. "FSC-A: [232684, Inf]".
+debris_def <- clean_res$gates$definition[clean_res$gates$gate == "nonDebris"]
+debris_cut <- as.numeric(sub("^FSC-A: \\[([^,]+),.*$", "\\1", debris_def))
+
+# All events of the synthetic frame, before any step, on the raw scale.
+fsc_plot <- data.frame(fsc_a = exprs(syn_ff)[, "FSC-A"])
+window_limits <- data.frame(
+  limit = c("debris_window min", "debris_window max", "nonDebris cut"),
+  fsc_a = c(clean_args$debris_window, debris_cut)
+)
+
+ggplot(fsc_plot, aes(fsc_a)) +
+  geom_density(fill = "grey85") +
+  geom_vline(
+    data = window_limits,
+    aes(xintercept = fsc_a, linetype = limit)
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "debris_window min" = "dashed",
+      "debris_window max" = "dashed",
+      "nonDebris cut" = "solid"
+    )
+  ) +
+  labs(x = "FSC-A (raw)", y = "Density", linetype = NULL) +
+  theme_classic(base_size = 9)
+```
+
+The figure uses synthetic data made in this vignette.
+
+### Every value is yours
+
+All nine values are the caller's choice, and the package gives no recommended
+value for any of them. The benchmark 05 numbers in the error message are the
+values that benchmark used as test values. They are not a recommendation. The
+placeholders in `clean_args` serve this synthetic frame only. To choose a
+value, follow the "How to choose" text in the message, and check the result in
+the `audit` and `gates` tables before you use the cleaned events.
+

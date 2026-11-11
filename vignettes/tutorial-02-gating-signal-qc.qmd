@@ -26,6 +26,9 @@ This part covers: building gating templates, automated gating with
 openCyto, extracting gated populations, scale transforms, and signal
 quality control with PeacoQC.
 
+To run margins, arcsinh, PeacoQC and the debris, singlet and live gates in
+one call, see [Cleaning stage](cleaning-gate.qmd).
+
 ## Synthetic data setup
 
 We recreate the synthetic FCS data from Part 1 so this vignette is
