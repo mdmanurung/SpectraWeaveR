@@ -53,8 +53,9 @@ test_that("sw_qc_summary flags high-removal samples", {
     )
   )
 
-  result <- expect_warning(
-    sw_qc_summary(qc_results, threshold = 30),
+  # testthat 3e: expect_warning() returns the condition, not the value
+  expect_warning(
+    result <- sw_qc_summary(qc_results, threshold = 30),
     "exceeded"
   )
 
@@ -91,13 +92,14 @@ test_that("sw_qc_run runs on synthetic flowFrame", {
   skip_if_not_installed("flowCore")
 
   set.seed(42)
-  # Create 500 events with 4 channels; include some extreme values
-  # that PeacoQC should flag
-  n <- 500
-  bv421 <- c(abs(rnorm(480, mean = 50000, sd = 15000)),
-             rep(262143, 20))
-  pe <- c(abs(rnorm(480, mean = 40000, sd = 12000)),
-          rep(0, 20))
+  # Create 5000 events with 4 channels; include some extreme values
+  # that PeacoQC should flag. PeacoQC bins events and smooths the bin
+  # peaks, which needs several bins (a few hundred events gives too few).
+  n <- 5000
+  bv421 <- c(abs(rnorm(4800, mean = 50000, sd = 15000)),
+             rep(262143, 200))
+  pe <- c(abs(rnorm(4800, mean = 40000, sd = 12000)),
+          rep(0, 200))
   mat <- matrix(
     c(abs(rnorm(n, 100000, 30000)),
       abs(rnorm(n, 60000, 20000)),
@@ -114,7 +116,8 @@ test_that("sw_qc_run runs on synthetic flowFrame", {
   expect_equal(length(result$GoodCells), n)
   expect_true(result$n_removed >= 0)
   expect_true(result$pct_removed >= 0 && result$pct_removed <= 100)
-  expect_equal(nrow(result$FinalFF), sum(result$GoodCells))
+  # nrow() of a flowFrame is named ("events")
+  expect_equal(unname(nrow(result$FinalFF)), sum(result$GoodCells))
 })
 
 test_that("sw_qc_batch processes multiple samples", {
@@ -122,7 +125,7 @@ test_that("sw_qc_batch processes multiple samples", {
   skip_if_not_installed("flowCore")
 
   set.seed(42)
-  make_ff <- function(n = 200) {
+  make_ff <- function(n = 3000) {
     mat <- matrix(
       abs(rnorm(n * 3, mean = 50000, sd = 15000)),
       ncol = 3,
