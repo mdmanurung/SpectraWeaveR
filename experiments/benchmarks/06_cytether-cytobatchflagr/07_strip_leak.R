@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 # Purpose: anchor plan A8 leak check: in the stripped batches, do reference-based effects (unstripped heb_kv_bap)
-#          fall inside the anchor-based 90% intervals of heb_kv_bap_anc?
-# Run:     Rscript experiments/benchmarks/06_cytether-cytobatchflagr/07_strip_leak.R <strip_results> <full_results> <out_dir>
-# Inputs:  <strip_results>/heb_kv_bap_anc/fold_<c>/{effects.csv.gz,status.csv} (02c_correct_strip.R)
+#          fall inside the anchor-based 90% intervals of the anchor arm (heb_kv_bap_anc or heb_kv_bap_anc_u, A14)?
+# Run:     Rscript experiments/benchmarks/06_cytether-cytobatchflagr/07_strip_leak.R <strip_results> <full_results> <out_dir> <arm>
+# Inputs:  <strip_results>/<arm>/fold_<c>/{effects.csv.gz,status.csv} (02c_correct_strip.R)
 #          <full_results>/heb_kv_bap/fold_<c>/effects.csv.gz (02_correct.R, no batch stripped)
 # Outputs (in <out_dir>, which must not exist):
 #   leak_pairs.csv     fold, batch, population, marker, anchor-based and reference-based effect, se, df, inside
@@ -25,14 +25,16 @@ args <- commandArgs(trailingOnly = TRUE)
 strip_dir <- args[[1]]
 full_dir <- args[[2]]
 out_dir <- args[[3]]
+arm <- args[[4]]
+stopifnot("arm is an anchor arm" = arm %in% c("heb_kv_bap_anc", "heb_kv_bap_anc_u"))
 if (dir.exists(out_dir)) stop(sprintf("%s exists; use a new out_dir.", out_dir), call. = FALSE)
 
 # Pair the effects ---------------------------------------------------------------------
 folds <- c("tcu1", "tcu2", "tcs3", "tcs4")
 pairs <- map(folds, function(f) {
-  stripped <- strsplit(read_csv(file.path(strip_dir, "heb_kv_bap_anc", paste0("fold_", f), "status.csv"),
+  stripped <- strsplit(read_csv(file.path(strip_dir, arm, paste0("fold_", f), "status.csv"),
                                 show_col_types = FALSE)$stripped, ";")[[1]]
-  anc <- read_csv(file.path(strip_dir, "heb_kv_bap_anc", paste0("fold_", f), "effects.csv.gz"),
+  anc <- read_csv(file.path(strip_dir, arm, paste0("fold_", f), "effects.csv.gz"),
                   show_col_types = FALSE) |>
     filter(batch %in% stripped) |>
     select(batch, population, marker, est_anchor = estimate, se_anchor = se_donor, df_anchor = df, support)
@@ -71,7 +73,7 @@ p <- ggplot(fig_frame, aes(est_reference, est_anchor, colour = interval)) +
   coord_equal() +
   scale_colour_manual(values = c("inside 90% interval" = "grey40", outside = "#d95f02")) +
   labs(x = "effect, reference donors (unstripped fit, asinh)", y = "effect, internal anchors (asinh)",
-       colour = NULL, title = "Stripped batches: anchor-based vs reference-based HEB effects") +
+       colour = NULL, title = paste("Stripped batches: anchor-based vs reference-based HEB effects,", arm)) +
   theme_bw(base_size = 8) +
   theme(legend.position = "bottom")
 ggsave(file.path(out_dir, "fig_leak.png"), p, width = 180, height = 70, units = "mm", dpi = 200)

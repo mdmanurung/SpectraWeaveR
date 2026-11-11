@@ -31,6 +31,7 @@ T6_METHODS <- c(
   "heb_bap",
   "cycombine_ref",
   "heb_kv_bap_anc",
+  "heb_kv_bap_anc_u",
   "heb_kv_bap_sc",
   "heb_kv_bap_sc_cl"
 )
@@ -40,7 +41,8 @@ SUBCLUSTER_CELLS_PER_K <- 100 # F13 Q2: calibrating cells per aliquot per sub-cl
 SUBCLUSTER_SEED <- 1 # F13 Q2
 SUBCLUSTER_RLEN <- 10 # as cycombine_ref (adapter_cycombine_ref.R)
 # cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4; cycombine_ref: F11 (fit on reference cells only);
-# heb_kv_bap_anc: heb_kv_bap plus internal anchors (anchor plan A8), needs 'anchors'
+# heb_kv_bap_anc: heb_kv_bap plus internal anchors (anchor plan A8), needs 'anchors';
+# heb_kv_bap_anc_u: anchors only in unreferenced batches plus the anchor batch (A13, A14)
 
 correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
   if (method == "none") {
@@ -147,6 +149,7 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
       "heb_kv",
       "heb_bap",
       "heb_kv_bap_anc",
+      "heb_kv_bap_anc_u",
       "heb_kv_bap_sc"
     )
   engine <- if (is_heb) "heb" else method
@@ -155,10 +158,11 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
   } else {
     NULL
   }
-  if (method == "heb_kv_bap_anc" && is.null(anchors)) {
-    stop("heb_kv_bap_anc needs anchors.", call. = FALSE)
+  has_anchors <- method %in% c("heb_kv_bap_anc", "heb_kv_bap_anc_u")
+  if (has_anchors && is.null(anchors)) {
+    stop(sprintf("%s needs anchors.", method), call. = FALSE)
   }
-  heb_anchors <- if (method == "heb_kv_bap_anc") anchors else NULL
+  heb_anchors <- if (has_anchors) anchors else NULL
   xt <- tibble::as_tibble(x) |>
     dplyr::mutate(sample_id = meta$sample_id, .before = 1)
   # Every non-held-out cell enters the fit; heb summarises only reference samples (manifest), and a batch
@@ -182,7 +186,13 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
     variance_prior = if (is_heb) {
       (if (
         method %in%
-          c("heb_kv_bap", "heb_bap", "heb_kv_bap_anc", "heb_kv_bap_sc")
+          c(
+            "heb_kv_bap",
+            "heb_bap",
+            "heb_kv_bap_anc",
+            "heb_kv_bap_anc_u",
+            "heb_kv_bap_sc"
+          )
       ) {
         "boundary_avoiding"
       } else {
@@ -193,7 +203,14 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
     },
     residual_model = if (is_heb) {
       (if (
-        method %in% c("heb_kv_bap", "heb_kv", "heb_kv_bap_anc", "heb_kv_bap_sc")
+        method %in%
+          c(
+            "heb_kv_bap",
+            "heb_kv",
+            "heb_kv_bap_anc",
+            "heb_kv_bap_anc_u",
+            "heb_kv_bap_sc"
+          )
       ) {
         "known_plus_extra"
       } else {
@@ -208,7 +225,11 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
     } else {
       NULL
     }, # plan A11
-    anchor_batches = if (is_heb) "all" else NULL, # plan A13; T6 (A8) keeps anchors in every batch
+    anchor_batches = if (is_heb) {
+      (if (method == "heb_kv_bap_anc_u") "unreferenced" else "all")
+    } else {
+      NULL
+    }, # plan A13; A14 Q4 adds the anc_u arm to the A8 strip check
     scale_model = if (is_heb) {
       (if (endsWith(method, "_sc")) "log_sd" else "none")
     } else {

@@ -2,12 +2,12 @@
 # Purpose: anchor plan A8: in 3 seeded batches no control is a reference; compare heb_kv_bap (abstains there)
 #          with heb_kv_bap_anc (internal anchors) for one leave-one-donor-out fold.
 # Run:     Rscript experiments/benchmarks/06_cytether-cytobatchflagr/02c_correct_strip.R <prep_dir> <out_dir> <method> <held_out>
-#          method: heb_kv_bap or heb_kv_bap_anc
+#          method: heb_kv_bap, heb_kv_bap_anc or heb_kv_bap_anc_u (A14)
 # Inputs:  <prep_dir>/cells.rds, markers.csv, populations.rds (01_prep.R)
 # Outputs (in <out_dir>/<method>/fold_<held_out>/, which must not exist):
 #   corrected.rds   numeric matrix, same rows and marker columns as cells.rds
 #   effects.csv.gz  per batch, population and marker effect, se_donor, df, support
-#   anchors.csv.gz  anchor modes (heb_kv_bap_anc only) and anchor_markers.csv (separation, eligible)
+#   anchors.csv.gz  anchor modes (anchor arms only) and anchor_markers.csv (separation, eligible)
 #   status.csv      method, fold, stripped batches, abstained, runtime_s
 
 suppressPackageStartupMessages({
@@ -29,7 +29,7 @@ args <- commandArgs(trailingOnly = TRUE)
 prep_dir <- args[[1]]
 method <- args[[3]]
 held_out <- args[[4]]
-stopifnot("method is heb_kv_bap or heb_kv_bap_anc" = method %in% c("heb_kv_bap", "heb_kv_bap_anc"))
+stopifnot("method is heb_kv_bap, heb_kv_bap_anc or heb_kv_bap_anc_u" = method %in% c("heb_kv_bap", "heb_kv_bap_anc", "heb_kv_bap_anc_u"))
 out_dir <- file.path(args[[2]], method, paste0("fold_", held_out))
 if (dir.exists(out_dir)) stop(sprintf("%s exists; use a new out_dir.", out_dir), call. = FALSE)
 
@@ -54,7 +54,7 @@ meta <- cells |>
 
 # Anchors from every non-held-out sample, stripped batches included --------------------
 anchors <- NULL
-if (method == "heb_kv_bap_anc") {
+if (method %in% c("heb_kv_bap_anc", "heb_kv_bap_anc_u")) {
   rows <- !meta$is_holdout_reference
   anchors <- sw_corrector_anchors(x[rows, ], meta$sample_id[rows], meta$batch[rows], markers,
                                   positive_markers = ANCHOR_POSITIVE, min_separation = ANCHOR_MIN_SEPARATION,
