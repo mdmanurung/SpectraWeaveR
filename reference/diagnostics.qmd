@@ -573,6 +573,26 @@ built yet.
 
 ![Share of |z| at or above 2 to 5: false flags on clean files and hits on faulty files](figures/frozen_cutoff.png)
 
+Neither a rolling reference nor a bridge sample removes that excess. Each of
+the four controls served in turn as the bridge, with the other three as
+reference and scored files (27 each), so the in-sample baseline here is 5.7%
+at |z| 3. A rolling reference (the 9 batches before each scored batch) gives
+9.7% false flags against 10.9% for the frozen one, but it takes the earlier
+faulty batches into its window and finds the 80% fault at AUROC 0.59 (frozen
+0.88). Moving each batch so that its bridge file matches the bridge's
+batch01-09 median and SD finds the fault better (AUROC 0.93, 93% of hit
+markers at |z| 3) but raises false flags to 14.8%, because one file's noise
+now moves every file of its batch. Only tcu1 as the bridge lowers them (8.5%),
+with AUROC 0.90 and a wide interval (`figures/rolling_bridge_cutoff.png`). The
+excess sits in a few batches (11, 14, 15, 17) under every arm
+(`figures/rolling_bridge_null_z.png`), so it is a batch property, not a
+reference-window one. A bridge that averages several files per batch is
+untested.
+
+![Rolling and bridge references: false flags on clean files and hits on faulty files, per bridge control](figures/rolling_bridge_cutoff.png)
+
+![Clean files: |z| per batch under the frozen, rolling and bridge references](figures/rolling_bridge_null_z.png)
+
 ## What the checks cannot see
 
 - The negative checks assume a channel splits into a negative and a positive
