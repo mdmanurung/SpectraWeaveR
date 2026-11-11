@@ -4,7 +4,7 @@ Goal: one R package that takes spectral flow data from raw FCS to batch-checked,
 
 Status key: **done** (code and tests in the repo), **next** (designed, not written), **planned**, **gated** (starts only after a stated evidence gate), **parked** (set aside; the row names its return condition), **frozen** (code exists; no new work until a stated condition holds).
 
-Decisions of 2026-11-09. Track B items B3 to B10 are parked. They return when independent evaluation tubes (matched raw controls plus held-out stained tubes) exist. The flowstate I/O items (D1, D2) and the batch-side items (A1 to A6, C0 to C5: design audit, decision layer, IQR flags, manifest, correctors) are frozen: no new work until a real multi-batch dataset exists.
+Decisions of 2026-11-09. Track B items B3 to B10 are parked. They return when independent evaluation tubes (matched raw controls plus held-out stained tubes) exist. The flowstate I/O items (D1, D2) and the batch-side items (A1 to A6, C0 to C5: design audit, decision layer, IQR flags, manifest, correctors) are frozen: no new work until a real multi-batch dataset exists. Update 2026-11-11 (user, plan grill): a real multi-batch dataset is on disk (`cytobatchflagr_zenodo`: 18 batches, 4 repeated controls per batch), so the new batch-diagnostic, reference-check and synthetic-reference functions in `plans/2026-11-11_reference-and-batch-diagnostics.md` may be built once that plan is approved, and A2c (`sw_correct_metrics`) is unfrozen. A2b and A3 stay frozen.
 
 ## Source material
 
