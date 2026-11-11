@@ -457,6 +457,30 @@ test_that(".check_ellmer provides clear install instructions", {
   expect_error(SpectraWeaveR:::.check_ellmer(), "ellmer")
 })
 
+test_that(".check_ellmer rejects an ellmer older than the minimum", {
+  skip_if_not_installed("ellmer")
+
+  local_mocked_bindings(.ellmer_version = \() package_version("0.2.0"))
+  expect_error(
+    SpectraWeaveR:::.check_ellmer(),
+    "Installed version: 0.2.0; required: >= 0.3.0.*install.packages"
+  )
+})
+
+test_that(".check_ellmer accepts an ellmer at the minimum", {
+  skip_if_not_installed("ellmer")
+
+  local_mocked_bindings(.ellmer_version = \() package_version("0.3.0"))
+  expect_no_error(SpectraWeaveR:::.check_ellmer())
+})
+
+test_that("the ellmer floor in DESCRIPTION equals the code constant", {
+  fields <- utils::packageDescription("SpectraWeaveR")[c("Imports", "Suggests")]
+  deps <- paste(unlist(fields), collapse = ",")
+  floor <- sub(".*ellmer \\(>= ([0-9.]+)\\).*", "\\1", deps)
+  expect_identical(floor, SpectraWeaveR:::.SW_ELLMER_MIN_VERSION)
+})
+
 test_that("sw_assistant requires ellmer", {
   skip_if(requireNamespace("ellmer", quietly = TRUE),
           "ellmer is installed, cannot test missing-package path")

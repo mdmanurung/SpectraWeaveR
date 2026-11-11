@@ -14,11 +14,29 @@ NULL
 # Dependency check
 # ---------------------------------------------------------------------------
 
+# Lowest ellmer with the tool(fun, name, description, arguments) signature.
+# DESCRIPTION must list the same floor; test-assistant.R checks that.
+.SW_ELLMER_MIN_VERSION <- "0.3.0"
+
+.ellmer_version <- function() {
+  utils::packageVersion("ellmer")
+}
+
 .check_ellmer <- function() {
   if (!requireNamespace("ellmer", quietly = TRUE)) {
     stop(
       "Package 'ellmer' is required for the LLM assistant.\n",
       "Install it with: install.packages('ellmer')",
+      call. = FALSE
+    )
+  }
+  installed <- .ellmer_version()
+  if (installed < .SW_ELLMER_MIN_VERSION) {
+    stop(
+      "Package 'ellmer' is too old for the LLM assistant.\n",
+      "Installed version: ", format(installed), "; required: >= ",
+      .SW_ELLMER_MIN_VERSION, ".\n",
+      "Update it with: install.packages('ellmer')",
       call. = FALSE
     )
   }
@@ -863,9 +881,27 @@ NULL
 #' your experiment, inspects your files and directories, and generates
 #' runnable R code.
 #'
+#' @details
+#' Since the move to the ellmer 0.3.0 \code{tool()} interface, each tool
+#' has an explicit name. Earlier versions took the name from the function
+#' symbol, so a prompt or client that used an old name must use the new one.
+#' \tabular{ll}{
+#'   Old name (function symbol) \tab New name \cr
+#'   \code{.tool_list_fcs_files} \tab \code{list_fcs_files} \cr
+#'   \code{.tool_list_directory} \tab \code{list_directory} \cr
+#'   \code{.tool_read_fcs_header} \tab \code{read_fcs_header} \cr
+#'   \code{local_read_csv} \tab \code{read_csv_columns} \cr
+#'   \code{local_read_xlsx} \tab \code{read_xlsx_columns} \cr
+#'   \code{.tool_validate_sample_meta} \tab \code{validate_sample_meta} \cr
+#'   \code{.tool_detect_channels} \tab \code{detect_channels} \cr
+#'   \code{local_check_batch} \tab \code{check_batch_balance} \cr
+#'   \code{.tool_validate_markers} \tab \code{validate_markers} \cr
+#' }
+#' The package now requires ellmer >= 0.3.0.
+#'
 #' @section Prerequisites:
 #' \itemize{
-#'   \item Install ellmer: \code{install.packages("ellmer")}
+#'   \item Install ellmer (>= 0.3.0): \code{install.packages("ellmer")}
 #'   \item Set an API key for your chosen provider (e.g.
 #'     \code{Sys.setenv(OPENAI_API_KEY = "sk-...")}).
 #'   \item For local models, install and start Ollama.
@@ -1845,6 +1881,24 @@ sw_pipeline_config_type <- function() {
 #' or Cursor - can connect to this server to inspect FCS files, validate
 #' sample metadata, detect channels, and check batch balance directly from
 #' the user's R session.
+#'
+#' @details
+#' Since the move to the ellmer 0.3.0 \code{tool()} interface, each tool
+#' has an explicit name. Earlier versions took the name from the function
+#' symbol, so a prompt or client that used an old name must use the new one.
+#' \tabular{ll}{
+#'   Old name (function symbol) \tab New name \cr
+#'   \code{.tool_list_fcs_files} \tab \code{list_fcs_files} \cr
+#'   \code{.tool_list_directory} \tab \code{list_directory} \cr
+#'   \code{.tool_read_fcs_header} \tab \code{read_fcs_header} \cr
+#'   \code{local_read_csv} \tab \code{read_csv_columns} \cr
+#'   \code{local_read_xlsx} \tab \code{read_xlsx_columns} \cr
+#'   \code{.tool_validate_sample_meta} \tab \code{validate_sample_meta} \cr
+#'   \code{.tool_detect_channels} \tab \code{detect_channels} \cr
+#'   \code{local_check_batch} \tab \code{check_batch_balance} \cr
+#'   \code{.tool_validate_markers} \tab \code{validate_markers} \cr
+#' }
+#' The package now requires ellmer >= 0.3.0.
 #'
 #' @section Setup for Claude Code:
 #' \preformatted{
