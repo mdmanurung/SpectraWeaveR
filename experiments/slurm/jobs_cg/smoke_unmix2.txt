@@ -1,0 +1,5 @@
+88dcg_cospike_tnf_glut1.R unmix c188 cospike_g1
+88dcg_cospike_tnf_glut1.R unmix afrefine cospike_g1
+88dcg_cospike_tnf_glut1.R unmix s102_c102 cospike_g1
+61cg_af405_proof_unmix.R smoke_cgspike188 188 experiments/bmv_test/compare_3D/data/spiked/smoke_2026-11-11_cg_af405_proof
+61cg_af405_proof_unmix.R smoke_cgspike102af405 experiments/bmv_test/compare_3D/data/unmix_cells/var102_only_Alexa_Fluor_405/variants_used.rds experiments/bmv_test/compare_3D/data/spiked/smoke_2026-11-11_cg_af405_proof
