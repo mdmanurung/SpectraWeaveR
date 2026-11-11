@@ -478,37 +478,97 @@ test_that("margin_range reaches the margin step as the fluorescence range", {
 
 test_that("margin_range sets the range of fluorescence channels, scatter keeps the FCS range", {
   skip_if_no_clean_stack()
-  # FCS ranges are wide, so only margin_range can remove the planted events
-  # in the fluorescence channels. The scatter event lies above the FCS range
-  # of FSC-A and below the upper limit of margin_range.
-  set.seed(4)
-  n <- 400
-  mat <- cbind(
-    "FSC-A" = rnorm(n, 6e5, 3e4),
-    "FSC-H" = rnorm(n, 5e5, 3e4),
-    "SSC-A" = rnorm(n, 1e5, 2e4),
-    "Time" = seq_len(n) / 100,
-    "BV421-A" = rnorm(n, 2000, 800),
-    "PE-A" = rnorm(n, 3000, 900)
+  # PeacoQC::RemoveMargins() always drops the observed minimum and maximum of
+  # every channel (strict comparisons). Two planted events, hi_all and lo_all,
+  # hold the extremes of every channel, so no other event is an observed
+  # extreme and only margin_range or the FCS range can remove the rest.
+  m <- make_clean_ff()
+  mat <- flowCore::exprs(m$ff)
+  planted <- function(...) {
+    row <- mat[1, , drop = FALSE]
+    row[1, ] <- c(
+      "FSC-A" = 6e5,
+      "FSC-H" = 4.8e5,
+      "SSC-A" = 1e5,
+      "Time" = 0,
+      "BV421-A" = 2000,
+      "PE-A" = 3000,
+      "LIVE DEAD NIR-A" = 1000
+    )
+    over <- c(...)
+    row[1, names(over)] <- over
+    row
+  }
+  extra <- rbind(
+    # Observed extremes of every channel: removed whatever margin_range is.
+    planted(
+      "FSC-A" = 3e6, "FSC-H" = 3e6, "SSC-A" = 3e6,
+      "BV421-A" = 5e7, "PE-A" = 5e7, "LIVE DEAD NIR-A" = 5e7
+    ),
+    planted(
+      "FSC-A" = 10, "FSC-H" = 10, "SSC-A" = 10,
+      "BV421-A" = -3e5, "PE-A" = -3e5, "LIVE DEAD NIR-A" = -3e5
+    ),
+    # Scatter above the FCS range of FSC-A (1e6), not the observed maximum:
+    # removed whatever margin_range is.
+    planted("FSC-A" = 2e6),
+    # Scatter inside the FCS range: kept, also when margin_range is narrow.
+    planted("FSC-A" = 9e5),
+    # Fluorescence above the narrow maximum (5e5), inside the wide one (1e7).
+    planted("BV421-A" = 1e6),
+    planted("BV421-A" = 1e6),
+    planted("BV421-A" = 1e6),
+    # Fluorescence above both maxima, not the observed maximum.
+    planted("PE-A" = 2e7),
+    planted("PE-A" = 2e7),
+    # Fluorescence below the narrow minimum (-1e4), above the wide one (-1e5).
+    planted("PE-A" = -5e4),
+    planted("PE-A" = -5e4),
+    # Fluorescence below both minima, not the observed minimum.
+    planted("BV421-A" = -2e5),
+    planted("BV421-A" = -2e5),
+    # Inside both ranges: kept.
+    planted("BV421-A" = 5e4),
+    planted("BV421-A" = 5e4)
   )
-  mat[1, "BV421-A"] <- 2e7 # above the upper limit
-  mat[2, "PE-A"] <- -5e4 # below the lower limit
-  mat[3, "FSC-A"] <- 4.5e6 # above the FCS range of FSC-A
-  ff <- flowCore::flowFrame(mat)
+  extra[, "Time"] <- max(mat[, "Time"]) + seq_len(nrow(extra)) / 100
+  ff <- flowCore::flowFrame(rbind(mat, extra))
   pd <- flowCore::pData(flowCore::parameters(ff))
-  pd$minRange <- -1e8
-  pd$maxRange <- 1e8
-  pd$maxRange[pd$name == "FSC-A"] <- 4e6
+  pd$minRange <- -1e6
+  pd$maxRange <- 4e6
+  pd$maxRange[pd$name == "FSC-A"] <- 1e6
   flowCore::pData(flowCore::parameters(ff)) <- pd
 
-  out <- suppressWarnings(sw_filter_margins_peacoqc(
-    ff,
-    channel_specifications = list(AllFluoChannels = clean_args$margin_range)
-  ))
-  kept <- flowCore::exprs(out)
-  expect_false(any(kept[, "BV421-A"] == 2e7))
-  expect_false(any(kept[, "PE-A"] == -5e4))
-  expect_false(any(kept[, "FSC-A"] == 4.5e6))
+  # Run sw_clean_run() up to the margin step: its real call of
+  # sw_filter_margins_peacoqc() counts the events removed, then the stub that
+  # replaces the transformation stops the run.
+  removed_by_margins <- function(margin_range) {
+    n_kept <- NULL
+    orig_margins <- sw_filter_margins_peacoqc
+    local_mocked_bindings(
+      sw_filter_margins_peacoqc = function(x, ...) {
+        out <- orig_margins(x, ...)
+        n_kept <<- nrow(out)
+        out
+      },
+      sw_transform_apply = function(...) stop("stop after the margin step")
+    )
+    expect_error(
+      run_clean(ff, margin_range = margin_range),
+      "stop after the margin step"
+    )
+    unname(nrow(ff) - n_kept)
+  }
+  # Wide range: the two extreme events, the FSC-A event above the FCS range,
+  # the two PE events at 2e7 and the two BV421 events at -2e5. The FCS range
+  # (-1e6, 4e6) would remove the two PE events but keep the two BV421 events
+  # at -2e5 and remove the make_clean_ff event at BV421 4e6.
+  expect_equal(removed_by_margins(c(-1e5, 1e7)), 7)
+  # Narrow range: also the three BV421 events at 1e6, the make_clean_ff event
+  # at BV421 4e6 and the two PE events at -5e4. The 3900 scatter events near
+  # 6e5 lie above the narrow maximum, so they show that scatter keeps the FCS
+  # range.
+  expect_equal(removed_by_margins(c(-1e4, 5e5)), 13)
 })
 
 # Frame lists for the margin and PeacoQC error tests: b is the one that fails.
