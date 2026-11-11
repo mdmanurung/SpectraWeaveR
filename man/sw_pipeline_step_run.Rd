@@ -4,19 +4,12 @@
 \alias{sw_pipeline_step_run}
 \title{Execute a Processing Step}
 \usage{
-sw_pipeline_step_run(step, input, pipeline_name = NULL, step_index = NA_integer_)
+sw_pipeline_step_run(step, input)
 }
 \arguments{
 \item{step}{A \code{ProcessingStep} object.}
 
 \item{input}{The data to pass as the first argument to the step's function.}
-
-\item{pipeline_name}{Optional pipeline name, used only to word the type
-check error. Runners set it; direct callers can leave it \code{NULL}.}
-
-\item{step_index}{Optional position of the step in its pipeline, used only
-to word the type check error. Ignored when \code{pipeline_name} is
-\code{NULL}.}
 }
 \value{
 The result of calling \code{step@FUN(input, ...)}.
@@ -31,4 +24,13 @@ If the step declares an \code{input_type}, \code{input} must satisfy
 the call stops with a "type check failed" error before the step function
 runs. Steps with no \code{input_type} are not checked. Every runner,
 including the \code{targets} backend, goes through this check.
+
+The error from a direct call names the step only. \code{\link[=sw_pipeline_run]{sw_pipeline_run()}} and
+\code{\link[=sw_pipeline_run_targets]{sw_pipeline_run_targets()}} add the pipeline name and step position to it,
+so both runners give the same message. The generated \code{targets} command
+does not contain the pipeline name or the step position, so renaming a
+pipeline or moving a step does not rebuild cached targets.
+
+Upgrading from the previous release does not rebuild existing \code{targets}
+stores for this change: the generated command text is the same as before.
 }

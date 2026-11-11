@@ -364,3 +364,53 @@ test_that("steps with no input_type are unaffected in both runners", {
   expect_false(grepl("type check", seq_msg, fixed = TRUE))
   expect_false(grepl("type check", tar_msg, fixed = TRUE))
 })
+
+# -------------------------------------------------------------------------
+# Cache stability: the generated command must not depend on the pipeline
+# name or on the step position
+# -------------------------------------------------------------------------
+
+test_that("renaming a pipeline does not rebuild cached targets", {
+  skip_on_cran()
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  steps <- list(
+    sw_pipeline_step("double", .swt_times2, input_type = "numeric"),
+    sw_pipeline_step("plus1",  .swt_plus1,  input_type = "numeric")
+  )
+  run_with_name <- function(name) {
+    sw_pipeline_run_targets(sw_pipeline(name, steps = steps), input = 8,
+                            callr_function = NULL, trace = FALSE)
+  }
+  # Targets that ran in the last tar_make(), read from the store progress.
+  ran <- function() {
+    prog <- targets::tar_progress(store = "_targets")
+    sort(prog$name[prog$progress == "completed"])
+  }
+  skipped <- function() {
+    prog <- targets::tar_progress(store = "_targets")
+    sort(prog$name[prog$progress == "skipped"])
+  }
+  all_targets <- sort(c("sw_input_path", "sw_input", "double_def_path",
+                        "double_def", "double", "plus1_def_path",
+                        "plus1_def", "plus1"))
+
+  expect_equal(run_with_name("p")$result, 17)
+  expect_equal(ran(), all_targets)
+
+  # Same name: nothing re-runs.
+  expect_equal(run_with_name("p")$result, 17)
+  expect_equal(ran(), character(0))
+  expect_equal(skipped(), all_targets)
+
+  # New name: still nothing re-runs.
+  expect_equal(run_with_name("q")$result, 17)
+  expect_equal(ran(), character(0))
+  expect_equal(skipped(), all_targets)
+
+  # The generated command text has no pipeline name and no step position.
+  script <- paste(readLines("_targets.R"), collapse = "\n")
+  expect_false(grepl("pipeline_name", script, fixed = TRUE))
+  expect_false(grepl("step_index", script, fixed = TRUE))
+})

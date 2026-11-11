@@ -701,11 +701,6 @@ test_that("sw_pipeline_step_run enforces input_type on its own", {
     "Step 'double' type check failed: expected input of type numeric, got character.",
     fixed = TRUE
   )
-  expect_error(
-    sw_pipeline_step_run(step, "four", pipeline_name = "p", step_index = 3),
-    "Pipeline 'p' type check failed at step 3 ('double'): expected input of type numeric, got character.",
-    fixed = TRUE
-  )
 })
 
 test_that("sw_pipeline_step_run does not check a step without input_type", {

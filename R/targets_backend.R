@@ -133,9 +133,8 @@ NULL
               sym, q(def_path)),
       sprintf("  targets::tar_target(%s_def, readRDS(%s_def_path)),",
               sym, sym),
-      sprintf(paste0("  targets::tar_target(%s, SpectraWeaveR::sw_pipeline_step_run(",
-                     "%s_def, %s, pipeline_name = %s, step_index = %d))%s"),
-              sym, sym, prev_sym, q(pipeline@name), i, sep),
+      sprintf("  targets::tar_target(%s, SpectraWeaveR::sw_pipeline_step_run(%s_def, %s))%s",
+              sym, sym, prev_sym, sep),
       ""
     )
     prev_sym <- sym
@@ -150,6 +149,32 @@ NULL
     step_rds  = step_rds,
     sym_map   = sym_map
   )
+}
+
+# ---------------------------------------------------------------------------
+# Internal helper: give a step's type check error the pipeline context
+#
+# The generated target command stays `sw_pipeline_step_run(<step>_def, <prev>)`
+# with no pipeline name or step index, so renaming a pipeline or moving a step
+# does not change the command hash and does not rebuild cached targets. The
+# step-only message that the check raises in the targets session is reworded
+# here, in the calling session, to match sw_pipeline_run(). Step names are
+# unique within a pipeline, so the step name finds the step position.
+# ---------------------------------------------------------------------------
+.sw_targets_add_type_check_context <- function(msg, pipeline) {
+  for (i in seq_along(pipeline@steps)) {
+    step_name <- pipeline@steps[[i]]@name
+    bare <- .sw_type_check_prefix(step_name)
+    start <- regexpr(bare, msg, fixed = TRUE)
+    if (start > 0) {
+      # Splice by position: pipeline names may hold backslashes, which
+      # sub() would read as replacement escapes.
+      with_context <- .sw_type_check_message(pipeline@name, i, step_name, "")
+      return(paste0(substr(msg, 1, start - 1), with_context,
+                    substr(msg, start + nchar(bare), nchar(msg))))
+    }
+  }
+  msg
 }
 
 # ---------------------------------------------------------------------------
@@ -301,7 +326,9 @@ sw_pipeline_run_targets <- function(pipeline, input,
     do.call(targets::tar_make, make_args),
     error = function(e) {
       stop(sprintf("Pipeline '%s' failed under targets backend: %s",
-                   pipeline@name, conditionMessage(e)),
+                   pipeline@name,
+                   .sw_targets_add_type_check_context(conditionMessage(e),
+                                                      pipeline)),
            call. = FALSE)
     }
   )
