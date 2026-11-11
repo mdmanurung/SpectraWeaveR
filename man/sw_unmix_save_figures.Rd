@@ -4,7 +4,7 @@
 \alias{sw_unmix_save_figures}
 \title{Save unmixing figures and their source data}
 \usage{
-sw_unmix_save_figures(figures, dir, sizes = NULL)
+sw_unmix_save_figures(figures, dir, sizes = NULL, check = c("none", "nature"))
 }
 \arguments{
 \item{figures}{Named list of figure results keyed by panel (\code{F1} to
@@ -14,11 +14,16 @@ sw_unmix_save_figures(figures, dir, sizes = NULL)
 
 \item{sizes}{Optional named list of \code{c(width, height)} in mm, keyed by
 panel, replacing the default size of those panels.}
+
+\item{check}{\code{"none"} (default) or \code{"nature"}, the journal spec check
+described in Details.}
 }
 \value{
 A tibble with \code{panel}, \code{png}, \code{pdf} (\code{NA} without cairo),
-\code{source_csv}, \code{n_rows} (rows in the source table), \code{width_mm} and
-\code{height_mm}.
+\code{source_csv}, \code{n_rows} (rows in the source table), \code{width_mm},
+\code{height_mm}, and with \code{check = "nature"} the drawn text range
+\code{text_pt_min}, \code{text_pt_max} and \code{fonts_embedded} (\code{NA} when not checked
+or not checkable).
 }
 \description{
 Write each figure as PNG (and PDF when cairo is available) and its source
@@ -28,10 +33,19 @@ table as CSV.
 Files are \verb{<dir>/<stem>.png}, \verb{<dir>/<stem>.pdf} and
 \verb{<dir>/source_data/<stem>.csv}, where the stem is the panel name
 (\code{spectra-overlay}, \code{similarity-matrix}, \code{unmixed-distributions},
-\code{biplot}). Default sizes (width x height, mm) are F1 180 x 140, F2
-120 x 100, F3 180 x 120 and F4 180 x 150. The PNG is 300 dpi and uses the
-cairo \code{png()} type when available; the PDF uses \code{\link[grDevices:cairo_pdf]{grDevices::cairo_pdf()}}.
-If any target file already exists, nothing is written.
+\code{biplot}). Default sizes (width x height, mm) are F1 183 x 140, F2
+89 x 85, F3 183 x 110 and F4 183 x 110; the widths are Nature column
+widths. The PNG is 300 dpi and uses the cairo \code{png()} type when available;
+the PDF uses \code{\link[grDevices:cairo_pdf]{grDevices::cairo_pdf()}}. If any target file already exists,
+nothing is written.
+
+With \code{check = "nature"}, each figure must meet the Nature final artwork
+spec before anything is written: width 89 or 183 mm, and every text the
+plot draws between 5 and 7 pt (font sizes read from the built plot on a
+cairo device). After the PDFs are written, \code{pdffonts} (poppler) checks
+that every font is embedded; when \code{pdffonts} or cairo is absent, that check
+is skipped and \code{fonts_embedded} is \code{NA}. A breach stops with the panel
+name; files already written stay.
 }
 \examples{
 \dontrun{

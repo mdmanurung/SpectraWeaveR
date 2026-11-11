@@ -26,8 +26,12 @@ Methods are coloured from one fixed palette keyed by method label
 \code{spectroflo}, \code{ols}, \code{autospectral_fast} and \code{autospectral_slow}. Any other
 label is an error in every builder.
 
-The figures use \code{ggpubr::theme_pubr(base_size = 8)} when ggpubr is
-installed, else \code{ggplot2::theme_classic(base_size = 8)}. The theme is
-added to each plot; the session theme is not changed.
+The figures use the package's Nature-spec theme: a prism-style
+black-and-white theme at 7 pt, plain text with bold titles, strips and axis
+titles, line width 0.4 and the legend on the right, so every drawn text sits
+in 5 to 7 pt (user decision 2026-11-11, grill Q20). Faceted panels draw axis
+lines and ticks on every panel, with tick labels on the outer edges only.
+Saved widths are Nature column widths, 89 or 183 mm. The theme is added to
+each plot; the session theme is not changed.
 }
 \keyword{internal}

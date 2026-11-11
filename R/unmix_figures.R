@@ -22,9 +22,13 @@
 #' `spectroflo`, `ols`, `autospectral_fast` and `autospectral_slow`. Any other
 #' label is an error in every builder.
 #'
-#' The figures use `ggpubr::theme_pubr(base_size = 8)` when ggpubr is
-#' installed, else `ggplot2::theme_classic(base_size = 8)`. The theme is
-#' added to each plot; the session theme is not changed.
+#' The figures use the package's Nature-spec theme: a prism-style
+#' black-and-white theme at 7 pt, plain text with bold titles, strips and axis
+#' titles, line width 0.4 and the legend on the right, so every drawn text sits
+#' in 5 to 7 pt (user decision 2026-11-11, grill Q20). Faceted panels draw axis
+#' lines and ticks on every panel, with tick labels on the outer edges only.
+#' Saved widths are Nature column widths, 89 or 183 mm. The theme is added to
+#' each plot; the session theme is not changed.
 #'
 #' @name unmix_figures
 #' @keywords internal
@@ -40,14 +44,18 @@ NULL
   F4 = "biplot"
 )
 
-# Default saved size per panel, c(width, height) in mm; faceted panels need
-# more room than one 89 mm column.
+# Default saved size per panel, c(width, height) in mm. Widths are Nature column widths
+# (89 single, 183 double); faceted panels take the double column.
 .sw_fig_sizes <- list(
-  F1 = c(180, 140),
-  F2 = c(120, 100),
-  F3 = c(180, 120),
-  F4 = c(180, 150)
+  F1 = c(183, 140),
+  F2 = c(89, 85),
+  F3 = c(183, 110),
+  F4 = c(183, 110)
 )
+
+# Nature final artwork: column widths in mm and the drawn text range in pt.
+.sw_fig_nature_widths <- c(single = 89, double = 183)
+.sw_fig_nature_text_pt <- c(min = 5, max = 7)
 
 # Okabe-Ito colours keyed by method label.
 .sw_fig_palette_values <- c(
@@ -91,18 +99,11 @@ NULL
   }
 }
 
-# House theme, added to each plot rather than set globally.
-# Legend at the bottom, thin strip border, caption left-aligned to the plot.
+# House theme, added to each plot rather than set globally: the Nature-spec theme
+# (R/theme_prism.R), legend on the right, caption left-aligned to the plot.
 .sw_fig_theme <- function() {
-  base <- if (requireNamespace("ggpubr", quietly = TRUE)) {
-    ggpubr::theme_pubr(base_size = 8)
-  } else {
-    ggplot2::theme_classic(base_size = 8)
-  }
-  base +
+  .sw_theme_nature() +
     ggplot2::theme(
-      legend.position = "bottom",
-      strip.background = ggplot2::element_rect(linewidth = 0.3),
       plot.caption = ggplot2::element_text(hjust = 0),
       plot.caption.position = "plot",
       # Extra right margin so the last tick label is not cut off.
@@ -110,14 +111,23 @@ NULL
     )
 }
 
+# Facet axes on every panel, tick labels on the outer edges only (user rule r-0008).
+.sw_fig_facet_wrap <- function(var) {
+  ggplot2::facet_wrap(
+    ggplot2::vars({{ var }}),
+    axes = "all",
+    axis.labels = "margins"
+  )
+}
+
 # Wrap a caption so it is not clipped at the saved width.
 .sw_fig_wrap <- function(text, width = 80) {
   paste(strwrap(text, width = width), collapse = "\n")
 }
 
-# Legend rows so method keys never run off the page (3 keys per row).
+# Legend on the right: one column of method keys.
 .sw_fig_legend <- function(n_keys) {
-  ggplot2::guide_legend(nrow = ceiling(n_keys / 3))
+  ggplot2::guide_legend(ncol = 1)
 }
 
 # Error naming the argument when a required argument is missing.
@@ -557,7 +567,7 @@ sw_unmix_figure_spectra <- function(spectra_list) {
   ) +
     ggplot2::geom_line(linewidth = 0.4) +
     ggplot2::geom_point(size = 0.6) +
-    ggplot2::facet_wrap(ggplot2::vars(panel_label)) +
+    .sw_fig_facet_wrap(panel_label) +
     ggplot2::scale_x_discrete(breaks = detector_breaks) +
     ggplot2::scale_colour_manual(
       values = palette,
@@ -576,8 +586,7 @@ sw_unmix_figure_spectra <- function(spectra_list) {
     ) +
     .sw_fig_theme() +
     ggplot2::theme(
-      axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5),
-      strip.text = ggplot2::element_text(size = 6)
+      axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5)
     )
 
   list(panel = "F1", plot = p, source = source)
@@ -683,7 +692,7 @@ sw_unmix_figure_similarity <- function(spectra) {
     ggplot2::labs(
       x = "Fluorophore",
       y = "Fluorophore",
-      caption = .sw_fig_wrap(caption)
+      caption = .sw_fig_wrap(caption, width = 70)
     ) +
     .sw_fig_theme() +
     ggplot2::theme(
@@ -789,7 +798,7 @@ sw_unmix_figure_distributions <- function(events, channels, pseudo_log_sigma) {
     ggplot2::aes(x = value, colour = method)
   ) +
     ggplot2::geom_density(linewidth = 0.4, key_glyph = "path") +
-    ggplot2::facet_wrap(ggplot2::vars(channel)) +
+    .sw_fig_facet_wrap(channel) +
     .sw_fig_symlog_scale("x", trans) +
     ggplot2::scale_colour_manual(
       values = palette,
@@ -908,7 +917,7 @@ sw_unmix_figure_biplot <- function(
 
   p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_bin2d(bins = bins) +
-    ggplot2::facet_wrap(ggplot2::vars(method)) +
+    .sw_fig_facet_wrap(method) +
     .sw_fig_symlog_scale("x", trans) +
     .sw_fig_symlog_scale("y", trans) +
     ggplot2::scale_fill_viridis_c(transform = "log10", name = "Events") +
@@ -939,20 +948,33 @@ sw_unmix_figure_biplot <- function(
 #' Files are `<dir>/<stem>.png`, `<dir>/<stem>.pdf` and
 #' `<dir>/source_data/<stem>.csv`, where the stem is the panel name
 #' (`spectra-overlay`, `similarity-matrix`, `unmixed-distributions`,
-#' `biplot`). Default sizes (width x height, mm) are F1 180 x 140, F2
-#' 120 x 100, F3 180 x 120 and F4 180 x 150. The PNG is 300 dpi and uses the
-#' cairo `png()` type when available; the PDF uses [grDevices::cairo_pdf()].
-#' If any target file already exists, nothing is written.
+#' `biplot`). Default sizes (width x height, mm) are F1 183 x 140, F2
+#' 89 x 85, F3 183 x 110 and F4 183 x 110; the widths are Nature column
+#' widths. The PNG is 300 dpi and uses the cairo `png()` type when available;
+#' the PDF uses [grDevices::cairo_pdf()]. If any target file already exists,
+#' nothing is written.
+#'
+#' With `check = "nature"`, each figure must meet the Nature final artwork
+#' spec before anything is written: width 89 or 183 mm, and every text the
+#' plot draws between 5 and 7 pt (font sizes read from the built plot on a
+#' cairo device). After the PDFs are written, `pdffonts` (poppler) checks
+#' that every font is embedded; when `pdffonts` or cairo is absent, that check
+#' is skipped and `fonts_embedded` is `NA`. A breach stops with the panel
+#' name; files already written stay.
 #'
 #' @param figures Named list of figure results keyed by panel (`F1` to
 #'   `F4`), as returned by the `sw_unmix_figure_*()` builders.
 #' @param dir Output folder. Required. Created if absent.
 #' @param sizes Optional named list of `c(width, height)` in mm, keyed by
 #'   panel, replacing the default size of those panels.
+#' @param check `"none"` (default) or `"nature"`, the journal spec check
+#'   described in Details.
 #'
 #' @return A tibble with `panel`, `png`, `pdf` (`NA` without cairo),
-#'   `source_csv`, `n_rows` (rows in the source table), `width_mm` and
-#'   `height_mm`.
+#'   `source_csv`, `n_rows` (rows in the source table), `width_mm`,
+#'   `height_mm`, and with `check = "nature"` the drawn text range
+#'   `text_pt_min`, `text_pt_max` and `fonts_embedded` (`NA` when not checked
+#'   or not checkable).
 #'
 #' @examples
 #' \dontrun{
@@ -963,10 +985,16 @@ sw_unmix_figure_biplot <- function(
 #' }
 #'
 #' @export
-sw_unmix_save_figures <- function(figures, dir, sizes = NULL) {
+sw_unmix_save_figures <- function(
+  figures,
+  dir,
+  sizes = NULL,
+  check = c("none", "nature")
+) {
   .sw_fig_require(missing(figures), "figures")
   .sw_fig_require(missing(dir), "dir")
   .sw_fig_need_ggplot2()
+  check <- match.arg(check)
   keys <- names(figures)
   if (!is.list(figures) || is.null(keys) || anyDuplicated(keys)) {
     stop("`figures` must be a list with unique panel names.", call. = FALSE)
@@ -1011,6 +1039,18 @@ sw_unmix_save_figures <- function(figures, dir, sizes = NULL) {
     )
   }
   sizes <- utils::modifyList(.sw_fig_sizes, as.list(sizes))
+
+  # Journal spec: widths and drawn text sizes, checked before anything is written.
+  text_pt <- matrix(NA_real_, nrow = length(keys), ncol = 2)
+  if (check == "nature") {
+    for (i in seq_along(keys)) {
+      text_pt[i, ] <- .sw_fig_check_nature(
+        figures[[i]][["plot"]],
+        keys[i],
+        sizes[[keys[i]]][1]
+      )
+    }
+  }
 
   use_cairo <- isTRUE(capabilities("cairo"))
   stems <- unname(.sw_fig_panels[keys])
@@ -1078,6 +1118,24 @@ sw_unmix_save_figures <- function(figures, dir, sizes = NULL) {
     utils::write.csv(figures[[i]][["source"]], csv_paths[i], row.names = FALSE)
   }
 
+  # Font embedding, read from the written PDFs (needs cairo and poppler's pdffonts).
+  fonts_embedded <- rep(NA, length(keys))
+  if (check == "nature") {
+    for (i in which(!is.na(pdf_paths))) {
+      fonts_embedded[i] <- .sw_fig_fonts_embedded(pdf_paths[i])
+      if (isFALSE(fonts_embedded[i])) {
+        stop(
+          sprintf(
+            "Panel %s: a font is not embedded in %s.",
+            keys[i],
+            pdf_paths[i]
+          ),
+          call. = FALSE
+        )
+      }
+    }
+  }
+
   tibble::tibble(
     panel = keys,
     png = png_paths,
@@ -1090,8 +1148,107 @@ sw_unmix_save_figures <- function(figures, dir, sizes = NULL) {
       USE.NAMES = FALSE
     ),
     width_mm = vapply(keys, \(k) sizes[[k]][1], numeric(1), USE.NAMES = FALSE),
-    height_mm = vapply(keys, \(k) sizes[[k]][2], numeric(1), USE.NAMES = FALSE)
+    height_mm = vapply(keys, \(k) sizes[[k]][2], numeric(1), USE.NAMES = FALSE),
+    text_pt_min = text_pt[, 1],
+    text_pt_max = text_pt[, 2],
+    fonts_embedded = fonts_embedded
   )
+}
+
+# Font sizes (pt) of every non-empty text grob the built plot draws, measured on a cairo
+# device (as the saved PDF) so the font family resolves through fontconfig.
+.sw_fig_drawn_font_sizes <- function(p) {
+  path <- tempfile(fileext = ".pdf")
+  if (isTRUE(capabilities("cairo"))) {
+    grDevices::cairo_pdf(path)
+  } else {
+    grDevices::pdf(path)
+  }
+  on.exit({
+    grDevices::dev.off()
+    unlink(path)
+  })
+  g <- ggplot2::ggplotGrob(p)
+  sizes <- numeric(0)
+  walk <- function(x) {
+    label <- x[["label"]]
+    fontsize <- x[["gp"]][["fontsize"]]
+    if (
+      !is.null(label) && any(nzchar(as.character(label))) && !is.null(fontsize)
+    ) {
+      cex <- x[["gp"]][["cex"]]
+      sizes <<- c(sizes, fontsize * if (is.null(cex)) 1 else cex)
+    }
+    if (inherits(x, "gtable")) {
+      lapply(x[["grobs"]], walk)
+    } else if (inherits(x, "gTree")) {
+      lapply(x[["children"]], walk)
+    }
+    invisible(NULL)
+  }
+  walk(g)
+  sizes
+}
+
+# Stop unless the figure meets the Nature width and text-size spec; returns c(min, max) pt.
+.sw_fig_check_nature <- function(p, panel, width_mm) {
+  if (!width_mm %in% .sw_fig_nature_widths) {
+    stop(
+      sprintf(
+        "Panel %s: width %s mm; Nature needs %s mm.",
+        panel,
+        format(width_mm),
+        paste(.sw_fig_nature_widths, collapse = " or ")
+      ),
+      call. = FALSE
+    )
+  }
+  pt <- round(.sw_fig_drawn_font_sizes(p), 2)
+  if (
+    length(pt) > 0L &&
+      (min(pt) < .sw_fig_nature_text_pt[["min"]] ||
+        max(pt) > .sw_fig_nature_text_pt[["max"]])
+  ) {
+    stop(
+      sprintf(
+        "Panel %s: drawn text %.1f to %.1f pt; Nature needs %s to %s pt.",
+        panel,
+        min(pt),
+        max(pt),
+        .sw_fig_nature_text_pt[["min"]],
+        .sw_fig_nature_text_pt[["max"]]
+      ),
+      call. = FALSE
+    )
+  }
+  if (length(pt) == 0L) c(NA_real_, NA_real_) else range(pt)
+}
+
+# Run poppler's pdffonts; NULL when it is not installed (wrapped so tests can mock it).
+.sw_pdffonts <- function(path) {
+  if (!nzchar(Sys.which("pdffonts"))) {
+    return(NULL)
+  }
+  system2("pdffonts", shQuote(path), stdout = TRUE, stderr = FALSE)
+}
+
+# TRUE when every font in the PDF is embedded, NA when pdffonts is unavailable.
+.sw_fig_fonts_embedded <- function(path) {
+  out <- .sw_pdffonts(path)
+  if (is.null(out)) {
+    return(NA)
+  }
+  rows <- out[-(1:2)]
+  if (length(rows) == 0L) {
+    return(TRUE)
+  }
+  # pdffonts rows end in "emb sub uni object ID": emb is the fifth field from the end
+  emb <- vapply(
+    strsplit(trimws(rows), "\\s+"),
+    \(x) x[length(x) - 4L],
+    character(1)
+  )
+  all(emb == "yes")
 }
 
 # Bare column names used inside ggplot2::aes() and dplyr::count().
