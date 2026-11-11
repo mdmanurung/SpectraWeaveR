@@ -224,6 +224,19 @@ test_that("F6 errors on a setup without a colour and on a missing argument", {
 
 # ---- F7 and F8 ---------------------------------------------------------------
 
+test_that("F7 share panel axis includes 0", {
+  f7 <- sw_unmix_figure_spike_summary(
+    mock_spike_score(),
+    readout_level = 2,
+    stem = "spike-summary_TNF"
+  )
+  built <- ggplot2::ggplot_build(f7$plot)
+  lay <- built$layout$layout
+  lost_panel <- lay$PANEL[grepl("losing", lay$readout)]
+  ranges <- purrr::map(lost_panel, \(i) built$layout$panel_params[[i]]$x.range)
+  expect_true(all(purrr::map_lgl(ranges, \(r) r[[1]] <= 0)))
+})
+
 test_that("F7 plots loss and recovery per donor for every setup", {
   score <- mock_spike_score()
   f7 <- sw_unmix_figure_spike_summary(
