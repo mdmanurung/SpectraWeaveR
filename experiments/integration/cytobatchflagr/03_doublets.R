@@ -4,10 +4,12 @@
 #          Doublets are injected into 25% of files: an injected event is two events passing
 #          together, so every area channel is their sum and every height channel their maximum.
 #          AUROC ranks faulty files above clean ones; the real batch effects stay in.
+# G40: null arm (no injection, same draws)
 # Run:     Rscript experiments/integration/cytobatchflagr/03_doublets.R <extract_run_dir> <run_dir>
 # Inputs:  <extract_run_dir>/events.rds, files.csv   from 01_extract.R
-# Outputs: <run_dir>/doublets_long.csv
-#          <run_dir>/fig_doublets.png, figure_source_data_doublets.csv
+# Outputs: <run_dir>/doublets_long.csv, figure_source_data_doublets.csv   (both have a column
+#          `arm`: "fault" and "null"; null = same bad labels, clean files, same scoring)
+#          <run_dir>/fig_doublets.png   (arm == "fault" only), session_info.txt
 #
 # Fault sizes and seeds are illustrative; the two quantiles are the variants the user approved.
 
@@ -21,7 +23,9 @@ theme_set(ggpubr::theme_pubr(base_size = 8))
 args <- commandArgs(trailingOnly = TRUE)
 extract_dir <- args[[1]]
 run_dir <- args[[2]]
-if (dir.exists(run_dir)) stop("run dir exists: ", run_dir, call. = FALSE)
+if (dir.exists(run_dir)) {
+  stop("run dir exists: ", run_dir, call. = FALSE)
+}
 dir.create(run_dir, recursive = TRUE)
 
 SEEDS <- 1:5
@@ -55,24 +59,45 @@ add_doublets <- function(x, share) {
 long <- lapply(SEEDS, function(seed) {
   lapply(DOUBLET_SHARE, function(share) {
     set.seed(seed * 1000 + round(share * 100))
-    bad <- seq_along(ev) %in% sample(seq_along(ev), round(FRACTION_BAD * length(ev)))
+    bad <- seq_along(ev) %in%
+      sample(seq_along(ev), round(FRACTION_BAD * length(ev)))
     files <- ev
     files[bad] <- lapply(files[bad], add_doublets, share = share)
-    lapply(QUANTILES, function(q) {
-      sa <- sw_fcs_signal_audit(files, markers, NULL, NULL, time_channel = NULL, time_bin = NULL,
-        area_height = AREA_HEIGHT, area_height_quantile = q, reference_group = NULL, reference = NULL)
-      z <- sa[sa$check == "area_height_z", ]
-      fsc_sd <- sa[sa$check == "sd_z" & sa$channel == markers[1], ]
-      gz <- sa[sa$check == "global_sd_z", ]
-      tibble(
-        seed = seed, share = share, quantile = q,
-        check = c("area_height_z", "global_sd_z", "sd_z_one_marker"),
-        auroc = c(
-          auroc(z$value[match(names(files), z$file)], bad),
-          auroc(abs(gz$value[match(names(files), gz$file)]), bad),
-          auroc(abs(fsc_sd$value[match(names(files), fsc_sd$file)]), bad)
+    # G40: null arm = the same clean files and bad labels, no doublets. lapply runs "fault" for
+    # every quantile before "null", and sw_fcs_signal_audit draws no random numbers.
+    arms <- list(fault = files, null = ev)
+    lapply(names(arms), function(which_arm) {
+      files <- arms[[which_arm]]
+      lapply(QUANTILES, function(q) {
+        sa <- sw_fcs_signal_audit(
+          files,
+          markers,
+          NULL,
+          NULL,
+          time_channel = NULL,
+          time_bin = NULL,
+          area_height = AREA_HEIGHT,
+          area_height_quantile = q,
+          reference_group = NULL,
+          reference = NULL
         )
-      )
+        z <- sa[sa$check == "area_height_z", ]
+        fsc_sd <- sa[sa$check == "sd_z" & sa$channel == markers[1], ]
+        gz <- sa[sa$check == "global_sd_z", ]
+        tibble(
+          seed = seed,
+          arm = which_arm,
+          share = share,
+          quantile = q,
+          check = c("area_height_z", "global_sd_z", "sd_z_one_marker"),
+          auroc = c(
+            auroc(z$value[match(names(files), z$file)], bad),
+            auroc(abs(gz$value[match(names(files), gz$file)]), bad),
+            auroc(abs(fsc_sd$value[match(names(files), fsc_sd$file)]), bad)
+          )
+        )
+      }) |>
+        bind_rows()
     }) |>
       bind_rows()
   }) |>
@@ -85,16 +110,37 @@ mat <- long |>
   summarise(
     ci95_half = 1.96 * sd(auroc) / sqrt(n()),
     auroc = mean(auroc),
-    .by = c(share, quantile, check)
+    .by = c(arm, share, quantile, check)
   )
-write.csv(mat, file.path(run_dir, "figure_source_data_doublets.csv"), row.names = FALSE)
+write.csv(
+  mat,
+  file.path(run_dir, "figure_source_data_doublets.csv"),
+  row.names = FALSE
+)
 print(as.data.frame(mutate(mat, across(c(auroc, ci95_half), \(x) round(x, 3)))))
-p <- ggplot(mat, aes(share, auroc, colour = check)) +
+p <- ggplot(filter(mat, arm == "fault"), aes(share, auroc, colour = check)) +
   geom_hline(yintercept = c(0.5, 0.9), linetype = 2, colour = "grey60") +
-  geom_pointrange(aes(ymin = auroc - ci95_half, ymax = pmin(auroc + ci95_half, 1)), size = 0.2) +
+  geom_pointrange(
+    aes(ymin = auroc - ci95_half, ymax = pmin(auroc + ci95_half, 1)),
+    size = 0.2
+  ) +
   geom_line() +
   facet_wrap(vars(quantile), labeller = label_both) +
   scale_x_continuous(labels = scales::percent) +
-  labs(x = "Injected doublets (share of events)", y = "AUROC, 72 real files (mean, 95% CI, 5 seeds)", colour = NULL)
-ggsave(file.path(run_dir, "fig_doublets.png"), p, width = 150, height = 70, units = "mm", dpi = 200)
-writeLines(capture.output(sessionInfo()), file.path(run_dir, "session_info.txt"))
+  labs(
+    x = "Injected doublets (share of events)",
+    y = "AUROC, 72 real files (mean, 95% CI, 5 seeds)",
+    colour = NULL
+  )
+ggsave(
+  file.path(run_dir, "fig_doublets.png"),
+  p,
+  width = 150,
+  height = 70,
+  units = "mm",
+  dpi = 200
+)
+writeLines(
+  capture.output(sessionInfo()),
+  file.path(run_dir, "session_info.txt")
+)

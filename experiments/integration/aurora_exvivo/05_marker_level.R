@@ -2,11 +2,15 @@
 # Purpose: split the real-data detection limit into two causes. (a) Natural file-to-file spread
 #          of each marker's median and SD in the cohort. (b) AUROC of the injected marker's own
 #          z-score (an oracle that knows which marker was hit) against the max over 40 markers.
+# G40:     null arm (no injection, same draws)
+#          arm = "null" rows use the same bad files and hit marker as the fault arm, score the clean
+#          base files, and give the AUROC of both scores against those same bad labels.
 # Run:     Rscript experiments/integration/aurora_exvivo/05_marker_level.R <run_dir>
 # Inputs:  <run_dir>/events.rds, files.csv   from 01_extract.R
-# Outputs: <run_dir>/marker_level_long.csv, marker_level_matrix.csv
+# Outputs: <run_dir>/marker_level_long.csv     seed, fault, size, arm (fault/null), score, auroc
+#          <run_dir>/marker_level_matrix.csv   mean AUROC and 95% CI per fault, size, arm, score
 #          <run_dir>/natural_spread.csv      per marker: SD of file medians and of file SDs
-#          <run_dir>/fig_marker_level.png, figure_source_data_marker_level.csv
+#          <run_dir>/fig_marker_level.png (fault arm only), figure_source_data_marker_level.csv
 #
 # Every value below is illustrative; none is a package default.
 
@@ -31,7 +35,9 @@ stopifnot("files match events" = identical(info$file, names(ev)))
 base <- ev[info$file[info$batch == BATCH & grepl("BMV_[0-9]+[A-Z]", info$file)]]
 ch <- setdiff(colnames(base[[1]]), "Time")
 marker_sd <- apply(do.call(rbind, base)[, ch], 2, sd)
-time_bin <- as.numeric(median(vapply(base, \(m) diff(range(m[, "Time"])), numeric(1))) / TIME_BINS)
+time_bin <- as.numeric(
+  median(vapply(base, \(m) diff(range(m[, "Time"])), numeric(1))) / TIME_BINS
+)
 
 # Natural spread, in units of the pooled marker SD --------------------------------
 file_med <- t(vapply(base, \(m) apply(m[, ch], 2, median), numeric(length(ch))))
@@ -42,8 +48,16 @@ spread <- tibble(
   cv_of_file_sds = apply(file_sd, 2, sd) / colMeans(file_sd)
 )
 write.csv(spread, file.path(run_dir, "natural_spread.csv"), row.names = FALSE)
-cat("median over markers of SD(file medians)/pooled SD:", round(median(spread$sd_of_file_medians), 2), "\n")
-cat("median over markers of CV(file SDs):", round(median(spread$cv_of_file_sds), 2), "\n")
+cat(
+  "median over markers of SD(file medians)/pooled SD:",
+  round(median(spread$sd_of_file_medians), 2),
+  "\n"
+)
+cat(
+  "median over markers of CV(file SDs):",
+  round(median(spread$cv_of_file_sds), 2),
+  "\n"
+)
 
 # Injected faults: max over markers against the injected marker only ----------------
 auroc <- function(score, pos) {
@@ -74,25 +88,43 @@ long <- lapply(SEEDS, \(sd) {
     files <- base
     files[bad] <- lapply(files[bad], j$fn, m = marker)
     names(files) <- paste0("f", seq_along(files))
-    aud <- sw_fcs_signal_audit(
-      files,
-      ch,
-      range_max = NULL,
-      range_min = NULL,
-      time_channel = "Time",
-      time_bin = time_bin, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL
+    # Scores both checks on one set of files against the bad labels of this iteration.
+    score_files <- function(files) {
+      aud <- sw_fcs_signal_audit(
+        files,
+        ch,
+        range_max = NULL,
+        range_min = NULL,
+        time_channel = "Time",
+        time_bin = time_bin,
+        area_height = NULL,
+        area_height_quantile = NULL,
+        reference_group = NULL,
+        reference = NULL
+      )
+      a <- aud[aud$check == j$check, ]
+      mx <- as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[names(
+        files
+      )])
+      a_own <- a[a$channel == marker, ]
+      own <- abs(a_own$value)[match(names(files), a_own$file)]
+      tibble(
+        seed = sd,
+        fault = j$fault,
+        size = j$size,
+        score = c("max over 40 markers", "injected marker only (oracle)"),
+        auroc = c(auroc(mx, bad), auroc(own, bad))
+      )
+    }
+    # Fault arm first: it uses the random stream exactly as before. The null arm comes last, so
+    # it cannot change any draw of this iteration; the next iteration starts with its own set.seed().
+    fault_rows <- mutate(score_files(files), arm = "fault", .after = size)
+    null_rows <- mutate(
+      score_files(setNames(base, names(files))),
+      arm = "null",
+      .after = size
     )
-    a <- aud[aud$check == j$check, ]
-    mx <- as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[names(files)])
-    a_own <- a[a$channel == marker, ]
-    own <- abs(a_own$value)[match(names(files), a_own$file)]
-    tibble(
-      seed = sd,
-      fault = j$fault,
-      size = j$size,
-      score = c("max over 40 markers", "injected marker only (oracle)"),
-      auroc = c(auroc(mx, bad), auroc(own, bad))
-    )
+    bind_rows(fault_rows, null_rows)
   })
 }) |>
   unlist(recursive = FALSE) |>
@@ -103,13 +135,20 @@ mat <- long |>
   summarise(
     ci95_half = 1.96 * sd(auroc) / sqrt(n()),
     auroc = mean(auroc),
-    .by = c(fault, size, score)
+    .by = c(fault, size, arm, score)
   )
 write.csv(mat, file.path(run_dir, "marker_level_matrix.csv"), row.names = FALSE)
-write.csv(mat, file.path(run_dir, "figure_source_data_marker_level.csv"), row.names = FALSE)
-p <- ggplot(mat, aes(size, auroc, colour = score)) +
+write.csv(
+  mat,
+  file.path(run_dir, "figure_source_data_marker_level.csv"),
+  row.names = FALSE
+)
+p <- ggplot(filter(mat, arm == "fault"), aes(size, auroc, colour = score)) +
   geom_hline(yintercept = 0.5, linetype = 2, colour = "grey60") +
-  geom_pointrange(aes(ymin = auroc - ci95_half, ymax = auroc + ci95_half), size = 0.25) +
+  geom_pointrange(
+    aes(ymin = auroc - ci95_half, ymax = auroc + ci95_half),
+    size = 0.25
+  ) +
   geom_line() +
   facet_wrap(vars(fault), scales = "free_x", nrow = 1) +
   labs(
