@@ -25,8 +25,14 @@ NULL
     ),
     how = paste0(
       "Look at the raw fluorescence densities and the share of events flagged ",
-      "per channel. The PeacoQC default removes over 99% on 40-colour Aurora ",
-      "data."
+      "per channel. ",
+      "In a failed smoke run on 5 BMV donors with PeacoQC's default ranges, ",
+      "PeacoQC warned that more than 99.34 % (A3), 99.81 % (A6), 99.48 % ",
+      "(B11), 99.16 % (B2) and 99.86 % (D1) of the events were margin events ",
+      "(experiments/runs/2026-11-11_clean-run-smoke/warnings.txt, a run ",
+      "folder that git does not track). The comment on MAX_MARGIN_FRAC in ",
+      "experiments/benchmarks/05_bmv-unmix-compare/12_cleanup.R notes that ",
+      "the defaults removed 99.9%."
     ),
     reference = paste0(
       "c(-21761, 1e7) on fluorescence channels (arcsinh -2 to the ",
@@ -228,10 +234,11 @@ NULL
 #'   every fluorescence channel; two finite numbers with \code{min} below
 #'   \code{max}. Scatter channels keep the range stored in the FCS file. It
 #'   is passed to \code{PeacoQC::RemoveMargins()} as the \code{minRange} and
-#'   \code{maxRange} of every fluorescence channel (see Details). PeacoQC's own
-#'   default ranges (the FCS parameter ranges) removed over 99\% of the events
-#'   on 40-colour Aurora data, so the value sets how many events every later
-#'   step sees.
+#'   \code{maxRange} of every fluorescence channel (see Details). The value
+#'   sets how many events every later step sees. The user approved it as a
+#'   required argument in the 2026-11-11 session, because PeacoQC's own default
+#'   ranges (the FCS parameter ranges) flagged almost all events in a smoke
+#'   run (sources in Details).
 #' @param debris_window Numeric length 2; required, no default. Lower and
 #'   upper FSC-A limit (raw scale) of the events the \code{nonDebris} density
 #'   is built from. It is written as \code{min} and \code{max} of the openCyto
@@ -278,6 +285,15 @@ NULL
 #' keep the \code{minRange} and \code{maxRange} of the FCS parameters. The
 #' \code{debris_window} and the singlet gate act on raw scatter; the
 #' viability cut acts on the arcsinh scale.
+#'
+#' \strong{Why \code{margin_range} has no default.} In a failed smoke run on 5
+#' BMV donors with PeacoQC's default ranges, PeacoQC warned that more than
+#' 99.34 % (A3), 99.81 % (A6), 99.48 % (B11), 99.16 % (B2) and 99.86 % (D1)
+#' of the events were margin events
+#' (\code{experiments/runs/2026-11-11_clean-run-smoke/warnings.txt}, a run
+#' folder that git does not track). The comment on \code{MAX_MARGIN_FRAC} in
+#' \code{experiments/benchmarks/05_bmv-unmix-compare/12_cleanup.R} notes that
+#' the defaults removed 99.9%.
 #'
 #' \strong{The margin step removes more than events on the range limit.}
 #' PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
