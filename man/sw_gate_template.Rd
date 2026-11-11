@@ -43,9 +43,14 @@ biological choice.}
 
 \item{pool_samples}{Logical; required, no default. Written to the
 \code{collapseDataForGating} column of every row, with \code{groupBy}
-left empty. \code{TRUE}: openCyto pools the events of all samples in
-the GatingSet, fits one gate, and applies that gate to every sample.
-\code{FALSE}: each sample gets its own gate fitted on its own events.}
+left empty. In openCyto 2.18.0 a gate is fitted on pooled events only
+when \code{collapseDataForGating} is \code{TRUE} and \code{groupBy} is
+not empty (a number N pools N samples per group). With \code{groupBy}
+empty, openCyto fits one gate per sample whatever this argument says, so
+\code{TRUE} alone does not pool. To pool, set \code{groupBy} in the
+written CSV to the number of samples; \code{\link{sw_clean_run}} does
+this. \code{FALSE}: each sample gets its own gate fitted on its own
+events.}
 }
 \value{
 The file path (invisibly).
