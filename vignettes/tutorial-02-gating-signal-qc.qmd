@@ -98,7 +98,11 @@ sample_info <- data.frame(
 
 for (i in seq_len(nrow(sample_info))) {
   shift <- if (sample_info$batch[i] == "B2") 300 else 0
-  ff <- make_tutorial_fcs(n_per_pop = 150, batch_shift = shift)
+  # PeacoQC bins events (500 per bin by default, bins overlap by half) and
+  # smooths the bins, so it needs at least four bins. The isolation tree step
+  # needs 150 bins, about 37,500 events. 15,000 events per population give
+  # 45,000 events per file.
+  ff <- make_tutorial_fcs(n_per_pop = 15000, batch_shift = shift)
   write.FCS(ff, file.path(fcs_dir, sample_info$file[i]))
 }
 
