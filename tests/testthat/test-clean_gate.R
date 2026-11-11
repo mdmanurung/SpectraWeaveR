@@ -678,7 +678,7 @@ test_that("a sample left with a few events reaches PeacoQC; no event-count thres
     },
     sw_qc_run = function(ff, ...) {
       if (nrow(ff) == 5) {
-        handed <<- nrow(ff)
+        handed <<- unname(nrow(ff))
         stop("need at least four unique x values", call. = FALSE)
       }
       orig_qc(ff, ...)
