@@ -97,3 +97,42 @@ Extracts `flowFrame` objects from a specific gate node of a `GatingSet`.
 ### Value
 
 A named list of `flowFrame` objects, one per sample in the GatingSet.
+
+## `sw_clean_run` {#sw_clean_run}
+
+Clean spectral flow data: margins, arcsinh, PeacoQC, then debris, singlet and live gates.
+
+### Usage
+
+```r
+sw_clean_run(
+  x, debris_window, singlet_wider_gate, pool_samples,
+  viability_channel, viability_method, viability_cut,
+  IT_limit, MAD, cofactor
+)
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `x` | FCS file paths, a `flowFrame`, a `flowSet` or a list of `flowFrame`s. |
+| `debris_window` | Required, no default. Lower and upper FSC-A bound (raw scale) of the cut point of the nonDebris gate. Events below the cut are debris. Benchmark 05 used c(2e5, 1.5e6) with mindensity (reference only). |
+| `singlet_wider_gate` | Required, no default. Width of the openCyto singletGate on FSC-A against FSC-H. TRUE widens it and keeps more events near the edge. Benchmark 05 used TRUE (reference only). |
+| `pool_samples` | Required, no default. TRUE fits each gate once on the pooled events of all samples and applies it to every sample. FALSE fits one gate per sample. Benchmark 05 used TRUE (gates pooled over donors) (reference only). |
+| `viability_channel` | Required, no default. Channel of the viability dye. Dead cells are the high tail. Benchmark 05 used "LIVE DEAD NIR-A" (reference only). |
+| `viability_method` | Required, no default. How the live cut is found: "mindensity" takes the valley of the density, "boundary" takes the fixed cut in viability_cut. Benchmark 05 used "mindensity" (reference only). |
+| `viability_cut` | Required, no default. Live cut on the arcsinh scale for viability_method = "boundary" (events below it are live). Must be NULL for "mindensity". Benchmark 05 used NULL (mindensity finds the valley) (reference only). |
+| `IT_limit` | Required, no default. Isolation Tree limit of PeacoQC. It trades stringency against the number of events kept. Benchmark 05 used 0.55 (reference only). |
+| `MAD` | Required, no default. Median Absolute Deviation limit of PeacoQC. It trades stringency against the number of events kept. Benchmark 05 used 6 (reference only). |
+| `cofactor` | Required, no default. Divisor of the arcsinh transformation of all fluorescence channels, asinh(x / cofactor). Scatter stays raw. It shifts the QC and viability cuts. Benchmark 05 used 6000 (reference only). |
+
+### Details
+
+Steps run in this order: `sw_filter_margins_peacoqc()` on the raw scale, arcsinh on all fluorescence channels (`sw_transform_apply()`), `sw_qc_batch()` with the given `IT_limit` and `MAD`, then `sw_gate_run()` with a template of three gates: `nonDebris`, `singlets`, `live`. Scatter channels stay raw, so `debris_window` is in raw FSC-A units. Nothing runs after the live gate.
+
+If any required argument is missing, the function stops once. The message names every missing argument with what it controls, how to choose it, and the benchmark 05 value labelled "not a recommendation". No step runs first. A sample with no events left after a step stops the run.
+
+### Value
+
+A list: `events` (live singlet flowFrames, arcsinh scale), `audit` (per sample and step: `n_events`, `n_removed`, percentages), `audit_total`, `gates` (per sample and gate), `qc` (PeacoQC summary with the limits used), `template` and `parameters`.
