@@ -2,7 +2,7 @@
 % Please edit documentation in R/unmix_figures.R
 \name{unmix_figures}
 \alias{unmix_figures}
-\title{Unmixing Report Figures (F1 to F4)}
+\title{Unmixing Report Figures (F1 to F4, F6 to F8)}
 \description{
 Build the four figures approved in
 \code{plans/beta_unmix_report_figure_plan.md}. Each builder returns the ggplot
@@ -14,7 +14,11 @@ until you call \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}}.
 \item \code{\link[=sw_unmix_figure_similarity]{sw_unmix_figure_similarity()}} is F2, the cosine-similarity matrix.
 \item \code{\link[=sw_unmix_figure_distributions]{sw_unmix_figure_distributions()}} is F3, per-channel densities.
 \item \code{\link[=sw_unmix_figure_biplot]{sw_unmix_figure_biplot()}} is F4, a two-channel biplot per method.
-\item \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}} writes PNG, PDF and source CSV per panel.
+\item \code{\link[=sw_unmix_figure_scatter_grid]{sw_unmix_figure_scatter_grid()}} is F6, a hexbin grid per setup and
+sample (marker vs marker, or a spike before vs after per cell).
+\item \code{\link[=sw_unmix_figure_spike_summary]{sw_unmix_figure_spike_summary()}} is F7 and \code{\link[=sw_unmix_figure_spike_ecdf]{sw_unmix_figure_spike_ecdf()}}
+is F8, the spike-in recovery summaries.
+\item \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}} writes PNG (300 dpi), PDF and source CSV per panel.
 }
 }
 \details{

@@ -1,4 +1,4 @@
-#' @title Unmixing Report Figures (F1 to F4)
+#' @title Unmixing Report Figures (F1 to F4, F6 to F8)
 #'
 #' @description
 #' Build the four figures approved in
@@ -11,7 +11,11 @@
 #' * [sw_unmix_figure_similarity()] is F2, the cosine-similarity matrix.
 #' * [sw_unmix_figure_distributions()] is F3, per-channel densities.
 #' * [sw_unmix_figure_biplot()] is F4, a two-channel biplot per method.
-#' * [sw_unmix_save_figures()] writes PNG, PDF and source CSV per panel.
+#' * [sw_unmix_figure_scatter_grid()] is F6, a hexbin grid per setup and
+#'   sample (marker vs marker, or a spike before vs after per cell).
+#' * [sw_unmix_figure_spike_summary()] is F7 and [sw_unmix_figure_spike_ecdf()]
+#'   is F8, the spike-in recovery summaries.
+#' * [sw_unmix_save_figures()] writes PNG (300 dpi), PDF and source CSV per panel.
 #'
 #' @details
 #' F5 (condition number and AF library size) stays a table in
@@ -41,7 +45,10 @@ NULL
   F1 = "spectra-overlay",
   F2 = "similarity-matrix",
   F3 = "unmixed-distributions",
-  F4 = "biplot"
+  F4 = "biplot",
+  F6 = "scatter-grid",
+  F7 = "spike-summary",
+  F8 = "spike-ecdf"
 )
 
 # Default saved size per panel, c(width, height) in mm. Widths are Nature column widths
@@ -50,7 +57,10 @@ NULL
   F1 = c(183, 140),
   F2 = c(89, 85),
   F3 = c(183, 110),
-  F4 = c(183, 90)
+  F4 = c(183, 90),
+  F6 = c(183, 200),
+  F7 = c(183, 100),
+  F8 = c(183, 90)
 )
 
 # Nature final artwork: column widths in mm and the drawn text range in pt.
@@ -962,8 +972,9 @@ sw_unmix_figure_biplot <- function(
 #' is skipped and `fonts_embedded` is `NA`. A breach stops with the panel
 #' name; files already written stay.
 #'
-#' @param figures Named list of figure results keyed by panel (`F1` to
-#'   `F4`), as returned by the `sw_unmix_figure_*()` builders.
+#' @param figures Named list of figure results keyed by panel (`F1` to `F4`,
+#'   `F6` to `F8`), as returned by the `sw_unmix_figure_*()` builders. A
+#'   result that carries a `stem` (F6 to F8) is written under that stem.
 #' @param dir Output folder. Required. Created if absent.
 #' @param sizes Optional named list of `c(width, height)` in mm, keyed by
 #'   panel, replacing the default size of those panels.
@@ -1034,7 +1045,7 @@ sw_unmix_save_figures <- function(
       ))
   ) {
     stop(
-      "`sizes` must be a list named by panel (F1 to F4) of c(width, height) in mm.",
+      "`sizes` must be a list named by panel (F1 to F8) of c(width, height) in mm.",
       call. = FALSE
     )
   }
@@ -1053,7 +1064,16 @@ sw_unmix_save_figures <- function(
   }
 
   use_cairo <- isTRUE(capabilities("cairo"))
-  stems <- unname(.sw_fig_panels[keys])
+  # A builder may carry its own file stem (F6 to F8: one per marker and population).
+  stems <- vapply(
+    keys,
+    \(k) {
+      own <- figures[[k]][["stem"]]
+      if (is.null(own)) .sw_fig_panels[[k]] else as.character(own)
+    },
+    character(1),
+    USE.NAMES = FALSE
+  )
   png_paths <- file.path(dir, paste0(stems, ".png"))
   pdf_paths <- if (use_cairo) {
     file.path(dir, paste0(stems, ".pdf"))
