@@ -67,3 +67,6 @@ experiments/bmv_test/**/*.fcs
 
 /.quarto/
 **/*.quarto_ipynb
+
+tests/testthat/PeacoQC_results/
+tests/testthat/Rplots.pdf
