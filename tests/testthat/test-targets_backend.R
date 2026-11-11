@@ -258,3 +258,159 @@ test_that("typed ProcessingStep round-trips through targets backend + type check
     "type check failed"
   )
 })
+
+# -------------------------------------------------------------------------
+# One input_type check, same wording in both runners
+# -------------------------------------------------------------------------
+
+# Message of the error a runner raises, so the two runners can be compared.
+.swt_error_message <- function(expr) {
+  tryCatch(expr, error = function(e) conditionMessage(e))
+}
+
+test_that("type mismatch at step 1 gives the same message in both runners", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  pip <- sw_pipeline("typed", steps = list(
+    sw_pipeline_step("double", .swt_times2, input_type = "numeric"),
+    sw_pipeline_step("plus1",  .swt_plus1,  input_type = "numeric")
+  ))
+
+  seq_msg <- .swt_error_message(
+    sw_pipeline_run(pip, input = "eight", trace = FALSE)
+  )
+  tar_msg <- .swt_error_message(
+    sw_pipeline_run_targets(pip, input = "eight",
+                            callr_function = NULL, trace = FALSE)
+  )
+
+  expect_identical(
+    seq_msg,
+    paste0("Pipeline 'typed' type check failed at step 1 ('double'): ",
+           "expected input of type numeric, got character.")
+  )
+  expect_match(tar_msg, seq_msg, fixed = TRUE)
+})
+
+test_that("type mismatch at a later step reports its index and name in both runners", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  # Step 1 has no input_type and turns the number into a string, so the
+  # check fails at step 2.
+  pip <- sw_pipeline("later", steps = list(
+    sw_pipeline_step("to_chr", as.character),
+    sw_pipeline_step("plus1",  .swt_plus1, input_type = "numeric")
+  ))
+
+  seq_msg <- .swt_error_message(sw_pipeline_run(pip, input = 8, trace = FALSE))
+  tar_msg <- .swt_error_message(
+    sw_pipeline_run_targets(pip, input = 8, callr_function = NULL, trace = FALSE)
+  )
+
+  expect_identical(
+    seq_msg,
+    paste0("Pipeline 'later' type check failed at step 2 ('plus1'): ",
+           "expected input of type numeric, got character.")
+  )
+  expect_match(tar_msg, seq_msg, fixed = TRUE)
+})
+
+test_that("matching input_type passes in both runners with equal results", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  pip <- sw_pipeline("typed", steps = list(
+    sw_pipeline_step("double", .swt_times2, input_type = "numeric"),
+    sw_pipeline_step("plus1",  .swt_plus1,  input_type = c("integer", "numeric"))
+  ))
+
+  seq_res <- sw_pipeline_run(pip, input = 8, trace = FALSE)
+  tar_res <- sw_pipeline_run_targets(pip, input = 8,
+                                     callr_function = NULL, trace = FALSE)
+
+  expect_equal(seq_res$result, 17)
+  expect_equal(tar_res$result, seq_res$result)
+  expect_equal(tar_res$intermediates, seq_res$intermediates)
+})
+
+test_that("steps with no input_type are unaffected in both runners", {
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  pip <- sw_pipeline("untyped", steps = list(
+    sw_pipeline_step("double", .swt_times2),
+    sw_pipeline_step("plus1",  .swt_plus1)
+  ))
+
+  seq_res <- sw_pipeline_run(pip, input = 8, trace = FALSE)
+  tar_res <- sw_pipeline_run_targets(pip, input = 8,
+                                     callr_function = NULL, trace = FALSE)
+
+  expect_equal(seq_res$result, 17)
+  expect_equal(tar_res$result, 17)
+
+  # A wrong-typed input is not caught by a check: the step function itself
+  # fails, with no "type check" wording.
+  seq_msg <- .swt_error_message(
+    sw_pipeline_run(pip, input = "eight", trace = FALSE)
+  )
+  tar_msg <- .swt_error_message(
+    sw_pipeline_run_targets(pip, input = "eight",
+                            callr_function = NULL, trace = FALSE)
+  )
+  expect_match(seq_msg, "non-numeric argument")
+  expect_false(grepl("type check", seq_msg, fixed = TRUE))
+  expect_false(grepl("type check", tar_msg, fixed = TRUE))
+})
+
+# -------------------------------------------------------------------------
+# Cache stability: the generated command must not depend on the pipeline
+# name or on the step position
+# -------------------------------------------------------------------------
+
+test_that("renaming a pipeline does not rebuild cached targets", {
+  skip_on_cran()
+  skip_targets_unavailable()
+  local_targets_dir()
+
+  steps <- list(
+    sw_pipeline_step("double", .swt_times2, input_type = "numeric"),
+    sw_pipeline_step("plus1",  .swt_plus1,  input_type = "numeric")
+  )
+  run_with_name <- function(name) {
+    sw_pipeline_run_targets(sw_pipeline(name, steps = steps), input = 8,
+                            callr_function = NULL, trace = FALSE)
+  }
+  # Targets that ran in the last tar_make(), read from the store progress.
+  ran <- function() {
+    prog <- targets::tar_progress(store = "_targets")
+    sort(prog$name[prog$progress == "completed"])
+  }
+  skipped <- function() {
+    prog <- targets::tar_progress(store = "_targets")
+    sort(prog$name[prog$progress == "skipped"])
+  }
+  all_targets <- sort(c("sw_input_path", "sw_input", "double_def_path",
+                        "double_def", "double", "plus1_def_path",
+                        "plus1_def", "plus1"))
+
+  expect_equal(run_with_name("p")$result, 17)
+  expect_equal(ran(), all_targets)
+
+  # Same name: nothing re-runs.
+  expect_equal(run_with_name("p")$result, 17)
+  expect_equal(ran(), character(0))
+  expect_equal(skipped(), all_targets)
+
+  # New name: still nothing re-runs.
+  expect_equal(run_with_name("q")$result, 17)
+  expect_equal(ran(), character(0))
+  expect_equal(skipped(), all_targets)
+
+  # The generated command text has no pipeline name and no step position.
+  script <- paste(readLines("_targets.R"), collapse = "\n")
+  expect_false(grepl("pipeline_name", script, fixed = TRUE))
+  expect_false(grepl("step_index", script, fixed = TRUE))
+})

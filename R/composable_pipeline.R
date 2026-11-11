@@ -154,6 +154,51 @@ NULL
   tryCatch(step@input_type,  error = function(e) character(0))
 }
 
+# ---------------------------------------------------------------------------
+# Runtime input-type check shared by every runner
+#
+# Called from sw_pipeline_step_run(), so the sequential runner and the
+# generated targets script both enforce `input_type` through one code path.
+# Steps with no declared input_type are skipped.
+#
+# The check knows only the step, so its message names the step and not the
+# pipeline. Keeping the pipeline name and step position out of the check
+# matters for the targets backend: they would otherwise sit in the generated
+# target command, and renaming a pipeline or moving a step would change the
+# command hash and rebuild the target. Each runner adds the pipeline context
+# itself with .sw_type_check_message().
+# ---------------------------------------------------------------------------
+.sw_type_check_prefix <- function(step_name) {
+  sprintf("Step '%s' type check failed: ", step_name)
+}
+
+.sw_type_check_message <- function(pipeline_name, step_index, step_name,
+                                   detail) {
+  sprintf("Pipeline '%s' type check failed at step %d ('%s'): %s",
+          pipeline_name, as.integer(step_index), step_name, detail)
+}
+
+.sw_check_step_input <- function(step, input) {
+  declared_in <- .step_input_type(step)
+  if (length(declared_in) == 0) {
+    return(invisible(TRUE))
+  }
+  ok <- any(vapply(declared_in,
+                   function(t) methods::is(input, t),
+                   logical(1)))
+  if (isTRUE(ok)) {
+    return(invisible(TRUE))
+  }
+  detail <- sprintf("expected input of type %s, got %s.",
+                    paste(declared_in, collapse = "|"),
+                    paste(class(input), collapse = "/"))
+  stop(structure(
+    class = c("sw_type_check_error", "error", "condition"),
+    list(message = paste0(.sw_type_check_prefix(step@name), detail),
+         call = NULL, step_name = step@name, detail = detail)
+  ))
+}
+
 .step_output_type <- function(step) {
   tryCatch(step@output_type, error = function(e) character(0))
 }
@@ -256,6 +301,22 @@ sw_pipeline_step <- function(name, FUN, ARGS = list(),
 #' @param step A \code{ProcessingStep} object.
 #' @param input The data to pass as the first argument to the step's function.
 #'
+#' @details
+#' If the step declares an \code{input_type}, \code{input} must satisfy
+#' \code{methods::is()} for at least one of the declared classes. Otherwise
+#' the call stops with a "type check failed" error before the step function
+#' runs. Steps with no \code{input_type} are not checked. Every runner,
+#' including the \code{targets} backend, goes through this check.
+#'
+#' The error from a direct call names the step only. [sw_pipeline_run()] and
+#' [sw_pipeline_run_targets()] add the pipeline name and step position to it,
+#' so both runners give the same message. The generated \code{targets} command
+#' does not contain the pipeline name or the step position, so renaming a
+#' pipeline or moving a step does not rebuild cached targets.
+#'
+#' Upgrading from the previous release does not rebuild existing \code{targets}
+#' stores for this change: the generated command text is the same as before.
+#'
 #' @return The result of calling \code{step@@FUN(input, ...)}.
 #'
 #' @export
@@ -265,6 +326,7 @@ sw_pipeline_step_run <- function(step, input) {
   if (!S7::S7_inherits(step, cls)) {
     stop("'step' must be a ProcessingStep object.", call. = FALSE)
   }
+  .sw_check_step_input(step, input)
   do.call(step@FUN, c(list(input), step@ARGS))
 }
 
@@ -716,29 +778,21 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
                       i, n_steps, pipeline@name, step_name))
     }
 
-    # --- Runtime input-type check ---------------------------------------
-    declared_in <- .step_input_type(step)
-    if (length(declared_in) > 0) {
-      ok <- any(vapply(declared_in,
-                       function(t) methods::is(current, t),
-                       logical(1)))
-      if (!isTRUE(ok)) {
-        stop(sprintf(
-          paste0("Pipeline '%s' type check failed at step %d ('%s'): ",
-                 "expected input of type %s, got %s."),
-          pipeline@name, i, step_name,
-          paste(declared_in, collapse = "|"),
-          paste(class(current), collapse = "/")),
-          call. = FALSE)
-      }
-    } else if (trace && any_typed) {
+    if (trace && any_typed && length(.step_input_type(step)) == 0) {
       message(sprintf("    (step '%s': type check skipped - no input_type declared)",
                       step_name))
     }
 
+    # The input-type check runs inside sw_pipeline_step_run(). Its error gets
+    # the pipeline context here and skips the "failed at step" wrapper, so
+    # the wording matches earlier releases.
     current <- tryCatch(
       sw_pipeline_step_run(step, current),
       error = function(e) {
+        if (inherits(e, "sw_type_check_error")) {
+          stop(.sw_type_check_message(pipeline@name, i, step_name, e$detail),
+               call. = FALSE)
+        }
         stop(sprintf("Pipeline '%s' failed at step %d ('%s'): %s",
                      pipeline@name, i, step_name, conditionMessage(e)),
              call. = FALSE)

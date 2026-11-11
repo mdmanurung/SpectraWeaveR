@@ -18,3 +18,19 @@ The result of calling \code{step@FUN(input, ...)}.
 Runs the function wrapped by a \code{ProcessingStep}, passing \code{input}
 as the first argument followed by the step's \code{ARGS}.
 }
+\details{
+If the step declares an \code{input_type}, \code{input} must satisfy
+\code{methods::is()} for at least one of the declared classes. Otherwise
+the call stops with a "type check failed" error before the step function
+runs. Steps with no \code{input_type} are not checked. Every runner,
+including the \code{targets} backend, goes through this check.
+
+The error from a direct call names the step only. \code{\link[=sw_pipeline_run]{sw_pipeline_run()}} and
+\code{\link[=sw_pipeline_run_targets]{sw_pipeline_run_targets()}} add the pipeline name and step position to it,
+so both runners give the same message. The generated \code{targets} command
+does not contain the pipeline name or the step position, so renaming a
+pipeline or moving a step does not rebuild cached targets.
+
+Upgrading from the previous release does not rebuild existing \code{targets}
+stores for this change: the generated command text is the same as before.
+}

@@ -58,6 +58,12 @@ sw_pipeline_step_run(step, input)
 | `step` | A `ProcessingStep` object. |
 | `input` | Input data (passed as first argument to the step's function). |
 
+#### Details
+
+If the step declares an `input_type`, `input` must satisfy `methods::is()` for at least one declared class. Otherwise the call stops with a "type check failed" error before the step function runs. Steps with no `input_type` are not checked. Every runner, including the `targets` backend, goes through this check.
+
+The error from a direct call names the step only. `sw_pipeline_run()` and `sw_pipeline_run_targets()` add the pipeline name and step position, so both runners give the same message. The generated `targets` command contains neither, so renaming a pipeline or moving a step does not rebuild cached targets. Upgrading from the previous release does not rebuild existing `targets` stores for this change: the generated command text is the same as before.
+
 #### Value
 
 The result of calling `step@FUN(input, ...)`.
