@@ -34,6 +34,8 @@ NULL
 #'       removed (FALSE) events}
 #'     \item{\code{n_removed}}{Number of events removed}
 #'     \item{\code{pct_removed}}{Percentage of events removed}
+#'     \item{\code{PeacoQC}}{The unchanged result object of
+#'       \code{PeacoQC::PeacoQC()}. \code{\link{sw_qc_plot}} needs it.}
 #'   }
 #'
 #' @examples
@@ -48,11 +50,20 @@ NULL
 #' }
 #'
 #' @export
-sw_qc_run <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
-                         output_dir = NULL, ...) {
+sw_qc_run <- function(
+  ff,
+  channels = NULL,
+  IT_limit = 0.55,
+  MAD = 6,
+  output_dir = NULL,
+  ...
+) {
   if (!requireNamespace("PeacoQC", quietly = TRUE)) {
-    stop("Package 'PeacoQC' is required for signal QC. ",
-         "Install it from Bioconductor.", call. = FALSE)
+    stop(
+      "Package 'PeacoQC' is required for signal QC. ",
+      "Install it from Bioconductor.",
+      call. = FALSE
+    )
   }
 
   if (!requireNamespace("flowCore", quietly = TRUE)) {
@@ -64,8 +75,10 @@ sw_qc_run <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
   }
 
   if (!is.numeric(IT_limit) || IT_limit <= 0 || IT_limit >= 1) {
-    stop("'IT_limit' must be a number between 0 and 1 (exclusive).",
-         call. = FALSE)
+    stop(
+      "'IT_limit' must be a number between 0 and 1 (exclusive).",
+      call. = FALSE
+    )
   }
 
   if (!is.numeric(MAD) || MAD <= 0) {
@@ -109,14 +122,22 @@ sw_qc_run <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
   n_removed <- n_before - n_after
   pct_removed <- round(100 * n_removed / n_before, 1)
 
-  message("PeacoQC: removed ", n_removed, " / ", n_before,
-          " events (", pct_removed, "%)")
+  message(
+    "PeacoQC: removed ",
+    n_removed,
+    " / ",
+    n_before,
+    " events (",
+    pct_removed,
+    "%)"
+  )
 
   list(
     FinalFF = ff_clean,
     GoodCells = good_cells,
     n_removed = n_removed,
-    pct_removed = pct_removed
+    pct_removed = pct_removed,
+    PeacoQC = qc_result
   )
 }
 
@@ -137,8 +158,10 @@ sw_qc_run <- function(ff, channels = NULL, IT_limit = 0.55, MAD = 6,
 #' @export
 sw_qc_batch <- function(ff_list, ...) {
   if (!is.list(ff_list) || length(ff_list) == 0) {
-    stop("'ff_list' must be a non-empty list of flowFrame objects.",
-         call. = FALSE)
+    stop(
+      "'ff_list' must be a non-empty list of flowFrame objects.",
+      call. = FALSE
+    )
   }
 
   sample_names <- names(ff_list)
@@ -188,8 +211,7 @@ sw_qc_batch <- function(ff_list, ...) {
 #' @export
 sw_qc_summary <- function(qc_results, threshold = 30) {
   if (!is.list(qc_results) || !"summary" %in% names(qc_results)) {
-    stop("'qc_results' must be the output from sw_qc_batch().",
-         call. = FALSE)
+    stop("'qc_results' must be the output from sw_qc_batch().", call. = FALSE)
   }
 
   if (!is.numeric(threshold) || threshold < 0 || threshold > 100) {
@@ -201,10 +223,14 @@ sw_qc_summary <- function(qc_results, threshold = 30) {
 
   n_flagged <- sum(summary_df$flagged)
   if (n_flagged > 0) {
-    warning(n_flagged, " sample(s) exceeded the ", threshold,
-            "% removal threshold: ",
-            paste(summary_df$sample[summary_df$flagged], collapse = ", "),
-            call. = FALSE)
+    warning(
+      n_flagged,
+      " sample(s) exceeded the ",
+      threshold,
+      "% removal threshold: ",
+      paste(summary_df$sample[summary_df$flagged], collapse = ", "),
+      call. = FALSE
+    )
   }
 
   summary_df

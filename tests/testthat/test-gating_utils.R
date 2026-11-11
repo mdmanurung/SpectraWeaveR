@@ -7,7 +7,7 @@
 
 test_that("sw_gate_singlets rejects non-flowFrame", {
   skip_if_not_installed("flowCore")
-  expect_error(sw_gate_singlets("not_ff"), "flowFrame")
+  expect_error(sw_gate_singlets("not_ff", nmad = 4), "flowFrame")
 })
 
 test_that("sw_gate_singlets rejects invalid channel1", {
@@ -15,7 +15,7 @@ test_that("sw_gate_singlets rejects invalid channel1", {
   mat <- matrix(abs(rnorm(200)) + 1, ncol = 2,
                 dimnames = list(NULL, c("FSC-A", "FSC-H")))
   ff <- flowCore::flowFrame(mat)
-  expect_error(sw_gate_singlets(ff, channel1 = 42), "single channel name")
+  expect_error(sw_gate_singlets(ff, channel1 = 42, nmad = 4), "single channel name")
 })
 
 test_that("sw_gate_singlets rejects invalid channel2", {
@@ -23,7 +23,7 @@ test_that("sw_gate_singlets rejects invalid channel2", {
   mat <- matrix(abs(rnorm(200)) + 1, ncol = 2,
                 dimnames = list(NULL, c("FSC-A", "FSC-H")))
   ff <- flowCore::flowFrame(mat)
-  expect_error(sw_gate_singlets(ff, channel2 = c("a", "b")),
+  expect_error(sw_gate_singlets(ff, channel2 = c("a", "b"), nmad = 4),
                "single channel name")
 })
 
@@ -40,7 +40,7 @@ test_that("sw_gate_singlets rejects missing channel", {
   mat <- matrix(abs(rnorm(200)) + 1, ncol = 2,
                 dimnames = list(NULL, c("FSC-A", "FSC-H")))
   ff <- flowCore::flowFrame(mat)
-  expect_error(sw_gate_singlets(ff, channel1 = "MISSING"),
+  expect_error(sw_gate_singlets(ff, channel1 = "MISSING", nmad = 4),
                "not found")
 })
 
@@ -52,7 +52,7 @@ test_that("sw_gate_singlets returns polygonGate", {
   mat <- matrix(c(ch1, ch2), ncol = 2,
                 dimnames = list(NULL, c("FSC-A", "FSC-H")))
   ff <- flowCore::flowFrame(mat)
-  gate <- sw_gate_singlets(ff)
+  gate <- sw_gate_singlets(ff, nmad = 4)
   expect_true(methods::is(gate, "polygonGate"))
   expect_equal(gate@filterId, "Singlets")
 })
@@ -65,7 +65,7 @@ test_that("sw_gate_singlets accepts custom filter_id", {
   mat <- matrix(c(ch1, ch2), ncol = 2,
                 dimnames = list(NULL, c("FSC-A", "FSC-H")))
   ff <- flowCore::flowFrame(mat)
-  gate <- sw_gate_singlets(ff, filter_id = "MySinglets")
+  gate <- sw_gate_singlets(ff, filter_id = "MySinglets", nmad = 4)
   expect_equal(gate@filterId, "MySinglets")
 })
 
@@ -75,7 +75,7 @@ test_that("sw_gate_singlets accepts custom filter_id", {
 
 test_that("sw_filter_doublets rejects non-flowFrame", {
   skip_if_not_installed("flowCore")
-  expect_error(sw_filter_doublets("not_ff"), "flowFrame")
+  expect_error(sw_filter_doublets("not_ff", nmads = 4), "flowFrame")
 })
 
 test_that("sw_filter_doublets rejects mismatched channel lengths", {
@@ -86,7 +86,8 @@ test_that("sw_filter_doublets rejects mismatched channel lengths", {
   expect_error(
     sw_filter_doublets(ff,
                        area_channels = c("FSC-A", "SSC-A"),
-                       height_channels = c("FSC-H")),
+                       height_channels = c("FSC-H"),
+                       nmads = c(4, 4)),
     "same length"
   )
 })
@@ -114,7 +115,8 @@ test_that("sw_filter_doublets rejects >2 channel pairs", {
   expect_error(
     sw_filter_doublets(ff,
                        area_channels = c("FSC-A", "SSC-A", "X-A"),
-                       height_channels = c("FSC-H", "SSC-H", "X-H")),
+                       height_channels = c("FSC-H", "SSC-H", "X-H"),
+                       nmads = c(4, 4, 4)),
     "length 1 or 2"
   )
 })
@@ -151,7 +153,7 @@ test_that("sw_filter_doublets returns flowFrame with fewer events", {
 
 test_that("sw_filter_doublets_peacoqc rejects non-flowFrame", {
   skip_if_not_installed("PeacoQC")
-  expect_error(sw_filter_doublets_peacoqc("not_ff"), "flowFrame")
+  expect_error(sw_filter_doublets_peacoqc("not_ff", nmads = 4), "flowFrame")
 })
 
 test_that("sw_filter_doublets_peacoqc rejects mismatched channels", {
@@ -163,7 +165,8 @@ test_that("sw_filter_doublets_peacoqc rejects mismatched channels", {
   expect_error(
     sw_filter_doublets_peacoqc(ff,
                                 area_channels = c("FSC-A", "SSC-A"),
-                                height_channels = "FSC-H"),
+                                height_channels = "FSC-H",
+                                nmads = c(4, 4)),
     "same length"
   )
 })
@@ -171,11 +174,14 @@ test_that("sw_filter_doublets_peacoqc rejects mismatched channels", {
 test_that("sw_filter_doublets_peacoqc handles empty flowFrame", {
   skip_if_not_installed("PeacoQC")
   skip_if_not_installed("flowCore")
-  mat <- matrix(numeric(0), ncol = 4,
+  # flowCore's constructor cannot build a 0-event frame (it round-trips an FCS
+  # file and $TOT = 0 reads as corrupt), so subset a 1-event frame instead.
+  mat <- matrix(1, nrow = 1, ncol = 4,
                 dimnames = list(NULL, c("FSC-A", "FSC-H", "SSC-A", "SSC-H")))
-  ff <- flowCore::flowFrame(mat)
-  result <- sw_filter_doublets_peacoqc(ff)
-  expect_equal(nrow(result), 0)
+  ff <- flowCore::flowFrame(mat)[integer(0), ]
+  result <- sw_filter_doublets_peacoqc(ff, nmads = c(4, 4))
+  expect_equal(unname(nrow(result)), 0) # flowCore's nrow() is named "events"
+  expect_equal(attr(result, "events_removed"), 0L)
 })
 
 # =========================================================================
@@ -248,6 +254,72 @@ test_that("sw_filter_debris returns flowFrame", {
   ff_clean <- sw_filter_debris(ff, gate_data = gate_coords)
   expect_true(methods::is(ff_clean, "flowFrame"))
   expect_true(nrow(ff_clean) <= nrow(ff))
+})
+
+# =========================================================================
+# required arguments and events_removed
+# =========================================================================
+
+test_that("nmad and nmads have no default", {
+  skip_if_not_installed("flowCore")
+  expect_true(identical(formals(sw_gate_singlets)$nmad, quote(expr = )))
+  expect_true(identical(formals(sw_filter_doublets)$nmads, quote(expr = )))
+  expect_true(identical(formals(sw_filter_doublets_peacoqc)$nmads, quote(expr = )))
+  mat <- matrix(abs(rnorm(200)) + 1, ncol = 2,
+                dimnames = list(NULL, c("FSC-A", "FSC-H")))
+  ff <- flowCore::flowFrame(mat)
+  expect_error(sw_gate_singlets(ff), "'nmad' is required")
+  expect_error(sw_filter_doublets(ff, area_channels = "FSC-A",
+                                  height_channels = "FSC-H"),
+               "'nmads' is required")
+  expect_error(sw_filter_doublets_peacoqc(ff, area_channels = "FSC-A",
+                                          height_channels = "FSC-H"),
+               "'nmads' is required")
+})
+
+test_that("sw_filter_debris reports events_removed on a synthetic frame", {
+  skip_if_not_installed("flowCore")
+  # 10 events: 7 inside the square gate, 3 outside (FSC below 100)
+  fsc <- c(rep(500, 7), rep(10, 3))
+  ssc <- rep(500, 10)
+  mat <- matrix(c(fsc, ssc), ncol = 2,
+                dimnames = list(NULL, c("FSC-A", "SSC-A")))
+  ff <- flowCore::flowFrame(mat)
+  gate_coords <- c(100, 100, 1000, 1000, 100, 1000, 1000, 100)
+  expect_silent(out <- sw_filter_debris(ff, gate_data = gate_coords))
+  expect_equal(nrow(out), 7, ignore_attr = TRUE)
+  expect_equal(attr(out, "events_in"), 10L)
+  expect_equal(attr(out, "events_removed"), 3L)
+  expect_message(
+    sw_filter_debris(ff, gate_data = gate_coords, verbose = TRUE),
+    "removed 3 / 10 events \\(30%\\)"
+  )
+})
+
+test_that("sw_filter_doublets reports events_removed on a synthetic frame", {
+  skip_if_not_installed("flowCore")
+  set.seed(1)
+  n <- 200
+  a <- runif(n, 90000, 110000)
+  h <- a * 0.7 + rnorm(n, sd = 100)
+  # 5 clear doublets: height is far below 0.7 * area
+  a_d <- rep(200000, 5)
+  h_d <- rep(40000, 5)
+  mat <- matrix(c(c(a, a_d), c(h, h_d)), ncol = 2,
+                dimnames = list(NULL, c("FSC-A", "FSC-H")))
+  ff <- flowCore::flowFrame(mat)
+  out <- sw_filter_doublets(ff, area_channels = "FSC-A",
+                            height_channels = "FSC-H", nmads = 4)
+  expect_equal(attr(out, "events_in"), nrow(ff), ignore_attr = TRUE)
+  expect_equal(attr(out, "events_removed"), nrow(ff) - nrow(out),
+               ignore_attr = TRUE)
+  expect_gte(attr(out, "events_removed"), 5L)
+  expect_message(
+    sw_filter_doublets(ff, area_channels = "FSC-A",
+                       height_channels = "FSC-H", nmads = 4,
+                       verbose = TRUE),
+    "sw_filter_doublets: removed"
+  )
 })
 
 # =========================================================================

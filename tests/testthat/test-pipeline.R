@@ -4,6 +4,7 @@
 test_that("sw_pipeline_run_all rejects non-existent directory", {
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = "/nonexistent/dir",
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
       markers = "CD3",
@@ -17,6 +18,7 @@ test_that("sw_pipeline_run_all rejects non-data.frame sample_meta", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = "not_a_df",
       markers = "CD3",
@@ -30,6 +32,7 @@ test_that("sw_pipeline_run_all rejects missing sample_meta columns", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(sample = "S1"),
       markers = "CD3",
@@ -43,6 +46,7 @@ test_that("sw_pipeline_run_all rejects empty markers", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -57,6 +61,7 @@ test_that("sw_pipeline_run_all rejects lineage_markers not in markers", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -70,6 +75,7 @@ test_that("sw_pipeline_run_all rejects lineage_markers not in markers", {
 test_that("sw_pipeline_run_all rejects non-character fcs_dir", {
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = 42,
       sample_meta = tibble::tibble(file = "f.fcs", sample = "S1",
                                    batch = "B1"),
@@ -84,6 +90,7 @@ test_that("sw_pipeline_run_all rejects duplicate sample names in metadata", {
   tmp_dir <- tempdir()
   expect_error(
     sw_pipeline_run_all(
+      cofactor = 6000,
       fcs_dir = tmp_dir,
       sample_meta = tibble::tibble(
         file = c("a.fcs", "b.fcs"),
@@ -95,6 +102,19 @@ test_that("sw_pipeline_run_all rejects duplicate sample names in metadata", {
     ),
     "duplicate sample name"
   )
+})
+
+test_that("sw_pipeline_run_all requires cofactor", {
+  expect_error(
+    sw_pipeline_run_all(
+      fcs_dir = tempdir(),
+      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
+      markers = "CD3",
+      lineage_markers = "CD3"
+    ),
+    "'cofactor' is required"
+  )
+  expect_null(formals(sw_pipeline_run_all)$cofactor |> (\(x) if (identical(x, quote(expr = ))) NULL else x)())
 })
 
 test_that("sw_pipeline_run_all function signature has expected parameters", {
@@ -126,15 +146,19 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
     unlink(out_dir, recursive = TRUE)
   })
 
-  make_fcs <- function(filename, n = 300, batch_shift = 0) {
+  # PeacoQC bins events over time and smooths the bins, so each file needs a
+  # Time channel and enough events for several bins (300 events gave fewer
+  # than four and stopped smooth.spline).
+  make_fcs <- function(filename, n = 6000, batch_shift = 0) {
     mat <- matrix(
-      c(abs(rnorm(n, 150000, 30000)),       # FSC-A
+      c(sort(runif(n, 0, 1000)),             # Time
+        abs(rnorm(n, 150000, 30000)),       # FSC-A
         abs(rnorm(n, 50000, 15000)),         # SSC-A
         abs(rnorm(n, 1000 + batch_shift, 300)),  # CD3
         abs(rnorm(n, 2000 + batch_shift, 500)),  # CD4
         abs(rnorm(n, 500 + batch_shift, 200))),   # CD8
-      ncol = 5,
-      dimnames = list(NULL, c("FSC-A", "SSC-A", "CD3", "CD4", "CD8"))
+      ncol = 6,
+      dimnames = list(NULL, c("Time", "FSC-A", "SSC-A", "CD3", "CD4", "CD8"))
     )
     storage.mode(mat) <- "double"
     ff <- flowCore::flowFrame(mat)
@@ -151,6 +175,7 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
   )
 
   result <- sw_pipeline_run_all(
+    cofactor = 6000,
     fcs_dir = tmp_dir,
     sample_meta = sample_meta,
     markers = c("CD3", "CD4", "CD8"),

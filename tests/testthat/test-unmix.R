@@ -66,6 +66,58 @@ test_that("sw_filter_margins requires PeacoQC", {
   expect_error(sw_filter_margins(ff), "PeacoQC")
 })
 
+test_that("sw_filter_margins passes user ranges to PeacoQC", {
+  skip_if_not_installed("flowCore")
+  skip_if_not_installed("PeacoQC")
+
+  # Values 1..100 in CD3; the default range would keep nearly all events
+  mat <- cbind("CD3" = as.numeric(1:100), "CD4" = as.numeric(1:100))
+  ff <- flowCore::flowFrame(mat)
+
+  seen <- NULL
+  testthat::local_mocked_bindings(
+    RemoveMargins = function(ff, channels, channel_specifications = NULL,
+                             output = "frame") {
+      seen <<- list(channels = channels, specs = channel_specifications)
+      ff
+    },
+    .package = "PeacoQC"
+  )
+  suppressMessages(sw_filter_margins(ff, channel_specs = list(CD3 = c(10, 60))))
+  expect_equal(seen$channels, "CD3")
+  expect_equal(seen$specs, list(CD3 = c(10, 60)))
+})
+
+test_that("sw_filter_margins ranges remove events and events_removed is right", {
+  skip_if_not_installed("flowCore")
+  skip_if_not_installed("PeacoQC")
+
+  # CD3 runs from -20 to 79 (100 events)
+  mat <- cbind("CD3" = as.numeric(-20:79), "CD4" = as.numeric(-20:79))
+  ff <- flowCore::flowFrame(mat)
+
+  # PeacoQC keeps max(min(lower, 0), min(x)) < x < min(upper, max(x)),
+  # so -5 < x < 60 stays: -4..59 is 64 events.
+  out <- suppressWarnings(suppressMessages(
+    sw_filter_margins(ff, channel_specs = list(CD3 = c(-5, 60)))
+  ))
+  expect_equal(nrow(out), 64, ignore_attr = TRUE)
+  expect_equal(attr(out, "events_in"), 100L)
+  expect_equal(attr(out, "events_removed"), 36L)
+  x <- flowCore::exprs(out)[, "CD3"]
+  expect_true(all(x > -5 & x < 60))
+})
+
+test_that("sw_filter_margins validates channel_specs", {
+  skip_if_not_installed("flowCore")
+  skip_if_not_installed("PeacoQC")
+  ff <- flowCore::flowFrame(cbind("CD3" = as.numeric(1:10)))
+  expect_error(sw_filter_margins(ff, channel_specs = list(1:2)),
+               "named list")
+  expect_error(sw_filter_margins(ff, channel_specs = list(CD3 = 1)),
+               "length 2")
+})
+
 # ============================================================================
 # sw_unmix_setup
 # ============================================================================

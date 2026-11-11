@@ -12,7 +12,7 @@ sw_pipeline_run_all(
   gating_template = NULL,
   gate_node = "lymphocytes",
   output_dir = "SpectraWeaveR_output",
-  cofactor = 6000,
+  cofactor,
   n_metaclusters = 20,
   seed = 42,
   unmix_from_raw = FALSE,
@@ -46,7 +46,9 @@ the pipeline.}
 \item{output_dir}{Character path for output files (plots, reports).
 Default: \code{"SpectraWeaveR_output"}.}
 
-\item{cofactor}{Numeric; arcsinh cofactor (default: 6000).}
+\item{cofactor}{Numeric; arcsinh cofactor. Required, no default: it changes
+every transformed value (6000 is common for spectral data; user decision
+2026-11-10, replacing the earlier default).}
 
 \item{n_metaclusters}{Integer; number of metaclusters for clustering
 (default: 20).}
@@ -113,7 +115,8 @@ result <- sw_pipeline_run_all(
   fcs_dir = "path/to/fcs",
   sample_meta = meta,
   markers = c("CD3", "CD4", "CD8"),
-  lineage_markers = c("CD3", "CD4", "CD8")
+  lineage_markers = c("CD3", "CD4", "CD8"),
+  cofactor = 6000
 )
 names(result)
 }

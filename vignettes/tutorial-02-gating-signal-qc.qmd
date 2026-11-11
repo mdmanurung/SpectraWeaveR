@@ -117,7 +117,11 @@ with the openCyto framework. Five pre-built templates are available:
 ```{r}
 #| label: build-template
 template_file <- file.path(tempdir(), "lymphocyte_template.csv")
-sw_gate_template(template_file, template_type = "lymphocyte")
+# Every cutoff below is a required choice, not a default.
+sw_gate_template(template_file, template_type = "lymphocyte",
+                 debris_min = 50000, singlet_wider_gate = TRUE,
+                 flowclust_k = 2, flowclust_target = 1,
+                 pool_samples = TRUE)
 
 stopifnot(file.exists(template_file))
 template_df <- read.csv(template_file)
@@ -138,7 +142,8 @@ a `tryCatch`.
 fcs_paths <- file.path(fcs_dir, sample_info$file[1:2])
 
 gating_result <- tryCatch({
-  gs <- sw_gate_run(fcs_paths, gating_template = template_file)
+  gs <- sw_gate_run(fcs_paths, gating_template = template_file,
+                    transform_channels = NULL)
   stopifnot(is(gs, "GatingSet"))
   cat("Gating succeeded. GatingSet with",
       length(gs), "samples\n")

@@ -39,6 +39,8 @@ removed}
 removed (FALSE) events}
 \item{\code{n_removed}}{Number of events removed}
 \item{\code{pct_removed}}{Percentage of events removed}
+\item{\code{PeacoQC}}{The unchanged result object of
+\code{PeacoQC::PeacoQC()}. \code{\link{sw_qc_plot}} needs it.}
 }
 }
 \description{

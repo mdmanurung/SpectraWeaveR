@@ -293,7 +293,9 @@ FSC-A vs FSC-H. You can then apply it with `flowCore::filter()`.
 
 ```{r}
 #| label: singlets-gate
-gate <- sw_gate_singlets(ff_clean, channel1 = "FSC-A", channel2 = "FSC-H")
+# nmad is a required choice: MADs around the median FSC-A/FSC-H ratio
+gate <- sw_gate_singlets(ff_clean, channel1 = "FSC-A", channel2 = "FSC-H",
+                         nmad = 4)
 stopifnot(is(gate, "polygonGate"))
 cat("Created singlets gate:", gate@filterId, "\n")
 
@@ -352,7 +354,9 @@ gate_coords <- c(
   10000, 80000,  80000,  10000     # SSC-A y-coords (4 vertices)
 )
 
-ff_no_debris <- sw_filter_debris(ff_clean, gate_data = gate_coords)
+ff_no_debris <- sw_filter_debris(ff_clean, gate_data = gate_coords,
+                                 verbose = TRUE)
+cat("Events removed:", attr(ff_no_debris, "events_removed"), "\n")
 stopifnot(is(ff_no_debris, "flowFrame"))
 stopifnot(nrow(ff_no_debris) <= nrow(ff_clean))
 cat("Debris removal:", nrow(ff_clean), "->", nrow(ff_no_debris), "events\n")

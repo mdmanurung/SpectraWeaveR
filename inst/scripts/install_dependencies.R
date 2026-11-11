@@ -49,6 +49,8 @@ optional_pkgs <- c(
   "sararselitsky/FastPG",                 # Graph-based clustering
   "nlaniewski/flowstate",         # data.table FCS I/O (AGPL, wrapped)
   "nlaniewski/spectracle",        # Spectra from single-color controls (AGPL, wrapped)
+  "RGLab/scamp",                  # Needed by FAUST (GPL)
+  "RGLab/FAUST",                  # Annotation before and after correction (GPL, wrapped)
 
   # Bioconductor
   "bioc::ggcyto",                 # Gate visualization

@@ -35,7 +35,9 @@ NULL
 #'   (default: \code{"lymphocytes"}).
 #' @param output_dir Character path for output files (plots, reports).
 #'   Default: \code{"SpectraWeaveR_output"}.
-#' @param cofactor Numeric; arcsinh cofactor (default: 6000).
+#' @param cofactor Numeric; arcsinh cofactor. Required, no default: it changes
+#'   every transformed value (6000 is common for spectral data; user decision
+#'   2026-11-10, replacing the earlier default).
 #' @param n_metaclusters Integer; number of metaclusters for clustering
 #'   (default: 20).
 #' @param seed Integer; random seed for reproducibility (default: 42).
@@ -80,7 +82,8 @@ NULL
 #'   fcs_dir = "path/to/fcs",
 #'   sample_meta = meta,
 #'   markers = c("CD3", "CD4", "CD8"),
-#'   lineage_markers = c("CD3", "CD4", "CD8")
+#'   lineage_markers = c("CD3", "CD4", "CD8"),
+#'   cofactor = 6000
 #' )
 #' names(result)
 #' }
@@ -93,7 +96,7 @@ sw_pipeline_run_all <- function(fcs_dir,
                          gating_template = NULL,
                          gate_node = "lymphocytes",
                          output_dir = "SpectraWeaveR_output",
-                         cofactor = 6000,
+                         cofactor,
                          n_metaclusters = 20,
                          seed = 42,
                          unmix_from_raw = FALSE,
@@ -104,6 +107,13 @@ sw_pipeline_run_all <- function(fcs_dir,
                          unmix_method = "AutoSpectral",
                          ...) {
   # --- Input validation ---
+  if (missing(cofactor)) {
+    stop("'cofactor' is required and has no default (6000 is common for spectral data).",
+         call. = FALSE)
+  }
+  if (!is.numeric(cofactor) || length(cofactor) != 1 || is.na(cofactor) || cofactor <= 0) {
+    stop("'cofactor' must be one positive number.", call. = FALSE)
+  }
   if (!is.character(fcs_dir) || length(fcs_dir) != 1) {
     stop("'fcs_dir' must be a single directory path.", call. = FALSE)
   }
@@ -231,6 +241,18 @@ sw_pipeline_run_all <- function(fcs_dir,
                                               c("sample", "batch",
                                                 "condition")),
                                   drop = FALSE]
+
+  # The cleaned frames are named by file; batch correction looks samples up
+  # by the `sample` column, so rename file -> sample (they differ in general).
+  sample_of_file <- sample_meta$sample[match(names(ff_list_clean), sample_meta$file)]
+  if (anyNA(sample_of_file)) {
+    stop(
+      "No sample_meta row for file(s): ",
+      paste(names(ff_list_clean)[is.na(sample_of_file)], collapse = ", "),
+      call. = FALSE
+    )
+  }
+  names(ff_list_clean) <- sample_of_file
 
   uncorrected <- sw_correct_prepare(
     ff_list_clean,

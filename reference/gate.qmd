@@ -11,7 +11,9 @@ Build a gating template CSV.
 ### Usage
 
 ```r
-sw_gate_template(output_file, template_type = "lymphocyte")
+sw_gate_template(output_file, template_type = "lymphocyte",
+                 debris_min, singlet_wider_gate,
+                 flowclust_k, flowclust_target, pool_samples)
 ```
 
 ### Arguments
@@ -19,7 +21,12 @@ sw_gate_template(output_file, template_type = "lymphocyte")
 | Argument | Description |
 |----------|-------------|
 | `output_file` | Path for the output CSV file. |
-| `template_type` | Template type. Currently supports `"lymphocyte"`. |
+| `template_type` | Template type: `"lymphocyte"`, `"myeloid"`, `"nk"`, `"treg"`, `"full_pbmc"`. |
+| `debris_min` | Required. Lower FSC-A cutoff (`min` of the mindensity debris gate). |
+| `singlet_wider_gate` | Required. `wider_gate` of the singletGate method. |
+| `flowclust_k` | Required for `"lymphocyte"` and `"treg"`. Number of flowClust clusters `K`. |
+| `flowclust_target` | Required for `"lymphocyte"` and `"treg"`. flowClust `target` cluster index. |
+| `pool_samples` | Required. `TRUE` pools all samples to fit one gate; `FALSE` fits a gate per sample (`collapseDataForGating`). |
 
 ### Details
 
@@ -42,7 +49,7 @@ Apply automated gating.
 
 ```r
 sw_gate_run(fcs_files, gating_template, transform_channels = NULL,
-        transform_func = NULL, ...)
+        transform_func = NULL, cofactor)
 ```
 
 ### Arguments
@@ -53,7 +60,7 @@ sw_gate_run(fcs_files, gating_template, transform_channels = NULL,
 | `gating_template` | Path to a CSV gating template. |
 | `transform_channels` | Optional character vector of channels to transform before gating. |
 | `transform_func` | Optional transformation function. |
-| `...` | Additional arguments passed to `openCyto::gating()`. |
+| `cofactor` | No default. arcsinh cofactor; required when `transform_channels` is set without `transform_func`. |
 
 ### Details
 

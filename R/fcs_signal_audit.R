@@ -1,0 +1,502 @@
+# R/fcs_signal_audit.R
+# Per-file technical checks on event data: saturation, dead channels, NA/Inf,
+# negative share, event-rate stability and channel-pair correlation change.
+# Written from scratch; it only computes summaries and sets no cutoffs.
+
+#' Audit event data of each file for technical problems
+#'
+#' @description
+#' Compute a set of plain per-file numbers that expose common technical faults.
+#' The result is a long table, one row per file, check and channel. It holds
+#' numbers only: no check is marked pass or fail, because a cutoff changes
+#' which files look bad and is yours to choose.
+#'
+#' Checks (the `check` column):
+#'
+#' * `n_events`: events in the file (file level).
+#' * `nonfinite_share`: share of `NA`, `NaN` or `Inf` values per channel.
+#' * `zero_variance`: 1 when a channel is constant (a dead or disconnected
+#'   detector), else 0, per channel.
+#' * `negative_share`: share of values below 0 per channel.
+#' * `saturation_share`: share of values at or above `range_max` per channel.
+#'   Only when `range_max` is given.
+#' * `floor_share`: share of values at or below `range_min` per channel. Only
+#'   when `range_min` is given.
+#' * `rate_cv`: coefficient of variation of event counts per time bin (file
+#'   level). A clog or a pressure change makes the event rate uneven. Only when
+#'   `time_channel` is given.
+#' * `max_gap`: largest gap between consecutive event times, as a multiple of
+#'   the median gap (file level). Only when `time_channel` is given.
+#' * `median_z`, `sd_z`: robust z-score of the file's median and of its SD in
+#'   a channel against all files, `(value - median) / (1.4826 * MAD)` over
+#'   files. A shift of one marker shows in `median_z`; a stretch or a split
+#'   into two modes widens the SD and shows in `sd_z`. The reference is the
+#'   cohort you pass, batch effects included, so a whole batch that differs
+#'   shifts the reference too (see `reference` for a frozen one). `NA` with
+#'   fewer than 3 files.
+#' * `bimodality`, `bimodality_z`: per file and channel, the bimodality
+#'   coefficient `BC = (g^2 + 1) / (k + 3 (n - 1)^2 / ((n - 2) (n - 3)))`, with
+#'   `g` the bias-adjusted sample skewness and `k` the bias-adjusted sample
+#'   excess kurtosis (SAS form, Pfister et al. 2013), on all finite events as
+#'   given. A normal sample gives about 1/3; values above 5/9 point to two
+#'   modes. `bimodality_z` is the robust z of `bimodality` over files, as for
+#'   `median_z`. Two modes less than about 1 SD apart each way barely move BC.
+#'   `bimodality` is `NA` with fewer than 4 finite events or no variance.
+#' * `global_sd_z`: per file, the median over channels of
+#'   `log(file SD / cohort median SD)`, as a robust z over files (file level).
+#'   A fault that widens or narrows every channel a little (a gain or focus
+#'   change) shows here even when no single channel's `sd_z` stands out. It is
+#'   a check of its own, not a summary of the other rows. `NA` with fewer than
+#'   3 files.
+#' * `area_height_q`, `area_height_z`: for each `area_height` pair, the
+#'   file's `area_height_quantile` quantile of area / height (`channel` is the
+#'   area channel, `detail` names the pair), and its robust z over files.
+#'   Doublets have a larger area than their height implies, so a file with
+#'   more doublets has a higher upper tail. Only when `area_height` is given.
+#' * `time_trend`: Spearman correlation of a channel with time, per channel. A
+#'   steady drift of a marker inside one acquisition (laser, fluidics or
+#'   detector drift) gives a value far from 0. Only when `time_channel` is
+#'   given.
+#' * `corr_shift`: largest absolute difference between the file's Spearman
+#'   correlation of a channel pair and the median of that pair over all files
+#'   (file level, `detail` names the pair). A wrong spillover or unmixing
+#'   matrix changes channel-pair correlations.
+#' * `corr_pair_z`: the same correlations, one row per file and channel pair
+#'   (`channel` is `"A ~ B"`): robust z of the file's correlation against all
+#'   files. Rank these rows per pair; `corr_shift` keeps only the largest change
+#'   per file, which hides a change in one pair among many (on 36 real files
+#'   with 40 channels, a 0.3 spillover scored AUROC 0.66 with `corr_shift`).
+#'   `NA` with fewer than 3 files.
+#'
+#' @details
+#' **Scale is yours.** Saturation and floor limits must be on the same scale as
+#' `data`. `negative_share` is only meaningful on a scale that keeps negative
+#' values (raw or arcsinh).
+#'
+#' **No defaults.** `range_max`, `range_min`, `time_channel` and `time_bin`
+#' each change what is reported, so each must be passed. Pass `NULL` for a
+#' check you do not want. `corr_shift` uses every row of each file; subsample
+#' first for large files.
+#'
+#' @param data A named list. Each element is a numeric matrix or data frame
+#'   with one column per channel. Names are the file ids. At least two files.
+#' @param channels Character vector of channel names to audit (not the time
+#'   channel).
+#' @param range_max `NULL`, or a single number or named numeric vector of the
+#'   instrument maximum per channel.
+#' @param range_min `NULL`, or a single number or named numeric vector of the
+#'   lowest value counted as a floor event.
+#' @param time_channel `NULL`, or the name of the time column in each file.
+#' @param time_bin Number, width of a time bin in the units of the time
+#'   channel. Needed when `time_channel` is given; otherwise pass `NULL`.
+#' @param area_height `NULL`, or a named character vector of area = height
+#'   channel pairs, for example `c("FSC-A" = "FSC-H")`, for the doublet check.
+#' @param area_height_quantile Number in (0, 1), the upper quantile of area /
+#'   height reported per file. Needed when `area_height` is given; otherwise
+#'   pass `NULL`.
+#' @param reference_group `NULL`, or a named character vector with one group
+#'   label per file (names = file ids, covering every file in `data`), for
+#'   example the donor. With `NULL`, every robust z (`median_z`, `sd_z`, `bimodality_z`,
+#'   `global_sd_z`, `area_height_z`, `corr_pair_z`) is taken over all files.
+#'   With groups, each z uses only the files of the same group: median and MAD
+#'   come from the group, and the cohort SD behind `global_sd_z` too. A group
+#'   with fewer than 3 files, or with MAD 0, gives `NA`. `corr_shift` still
+#'   uses all files. Use groups when files of one donor differ from other
+#'   donors for biological reasons.
+#'   Or a data frame with a `file` column (every file once) and exactly two
+#'   more character columns, for example donor and batch: for each value, a
+#'   two-way `stats::medpolish()` (`maxiter = 10`) removes both effects, and the
+#'   z is the robust z of the residuals over all files. Fewer than 3 finite
+#'   residuals, or MAD 0, gives `NA`.
+#'
+#' @param reference `NULL`, or an `sw_signal_reference` from
+#'   [sw_signal_reference_fit()]. With `NULL`, `median_z` and `sd_z` are taken
+#'   over the files in `data`. With a reference, each is
+#'   `(value - reference centre) / reference scale`, where centre and scale
+#'   are the median and `1.4826 * MAD` of the reference files' file-level
+#'   medians (or SDs); a fault that hits every file in `data` then still
+#'   shows. Every other check, `bimodality_z` included, is unchanged. Not
+#'   allowed together with a non-`NULL` `reference_group`. Every channel must
+#'   be in the reference. A scale of 0 gives `NA`.
+#'
+#' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
+#'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
+#'   (text; the channel pair for `corr_shift`, else `NA`).
+#'
+#' @seealso [sw_anomaly_features()], [sw_fcs_header_audit()]
+#'
+#' @examples
+#' set.seed(1)
+#' files <- lapply(1:4, function(i) {
+#'   matrix(stats::rnorm(400), ncol = 2, dimnames = list(NULL, c("A", "B")))
+#' })
+#' names(files) <- paste0("f", 1:4)
+#' sw_fcs_signal_audit(
+#'   files,
+#'   channels = c("A", "B"),
+#'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
+#'   area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
+#'   reference = NULL
+#' )
+#'
+#' @export
+sw_fcs_signal_audit <- function(
+  data,
+  channels,
+  range_max,
+  range_min,
+  time_channel,
+  time_bin,
+  area_height,
+  area_height_quantile,
+  reference_group,
+  reference
+) {
+  .sw_stop_missing(c(
+    data = missing(data),
+    channels = missing(channels),
+    range_max = missing(range_max),
+    range_min = missing(range_min),
+    time_channel = missing(time_channel),
+    time_bin = missing(time_bin),
+    area_height = missing(area_height),
+    area_height_quantile = missing(area_height_quantile),
+    reference_group = missing(reference_group),
+    reference = missing(reference)
+  ))
+  if (!is.null(reference)) {
+    if (!is.null(reference_group)) {
+      stop(
+        "`reference` and `reference_group` cannot be used together; pass one and NULL for the other.",
+        call. = FALSE
+      )
+    }
+    .sw_validate_signal_reference(reference)
+    if (!all(channels %in% reference$channels$channel)) {
+      stop(
+        "Channel(s) missing from `reference`: ",
+        paste(setdiff(channels, reference$channels$channel), collapse = ", "),
+        call. = FALSE
+      )
+    }
+  }
+  if (!is.null(area_height)) {
+    if (
+      !is.character(area_height) ||
+        is.null(names(area_height)) ||
+        any(names(area_height) == "")
+    ) {
+      stop(
+        "`area_height` must be NULL or a named character vector, area = height.",
+        call. = FALSE
+      )
+    }
+    if (
+      !is.numeric(area_height_quantile) ||
+        length(area_height_quantile) != 1 ||
+        is.na(area_height_quantile) ||
+        area_height_quantile <= 0 ||
+        area_height_quantile >= 1
+    ) {
+      stop(
+        "`area_height_quantile` must be one number in (0, 1) when `area_height` is given.",
+        call. = FALSE
+      )
+    }
+  }
+  if (
+    !is.list(data) ||
+      is.null(names(data)) ||
+      anyDuplicated(names(data)) ||
+      length(data) < 2
+  ) {
+    stop("`data` must be a named list of at least two files.", call. = FALSE)
+  }
+  if (!is.character(channels) || length(channels) < 2) {
+    stop("`channels` must name at least two channels.", call. = FALSE)
+  }
+  lim_max <- .sw_audit_limit(range_max, channels, "range_max")
+  lim_min <- .sw_audit_limit(range_min, channels, "range_min")
+  if (!is.null(time_channel)) {
+    if (!is.character(time_channel) || length(time_channel) != 1) {
+      stop("`time_channel` must be one column name or NULL.", call. = FALSE)
+    }
+    if (
+      !is.numeric(time_bin) ||
+        length(time_bin) != 1 ||
+        is.na(time_bin) ||
+        time_bin <= 0
+    ) {
+      stop(
+        "`time_bin` must be a positive number when `time_channel` is given.",
+        call. = FALSE
+      )
+    }
+  }
+
+  files <- sort(names(data))
+  grp <- .sw_check_reference_group(reference_group, files)
+  mats <- lapply(files, function(f) {
+    m <- as.matrix(data[[f]])
+    need <- c(channels, time_channel, names(area_height), unname(area_height))
+    if (!all(need %in% colnames(m))) {
+      stop(
+        "File '",
+        f,
+        "' lacks column(s): ",
+        paste(setdiff(need, colnames(m)), collapse = ", "),
+        call. = FALSE
+      )
+    }
+    m
+  })
+  names(mats) <- files
+
+  rows <- list()
+  add <- function(file, check, channel, value, detail = NA_character_) {
+    rows[[length(rows) + 1L]] <<- tibble::tibble(
+      file = file,
+      check = check,
+      channel = channel,
+      value = as.numeric(value), # as.numeric drops names carried by some inputs
+      detail = detail
+    )
+  }
+  # Per file and channel median and SD, for the cohort z-scores below.
+  med_mat <- sd_mat <- bc_mat <- matrix(
+    NA_real_,
+    length(files),
+    length(channels),
+    dimnames = list(files, channels)
+  )
+  for (f in files) {
+    m <- mats[[f]]
+    add(f, "n_events", NA_character_, nrow(m))
+    for (ch in channels) {
+      v <- m[, ch]
+      finite <- is.finite(v)
+      add(f, "nonfinite_share", ch, mean(!finite))
+      vf <- v[finite]
+      add(
+        f,
+        "zero_variance",
+        ch,
+        as.numeric(length(vf) > 0 && stats::var(vf) == 0)
+      )
+      add(f, "negative_share", ch, if (length(vf)) mean(vf < 0) else NA_real_)
+      if (length(vf) > 1) {
+        med_mat[f, ch] <- stats::median(vf)
+        sd_mat[f, ch] <- stats::sd(vf)
+      }
+      bc_mat[f, ch] <- .sw_bimodality(vf)
+      add(f, "bimodality", ch, bc_mat[f, ch])
+      if (!is.null(lim_max)) {
+        add(
+          f,
+          "saturation_share",
+          ch,
+          if (length(vf)) mean(vf >= lim_max[[ch]]) else NA_real_
+        )
+      }
+      if (!is.null(lim_min)) {
+        add(
+          f,
+          "floor_share",
+          ch,
+          if (length(vf)) mean(vf <= lim_min[[ch]]) else NA_real_
+        )
+      }
+    }
+    if (!is.null(time_channel)) {
+      tt <- sort(m[, time_channel])
+      tt <- tt[is.finite(tt)]
+      # Events per time bin; bins with no events inside the run count as zero.
+      bin_id <- as.integer(floor((tt - min(tt)) / time_bin)) + 1L
+      full <- tabulate(bin_id, nbins = max(bin_id))
+      add(
+        f,
+        "rate_cv",
+        NA_character_,
+        if (length(full) > 1) stats::sd(full) / mean(full) else NA_real_
+      )
+      gaps <- diff(tt)
+      med <- stats::median(gaps)
+      add(
+        f,
+        "max_gap",
+        NA_character_,
+        if (length(gaps) && med > 0) max(gaps) / med else NA_real_
+      )
+      # Drift inside the file: rank correlation of each channel with time.
+      for (ch in channels) {
+        add(
+          f,
+          "time_trend",
+          ch,
+          as.numeric(suppressWarnings(stats::cor(
+            m[, ch],
+            m[, time_channel],
+            method = "spearman",
+            use = "pairwise.complete.obs"
+          )))
+        )
+      }
+    }
+  }
+
+  # Robust z of each file's median and SD against the other files, per channel:
+  # (value - median over files) / (1.4826 * MAD over files), over all files or
+  # within each `reference_group`. NA with fewer than 3 files or when the
+  # spread over files is 0.
+  robust_z <- function(x) .sw_robust_z(x, grp)
+  for (ch in channels) {
+    if (is.null(reference)) {
+      zm <- robust_z(med_mat[, ch])
+      zs <- robust_z(sd_mat[, ch])
+    } else {
+      rc <- reference$channels[reference$channels$channel == ch, ]
+      zm <- .sw_frozen_z(med_mat[, ch], rc$median_centre, rc$median_scale)
+      zs <- .sw_frozen_z(sd_mat[, ch], rc$sd_centre, rc$sd_scale)
+    }
+    zb <- robust_z(bc_mat[, ch])
+    for (j in seq_along(files)) {
+      add(files[j], "median_z", ch, zm[j])
+      add(files[j], "sd_z", ch, zs[j])
+      add(files[j], "bimodality_z", ch, zb[j])
+    }
+  }
+  # File-wide spread change (user decision 2026-11-10): per file, the median
+  # over channels of log(file SD / cohort median SD), as a robust z over files.
+  # A fault that widens every channel a little shows here, not in any one row.
+  # With groups, the cohort SD of a channel is the median over the file's own group.
+  cohort_sd <- apply(sd_mat, 2, stats::median, na.rm = TRUE)
+  cohort_sd_by_file <- matrix(
+    cohort_sd,
+    nrow(sd_mat),
+    ncol(sd_mat),
+    byrow = TRUE
+  )
+  grp1 <- .sw_one_way(grp)
+  for (g in unique(grp1)) {
+    cohort_sd_by_file[grp1 == g, ] <- matrix(
+      apply(sd_mat[grp1 == g, , drop = FALSE], 2, stats::median, na.rm = TRUE),
+      sum(grp1 == g),
+      ncol(sd_mat),
+      byrow = TRUE
+    )
+  }
+  log_ratio <- log(sd_mat / cohort_sd_by_file)
+  log_ratio[!is.finite(log_ratio)] <- NA_real_
+  global <- apply(log_ratio, 1, stats::median, na.rm = TRUE)
+  global[is.nan(global)] <- NA_real_
+  zg <- robust_z(global)
+  for (j in seq_along(files)) {
+    add(files[j], "global_sd_z", NA_character_, zg[j])
+  }
+
+  # Doublets (user decision 2026-11-10): a doublet has a larger area than its
+  # height suggests, so the upper tail of area / height rises. Per area-height
+  # pair, the file's area_height_quantile of the ratio, raw and as a robust z.
+  for (a in names(area_height)) {
+    h <- area_height[[a]]
+    q <- vapply(
+      files,
+      function(f) {
+        m <- mats[[f]]
+        ok <- is.finite(m[, a]) & is.finite(m[, h]) & m[, h] > 0
+        if (!any(ok)) {
+          NA_real_
+        } else {
+          unname(stats::quantile(m[ok, a] / m[ok, h], area_height_quantile))
+        }
+      },
+      numeric(1)
+    )
+    zq <- robust_z(q)
+    for (j in seq_along(files)) {
+      add(files[j], "area_height_q", a, q[j], paste(a, "/", h))
+      add(files[j], "area_height_z", a, zq[j], paste(a, "/", h))
+    }
+  }
+
+  # Channel-pair Spearman correlation against the cohort median per pair.
+  cors <- lapply(mats, function(m) {
+    suppressWarnings(stats::cor(
+      m[, channels],
+      method = "spearman",
+      use = "pairwise.complete.obs"
+    ))
+  })
+  idx <- which(upper.tri(cors[[1]]), arr.ind = TRUE)
+  pair_name <- paste(channels[idx[, 1]], channels[idx[, 2]], sep = " ~ ")
+  pair_vals <- vapply(cors, function(cm) cm[idx], numeric(nrow(idx)))
+  pair_vals <- matrix(pair_vals, nrow = nrow(idx))
+  center <- apply(pair_vals, 1, stats::median, na.rm = TRUE)
+  for (j in seq_along(files)) {
+    d <- abs(pair_vals[, j] - center)
+    if (all(is.na(d))) {
+      add(files[j], "corr_shift", NA_character_, NA_real_)
+    } else {
+      k <- which.max(d)
+      add(files[j], "corr_shift", NA_character_, d[k], pair_name[k])
+    }
+  }
+
+  # The same pairs one row each: robust z of the file's correlation against the
+  # other files, per pair. Built in one step (pairs x files can be large).
+  pair_z <- t(apply(pair_vals, 1, robust_z))
+  if (nrow(idx) == 1) {
+    pair_z <- matrix(pair_z, nrow = 1)
+  }
+  pair_rows <- tibble::tibble(
+    file = rep(files, each = nrow(idx)),
+    check = "corr_pair_z",
+    channel = rep(pair_name, times = length(files)),
+    value = as.numeric(pair_z),
+    detail = NA_character_
+  )
+
+  out <- dplyr::bind_rows(c(rows, list(pair_rows)))
+  class(out) <- c("sw_fcs_signal_audit", class(out))
+  out
+}
+
+# z against a frozen centre and scale; NA when the scale is 0 or NA.
+.sw_frozen_z <- function(x, centre, scale) {
+  if (is.na(scale) || scale == 0) {
+    return(rep(NA_real_, length(x)))
+  }
+  (x - centre) / scale
+}
+
+# NULL, one number, or a named vector covering every channel -> named vector.
+.sw_audit_limit <- function(x, channels, name) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (!is.numeric(x) || anyNA(x)) {
+    stop("`", name, "` must be NULL or numeric without NA.", call. = FALSE)
+  }
+  if (length(x) == 1 && is.null(names(x))) {
+    return(stats::setNames(rep(x, length(channels)), channels))
+  }
+  if (!all(channels %in% names(x))) {
+    stop("`", name, "` must name every channel.", call. = FALSE)
+  }
+  x[channels]
+}
+
+# Bimodality coefficient with the bias-adjusted sample skewness and excess
+# kurtosis (SAS form; Pfister et al. 2013). NA with fewer than 4 values or SD 0.
+.sw_bimodality <- function(x) {
+  x <- x[is.finite(x)]
+  n <- length(x)
+  if (n < 4 || stats::sd(x) == 0) {
+    return(NA_real_)
+  }
+  u <- (x - mean(x)) / stats::sd(x)
+  g <- n / ((n - 1) * (n - 2)) * sum(u^3)
+  corr <- 3 * (n - 1)^2 / ((n - 2) * (n - 3))
+  k <- n * (n + 1) / ((n - 1) * (n - 2) * (n - 3)) * sum(u^4) - corr
+  (g^2 + 1) / (k + corr)
+}

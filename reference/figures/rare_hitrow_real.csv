@@ -1,0 +1,13 @@
+"size","check","ci95_half","auroc"
+1,"cluster_median_z_hitrow",0.0843796733761948,0.945679012345679
+1,"cluster_median_z",0.128183487175721,0.882304526748971
+1,"cluster_median_z_ref",0.130092831321063,0.863374485596708
+1,"oracle_cluster_z",0.0596218081986002,0.963786008230453
+2,"cluster_median_z_hitrow",0.0774320987654321,0.960493827160494
+2,"cluster_median_z",0.253970349197706,0.844444444444444
+2,"cluster_median_z_ref",0.26511239060856,0.838683127572016
+2,"oracle_cluster_z",0.0790452674897119,0.959670781893004
+3,"cluster_median_z_hitrow",0,1
+3,"cluster_median_z",0,1
+3,"cluster_median_z_ref",0,1
+3,"oracle_cluster_z",0,1

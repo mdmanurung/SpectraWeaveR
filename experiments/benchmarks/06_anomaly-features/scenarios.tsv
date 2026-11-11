@@ -1,0 +1,31 @@
+tag	candidate	env
+r01_bad3	both	SW_N_BAD=3
+r02_bad24	both	SW_N_BAD=24
+r03_jit0	both	SW_FILE_JITTER=0
+r04_jit03	both	SW_FILE_JITTER=0.3
+r05_ev300	both	SW_N_EV=300 SW_NEV=250
+r06_ch4	both	SW_N_CH=4
+r07_ch20	both	SW_N_CH=20
+r08_eff05	both	SW_EFFECT_SCALE=0.5
+r09_eff2	both	SW_EFFECT_SCALE=2
+r10_seeds11	both	SW_SEED_START=11
+s01_q005	both	SW_QSTEP=0.05
+s02_q025	both	SW_QSTEP=0.25
+s03_agg1000	both	SW_AGG=1000
+s04_agg20000	both	SW_AGG=20000
+s05_nev200	both	SW_NEV=200
+s06_nev1000	both	SW_NEV=1000
+s07_tree100	both	SW_NTREES=100
+s08_tree1000	both	SW_NTREES=1000
+s09_samp16	both	SW_FOREST_SAMPLE=16
+s10_samp64	both	SW_FOREST_SAMPLE=64
+s11_ndim2	both	SW_FOREST_NDIM=2
+c01_ch2	both	SW_N_CH_AFFECTED=2
+c02_poponly	both	SW_POP_ONLY=1
+c03_poponly_emd	emd	SW_POP_ONLY=1
+c04_robustz_both	both	SW_SCORER=robustz
+c05_robustz_emd	emd	SW_SCORER=robustz
+c06_robustz_quantile	quantile	SW_SCORER=robustz
+n01_novelty_emd	emd	SW_SCORER=novelty
+n02_novelty_q025	quantile	SW_SCORER=novelty SW_QSTEP=0.25
+n03_novelty_both	both	SW_SCORER=novelty

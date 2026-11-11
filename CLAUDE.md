@@ -21,6 +21,20 @@ SpectraWeaveR/
 │   ├── batch_correct.R           # Step 4: batch correction (cyCombine), diagnostics, plots
 │   ├── batch_decide.R            # Batch decision policy and states (batchdx port)
 │   ├── batch_flag.R              # Control IQR flags (Tukey fence)
+│   ├── batch_scores.R            # Per-marker batch scores: pairwise EMD, median range, eta2, order drift
+│   ├── anomaly_features.R        # Per-file quantile + exact-EMD features; sw_emd_1d()
+│   ├── anomaly_flag.R            # Outlier (isolation forest) and novelty (GMM) flags
+│   ├── cluster_scores.R          # Cluster shares and per-cluster medians as robust z (rare-population checks)
+│   ├── cytoscan_wrap.R           # CytoScan and CytoTools wrappers (GPL, Suggests)
+│   ├── diagnose.R                # sw_diagnose(): stacks the diagnostic modules
+│   ├── fcs_header_audit.R        # FCS header audit against a reference file
+│   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation)
+│   ├── qc_app.R                  # sw_qc_app(): Shiny explorer (layout adapted from iidx, Apache-2.0)
+│   ├── relativise.R              # CD3 (reference-population) relativisation, Glehr et al. 2026
+│   ├── otd.R                     # Debiased Sinkhorn divergence and per-file OTD
+│   ├── negative_audit.R          # Negative-population checks (GMM negative per channel)
+│   ├── cluster_stability.R       # Clustering stability across seeds and sizes
+│   ├── qc_plots.R                # PeacoQC plot and heatmap wrappers
 │   ├── cluster.R                 # Step 5: clustering (kohonen SOM / FastPG)
 │   ├── composable_pipeline.R     # S7 composable step and pipeline framework
 │   ├── corrector.R               # Corrector contract: fit, integrate, diagnose, save, load, compare
@@ -94,6 +108,20 @@ SpectraWeaveR/
 | Unmix figures | `sw_unmix_sample_events()`, `sw_unmix_figure_*()`, `sw_unmix_save_figures()` | ggplot2 | approved panels F1 to F4 with source data |
 | Unmix correction | `sw_unmix_correct()`, `sw_unmix_correct_signatures()`, `sw_unmix_correct_spillover()`, `sw_unmix_compare_spectra()` | AutoSpectral (wrapped) | spectra → candidate corrected spectra, change table |
 | Manifest and correctors | `sw_sample_manifest()`, `sw_corrector_*()` | cyTether design (paired shift engine) | manifest + frozen model → corrected data with per-cell-group actions |
+| FCS header audit | `sw_fcs_header_audit()`, `sw_fcs_header_summary()` | CytoTools idea (clean rewrite) | FCS paths + required keywords + reference file → long tibble of channel and keyword differences |
+| Signal audit | `sw_fcs_signal_audit()` | own code | per-file event matrices → numbers for saturation, dead channel, non-finite, event-rate and correlation shifts, and `bimodality`/`bimodality_z`; no cutoffs; `reference` (required, NULL = cohort) scores `median_z`/`sd_z` against a frozen reference |
+| Frozen signal reference | `sw_signal_reference_fit()`, `sw_signal_reference_save()`, `sw_signal_reference_load()` | own code | clean reference files → per-channel centre and scale of file medians and SDs, S3 object with digest, for faults most files share |
+| Anomaly features and flags | `sw_anomaly_features()`, `sw_emd_1d()`, `sw_anomaly_flag_outlier()`, `sw_anomaly_flag_novelty()` | CytoScan method (clean rewrite); isotree, mclust (Suggests) | transformed per-file data → quantile + exact-EMD features → isolation-forest score or GMM log-density. Every cutoff is a required argument. |
+| Batch-effect scores | `sw_batch_scores()` | own code | per-file data + batch labels → pairwise EMD, batch-vs-rest EMD (`rest_emd`, `rest_emd_z`), median range, eta2, order drift per marker |
+| Cluster scores | `sw_cluster_scores()` | own code (stats::kmeans) | per-file cluster shares and per-cluster marker medians as robust z against other files; `k`, `nstart`, events, seed, min events and `reference` (files to fit k-means on, or NULL for all) are required, no scaling; `sw_diagnose` ranks each marker and cluster as its own item |
+| Negative-population audit | `sw_negative_audit()` | own code; symptoms from the Colibri blog; mclust (Suggests) | per file and channel, a 2-component 1D GMM (model "V") gives the negative: its median, robust SD, share, separation, hyper-negative share, and joint-negative correlation per channel pair, each with a robust z across files. `n_events`, `seed`, `hyper_k`, `pairs`, `min_separation` required; channels whose median separation is below `min_separation` get `NA` negative checks and `split_ok = 0` |
+| Cluster stability | `sw_cluster_stability()` | own code (stats::kmeans) | ARI and moved-event share across seeds and subsample sizes; `k`, seeds, sizes, events, draw seed, nstart required |
+| Optimal transport distance | `sw_sinkhorn_divergence()`, `sw_otd_scores()` | own code from the definitions (as used by Glehr et al. 2026) | per-file debiased Sinkhorn divergence to a pooled reference; blur, events, seed, max_iter, tol required |
+| Diagnosis | `sw_diagnose()`, `sw_diagnosis_top()` | own code | stacks the header, signal, anomaly, batch, cluster, relativise, otd, negative and gate modules into one table; no pass or fail; files are ranked per check and marker, never by a per-file summary (user decision Q14) |
+| Reference relativisation | `sw_relativise_split_kmeans()`, `sw_relativise_fit()`, `sw_relativise_diagnose()`, `sw_relativise_apply()`; maps `sw_relativise_batch_map()` (per-batch controls), `sw_relativise_internal_map()` (reference channel from the full stain) | Glehr et al. 2026 Box 1 (clean rewrite from the paper) | linear controls + control map → per-channel offset and gain per unit → gain diagnostics → relativised linear data. Split scale, seed, nstart, min events, targets and `input_scale = "linear"` are required. Spec: `plans/2026-11-09_reference-relativisation.md` |
+| FAUST before and after correction | `sw_faust_gatingset()`, `sw_faust_run()`, `sw_faust_labels()`, `sw_faust_compare()` | FAUST, scamp (GPL, wrapped from Suggests) | per-file matrices → GatingSet → FAUST labels → label agreement (ARI), phenotype shares and medians before vs after correction; every FAUST knob required. Plan: `plans/2026-11-09_faust-wrapper.md` |
+| CytoScan family wrappers | `sw_cytoscan_run()`, `sw_cytoscan_preprocess_none()`, `sw_cytotools_header()` | CytoScan, CytoTools (GPL, wrapped from Suggests) | FCS paths → CytoScan flags with the caller's preprocess function |
+| QC plots and app | `sw_qc_plot()`, `sw_qc_heatmap()`, `sw_qc_app()` | PeacoQC (wrapped); layout adapted from iidx (Apache-2.0, see NOTICE) | QC result or diagnosis → PNG, heatmap, Shiny explorer |
 
 ## Extended Modules
 

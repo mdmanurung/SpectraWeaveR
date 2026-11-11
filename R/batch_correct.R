@@ -216,8 +216,12 @@ sw_correct_run <- function(uncorrected, markers, covar = NULL,
   message("Running cyCombine batch correction on ", nrow(uncorrected),
           " cells, ", length(markers), " markers")
 
+  # cyCombine >= 0.3.0 names the data `object` and takes its own `seed`
+  # (default 473), so the caller's seed must be passed, not only set. Its SOM
+  # `mode` is left at the cyCombine default ("online"; user decision 2026-11-10).
   corrected <- cyCombine::batch_correct(
-    df = uncorrected,
+    object = uncorrected,
+    seed = seed,
     label = label,
     markers = markers,
     covar = covar,
@@ -456,9 +460,15 @@ sw_correct_som <- function(df, markers, xdim = 8, ydim = 8, rlen = 10,
 
   message("Creating SOM (", xdim, "x", ydim, " grid, rlen=", rlen, ")")
 
-  cyCombine::create_som(df, markers = markers,
-                        xdim = xdim, ydim = ydim,
-                        rlen = rlen, seed = seed, ...)
+  labels <- cyCombine::create_som(df, markers = markers,
+                                  xdim = xdim, ydim = ydim,
+                                  rlen = rlen, seed = seed, ...)
+  # cyCombine >= 0.3.0 returns a factor whose levels are the cluster ids;
+  # return the ids as integers, as sw_correct_apply() expects.
+  if (is.factor(labels)) {
+    labels <- as.integer(as.character(labels))
+  }
+  labels
 }
 
 

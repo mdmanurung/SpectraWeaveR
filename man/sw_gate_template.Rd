@@ -4,7 +4,15 @@
 \alias{sw_gate_template}
 \title{Build a Gating Template CSV}
 \usage{
-sw_gate_template(output_file, template_type = "lymphocyte")
+sw_gate_template(
+  output_file,
+  template_type = "lymphocyte",
+  debris_min,
+  singlet_wider_gate,
+  flowclust_k,
+  flowclust_target,
+  pool_samples
+)
 }
 \arguments{
 \item{output_file}{Character path where the CSV template will be written.}
@@ -12,6 +20,32 @@ sw_gate_template(output_file, template_type = "lymphocyte")
 \item{template_type}{Character string specifying the template type.
 Supported: \code{"lymphocyte"} (default), \code{"myeloid"},
 \code{"nk"}, \code{"treg"}, \code{"full_pbmc"}.}
+
+\item{debris_min}{Numeric; required, no default. Lower FSC-A cutoff for
+the \code{nonDebris} gate, written as the \code{min} argument of the
+openCyto \code{mindensity} method. Events below it are never taken as
+the valley, so it sets the debris boundary. The right value depends on
+the instrument and the FSC-A scale.}
+
+\item{singlet_wider_gate}{Logical; required, no default. Written as
+\code{wider_gate} of the openCyto \code{singletGate} method. \code{TRUE}
+widens the singlet gate and keeps more events near the edge.}
+
+\item{flowclust_k}{Integer; required for templates that use flowClust
+(\code{"lymphocyte"}, \code{"treg"}), ignored otherwise. Number of
+clusters \code{K} fitted by \code{flowClust}.}
+
+\item{flowclust_target}{Integer; required for templates that use
+flowClust (\code{"lymphocyte"}, \code{"treg"}), ignored otherwise.
+Index of the cluster kept as the population (\code{target} in
+\code{flowClust}). Clusters are not ordered by size, so this is a
+biological choice.}
+
+\item{pool_samples}{Logical; required, no default. Written to the
+\code{collapseDataForGating} column of every row, with \code{groupBy}
+left empty. \code{TRUE}: openCyto pools the events of all samples in
+the GatingSet, fits one gate, and applies that gate to every sample.
+\code{FALSE}: each sample gets its own gate fitted on its own events.}
 }
 \value{
 The file path (invisibly).
@@ -46,7 +80,9 @@ before applying it with \code{\link{sw_gate_run}}.
 }
 \examples{
 tmp <- tempfile(fileext = ".csv")
-sw_gate_template(tmp, template_type = "lymphocyte")
+sw_gate_template(tmp, template_type = "lymphocyte", debris_min = 50000,
+                 singlet_wider_gate = TRUE, flowclust_k = 2,
+                 flowclust_target = 1, pool_samples = TRUE)
 head(read.csv(tmp))
 unlink(tmp)
 

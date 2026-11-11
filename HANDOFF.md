@@ -1,5 +1,7 @@
 # Handoff — BMV unmix comparison: why AutoSpectral 1.0.2 and 1.8.8 differ on TNF
 
+> Diagnostics workstream (cytoscan-diagnostics, merged 2026-11-11): see `HANDOFF-diagnostics.md`.
+
 **Written:** 2026-11-10 15:56 CET, updated 2026-11-11 07:45 · **Branch:** main @ 6845d1d · **Status:** decision made: 1.8.8 zip (`as188_joint`) is final (README row 113). Every SLURM set is scored, including the CD3− spike (88e) and the TNF + GLUT1 co-spike (88d). INDEX §00–24, dashboard v17 and `report.html` (sections 16–24) are current; every claim in §16–§24 cites a figure that was opened. Nothing committed.
 
 ## Check first

@@ -37,8 +37,10 @@ NULL
 #'   Default: \code{"FSC-A"}.
 #' @param channel2 Character; the height channel (y-axis).
 #'   Default: \code{"FSC-H"}.
-#' @param nmad Numeric; number of MADs above the median ratio to allow.
-#'   Default: \code{4}.
+#' @param nmad Numeric; required, no default. Number of median absolute
+#'   deviations (MADs) around the median channel ratio that an event may
+#'   deviate before it is called a doublet. Larger values keep more events.
+#'   This choice changes which events are removed, so state it explicitly.
 #' @param verbose Logical; if \code{TRUE}, prints gate statistics.
 #'   Default: \code{FALSE}.
 #'
@@ -49,8 +51,12 @@ sw_gate_singlets <- function(ff,
                              filter_id = "Singlets",
                              channel1 = "FSC-A",
                              channel2 = "FSC-H",
-                             nmad = 4,
+                             nmad,
                              verbose = FALSE) {
+  if (missing(nmad)) {
+    stop("'nmad' is required (no default): number of MADs around the ",
+         "median channel ratio.", call. = FALSE)
+  }
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -120,6 +126,22 @@ sw_gate_singlets <- function(ff,
 }
 
 
+
+# Attach removed-event counts to a filtered flowFrame and, if verbose,
+# emit one message with count and percent.
+.sw_tag_removed <- function(ff_out, n_in, verbose, label) {
+  n_out <- nrow(ff_out)
+  n_removed <- n_in - n_out
+  attr(ff_out, "events_in") <- as.integer(n_in)
+  attr(ff_out, "events_removed") <- as.integer(n_removed)
+  if (isTRUE(verbose)) {
+    pct <- if (n_in > 0) round(100 * n_removed / n_in, 1) else 0
+    message(label, ": removed ", n_removed, " / ", n_in,
+            " events (", pct, "%)")
+  }
+  ff_out
+}
+
 # ---------------------------------------------------------------------------
 # removeDoublets — CytoPipeline algorithm
 # ---------------------------------------------------------------------------
@@ -138,19 +160,28 @@ sw_gate_singlets <- function(ff,
 #' @param height_channels Character vector of height-type channel names
 #'   (e.g., \code{c("FSC-H", "SSC-H")}). Must match length of
 #'   \code{area_channels}.
-#' @param nmads Numeric vector; MAD bandwidth per channel pair.
-#'   Default: \code{rep(4, length(area_channels))}.
-#' @param verbose Logical; if \code{TRUE}, prints gate statistics.
+#' @param nmads Numeric vector; required, no default. MAD bandwidth per
+#'   channel pair: number of median absolute deviations around the median
+#'   area/height ratio that an event may deviate before it is removed. Must
+#'   have the same length as \code{area_channels}.
+#' @param verbose Logical; if \code{TRUE}, prints gate statistics and one
+#'   message with the number and percent of events removed.
 #'   Default: \code{FALSE}.
 #'
-#' @return A \code{flowFrame} with doublets removed.
+#' @return A \code{flowFrame} with doublets removed. The attributes
+#'   \code{events_in} and \code{events_removed} hold the event counts
+#'   before filtering and the number removed.
 #'
 #' @export
 sw_filter_doublets <- function(ff,
                                area_channels = c("FSC-A", "SSC-A"),
                                height_channels = c("FSC-H", "SSC-H"),
-                               nmads = rep(4, length(area_channels)),
+                               nmads,
                                verbose = FALSE) {
+  if (missing(nmads)) {
+    stop("'nmads' is required (no default): one MAD bandwidth per ",
+         "channel pair.", call. = FALSE)
+  }
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -190,7 +221,8 @@ sw_filter_doublets <- function(ff,
   }
 
   flt <- flowCore::filter(ff, combined_gate)
-  flowCore::Subset(ff, flt)
+  out <- flowCore::Subset(ff, flt)
+  .sw_tag_removed(out, nrow(ff), verbose, "sw_filter_doublets")
 }
 
 
@@ -208,22 +240,30 @@ sw_filter_doublets <- function(ff,
 #' @param ff A \code{flowCore::flowFrame}.
 #' @param area_channels Character vector of area-type channel names.
 #' @param height_channels Character vector of height-type channel names.
-#' @param nmads Numeric vector; MAD bandwidth per channel pair.
-#'   Default: \code{rep(4, length(area_channels))}.
-#' @param verbose Logical; if \code{TRUE}, prints removal statistics.
+#' @param nmads Numeric vector; required, no default. MAD bandwidth per
+#'   channel pair, passed to \code{PeacoQC::RemoveDoublets()} as \code{nmad}.
+#'   Must have the same length as \code{area_channels}.
+#' @param verbose Logical; if \code{TRUE}, prints removal statistics and one
+#'   message with the number and percent of events removed.
 #'   Default: \code{TRUE}.
 #' @param ... Additional arguments passed to
 #'   \code{PeacoQC::RemoveDoublets()}.
 #'
-#' @return A \code{flowFrame} with doublets removed.
+#' @return A \code{flowFrame} with doublets removed. The attributes
+#'   \code{events_in} and \code{events_removed} hold the event counts
+#'   before filtering and the number removed.
 #'
 #' @export
 sw_filter_doublets_peacoqc <- function(ff,
                                        area_channels = c("FSC-A", "SSC-A"),
                                        height_channels = c("FSC-H", "SSC-H"),
-                                       nmads = rep(4, length(area_channels)),
+                                       nmads,
                                        verbose = TRUE,
                                        ...) {
+  if (missing(nmads)) {
+    stop("'nmads' is required (no default): one MAD bandwidth per ",
+         "channel pair.", call. = FALSE)
+  }
   if (!requireNamespace("PeacoQC", quietly = TRUE)) {
     stop("Package 'PeacoQC' is required. Install it from Bioconductor.",
          call. = FALSE)
@@ -236,8 +276,9 @@ sw_filter_doublets_peacoqc <- function(ff,
     stop("'ff' must be a flowFrame object.", call. = FALSE)
   }
 
-  if (flowCore::nrow(ff) == 0) {
-    return(ff)
+  n_in <- nrow(ff)
+  if (n_in == 0) {
+    return(.sw_tag_removed(ff, n_in, verbose, "sw_filter_doublets_peacoqc"))
   }
 
   n_filters <- length(area_channels)
@@ -264,7 +305,7 @@ sw_filter_doublets_peacoqc <- function(ff,
     )
   }
 
-  ff
+  .sw_tag_removed(ff, n_in, verbose, "sw_filter_doublets_peacoqc")
 }
 
 
@@ -288,9 +329,14 @@ sw_filter_doublets_peacoqc <- function(ff,
 #' @param gate_data Numeric vector of polygon gate coordinates. The first
 #'   half contains x-coordinates (FSC values), the second half contains
 #'   y-coordinates (SSC values). Must have even length (at least 6 for a
-#'   triangle).
+#'   triangle). The polygon defines which events are kept, so it is
+#'   always a user choice.
+#' @param verbose Logical; if \code{TRUE}, prints one message with the
+#'   number and percent of events removed. Default: \code{FALSE}.
 #'
-#' @return A \code{flowFrame} with debris events removed.
+#' @return A \code{flowFrame} with debris events removed. The attributes
+#'   \code{events_in} and \code{events_removed} hold the event counts
+#'   before filtering and the number removed.
 #'
 #' @examples
 #' \dontrun{
@@ -300,13 +346,15 @@ sw_filter_doublets_peacoqc <- function(ff,
 #'   47679, 260500, 260500, 113000, 35000     # SSC-A y-coords
 #' )
 #' ff_clean <- sw_filter_debris(ff, gate_data = gate_coords)
+#' attr(ff_clean, "events_removed")
 #' }
 #'
 #' @export
 sw_filter_debris <- function(ff,
                                   fsc_channel = "FSC-A",
                                   ssc_channel = "SSC-A",
-                                  gate_data) {
+                                  gate_data,
+                                  verbose = FALSE) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -347,7 +395,8 @@ sw_filter_debris <- function(ff,
   )
 
   selected <- flowCore::filter(ff, cells_gate)
-  flowCore::Subset(ff, selected)
+  out <- flowCore::Subset(ff, selected)
+  .sw_tag_removed(out, nrow(ff), verbose, "sw_filter_debris")
 }
 
 
