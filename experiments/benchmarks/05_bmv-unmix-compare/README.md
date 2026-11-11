@@ -115,6 +115,7 @@ Checked on 2026-11-09: all four arms have the same event count per sample, and `
 | Co-spike (grill Q6, Q7; script 88d) | TNF +1 arcsinh with GLUT1 at +0, +1, +2 in the same CD4T and CD8T cells (seed 42, 1.8.8 dye spectra); setups `as188_joint`, `af405_afrefine`, `as102_var` (positive control); plus the existing TNF spike split by natural GLUT1 | user, 2026-11-11 |
 | CD3− spike (grill Q8, Q9; script 88e) | the 12 spiked markers, +1 arcsinh, in live CD3− cells (`as188_joint` gates, seed 42); setups `as188_joint`, `af405_afrefine` | user, 2026-11-11 |
 | Raw companions (grill Q4) | ggcyto hexbins for every summary figure: flagged markers vs GLUT1 per arm; lineage markers of the shifted clusters; spike before vs after per cell | user, 2026-11-11 |
+| Spike passes (grill 2026-11-11; script 88h) | n.passes / n.af.passes 5/1, 1/5, 5/5 on `as188_joint` (joint, speed slow); 1/1 reference reuses the 88/88e c188 unmixes; Th2, IL-10 and TNF (control); CD4T, CD8T and CD3−; inherited levels 0–3, seed 42, lost = recovery < 0.5 at +1; descriptive, final setting stays 1/1 unless the user decides after | user, 2026-11-11 |
 
 ## Still to be set
 

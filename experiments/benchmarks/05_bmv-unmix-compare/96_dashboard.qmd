@@ -39,10 +39,10 @@ RUNS_DIR <- "experiments/runs"
 REPORT_QMD <- "experiments/benchmarks/05_bmv-unmix-compare/90_report.qmd" # section order and prose
 INDEX_MD <- "experiments/runs/2026-11-10_bmv-summary/INDEX.md"
 AUDIT_CSV <- "experiments/runs/2026-11-11_bmv-restyle/audit_freshness.csv"
-FIG_DIR <- "experiments/runs/2026-11-10_bmv-report/figures-v7" # report redraws, as 90_report.qmd
+FIG_DIR <- "experiments/runs/2026-11-10_bmv-report/figures-v7" # report redraws; the report now draws figures-v8, whose 34 tables equal v7's (certified copy kept)
 KEPT_DIR <- "experiments/runs/2026-11-11_bmv-restyle" # restyled per-cell and summary figures
-OUT_DIR <- "experiments/runs/2026-11-11_bmv-dashboard"
-WEB_DPI <- 120 # web copy resolution (150 gave a 17.7 MB page, over the 16 MB publish limit); the 300-dpi PNG and vector PDF stay in the run folders
+OUT_DIR <- "experiments/runs/2026-11-11_bmv-dashboard-v6" # v6: §17 caption fix; v5 lucid-writer prose at 300 dpi
+WEB_DPI <- 300 # figure resolution (user, 2026-11-11: "figures should be 300 dpi"); the local file has no size limit
 MAX_ROWS <- 500 # rows shown per data table; larger tables show the first MAX_ROWS
 ```
 
@@ -105,6 +105,7 @@ section_figures <- \(code) {
       paste0(
         'show\\("(s\\d\\d_[a-z0-9_]+)"\\)',
         '|show_kept\\(\\s*"([^"]+)"\\s*,\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\)',
+        '|show_run\\(\\s*"([^"]+)"\\s*,\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\)',
         '|walk\\(c\\(([^)]*)\\),\\s*\\\\\\(x\\) show_kept\\(\\s*sprintf\\("([^"]+)", x\\),\\s*sprintf\\(\\s*"((?:[^"\\\\]|\\\\.)*)",\\s*x\\s*\\)'
       ),
       dotall = TRUE
@@ -119,9 +120,12 @@ section_figures <- \(code) {
       tibble(path = file.path(FIG_DIR, paste0(m[2], ".png")), caption = redraw_titles[[m[2]]])
     } else if (!is.na(m[3])) {
       tibble(path = file.path(KEPT_DIR, m[3]), caption = unescape(m[4]))
+    } else if (!is.na(m[5])) {
+      # show_run(): a figure read straight from its run folder
+      tibble(path = file.path(RUNS_DIR, m[5]), caption = unescape(m[6]))
     } else {
-      xs <- str_match_all(m[5], '"([^"]+)"')[[1]][, 2]
-      tibble(path = file.path(KEPT_DIR, sprintf(m[6], xs)), caption = sprintf(unescape(m[7]), xs))
+      xs <- str_match_all(m[7], '"([^"]+)"')[[1]][, 2]
+      tibble(path = file.path(KEPT_DIR, sprintf(m[8], xs)), caption = sprintf(unescape(m[9]), xs))
     }
   }) |>
     list_rbind()
@@ -175,6 +179,10 @@ figures <- left_join(figures, select(img_log, rel, web), by = join_by(rel), rela
 # The plotted data of one figure: the source CSV save_panel wrote beside the PNG.
 data_table <- \(png) {
   csv <- str_replace(png, "\\.png$", ".csv")
+  # an original-style figure saved without its source table (e.g. the GLS density, script 43)
+  if (!file.exists(csv)) {
+    return(list(widget = NULL, note = "No source table was saved beside this figure; it is drawn from per-event data."))
+  }
   d <- read_csv(csv, show_col_types = FALSE, guess_max = 5000)
   n <- nrow(d)
   d <- d |>
@@ -240,10 +248,15 @@ finding <- \(prose) {
     <div class="v-value">1.3% vs 15.3% (refined AF)</div>
     <div class="v-note">22_spike_cd3neg/fig_spike_GLUT1.png</div>
   </div>
+  <div class="verdict good">
+    <div class="v-label">Passes 5 vs 1: CD8T Th2 spike loss</div>
+    <div class="v-value">13.7–14.5%, no change</div>
+    <div class="v-note">2026-11-11_bmv-spike-passes/fig_passes_Th2.png · final stays 1/1</div>
+  </div>
 </div>
 ```
 
-> **How to read this page.** Each section states the finding with the figures that support it. Tabs hold the figures (Nature spec, 120-dpi web copies of the vector PDFs), the plotted data behind each figure (sortable and searchable), and the AutoSpectral documentation quoted for that section. Arms are the unmixing setups compared; donors (A3, A6, B11, B2, D1) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell.
+> **How to read this page.** Each section states the finding with the figures that support it. Tabs hold the figures (Nature spec, 300-dpi copies of the vector PDFs), the plotted data behind each figure (sortable and searchable), and the AutoSpectral documentation quoted for that section. Arms are the unmixing setups compared; donors (A3, A6, B11, B2, D1) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell.
 
 ## Conclusions
 

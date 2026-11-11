@@ -28,5 +28,7 @@ snap="$(mktemp -d)/$(basename experiments/benchmarks/05_bmv-unmix-compare/53_opt
 cp experiments/benchmarks/05_bmv-unmix-compare/53_opt188.R "$snap"
 # freeze sourced helpers too: copy the benchmark scripts beside it and point source() at the copies
 cp experiments/benchmarks/05_bmv-unmix-compare/*.R "$(dirname "$snap")"/
-sed -i "s#source(\"experiments/benchmarks/05_bmv-unmix-compare/#source(\"$(dirname "$snap")/#" "$(dirname "$snap")"/*.R
+# freeze the helper folders too (lib/theme.R and the style/ and lucid/ pointers to it)
+cp -r experiments/benchmarks/05_bmv-unmix-compare/{lib,style,lucid} "$(dirname "$snap")"/
+sed -i "s#source(\"experiments/benchmarks/05_bmv-unmix-compare/#source(\"$(dirname "$snap")/#" "$(dirname "$snap")"/*.R "$(dirname "$snap")"/{lib,style,lucid}/*.R
 pixi run Rscript "$snap" "$route" "$neg" "$n_passes" "$stage"
