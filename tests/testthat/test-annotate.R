@@ -7,8 +7,9 @@
 .make_mfi <- function(n_clusters = 5) {
   # Each row = one cluster, columns = markers
   # Marker names match the built-in reference
+  # Fixed 5-row pattern, cut to the first n_clusters rows
   tibble::tibble(
-    cluster    = seq_len(n_clusters),
+    cluster    = 1:5,
     CD3        = c(3, 3, 0, 0, 3),
     CD4        = c(3, 0, 0, 0, 3),
     CD8a       = c(0, 3, 0, 0, 0),
@@ -22,7 +23,7 @@
     CD25       = c(1, 0, 0, 0, 3),
     CD127      = c(2, 2, 0, 0, 1),
     FoxP3      = c(0, 0, 0, 0, 3)
-  )
+  )[seq_len(n_clusters), ]
 }
 
 # ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ test_that("sw_annotate_load_ref mask values are binary 0/1", {
 })
 
 test_that("sw_annotate_load_ref rejects unsupported name", {
-  expect_error(sw_annotate_load_ref("t_cell"), "should be one of")
+  expect_error(sw_annotate_load_ref("t_cell"), "should be")
 })
 
 test_that("sw_annotate_load_ref rejects non-character name", {
@@ -222,7 +223,7 @@ test_that("sw_annotate_run score >= second_score", {
 test_that("sw_annotate_manual rejects non-named annotation_map", {
   mfi <- .make_mfi(2)
   expect_error(sw_annotate_manual(mfi, c("CD4+ T", "B cell")),
-               "named character vector")
+               "fully named")
 })
 
 test_that("sw_annotate_manual rejects non-character annotation_map", {

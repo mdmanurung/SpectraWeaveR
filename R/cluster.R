@@ -201,6 +201,8 @@ sw_cluster_run <- function(corrected, lineage_markers,
   fpg <- FastPG::fastCluster(mat, k = k, ...)
 
   communities <- as.integer(fpg$communities)
+  # FastPG 0.0.8 labels communities from 0; the SOM method labels from 1.
+  if (min(communities) == 0L) communities <- communities + 1L
   n_clusters <- length(unique(communities))
 
   message("FastPG clustering complete (", n_clusters, " communities found)")

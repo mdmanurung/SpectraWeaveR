@@ -156,6 +156,11 @@ test_that("sw_diff_abundance voom returns correct output structure", {
   skip_if_not_installed("limma")
 
   x    <- .make_corrected()
+  # .make_corrected() gives 50 cells in every sample x cluster, so all counts
+  # are equal and voom has no mean-variance trend to fit. Thin the cells at
+  # random so the counts differ.
+  set.seed(7)
+  x    <- x[sample(nrow(x), 0.8 * nrow(x)), ]
   meta <- .make_meta()
   result <- sw_diff_abundance(x, meta, group_col = "condition",
                                        method = "voom", min_prop = 0)
