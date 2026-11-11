@@ -1,48 +1,52 @@
-# Handoff — SpectraWeaveR unmixing beta, dashboard and plan cleanup
+# Handoff — cyTether/HEB benchmark: HEB beats fair cyCombine on T6 EMD (F12 + F13); O8 OpenProblems check running
 
-**Written:** 2026-11-09 13:34 CET · **Branch:** main @ 6c99bd6 · **Status:** beta unmixing, report, diagnostics, correction wrappers and dashboard work on real data; nothing committed; 3 protocol-audit follow-ups wait for the user
+**Written:** 2026-11-11 · **Branch:** cytether-benchmark @ 72d648d · **Status:** F12 scale term in the package; F13 sub-cluster arm (benchmark-side prototype) beats cycombine_ref on held-out EMD in 4 of 4 T6 folds; O8 (OpenProblems scores for sc and sc_cl) scoring on SLURM, figure script written, not yet run
 
 ## Check first
-Run `git log --oneline 6c99bd6..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
+Run `git log --oneline 72d648d..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
 
 ## Goal
-One-stop spectral-flow package. Active /goal: working unmixing wrapper, unmixing report and diagnostics, and correction of unmixing errors, tested on the Mendeley, OMIP-069v2 and OMIP-109 data. Latest AutoSpectral (1.8.8, commit 3c504c4) is the gold standard.
+Show HEB (reference-anchored hierarchical empirical Bayes corrector, `R/corrector_heb.R`) is not inferior to cyCombine, CytoNorm and CytofIn on synthetic, T6 (CytoBatchFlagR) and OpenProblems tasks; tusoskill loop (50-iteration floor, ledger at 22/50).
 
 ## Next action
-Ask the user the three protocol-audit questions in Open items (control-file review, `speed` check, channel/gate columns). Do not rerun any run before they answer.
+Check O8 jobs 25994245 (corrections), 25994248 (scoring), 25994249 (scaling) with `sacct -j 25994245,25994248,25994249 -X`. When all are COMPLETED, run `<venv python> -I experiments/benchmarks/06_cytether-cytobatchflagr/07b_fig_op.py experiments/runs/20261111_t6_op_sc/scores`, open `fig_op.png`, read `reading_rule.csv`, and apply the O8 rule (plan row O8). Label the result "same data, new metrics and held-out pairs", not out-of-sample.
 
 ## State
-- Uncommitted: 120 paths (all work this session; the user has not asked for a commit).
-- Tests: full suite 1847 expectations, 11 known failing older files (annotate, assistant, batch_correct, cluster, composable_pipeline, differential, gate, gating_utils, pipeline, qc, targets_backend); the same 11 failed at the original commit by count, not compared by name. New test files pass (dashboard 112, report 152, figures 122).
-- Run: finished runs in `experiments/runs/2026-11-09_*` (never edit). Current dashboards: `experiments/runs/2026-11-09_dashboard_v3/`. Run via SLURM (account div2-para, partition all) with `pixi run Rscript`.
-- Results: Mendeley, OMIP-109, OMIP-069v2 cells and beads, and the correction run all completed — see `experiments/benchmarks/RESULTS.md` for inspected figure paths per conclusion.
-- Assumed, not run: speed ("fast" vs "slow") takes effect in AutoSpectral's joint pipeline; the runner's new `report/dashboard.html` step end to end; dashboards in browsers other than Firefox; that the 11 failing files are the same by name as at the original commit.
-- Shiny app left running in the background on this node (127.0.0.1:38211); stop with `pkill -f serve.R`.
+- Uncommitted: O8 plan row in `plans/cytether_t6_cytobatchflagr_plan.md`; new `experiments/benchmarks/06_cytether-cytobatchflagr/07b_fig_op.py`; this file. Pre-existing, not this work: `experiments/datasets/registry.csv`, untracked `man/*.Rd`, `__pycache__/`.
+- Tests: pass — corrector_heb 51, corrector_heb_shared 18, corrector 66 (`pkgload::load_all` with `R_LIBS=.../Rlib_competitors`; devtools needs newer rlang).
+- Run: all compute on SLURM via `experiments/slurm/run_lines.sbatch`; generators in `experiments/runs/20261110_slurm_lists/` (git-ignored), O8 lists from `make_op_sc_lists.py`.
+- Package: F12 `scale_model = "none" | "log_sd"` (required, no default) — REML mixed model on per-aliquot log SD, cells x' = c + exp(−δ_b)(x − shift − c); A13 `anchor_batches = "all" | "unreferenced"` (required when anchors given).
+- Results: T6 held-out EMD per fold (tcs3, tcs4, tcu1, tcu2) — heb_kv_bap 5.40/4.37/4.99/4.99; sc 5.24/4.21/4.66/4.71; sc_cl 4.87/4.11/4.29/4.50; cycombine_ref 5.11/4.51/4.50/4.64 — `experiments/runs/20261111_t6_emd_cluster/scores/fig_emd.png`
+- Results: shape (spread) explains 51% of the heb_kv_bap − cycombine_ref EMD gap; MAD-ratio scale prototype made total EMD worse — `experiments/runs/20261111_t6_emd_decompose/fig_emd_decompose.png`
+- Results: F12 on synthetic costs +0.0007 to +0.0011 held-out RMSE vs lead (passes) — `experiments/runs/20261111_sc_s17/scored/summary/primary.png`
+- Results: A13 anc_u passes every anchor rule on dev, shrink, S17, S18, S18w — `experiments/runs/20261111_anc_u_s17/scored/summary/primary.png`, `experiments/runs/20261111_s17_mismatch_u/fig_mismatch.png`
+- Flag: sc_cl tcs4 fell back to stage 1 for 136,200 cell-markers (sub-clusters without an effect); unsplit populations differ from the plain sc run by ~9e-7 (refit noise).
+- Flag: T6 methods were tuned on these 18 batches (F9–F13); every T6 win risks overfitting until Z247 or another dataset confirms it. EMD is the only T6 metric scored for sc/sc_cl so far.
+- Flag: S17 anc_u anchor-only (nd0) cov90 0.43 — table fallback: `experiments/runs/20261111_anc_u_s17/scored/scores.csv`, no class-coverage figure.
 
 ## Locked decisions
-- Settings for OMIP runs: OLS + AutoSpectral fast + slow, seed 1, 50,000 events, pseudo-log sigma 1000, 200 bins — user, 2026-11-09.
-- OMIP-069v2: one control file `experiments/benchmarks/03_omip069v2-40color/control_combined.csv`, two runs (cells set, beads set), both unmixed — user, 2026-11-09.
-- SIF limits: warn 4, fail 6 (AutoSpectral article 01), passed explicitly via `sw_unmix_limits_autospectral()`; other metrics stay not_judged — user, 2026-11-09.
-- The seven `sw_unmix_assess_*`/`sw_unmix_compare*` wrappers are internal; roadmap B3 to B10 parked; flowstate and batch-side code frozen — user, 2026-11-09.
-- `sw_pipeline_run_all` defaults (cofactor 6000, n_metaclusters 20, seed 42, gate_node "lymphocytes", unmix_method "AutoSpectral") stay as they are — user, 2026-11-09.
-- Dashboard: HTML file plus Shiny app; what-if SIF sliders display-only; several runs side by side; AutoSpectral tab uses tables interactively and links the images (not embedded); no variants view — user, 2026-11-09.
-- Standing: wrap AGPL/GPL code, never copy; impactful choices are required arguments with no default; plot-first (cite an inspected figure or write `unsupported`); no commits unless asked.
+- Plans: `plans/cytether_t6_cytobatchflagr_plan.md` (N1–N7, O1–O8, S1–S4), `plans/cytether_fix_plan.md` (F1–F13), `plans/cytether_anchor_plan.md` (A0–A13, leak rule) — user, 2026-11-09/11.
+- F12 log-SD scale term; F13 sub-clusters k = max(1, min(4, floor(median calibrating cells per aliquot / 100))), SOM seed 1, rlen 10, fallback to stage 1 — user, 2026-11-11.
+- O8 rule: sc_cl ≥ cycombine_ref mean scaled score in ≥ 3 of 4 folds, and no biology metric more than 0.10 below cycombine_ref pooled — user, 2026-11-11.
+- All compute on SLURM; max 5 concurrent jobs. Test seeds 431–440 and Z247 sealed; only `evaluate.py` and `diag_mismatch.py` read truth; impactful choices need an approved plan row; plot-first.
 
 ## Dead ends — do not redo
-- Renaming bead variants in place after extraction — the variants object has many name-keyed parts; the runner now derives a per-set control file instead (`experiments/benchmarks/_common/run_unmix.R`).
-- SIF as the largest entry per row of the hotspot matrix — Mage et al. define SIF as the diagonal only; code now uses the diagonal.
-- `sw_unmix_sample_events` on all unmixed files unaligned — OLS output has no AF channels; align on shared `-A` channels.
+- MAD-ratio scale prototype (S1–S4) — worse total EMD; replaced by F12 log-SD model.
+- Boundary prior alone (F6, c022) — residual collapses instead.
+- Anchors in every batch (A0–A10 anc) and anchor discrepancy tau_d (A11 anc_d) on S17 — mode mismatch, slope −0.95.
+- Exact CD3-relativisation; pre-normalising channels by CD3; cyCombine `correct_data` matrix path.
 
 ## Read first
-- `experiments/benchmarks/RESULTS.md` — results and open items.
-- `ROADMAP.md` — tracks, gold-standard rules, register of user choices, unconfirmed defaults table.
-- `R/unmix_report.R` (`max_sif`, `sw_unmix_limits_autospectral`), `R/unmix_dashboard.R`, `R/unmix_dashboard_data.R`, `inst/dashboard/dashboard.html`, `R/unmix_app.R`.
-- `PROGRESS.md` Session 14 — what changed this session.
+- `plans/cytether_fix_plan.md` rows F12, F13; `plans/cytether_t6_cytobatchflagr_plan.md` row O8.
+- `R/corrector_heb.R` (`.sw_heb_fit_designs`, `.sw_heb_scale`), `R/corrector.R` (`.sw_apply_effects` scale step).
+- `experiments/benchmarks/06_cytether-cytobatchflagr/correct_lib.R` (`run_heb_subclusters`), `07b_fig_op.py`.
+- Ledger: `/exports/para-lipg-hpc/mdmanurung/spectraweaver_testdata/tusoskill_runs/cytether_heb_20261109/experiments/results.jsonl` (c020–c024; c025+ not logged).
 
 ## Open items
-- Review the OMIP-109 control file (4 blank markers, AF `universal.negative` empty, cFluor BYG750 fell back to the legacy path on unreviewed gates), then rerun into a new folder — needs the user's go; lean (not a decision): review and rerun.
-- Check whether `speed` takes effect in the joint pipeline; if not, relabel fast vs slow — needs the user's go; lean (not a decision): check first, it is read-only.
-- Drop the filled `channel` and gate columns from the OMIP-069v2 control file (article 02) and rerun — needs the user's go; lean (not a decision): drop only if AutoSpectral 1.8.8's automated path ignores them.
-- Nineteen pre-existing defaults on impactful choices are listed in ROADMAP as unconfirmed — return when the user confirms each; lean (not a decision): confirm in one table.
-- Run-folder gaps: the SpectraWeaveR sha in `provenance.csv` is NA; runs lack uniform `sessionInfo.txt` — return at the next runner edit.
-- Benchmark 01 README may still carry draft wording; the OMIP-109 dashboard tabs were not inspected.
+- O8 result — see Next action.
+- Move sub-clustering (F13) into the package — needs a user decision and plan row.
+- T6 strip array 25992174 failed; dependants 25992175, 25992197 at DependencyNeverSatisfied — scancel, read logs, fix, resubmit.
+- N1–N3 HEB candidates — rescore (3 FAILED tasks in 25991343).
+- Ledger records c025+ (anc, anc_d, anc_u, sc, sc_cl) — not logged.
+- EMD non-inferiority margin vs CytoNorm/cyCombine — needs user plan row.
+- Independent test on Z247 — sealed until the final audit.
