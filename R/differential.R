@@ -509,12 +509,14 @@ sw_diff_expression <- function(corrected, meta, group_col,
 
     all_results[[as.character(cl)]] <- tibble::tibble(
       cluster    = cl,
-      marker     = rownames(tab),
+      # topTable drops row names for a single marker ("1"); sort.by = "none"
+      # keeps the row order of t(med_sub), i.e. colnames(med_sub).
+      marker     = colnames(med_sub),
       logFC      = tab[["logFC"]],
       pvalue     = tab[["P.Value"]],
       adj_pvalue = tab[["adj.P.Val"]],
-      mean_A     = mean_A[rownames(tab)],
-      mean_B     = mean_B[rownames(tab)]
+      mean_A     = mean_A[colnames(med_sub)],
+      mean_B     = mean_B[colnames(med_sub)]
     )
   }
 
