@@ -1,18 +1,19 @@
 # Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
 
-**Written:** 2026-11-11 (after the four-gap round) · **Branch:** worktree-cytoscan-diagnostics @ 35591aa + uncommitted G38 · **Status:** G37 committed; ranking fix G38 uncommitted; ledger 125/150
+**Written:** 2026-11-11 (after the four-gap round) · **Branch:** worktree-cytoscan-diagnostics @ fcb4ecc + uncommitted G39 · **Status:** G38 committed; scorecard G39 run, uncommitted; ledger 126/150
 
 ## Check first
-Run `git log --oneline 35591aa..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
+Run `git log --oneline fcb4ecc..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
 
 ## Goal
 Active /goal: "work autonomously until we can consistently diagnose for any technical problems including but not limited to batch effects extensively". Bar per fault class: real-file AUROC mean >= 0.90, lower 95% CI >= 0.80 (D1). tusoskill ledger target 150 (G4); stop gate: `/usr/bin/python3.12 /home/mdmanurung/.claude/skills/tusoskill/scripts/biomni_method_state.py stop-check --root experiments/runs/2026-11-09_tusoskill`.
 
 ## Next action
-Commit G38 when the user asks. Then the W2 scorecard (advised to the user 2026-11-11: one met / not met / untested table per fault class from `reference/figures/*-source.csv`, then `final_round3.md`), then a second dataset decision (W8, D5). Nothing is running.
+Commit G39 when the user asks. Then, with the user: shuffled-label nulls for the 18 "met (null untested)" rows, or a second dataset decision (W8, D5). Nothing is running.
 
 ## State
-- G38 (2026-11-11, uncommitted): `bimodality_z` added to `.sw_signed_checks`; `spread_z` and `rest_emd_z` stay one-sided on purpose (comment in `R/diagnose.R`); test-diagnose 39 pass.
+- G39 scorecard (2026-11-11, uncommitted): 1 met, 18 met (null untested), 13 not met, 6 observed only — `reference/figures/scorecard.png`, `reference/figures/scorecard-source.csv`; script `experiments/benchmarks/11_scorecard/run.R` with `scorecard_map.csv`; run `experiments/runs/2026-11-11_scorecard-v2` (v1: same numbers, unlabelled frozen row, clipped label); report `experiments/runs/2026-11-09_tusoskill/reports/final_round3.md`.
+- G38 (2026-11-11, committed fcb4ecc): `bimodality_z` added to `.sw_signed_checks`; `spread_z` and `rest_emd_z` stay one-sided on purpose (comment in `R/diagnose.R`); test-diagnose 39 pass.
 - G37 rolling and bridge reference (2026-11-11, committed 35591aa): no arm meets the rule. Means over 4 bridge controls, false flags at |z| >= 3: frozen 10.9%, rolling 9.7%, bridge 14.8%, in-sample 5.7%; 80% fault AUROC 0.88 / 0.59 / 0.93; only tcu1 as bridge lowers flags (8.5%, AUROC 0.90, wide CI); excess sits in batches 11, 14, 15, 17 — `reference/figures/rolling_bridge_cutoff.png`, `reference/figures/rolling_bridge_null_z.png`; run `experiments/runs/2026-11-11_rolling-bridge`.
 - G36 frozen calibration (2026-11-11, committed fdccbbc): clean later batches give frozen |z| >= 3 in 9.4% of file x marker values (reference in-sample 4.1%, cohort 5.2%), no time trend (Spearman 0.12/0.03); hit marker 75% vs 1% cohort at |z| >= 3 — `reference/figures/frozen_cutoff.png`, `reference/figures/frozen_null_z.png`; run `experiments/runs/2026-11-11_frozen-calibration`. Stop rule applied: documented limit.
 - Round G20–G35 (2026-11-10/11), committed 7d2fea7..74e456d: (A) `bimodality`/`bimodality_z` in `sw_fcs_signal_audit` — 07 split 0.58, dip fallback 0.51 (not packaged); real 1.00/0.65/0.85 at 0.5/1/1.5 SD, only on already-bimodal markers — `reference/figures/bimodal_sim_tools.png`, `reference/figures/bimodal_limits_real.png`; runs `experiments/runs/2026-11-10_{bimodal-07,bimodal-limits-real,dip-07,dip-limits-real}`. (B) `min_separation` gate in `sw_negative_audit` (per-channel median, `split_ok`), 10 of 40 Aurora channels scored, 06/08/14 AUROC identical — `reference/figures/negative_gate.png`; run `experiments/runs/2026-11-10_negative-gate`. (C) `rest_emd`/`rest_emd_z` in `sw_batch_scores` — CBF batch split 0.48/0.60 at 0.5/1 SD, `pair_emd` 0.50 at 20 seeds (the 0.68 was 5-seed noise) — `reference/figures/cbf_batch_rest.png`; run `experiments/runs/2026-11-10_cbf-batch-rest`. (D) `sw_signal_reference_fit/save/load` + required `reference` arg on `sw_fcs_signal_audit` — 80% faulty: frozen 0.93 ± 0.06 vs cohort 0.16, nulls 0.51 — `reference/figures/frozen_reference.png`; run `experiments/runs/2026-11-10_frozen-reference`.
@@ -55,10 +56,10 @@ Commit G38 when the user asks. Then the W2 scorecard (advised to the user 2026-1
 - `plans/2026-11-10_diagnostics-next.md` — decisions and plan.
 - `reference/diagnostics.qmd` — coverage table and every real-data result with figures.
 - `plans/2026-11-09_faust-wrapper.md` — FAUST plan.
-- `experiments/runs/2026-11-09_tusoskill/reports/final_round2.md` — outdated; write `final_round3.md` at the end.
+- `experiments/runs/2026-11-09_tusoskill/reports/final_round3.md` — scorecard report (replaces round 2).
 
 ## Open items
-- Ledger 125 → 150: 25 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
+- Ledger 126 → 150: 24 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
 - Frozen reference: offset doubles clean false flags (G36); rolling and single-file bridge do not fix it (G37). A bridge averaging several files per batch is untested. lean (not a decision): document, do not pursue without new bridge data.
 - `fig_batch_rest.png` and `fig_frozen_reference.png` have a clipped x label (cosmetic).
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.

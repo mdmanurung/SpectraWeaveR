@@ -69,6 +69,30 @@ shiny::runApp(sw_qc_app(dx, n = 15, qc_report = NULL))
 
 The numbers above are illustrative. They are not recommended values.
 
+## Scorecard against the bar
+
+`experiments/benchmarks/11_scorecard/` reads the saved real-file results, with
+no reruns, and gives each fault class and dataset a status under the bar: mean
+AUROC 0.90 or more, lower 95% CI 0.80 or more, at least 5 seeds and a
+shuffled-label null at 0.55 or less. Sizes follow the agreed list (1 SD shift,
+x1.5 stretch, 15% leak, 0.5 SD batch shift, x1.3 batch stretch, 0.5 SD batch
+drift); other classes use the smallest size tested on real files. The check is
+the one built for the fault, fixed in advance.
+
+Of 32 class-and-dataset rows with an AUROC, 19 reach the mean and lower-CI bar
+(`figures/scorecard.png`). Only one of them, a fault most files share under the
+frozen reference, also has a measured null (0.51); the other 18 are "met (null
+untested)". Thirteen rows miss the bar: all markers widened, composition
+changes, batch stretch and drift, spread at 0.5 negative SD, doublets at
+quantile 0.95, and every two-mode split except the Aurora row. That row reaches
+1.00 only because its markers already had two populations; at ±1 SD it scores
+0.65. All CBF rows miss, except the doublets at quantile 0.99 and the frozen
+reference. Six classes (header, instrument gain and batch, gate, gain drift, a
+weak CD3 anchor) are observed on real data with no AUROC. The table with each
+row's source is `figures/scorecard-source.csv`.
+
+![Scorecard: AUROC of the designed check per fault class and dataset, coloured by status under the bar](figures/scorecard.png)
+
 ## Coverage at a glance
 
 One row per fault class: the check that finds it best, its AUROC in simulation

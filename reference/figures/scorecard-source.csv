@@ -1,0 +1,39 @@
+"class","dataset","size","check","auroc","ci95_half","lower","n_seeds","seeds_checked","null_auroc","best_check","best_auroc","status","note"
+"Saturation","Aurora","5% of events","saturation_share",1,0,1,5,"script",NA,"saturation_share",1,"met (null untested)",NA
+"Dead channel","Aurora","one channel","zero_variance",1,0,1,5,"script",NA,"zero_variance",1,"met (null untested)",NA
+"Missing or infinite values","Aurora","2% of events","nonfinite_share",1,0,1,5,"script",NA,"nonfinite_share",1,"met (null untested)",NA
+"Clog / event-rate drop","Aurora","80% drop over 30% of run","rate_cv",1,0,1,5,"script",NA,"rate_cv",1,"met (null untested)",NA
+"Drift within a file","Aurora","1 SD over the run","time_trend",1,0,1,5,"script",NA,"time_trend",1,"met (null untested)",NA
+"Debris spike","Aurora","10% of events","corr_shift",1,0,1,5,"script",NA,"corr_shift",1,"met (null untested)",NA
+"Spillover between two channels","Aurora","slope 0.3","corr_pair_z",0.986008230452675,0.0274238683127572,0.958584362139918,5,"script",NA,"corr_pair_z",0.986008230452675,"met (null untested)",NA
+"Doublets (quantile 0.99)","CBF","2% of events","area_height_z",1,0,1,5,"script",NA,"area_height_z",1,"met (null untested)",NA
+"Doublets (quantile 0.95)","CBF","2% of events","area_height_z",0.678189300411523,0.060377432605794,0.617811867805729,5,"script",NA,"area_height_z",0.678189300411523,"not met",NA
+"One-marker shift","Aurora","1 SD (D2)","injected marker only (oracle)",0.949794238683128,0.0498924571049804,0.899901781578148,10,"script",NA,"injected marker only (oracle)",0.949794238683128,"met (null untested)","the hit marker's own row"
+"One-marker stretch","Aurora","x1.5 (D2)","injected marker only (oracle)",0.938271604938272,0.0481104264867376,0.890161178451534,10,"script",NA,"injected marker only (oracle)",0.938271604938272,"met (null untested)","the hit marker's own row"
+"All markers widened","Aurora","x1.1","global_sd_z",0.821399176954733,0.0373649716064607,0.784034205348272,5,"script",NA,"global_sd_z",0.821399176954733,"not met",NA
+"All markers widened","CBF","x1.1","global_sd_z",0.555349794238683,0.0590013842119141,0.496348410026769,5,"script",NA,"global_sd_z",0.56656378600823,"not met",NA
+"Two-mode split (one marker)","Aurora","+/-0.5 SD","bimodality_z",0.995884773662551,0.00624777560375848,0.989636998058793,5,"script",NA,"bimodality_z",0.995884773662551,"met (null untested)","only on markers that already have two populations; 0.65 at 1 SD"
+"Two-mode split (one marker)","CBF","+/-0.5 SD","emd_z",0.468312757201646,0.0977107961537893,0.370601961047857,5,"script",NA,"emd_z",0.468312757201646,"not met","bimodality_z not run on CBF"
+"Change in a rare population","Aurora","+1 SD in the smallest cluster","cluster_median_z_hitrow",0.945679012345679,0.0843796733761948,0.861299338969484,5,"script",NA,"cluster_median_z_hitrow",0.945679012345679,"met (null untested)","the hit cluster's own row"
+"Composition (smallest cluster)","Aurora","50% removed","cluster_freq_z_hitrow",0.553497942386831,0.078471166196244,0.475026776190587,5,"script",NA,"cluster_freq_z_hitrow",0.553497942386831,"not met",NA
+"Composition (largest cluster)","Aurora","50% removed","cluster_freq_z_hitrow",0.817695473251029,0.0941287751992634,0.723566698051766,5,"script",NA,"cluster_freq_z_hitrow",0.817695473251029,"not met",NA
+"Composition (smallest cluster)","CBF","50% removed","freq_z_hitrow",0.474279835390947,0.0161316872427983,0.458148148148149,5,"script",NA,"freq_z_hitrow",0.481224279835391,"not met",NA
+"Composition (largest cluster)","CBF","50% removed","freq_z_hitrow",0.538168724279835,0.0979512359836792,0.440217488296156,5,"script",NA,"freq_z_hitrow",0.707818930041152,"not met",NA
+"Negative population shifted","Aurora","1 SD (D2)","neg_median_z",1,0,1,5,"script",NA,"neg_median_z",1,"met (null untested)","10 of 40 channels (separation >= 3)"
+"Negative population widened","Aurora","x1.5","neg_sd_z",1,0,1,5,"script",NA,"neg_sd_z",1,"met (null untested)","10 of 40 channels (separation >= 3)"
+"Hyper-negative events","Aurora","3% of events","hyper_negative_share",1,0,1,5,"script",NA,"hyper_negative_share",1,"met (null untested)","10 of 40 channels (separation >= 3)"
+"Angled negative","Aurora","slope 0.3","neg_corr_z",0.932098765432099,0.105474591720243,0.826624173711856,5,"script",NA,"neg_corr_z",0.932098765432099,"met (null untested)","10 of 40 channels (separation >= 3)"
+"Spillover spread into a negative","Aurora","0.5 negative SD","spread_z (source > target)",0.758487654320988,0.133912274000897,0.624575380320091,5,"script",NA,"spread_z (source > target)",0.758487654320988,"not met","0.98 at 1 negative SD"
+"Leak into a negative channel","Aurora","15% (D2)","spill_corr_z (source > target)",0.940516273849607,0.104908768907126,0.835607504942481,5,"script",NA,"spill_corr_z (source > target)",0.940516273849607,"met (null untested)",NA
+"Batch shift (one marker)","Aurora","0.5 SD (D2)","pair_emd",0.92051282051282,0.070855795770617,0.849657024742203,10,"script",NA,"pair_emd",0.92051282051282,"met (null untested)",NA
+"Batch stretch (one marker)","Aurora","x1.3 (D2)","spread_ratio",0.869230769230769,0.105538461538462,0.763692307692307,10,"script",NA,"spread_ratio",0.869230769230769,"not met",NA
+"Drift across a batch","Aurora","0.5 SD (D2)","order_rho",0.858974358974359,0.13511198051556,0.723862378458799,10,"script",NA,"order_rho",0.858974358974359,"not met",NA
+"Batch split into two modes","Aurora","+/-0.5 SD","spread_ratio",0.648717948717949,0.15427435565738,0.494443593060569,10,"script",NA,"pair_emd",0.784615384615385,"not met","0.99 at +/-1 SD"
+"Batch split into two modes","CBF","+/-0.5 SD","rest_emd_z",0.477083333333333,0.102700415605279,0.374382917728054,20,"run argument",0.427083333333333,"pair_emd",0.502083333333333,"not met",NA
+"A fault most files share","CBF","+1 SD in 80% of files","frozen",0.924630541871921,0.0577887140680816,0.866841827803839,10,"run argument",0.509852216748768,"frozen",0.924630541871921,"met","offset to later batches doubles clean false flags (G36)"
+"Header / keyword mismatch","Glehr and Aurora","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","all 9 Fortessa files flagged on $CYT $PnR $PnV; 4 Aurora files on $PnV and $DATE"
+"Instrument offset and gain per batch","Glehr","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","Aurora gains 2.0-2.4x; Fortessa 0.06-0.39x"
+"Instrument batch per marker","Glehr","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","eta2 0.88 / 0.82 before CD3 relativisation; 0.07 / 0.017 after"
+"Gate misplaced or failed transfer","Glehr","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","density gate F1 0.955-0.999; failed transfer keeps 100% of events"
+"Instrument gain drift over dates","CBF","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","CD3 gain rho -0.52 over two years"
+"Weak CD3 anchor in a control","Glehr","real",NA,NA,NA,NA,NA,NA,NA,NA,NA,"observed on real data, no AUROC","Fortessa KrO-A separation 1.13-1.21"
