@@ -31,8 +31,14 @@ T6_METHODS <- c(
   "heb_bap",
   "cycombine_ref",
   "heb_kv_bap_anc",
-  "heb_kv_bap_sc"
+  "heb_kv_bap_sc",
+  "heb_kv_bap_sc_cl"
 )
+# heb_kv_bap_sc_cl (plan F13): heb_kv_bap_sc refitted on sub-clusters of each population
+SUBCLUSTER_K_MAX <- 4 # F13 Q2
+SUBCLUSTER_CELLS_PER_K <- 100 # F13 Q2: calibrating cells per aliquot per sub-cluster
+SUBCLUSTER_SEED <- 1 # F13 Q2
+SUBCLUSTER_RLEN <- 10 # as cycombine_ref (adapter_cycombine_ref.R)
 # cytofin_pop: F2; heb_kv_bap: F9; heb_kv, heb_bap: ablation N4; cycombine_ref: F11 (fit on reference cells only);
 # heb_kv_bap_anc: heb_kv_bap plus internal anchors (anchor plan A8), needs 'anchors'
 
@@ -101,6 +107,9 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
         " within each population; abstained = raw cells"
       )
     ))
+  }
+  if (method == "heb_kv_bap_sc_cl") {
+    return(run_heb_subclusters(x, meta, population, markers))
   }
   # cyTether engines: fit on reference cells, integrate every cell with abstention.
   samples <- meta |>
@@ -221,5 +230,68 @@ correct_t6 <- function(x, meta, population, method, markers, anchors = NULL) {
     reason = paste("engine", method),
     fits_on_heldout = FALSE,
     effects = out$model$effects
+  )
+}
+
+# Plan F13: (1) heb_kv_bap_sc on the gated populations; (2) per population, a k-unit SOM on the stage-1
+# corrected calibrating cells, all cells mapped, so batch shifts do not set membership; (3) heb_kv_bap_sc
+# on the raw values with population:subcluster labels; cells of a sub-cluster without an effect keep their
+# stage-1 value (Q3).
+run_heb_subclusters <- function(x, meta, population, markers) {
+  stage1 <- correct_t6(x, meta, population, "heb_kv_bap_sc", markers)
+  x1 <- stage1$x
+  calib <- meta$is_reference & !meta$is_holdout_reference
+  sub <- rep(1L, length(population))
+  k_log <- character()
+  for (p in sort(unique(population))) {
+    rows <- which(population == p)
+    cal_rows <- rows[calib[rows]]
+    per_aliquot <- stats::median(table(meta$sample_id[cal_rows]))
+    k <- max(
+      1L,
+      min(SUBCLUSTER_K_MAX, floor(per_aliquot / SUBCLUSTER_CELLS_PER_K))
+    )
+    k_log <- c(k_log, sprintf("%s:%d", p, k))
+    if (k == 1) {
+      next
+    }
+    set.seed(SUBCLUSTER_SEED)
+    som <- kohonen::som(
+      x1[cal_rows, markers, drop = FALSE],
+      grid = kohonen::somgrid(xdim = k, ydim = 1, topo = "rectangular"),
+      rlen = SUBCLUSTER_RLEN
+    )
+    sub[rows] <- kohonen::map(
+      som,
+      newdata = x1[rows, markers, drop = FALSE]
+    )$unit.classif
+  }
+  labels <- paste(population, sub, sep = ":")
+  stage3 <- correct_t6(x, meta, labels, "heb_kv_bap_sc", markers)
+  # Fallback: (batch, sub-cluster, marker) without an effect leaves raw values; use stage 1 there.
+  eff <- stage3$effects
+  out <- stage3$x
+  n_fallback <- 0L
+  for (m in markers) {
+    has <- paste(meta$batch, labels) %in%
+      paste(eff$batch, eff$population)[eff$marker == m]
+    out[!has, m] <- x1[!has, m]
+    n_fallback <- n_fallback + sum(!has)
+  }
+  # Unsplit populations (k = 1) keep stage 1 exactly; the refit pools variance over other designs.
+  unsplit <- population %in%
+    sub("^(.*):1$", "\\1", grep(":1$", k_log, value = TRUE))
+  out[unsplit, ] <- x1[unsplit, ]
+  list(
+    x = out,
+    supported = TRUE,
+    abstained = stage3$abstained,
+    reason = sprintf(
+      "heb_kv_bap_sc on sub-clusters (k per population %s); fallback cell-markers to stage 1: %d",
+      paste(k_log, collapse = " "),
+      n_fallback
+    ),
+    fits_on_heldout = FALSE,
+    effects = eff
   )
 }
