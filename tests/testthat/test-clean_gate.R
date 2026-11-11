@@ -571,6 +571,35 @@ test_that("margin_range sets the range of fluorescence channels, scatter keeps t
   expect_equal(removed_by_margins(c(-1e4, 5e5)), 13)
 })
 
+test_that("a margin_range minimum above 0 warns and gives the same audit as 0", {
+  skip_if_no_clean_stack()
+  m <- make_clean_ff()
+  warnings_of <- function(margin_range) {
+    msgs <- character()
+    res <- withCallingHandlers(
+      run_clean_warn(m$ff, margin_range = margin_range),
+      warning = function(w) {
+        msgs <<- c(msgs, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(res = res, msgs = msgs)
+  }
+  positive <- warnings_of(c(500, 1e7))
+  zero <- warnings_of(c(0, 1e7))
+
+  # The warning names margin_range and the value, and says PeacoQC reads it as 0.
+  hit <- grepl("'margin_range' lower limit is 500", positive$msgs, fixed = TRUE)
+  expect_equal(sum(hit), 1)
+  expect_match(positive$msgs[hit], "reads a lower limit above 0 as 0", fixed = TRUE)
+  # A lower limit of 0 raises no such warning.
+  expect_false(any(grepl("'margin_range' lower limit", zero$msgs, fixed = TRUE)))
+
+  # The run continues and the counts equal those of margin_range[1] = 0.
+  expect_equal(positive$res$audit, zero$res$audit)
+  expect_equal(positive$res$parameters$margin_range, c(500, 1e7))
+})
+
 # Frame lists for the margin and PeacoQC error tests: b is the one that fails.
 two_samples <- function() {
   list(a = make_clean_ff(1)$ff, b = make_clean_ff(2, n_cells = 2500)$ff)

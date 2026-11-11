@@ -21,7 +21,8 @@ NULL
       "fluorescence channel. PeacoQC removes an event at or beyond a limit in ",
       "any fluorescence channel, and the event at the observed minimum or ",
       "maximum of a channel. Scatter channels keep the range stored in the ",
-      "FCS file. A lower limit above 0 is read as 0."
+      "FCS file. PeacoQC reads a lower limit above 0 as 0; sw_clean_run() ",
+      "warns and continues."
     ),
     how = paste0(
       "Look at the raw fluorescence densities and the share of events flagged ",
@@ -234,8 +235,12 @@ NULL
 #'   every fluorescence channel; two finite numbers with \code{min} below
 #'   \code{max}. Scatter channels keep the range stored in the FCS file. It
 #'   is passed to \code{PeacoQC::RemoveMargins()} as the \code{minRange} and
-#'   \code{maxRange} of every fluorescence channel (see Details). The value
-#'   sets how many events every later step sees. The user approved it as a
+#'   \code{maxRange} of every fluorescence channel (see Details). PeacoQC reads
+#'   a lower limit above 0 as 0 (\code{min(minRange, 0)}), so when
+#'   \code{margin_range[1]} is above 0 the function warns, naming
+#'   \code{margin_range} and the value, and continues; the result is the same
+#'   as with a lower limit of 0. The value sets how many events every later
+#'   step sees. The user approved it as a
 #'   required argument in the 2026-11-11 session, because PeacoQC's own default
 #'   ranges (the FCS parameter ranges) flagged almost all events in a smoke
 #'   run (sources in Details).
@@ -298,7 +303,9 @@ NULL
 #' \strong{The margin step removes more than events on the range limit.}
 #' PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
 #' and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
-#' \code{e < min(maxRange, max(e))}. A lower limit above 0 therefore acts as 0.
+#' \code{e < min(maxRange, max(e))}. A lower limit above 0 therefore acts as 0:
+#' \code{sw_clean_run()} warns when \code{margin_range[1]} is above 0 and
+#' continues.
 #' The package wrapper \code{sw_filter_margins_peacoqc()} picks these channels
 #' with \code{sw_channel_is_signal()}, which leaves out \code{Time},
 #' \code{Original_ID}, \code{File}, \code{SampleID} and \code{AF Index} by
@@ -664,6 +671,21 @@ sw_clean_run <- function(
     counts[[step]] <<- n
   }
   record("raw", ffs)
+
+  # PeacoQC::RemoveMargins() uses min(minRange, 0), so a lower limit above 0
+  # is read as 0. Tell the caller and continue with the value as given; the
+  # audit is the same as for margin_range[1] = 0.
+  if (margin_range[1] > 0) {
+    warning(
+      "'margin_range' lower limit is ",
+      format(margin_range[1]),
+      ", above 0. PeacoQC::RemoveMargins() reads a lower limit above 0 as 0, ",
+      "so margin_range[1] = ",
+      format(margin_range[1]),
+      " acts as 0. The run continues.",
+      call. = FALSE
+    )
+  }
 
   # --- 1. Margins (raw scale) --------------------------------------------
   # margin_range reaches PeacoQC::RemoveMargins() as channel_specifications:
