@@ -242,7 +242,10 @@ sw_gate_template <- function(output_file, template_type = "lymphocyte",
 #' Full openCyto gating workflow: loads FCS files into a GatingSet, applies
 #' optional transformation, and runs hierarchical gating using a CSV template.
 #'
-#' @param fcs_files Character vector of FCS file paths.
+#' @param fcs_files Character vector of FCS file paths, or a
+#'   \code{flowCore::flowSet} (or single \code{flowFrame}) already in memory.
+#'   Frames are used as given, so apply any transformation before the call
+#'   and leave \code{transform_channels} as \code{NULL}.
 #' @param gating_template Character path to a CSV gating template file
 #'   (see \code{\link{sw_gate_template}}).
 #' @param transform_channels Character vector of channel names to transform.
@@ -289,8 +292,11 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
     stop("Package 'openCyto' is required.", call. = FALSE)
   }
 
-  if (!is.character(fcs_files) || length(fcs_files) == 0) {
-    stop("'fcs_files' must be a non-empty character vector.", call. = FALSE)
+  in_memory <- methods::is(fcs_files, "flowSet") ||
+    methods::is(fcs_files, "flowFrame")
+  if (!in_memory && (!is.character(fcs_files) || length(fcs_files) == 0)) {
+    stop("'fcs_files' must be a non-empty character vector or a flowSet.",
+         call. = FALSE)
   }
 
   if (!file.exists(gating_template)) {
@@ -310,8 +316,12 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
   }
 
   # Load FCS data
-  message("Loading FCS files...")
-  fs <- sw_io_read_fcs(fcs_files)
+  if (in_memory) {
+    fs <- fcs_files
+  } else {
+    message("Loading FCS files...")
+    fs <- sw_io_read_fcs(fcs_files)
+  }
   # A single file comes back as a flowFrame; GatingSet() needs a flowSet.
   if (methods::is(fs, "flowFrame")) {
     fs <- flowCore::flowSet(fs)
