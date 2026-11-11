@@ -117,7 +117,7 @@ sw_clean_run(
 | Argument | Description |
 |----------|-------------|
 | `x` | FCS file paths, a `flowFrame`, a `flowSet` or a list of `flowFrame`s. |
-| `debris_window` | Required, no default. Lower and upper FSC-A bound (raw scale) of the cut point of the nonDebris gate. Events below the cut are debris. Benchmark 05 used c(2e5, 1.5e6) with mindensity (reference only). |
+| `debris_window` | Required, no default. Lower and upper FSC-A limit (raw scale) of the events the nonDebris density is built from. openCyto drops events outside [min, max] before it looks for peaks and valleys, so the cut is a valley of the density of the events inside the window and lies inside it. Events below the cut are debris. Events above max are kept. If the window holds no valley, the cut falls on the lowest event in the window (a warning, and `cut_at_window_floor = TRUE` in `$gates`). Benchmark 05 used c(2e5, 1.5e6) with mindensity (reference only). |
 | `singlet_wider_gate` | Required, no default. Width of the openCyto singletGate on FSC-A against FSC-H. TRUE widens it and keeps more events near the edge. Benchmark 05 used TRUE (reference only). |
 | `pool_samples` | Required, no default. TRUE fits each gate once on the pooled events of all samples and applies it to every sample. FALSE fits one gate per sample. Benchmark 05 used TRUE (gates pooled over donors) (reference only). |
 | `viability_channel` | Required, no default. Channel of the viability dye. Dead cells are the high tail. Benchmark 05 used "LIVE DEAD NIR-A" (reference only). |
@@ -131,8 +131,10 @@ sw_clean_run(
 
 Steps run in this order: `sw_filter_margins_peacoqc()` on the raw scale, arcsinh on all fluorescence channels (`sw_transform_apply()`), `sw_qc_batch()` with the given `IT_limit` and `MAD`, then `sw_gate_run()` with a template of three gates: `nonDebris`, `singlets`, `live`. Scatter channels stay raw, so `debris_window` is in raw FSC-A units. Nothing runs after the live gate.
 
+The margin step removes the events at the observed minimum and maximum of every scatter and fluorescence channel of each sample (PeacoQC `RemoveMargins()` compares strictly against `min(e)` and `max(e)`), not only events on the instrument range limit. The `margins` row of `$audit` shows how many events it removed.
+
 If any required argument is missing, the function stops once. The message names every missing argument with what it controls, how to choose it, and the benchmark 05 value labelled "not a recommendation". No step runs first. A sample with no events left after a step stops the run.
 
 ### Value
 
-A list: `events` (live singlet flowFrames, arcsinh scale), `audit` (per sample and step: `n_events`, `n_removed`, percentages), `audit_total`, `gates` (per sample and gate), `qc` (PeacoQC summary with the limits used), `template` and `parameters`.
+A list: `events` (live singlet flowFrames, arcsinh scale), `audit` (per sample and step: `n_events`, `n_removed`, percentages), `audit_total`, `gates` (per sample and gate, with `cut_at_window_floor` for the `nonDebris` rows), `qc` (PeacoQC summary with the limits used), `template` and `parameters`.

@@ -17,14 +17,19 @@ NULL
 .sw_clean_args <- list(
   debris_window = list(
     controls = paste0(
-      "Lower and upper FSC-A bound (raw scale) of the cut point of the ",
-      "nonDebris gate. Events below the cut are debris."
+      "Lower and upper FSC-A limit (raw scale) of the events the nonDebris ",
+      "density is built from. openCyto drops events outside [min, max] ",
+      "before it looks for peaks and valleys, so the cut is a valley of the ",
+      "density of the events inside the window and lies inside it. Events ",
+      "below the cut are debris. Events above max are kept. If the window ",
+      "holds no valley, the cut falls on the lowest event in the window."
     ),
     how = paste0(
       "Plot raw FSC-A as a density and FSC-A against SSC-A (ggplot2::geom_hex() ",
       "on sw_io_ff_to_tibble(ff)). Debris is the low-FSC cloud beside the main ",
-      "cells. Look at one sample per batch, because the valley can move. Use ",
-      "Inf as the upper bound for no cap."
+      "cells. Look at one sample per batch, because the valley can move. The ",
+      "window must hold the valley you want. Use Inf as the upper bound to ",
+      "keep every event above min in the density."
     ),
     reference = "c(2e5, 1.5e6) with mindensity",
     example = "debris_window = c(<min>, <max>)"
@@ -199,10 +204,14 @@ NULL
 #'   \code{flowSet}, or a list of \code{flowFrame}s. A list or flowSet keeps its
 #'   names; otherwise samples are named after the files or \code{sample_<i>}.
 #' @param debris_window Numeric length 2; required, no default. Lower and
-#'   upper FSC-A bound (raw scale) of the cut point of the \code{nonDebris}
-#'   gate. It is written as \code{min} and \code{max} of the openCyto
-#'   \code{mindensity} method; use \code{Inf} for no upper bound. It sets
-#'   the debris boundary, so it changes every later count.
+#'   upper FSC-A limit (raw scale) of the events the \code{nonDebris} density
+#'   is built from. It is written as \code{min} and \code{max} of the openCyto
+#'   \code{mindensity} method, which drops events outside the window before
+#'   it looks for peaks and valleys (see Details). The cut is therefore a
+#'   valley of the density of the events inside the window and lies inside
+#'   it. Events below the cut are debris; events above \code{max} are kept.
+#'   Use \code{Inf} for no upper limit. It sets the debris boundary, so it
+#'   changes every later count.
 #' @param singlet_wider_gate Logical; required, no default. \code{wider_gate}
 #'   of the openCyto \code{singletGate}. \code{TRUE} keeps more events near the
 #'   edge of the singlet diagonal.
@@ -233,6 +242,41 @@ NULL
 #' channel specifications). The \code{debris_window} and the singlet gate act
 #' on raw scatter; the viability cut acts on the arcsinh scale.
 #'
+#' \strong{The margin step removes more than events on the range limit.}
+#' PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
+#' and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
+#' \code{e < min(maxRange, max(e))} (PeacoQC source; \code{Time} is not
+#' checked). Both comparisons are strict, so in each channel of each sample
+#' the events at the observed minimum and the observed maximum are removed,
+#' even when no event reaches the instrument range. The \code{margins} row of
+#' the \code{audit} table (\code{n_removed}) shows how many events this step
+#' removed per sample.
+#'
+#' \strong{What \code{debris_window} does.} The \code{nonDebris} gate is the
+#' openCyto \code{mindensity} method on FSC-A, called with \code{min} and
+#' \code{max} (only \code{min} when \code{max} is \code{Inf}). In the
+#' installed openCyto (2.18.0), \code{gate_mindensity()} starts with
+#' \code{fr <- .truncate_flowframe(fr, channels = channel, min = min, max = max)},
+#' and \code{.truncate_flowframe()} ends with
+#' \code{Subset(flow_frame, truncate_filter)}, a rectangle gate on
+#' \code{c(min, max)}. So the window sets the data range the density is built
+#' from; it is not a separate bound applied to the cut. The peaks and valleys
+#' come from that truncated vector \code{x}, with
+#' \code{gate_range <- c(min(x), max(x))}. With two or more peaks and
+#' valleys the cut is the deepest valley between the two highest peaks, or the
+#' deepest valley overall if none lies between them. The gate
+#' is \code{c(cutpoint, Inf)} on FSC-A, which keeps events at or above the
+#' cut, so events below \code{min} are always debris and events above
+#' \code{max} are never removed by this gate. With one peak, or no valley
+#' inside the window, openCyto sets
+#' \code{cutpoint <- ifelse(positive, gate_range[1], gate_range[2])}: the cut
+#' falls on the lowest event inside the window and removes nothing at or
+#' above \code{min}. \code{sw_clean_run()} reports this case: it warns and sets
+#' \code{cut_at_window_floor} to \code{TRUE} in the \code{gates} table. A
+#' window that leaves out the real valley can also put the cut at a different
+#' valley inside it, so check the \code{nonDebris} \code{definition} in the
+#' \code{gates} table against the FSC-A density.
+#'
 #' A sample with no events left after any step stops the run, with the
 #' sample and the step named. The run never skips a sample.
 #'
@@ -250,7 +294,10 @@ NULL
 #'     \item{\code{gates}}{Tibble, one row per sample and gate: \code{sample},
 #'       \code{gate}, \code{class}, \code{channels}, \code{definition}
 #'       (rectangle limits or polygon vertices) and \code{keeps} (\code{"inside"}
-#'       or \code{"outside"} the shape; the live gate keeps events outside).}
+#'       or \code{"outside"} the shape; the live gate keeps events outside) and
+#'       \code{cut_at_window_floor} (\code{nonDebris} rows only, \code{NA}
+#'       otherwise: \code{TRUE} when the cut sits on the lowest event inside
+#'       \code{debris_window} because no valley was found there).}
 #'     \item{\code{qc}}{The per-sample PeacoQC summary tibble of
 #'       \code{\link{sw_qc_batch}} (\code{sample}, \code{n_before},
 #'       \code{n_after}, \code{n_removed}, \code{pct_removed}), with the
@@ -260,24 +307,59 @@ NULL
 #'   }
 #'
 #' @examples
-#' \donttest{
-#' # Benchmark 05 values, shown for reference only; they are not defaults.
 #' if (all(vapply(c("flowCore", "flowWorkspace", "openCyto", "PeacoQC"),
 #'                requireNamespace, logical(1), quietly = TRUE))) {
+#'   # A small synthetic frame: cells, debris (low FSC-A), doublets (low
+#'   # FSC-H for their FSC-A) and dead cells (high viability dye).
+#'   set.seed(1)
+#'   n_cells <- 8000
+#'   n_debris <- 600
+#'   n_doublet <- 600
+#'   n_dead <- 800
+#'   fsc_a <- c(
+#'     rnorm(n_cells, 6e5, 3e4), rnorm(n_debris, 5e4, 1.5e4),
+#'     rnorm(n_doublet, 6e5, 3e4), rnorm(n_dead, 6e5, 3e4)
+#'   )
+#'   n <- length(fsc_a)
+#'   fsc_h <- fsc_a * 0.8 + rnorm(n, 0, 8000)
+#'   is_doublet <- seq_len(n) %in% (n_cells + n_debris + seq_len(n_doublet))
+#'   fsc_h[is_doublet] <- fsc_a[is_doublet] * 0.45
+#'   viability <- c(rnorm(n - n_dead, 1000, 600), rnorm(n_dead, 3e5, 5e4))
+#'   mat <- cbind(
+#'     "FSC-A" = fsc_a,
+#'     "FSC-H" = fsc_h,
+#'     "SSC-A" = abs(rnorm(n, 1e5, 2e4)),
+#'     "Time" = seq_len(n) / 100,
+#'     "BV421-A" = rnorm(n, 2000, 800),
+#'     "PE-A" = rnorm(n, 3000, 900),
+#'     "LIVE DEAD NIR-A" = viability
+#'   )
+#'   mat <- mat[sample(n), ] # mix the classes along the run
+#'   mat[, "Time"] <- seq_len(n) / 100
+#'   ff <- flowCore::flowFrame(mat)
+#'   pd <- flowCore::pData(flowCore::parameters(ff))
+#'   pd$minRange <- -1e6
+#'   pd$maxRange <- 4e6
+#'   flowCore::pData(flowCore::parameters(ff)) <- pd
+#'
+#'   # Every value below is a PLACEHOLDER for this synthetic frame. Choose
+#'   # each one for your own data (see the message of a call without them).
+#'   # PeacoQC warns that this frame has too few bins for its isolation
+#'   # tree analysis; real files have more events.
 #'   res <- sw_clean_run(
-#'     "sample1.fcs",
-#'     debris_window = c(2e5, 1.5e6),
-#'     singlet_wider_gate = TRUE,
-#'     pool_samples = TRUE,
-#'     viability_channel = "LIVE DEAD NIR-A",
-#'     viability_method = "mindensity",
-#'     viability_cut = NULL,
-#'     IT_limit = 0.55,
-#'     MAD = 6,
-#'     cofactor = 6000
+#'     ff,
+#'     debris_window = c(1e4, 1.5e6), # PLACEHOLDER: must hold the debris valley
+#'     singlet_wider_gate = TRUE, # PLACEHOLDER: TRUE or FALSE
+#'     pool_samples = TRUE, # PLACEHOLDER: TRUE or FALSE
+#'     viability_channel = "LIVE DEAD NIR-A", # PLACEHOLDER: your dye channel
+#'     viability_method = "mindensity", # PLACEHOLDER: "mindensity" or "boundary"
+#'     viability_cut = NULL, # PLACEHOLDER: NULL for "mindensity"
+#'     IT_limit = 0.55, # PLACEHOLDER: between 0 and 1
+#'     MAD = 6, # PLACEHOLDER: positive number
+#'     cofactor = 6000 # PLACEHOLDER: positive number
 #'   )
 #'   res$audit
-#' }
+#'   res$gates
 #' }
 #'
 #' @seealso \code{\link{sw_gate_template}}, \code{\link{sw_gate_run}},
@@ -617,6 +699,43 @@ sw_clean_run <- function(
     "inside",
     "outside"
   )
+
+  # mindensity puts the cut on the lowest event inside debris_window when the
+  # window holds one peak or no valley. Flag that case per sample.
+  in_window <- lapply(ffs, function(f) {
+    v <- flowCore::exprs(f)[, "FSC-A"]
+    v[v >= debris_window[1] & v <= debris_window[2]]
+  })
+  window_floor <- if (pool_samples) {
+    rep(min(unlist(in_window)), length(sample_names))
+  } else {
+    vapply(in_window, min, numeric(1))
+  }
+  debris_cut <- vapply(
+    sample_names,
+    function(sn) {
+      g <- flowWorkspace::gh_pop_get_gate(gs[[sn]], nodes[["non_debris"]])
+      g@min[["FSC-A"]]
+    },
+    numeric(1)
+  )
+  at_floor <- unname(debris_cut <= window_floor)
+  gates$cut_at_window_floor <- NA
+  gates$cut_at_window_floor[gates$gate == "nonDebris"] <-
+    at_floor[match(gates$sample[gates$gate == "nonDebris"], sample_names)]
+  if (any(at_floor)) {
+    warning(
+      "The nonDebris cut sits on the lowest event inside debris_window ",
+      "(FSC-A = ",
+      paste(signif(debris_cut[at_floor], 6), collapse = ", "),
+      ") for sample(s): ",
+      paste(sample_names[at_floor], collapse = ", "),
+      ". openCyto found no density valley inside the window, so it removes ",
+      "nothing at or above debris_window[1]. Check the window against the ",
+      "FSC-A density.",
+      call. = FALSE
+    )
+  }
 
   list(
     events = events,

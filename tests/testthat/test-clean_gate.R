@@ -98,6 +98,16 @@ run_clean <- function(x, ...) {
   out
 }
 
+# Same as run_clean() but warnings from sw_clean_run() reach the caller.
+run_clean_warn <- function(x, ...) {
+  args <- utils::modifyList(clean_args, list(...), keep.null = TRUE)
+  out <- NULL
+  utils::capture.output(
+    suppressMessages(out <- do.call(sw_clean_run, c(list(x), args)))
+  )
+  out
+}
+
 msg_of <- function(expr) {
   tryCatch(
     {
@@ -442,6 +452,96 @@ test_that("a gating failure is reported with the settings to check", {
     run_clean(m$ff, debris_window = c(1e9, Inf)),
     "Gating failed (check debris_window",
     fixed = TRUE
+  )
+})
+
+# Cut of the nonDebris gate of one sample, from the gates table.
+debris_cut_of <- function(res, sample = 1) {
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  g <- d$definition[sample]
+  as.numeric(sub("^FSC-A: \\[([^,]+),.*$", "\\1", g))
+}
+
+test_that("debris_window bounds the data of the density: the cut is a valley inside it", {
+  skip_if_no_clean_stack()
+  # Debris peak at 5e4 (SD 1.5e4) and cell peak at 6e5 (SD 3e4): the valley
+  # lies between them. The window holds both peaks.
+  m <- make_clean_ff()
+  window <- c(1e4, 1.5e6)
+  res <- suppressWarnings(run_clean(m$ff, debris_window = window))
+
+  cut <- debris_cut_of(res)
+  expect_gt(cut, window[1])
+  expect_lt(cut, window[2])
+  # The cut sits between the two planted peaks, in the valley.
+  expect_gt(cut, 1e5)
+  expect_lt(cut, 5e5)
+  # mindensity was called with both limits.
+  expect_match(
+    res$template$gating_args[1],
+    "min = 10000, max = 1500000",
+    fixed = TRUE
+  )
+  # A valley was found, so the window floor is not the cut.
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  expect_false(d$cut_at_window_floor)
+  expect_true(all(is.na(res$gates$cut_at_window_floor[
+    res$gates$gate != "nonDebris"
+  ])))
+  # All planted debris is below the cut.
+  expect_true(all(tag_events(res$events[[1]], m$tags) == "cell"))
+  # No floor warning is raised.
+  floor_warned <- FALSE
+  withCallingHandlers(
+    run_clean_warn(m$ff, debris_window = window),
+    warning = function(w) {
+      if (grepl("lowest event inside debris_window", conditionMessage(w))) {
+        floor_warned <<- TRUE
+      }
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_false(floor_warned)
+})
+
+test_that("events above the window max are kept by the debris gate", {
+  skip_if_no_clean_stack()
+  # max = 5.9e5 truncates the data of the density only. The gate is
+  # c(cut, Inf), and the cells above 5.9e5 stay in the live events.
+  m <- make_clean_ff()
+  window <- c(1e4, 5.9e5)
+  res <- suppressWarnings(run_clean(m$ff, debris_window = window))
+  expect_match(res$template$gating_args[1], "max = 590000", fixed = TRUE)
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  expect_match(d$definition, ", Inf]", fixed = TRUE)
+  live_fsc <- flowCore::exprs(res$events[[1]])[, "FSC-A"]
+  expect_gt(sum(live_fsc > window[2]), 1000)
+})
+
+test_that("a window that leaves out the valley is reported, not silent", {
+  skip_if_no_clean_stack()
+  # The window starts above the debris peak and the valley, so the density
+  # has one peak. openCyto then puts the cut on the lowest event in the window.
+  m <- make_clean_ff()
+  window <- c(3e5, 1.5e6)
+  warned <- NULL
+  res <- withCallingHandlers(
+    run_clean_warn(m$ff, debris_window = window),
+    warning = function(w) {
+      if (grepl("lowest event inside debris_window", conditionMessage(w))) {
+        warned <<- conditionMessage(w)
+      }
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_match(warned, "no density valley inside the window", fixed = TRUE)
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  expect_true(d$cut_at_window_floor)
+  x <- flowCore::exprs(m$ff)[, "FSC-A"]
+  expect_equal(
+    debris_cut_of(res),
+    min(x[x >= window[1] & x <= window[2]]),
+    tolerance = 1e-4
   )
 })
 
