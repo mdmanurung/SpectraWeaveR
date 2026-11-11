@@ -13,7 +13,10 @@ sw_gate_run(
 )
 }
 \arguments{
-\item{fcs_files}{Character vector of FCS file paths.}
+\item{fcs_files}{Character vector of FCS file paths, or a
+\code{flowCore::flowSet} (or single \code{flowFrame}) already in memory.
+Frames are used as given, so apply any transformation before the call
+and leave \code{transform_channels} as \code{NULL}.}
 
 \item{gating_template}{Character path to a CSV gating template file
 (see \code{\link{sw_gate_template}}).}
