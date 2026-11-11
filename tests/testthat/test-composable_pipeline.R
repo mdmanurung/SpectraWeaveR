@@ -513,7 +513,8 @@ test_that("pipeline handles list inputs (multi-sample pattern)", {
   ))
   input <- list(a = 1:3, b = 4:6)
   result <- sw_pipeline_run(pip, input = input, trace = FALSE)
-  expect_equal(result$result, c(2, 4, 6, 8, 10, 12))
+  # do.call(c, <named list>) keeps the list names (a1..a3, b1..b3)
+  expect_equal(unname(result$result), c(2, 4, 6, 8, 10, 12))
 })
 
 # =========================================================================
@@ -725,8 +726,9 @@ test_that("static pre-run walk warns on declared-type mismatch but still runs", 
     sw_pipeline_step("trusts", function(x) x + 1,
             input_type = "numeric", output_type = "numeric")
   ))
-  res <- expect_warning(
-    sw_pipeline_run(pip, input = 5, trace = FALSE),
+  # testthat 3e: expect_warning() returns the condition, not the value
+  expect_warning(
+    res <- sw_pipeline_run(pip, input = 5, trace = FALSE),
     "declared types incompatible"
   )
   expect_equal(res$result, 6)
