@@ -408,8 +408,10 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-future.apply-1.21.0-r44hacb3a79_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-generics-0.1.4-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-getoptlong-1.1.1-r44hc72bb7e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggh4x-0.3.1-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggnewscale-0.5.2-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggplot2-4.0.3-r44h785f33e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggprism-1.0.7-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggpubr-1.0.0-r44hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggridges-0.5.7-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggsci-5.2.0-r44hc72bb7e_0.conda
@@ -469,6 +471,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-rcmdcheck-1.4.0-r44h785f33e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-rcolorbrewer-1.1_3-r44h785f33e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-rcppprogress-0.4.2-r44hc72bb7e_5.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-reactable-0.4.5-r44hc72bb7e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-reactr-0.6.1-r44hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-recipes-1.4.0-r44hacb3a79_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-rematch-2.0.0-r44hc72bb7e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-rematch2-2.1.2-r44hc72bb7e_5.conda
@@ -6642,6 +6646,24 @@ packages:
   run_exports: {}
   size: 798715
   timestamp: 1775681140690
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-ggh4x-0.3.1-r44hc72bb7e_1.conda
+  sha256: 840d8401fca11e1f7c537432a197fb77947239cbe89fdd4abab61c3043610329
+  md5: b86d2cf2500d6e8cfe8b237c38d55df4
+  depends:
+  - r-base >=4.4,<4.5.0a0
+  - r-cli
+  - r-ggplot2 >=3.5.2
+  - r-gtable
+  - r-lifecycle
+  - r-rlang >=1.1.0
+  - r-s7
+  - r-scales
+  - r-vctrs >=0.5.0
+  license: MIT
+  license_family: MIT
+  run_exports: {}
+  size: 1835161
+  timestamp: 1757835690080
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggnewscale-0.5.2-r44hc72bb7e_1.conda
   sha256: 12646562447643f88bfe25c78cd9c77654d91c5e2cbd36ab04b9f95d40343843
   md5: 5fa3627b9f6b88ad10fd3c581f4a9783
@@ -6673,6 +6695,23 @@ packages:
   run_exports: {}
   size: 7802183
   timestamp: 1776860388013
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-ggprism-1.0.7-r44hc72bb7e_1.conda
+  sha256: 6bc7cebe1e86c7270156d97c9897df19d46ae0984641ef089abfcc25bc604437
+  md5: ae5c01b29d31baadbc051db9288689ad
+  depends:
+  - r-base >=4.4,<4.5.0a0
+  - r-digest
+  - r-ggplot2 >=3.2.0
+  - r-glue
+  - r-gtable >=0.1.1
+  - r-rlang >=0.3.0
+  - r-scales >=0.5.0
+  - r-tibble
+  license: GPL-3.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 2772158
+  timestamp: 1758003232443
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-ggpubr-1.0.0-r44hc72bb7e_0.conda
   sha256: 715cffc461324fd5840ab8ab6f403aa3995217f0a6dc35bf84536dd52e6a4c10
   md5: 0ba2b0f400e12eaa918dfe49e88a5b11
@@ -7497,6 +7536,32 @@ packages:
   run_exports: {}
   size: 40843
   timestamp: 1757493827559
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-reactable-0.4.5-r44hc72bb7e_0.conda
+  sha256: 6de42582d111bb7a67da7d5c82dc0ad09661443742b55a9b17f933b80ad61262
+  md5: a58d129fdf6c951261413e6384a369a9
+  depends:
+  - r-base >=4.4,<4.5.0a0
+  - r-digest
+  - r-htmltools
+  - r-htmlwidgets
+  - r-jsonlite
+  - r-reactr
+  license: MIT
+  license_family: MIT
+  run_exports: {}
+  size: 787977
+  timestamp: 1764610914793
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-reactr-0.6.1-r44hc72bb7e_1.conda
+  sha256: f59b7f5104589020430a4796709082554b4200e44560612797a5739e8a8567b4
+  md5: 8f9255dfe9e1e06c7c3893259c3931c2
+  depends:
+  - r-base >=4.4,<4.5.0a0
+  - r-htmltools
+  license: MIT
+  license_family: MIT
+  run_exports: {}
+  size: 494824
+  timestamp: 1757539979058
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-recipes-1.4.0-r44hacb3a79_0.conda
   sha256: 7fdd0c9cf6d66bd8b4f91ddb72856e5204b876fc4fa0fa884b0c58b2b02932f7
   md5: e48cdf648a28bef7ef70f84edff38d5b

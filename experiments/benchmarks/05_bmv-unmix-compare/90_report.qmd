@@ -1,0 +1,493 @@
+---
+title: "BMV unmix comparison: final analyses"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 2
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: params
+# Parameters --------------------------------------------------------------------
+RUNS_DIR <- "experiments/runs"
+SUMMARY_DIR <- "experiments/runs/2026-11-10_bmv-summary" # INDEX.md sections 00-24 (as of 2026-11-11)
+FIG_DIR <- "experiments/runs/2026-11-10_bmv-report/figures-v9" # v9: re-render for the INDEX §11 and §25 edits; s* figures drawn as in v6 to v8 (2026-11-11)
+KEPT_DIR <- "experiments/runs/2026-11-11_bmv-restyle" # Nature-spec restyle of the kept per-cell and summary figures (2026-11-11)
+```
+
+```{r}
+#| label: setup
+# Paths are repo-root relative; the notebook sits three levels below the root.
+knitr::opts_knit$set(root.dir = normalizePath("../../.."))
+# Markdown image links resolve from this folder, so they carry the "../../.." prefix.
+```
+
+```{r}
+#| label: libraries
+source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R")
+```
+
+```{r}
+#| label: redraw
+# Redraw the cited figures ------------------------------------------------------
+# Every figure is drawn from a table a run saved; nothing is recomputed.
+stopifnot("figure dir is new" = !dir.exists(FIG_DIR))
+dir.create(FIG_DIR, recursive = TRUE)
+
+FIGURES <- tribble(
+  ~key                , ~src                                                               , ~layout           , ~title                   ,
+  "s00_per_dye"       , "2026-11-10_bmv-variant-per-dye/scores/fig_cd8t_tnf_squeezed_source.csv" , "dye_share"   , "CD8T TNF squeezed, one dye swapped",
+  "s01_pct_fixed"     , "2026-11-10_bmv-gated-pooled/figures_fixed_cut_1/pct_fixed_source.csv", "pct_pos"       , "% positive at cut 1"    ,
+  "s03_streak"        , "2026-11-10_bmv-ranking-sym/fig_streak_sym_source.csv"             , "rank"            , "fig_streak_sym"         ,
+  "s03_ssm"           , "2026-11-10_bmv-ranking-sym/fig_ssm_sym_source.csv"                , "rank"            , "fig_ssm_sym"            ,
+  "s03_tilt"          , "2026-11-10_bmv-ranking-sym/fig_tilt_sym_source.csv"               , "rank"            , "fig_tilt_sym"           ,
+  "s03_spread"        , "2026-11-10_bmv-ranking-sym/fig_spread_sym_source.csv"             , "rank"            , "fig_spread_sym"         ,
+  "s04_g1"            , "2026-11-10_bmv-g1g2-figures/fig_g1_heldout_source.csv"            , "g1"              , "G1 held-out controls"   ,
+  "s04_g2"            , "2026-11-10_bmv-g1g2-figures/fig_g2_simulation_source.csv"         , "g2"              , "G2 simulation"          ,
+  "s05_swap"          , "2026-11-10_bmv-swap-test/scores.csv"                              , "scores"          , "Swap test"              ,
+  "s05_count"         , "2026-11-10_bmv-variant-count/scores.csv"                          , "scores"          , "Variant count"          ,
+  "s05_af_swap"       , "2026-11-10_bmv-af-swap/fig_gap_closed_source.csv"                 , "gap"             , "AF set swap"            ,
+  "s05_bv510_by_set"  , "2026-11-10_bmv-variant-bv510-by-set/fig_variant_bv510_by_set_source.csv", "variant_set" , "BV510 part by set"      ,
+  "s05_coherence_or"  , "2026-11-10_bmv-coherence-or/coherence_or.csv"                     , "coherence"       , "TNF-IFNg odds ratio"    ,
+  "s07_neg_spread"    , "2026-11-10_bmv-other-cytokines/fig_f_source.csv"                  , "neg_spread"      , "Negative spread"        ,
+  "s07_pct_pos"       , "2026-11-10_bmv-other-cytokines/fig_a_source.csv"                  , "pct_pos"         , "IL-2, IL-10 and Th2"    ,
+  "s09_block_a"       , "2026-11-10_bmv-ablation/fig_gap_closed_source.csv"                , "gap"             , "Block A swaps"          ,
+  "s09_chain"         , "2026-11-10_bmv-ablation-chain-all/fig_gap_closed_source.csv"      , "gap"             , "Rebuild chain"          ,
+  "s09_chain7a8"      , "2026-11-10_bmv-ablation-chain7a8/fig_gap_closed_source.csv"       , "gap"             , "Chain 7a and 8"         ,
+  "s10_interventions" , "2026-11-10_bmv-af405-proof/fig2_interventions_source.csv"         , "interventions"   , "AF405 interventions"    ,
+  "s10_dose"          , "2026-11-10_bmv-af405-proof/fig4_dose_source.csv"                  , "dose"            , "AF405 spread dose"      ,
+  "s10_spike"         , "2026-11-10_bmv-af405-proof/fig5_spike_recovery_source.csv"        , "spike"           , "Spike recovery"         ,
+  "s11_gls"           , "2026-11-10_bmv-gls-noise/scores/scores.csv"                       , "scores"          , "GLS noise model"        ,
+  "s12_passes"        , "2026-11-10_bmv-passes-grid/fig_passes_grid_source.csv"            , "passes"          , "Passes grid"            ,
+  "s13_opt188"        , "2026-11-10_bmv-opt188/report/opt188_readouts.csv"                 , "readouts"        , "opt188 readouts"        ,
+  "s15_102code_spread", "2026-11-10_bmv-af405-102code-clean/fig_af405_spread_source.csv"   , "spread_coef"     , "AF405 spread, clean controls",
+  "s15_102code_gap"   , "2026-11-10_bmv-af405-102code-clean-score/fig_gap_closed_source.csv", "gap"            , "1.0.2-code AF405 variants",
+  "s15_origin_spread" , "2026-11-10_bmv-af405-af-origin/fig_af_origin_spread_source.csv"   , "spread_coef"     , "AF405 spread by AF half",
+  "s15_origin_shape"  , "2026-11-10_bmv-af405-af-origin/fig_af_origin_shape_source.csv"    , "af_shape"        , "Spread shape"           ,
+  "s15_offsets"       , "2026-11-10_bmv-automated-raw-controls/fig_offsets_source.csv"     , "offsets"         , "Reference offsets"      ,
+  "s15_sbuv510"       , "2026-11-10_bmv-sbuv510-decompose-score/fig_gap_closed_source.csv" , "gap"             , "SBUV510 decomposition"  ,
+  "s15_ssm_zip"       , "2026-11-10_bmv-own-ssm/fig_ssm_vs_zip_source.csv"                 , "ssm_zip"         , "Own SSM vs zip"         ,
+  "s15_screen"        , "2026-11-10_bmv-all-marker-screen/fig_screen_squeezed_source.csv"  , "screen"          , "All-marker screen"      ,
+  "s15_channel_map"   , "2026-11-10_bmv-per-dye-channel-map/fig_per_dye_channel_map_source.csv", "dye_channel_map", "Per-dye channel map"
+)
+
+drawn <- FIGURES |>
+  mutate(
+    res = pmap(
+      list(.data$src, .data$layout, .data$title, .data$key),
+      \(src, layout, title, key) redraw_panel(file.path(RUNS_DIR, src), layout, title, FIG_DIR, key)
+    )
+  ) |>
+  unnest(res)
+
+# Section 06: angle between the 1.0.2 and 1.8.8 dye spectra (a two-column table, so drawn here).
+angles <- read_csv(file.path(SUMMARY_DIR, "06_spectra_variants/spectra_compare.csv"), show_col_types = FALSE) |>
+  mutate(fluorophore = reorder(.data$fluorophore, .data$angle_deg))
+p_angle <- ggplot(angles, aes(angle_deg, fluorophore)) +
+  geom_point(size = 1.2) +
+  labs(x = "Angle, 1.0.2 vs 1.8.8 (degrees)", y = NULL, title = "Dye spectra, 1.0.2 vs 1.8.8") +
+  value_grid("x")
+save_panel(p_angle, angles, FIG_DIR, "s06_spectra_angle", 89, 120)
+drawn <- drawn |>
+  bind_rows(
+    tibble(
+      key = "s06_spectra_angle",
+      redrawn = file.path(FIG_DIR, "s06_spectra_angle.png"),
+      caption = "Angle between each dye's 1.0.2 and 1.8.8 spectrum; each point is one dye."
+    )
+  )
+
+# Show one redrawn figure with its caption and file name.
+show <- function(which_key) {
+  row <- filter(drawn, .data$key == .env$which_key)
+  cat(sprintf(
+    "![%s File: `figures/%s.png`.](%s){width=100%%}\n\n",
+    row$caption,
+    which_key,
+    file.path("../../..", row$redrawn)
+  ))
+}
+
+# Show a figure kept from its script because it needs raw events or has no saved table.
+# Restyled copies sit under KEPT_DIR at the summary path; the manifests name the script that redrew each.
+RESTYLED <- list.files(KEPT_DIR, pattern = "^manifest_F[0-9]+[.]csv$", full.names = TRUE) |>
+  map(\(f) read_csv(f, show_col_types = FALSE)) |>
+  list_rbind()
+show_kept <- function(path, caption) {
+  restyled <- file.path(KEPT_DIR, path)
+  if (!file.exists(restyled)) {
+    stop("show_kept: no restyled copy of ", path, " in ", KEPT_DIR, call. = FALSE)
+  }
+  script <- word(RESTYLED$script[RESTYLED$new_path == restyled][1], 1)
+  cat(sprintf(
+    "![%s Restyled by `%s`.](%s){width=100%%}\n\n",
+    caption,
+    basename(script),
+    file.path("../../..", restyled)
+  ))
+}
+
+# Show a figure straight from its run folder (new runs are drawn at Nature spec by their script).
+show_run <- function(path, caption) {
+  src <- file.path(RUNS_DIR, path)
+  if (!file.exists(src)) {
+    stop("show_run: no figure at ", src, call. = FALSE)
+  }
+  cat(sprintf("![%s](%s){width=100%%}\n\n", caption, file.path("../../..", src)))
+}
+```
+
+Five donors (A3, A6, B11, B2, D1) and 11 unmixing arms. Each figure below is redrawn from a table a run saved; the per-cell figures are kept as their scripts drew them.
+
+## 00 Key figure: one dye's variants
+
+The Alexa Fluor 405 (GLUT1) 1.0.2 variants alone reproduce the full CD8T squeeze (0.382). SBUV510 is a smaller second effect (0.19), and the other dyes stay at 0.12 (`figures/s00_per_dye.png`).
+
+```{r}
+#| results: asis
+show("s00_per_dye")
+```
+
+## 01 % TNF+ and IFNg+ at cut 1
+
+TNF+ follows the spectra set. CD8T TNF+ is 22–32% with the 1.0.2 spectra vs 51–62% with 1.8.8, while IFNg+ agrees across arms (`figures/s01_pct_fixed.png`).
+
+```{r}
+#| results: asis
+show("s01_pct_fixed")
+```
+
+## 02 Gates
+
+CD4T is 59–76% and CD8T 15–39% of CD3+ in every arm (table fallback: the gate counts are tables, `02_gates/gate_counts/`; the gate plot below needs raw events).
+
+```{r}
+#| results: asis
+show_kept(
+  "02_gates/cd4_cd8_tmix_pooled/gate_cd4_cd8_A3.png",
+  "CD4T and CD8T quadrant gates (openCyto quadGate.tmix, K = 3, pooled per arm), donor A3; all arms share one −3 to 6 arcsinh window. Kept from script 19a_gate_arm.R: a per-cell plot needs raw events."
+)
+```
+
+## 03 Negative spread, SSM, tilt and streak
+
+`s188_c102` has a lower TNF–CD8 streak than `as188_joint` in every donor (0.20 vs 0.39), lower SSM (1.48 vs 1.91) and lower tilt (0.080 vs 0.12). Spread is a tie (1200 vs 1270) (`figures/s03_streak.png`, `s03_ssm.png`, `s03_tilt.png`, `s03_spread.png`).
+
+```{r}
+#| results: asis
+show("s03_streak")
+show("s03_ssm")
+show("s03_tilt")
+show("s03_spread")
+```
+
+## 04 Held-out controls (G1) and simulation (G2)
+
+G1 shows equal cell spread for the two code versions, with a noisy bias estimate. G2 gives the `s188` recipe an RMSE of 1.02, also noisy (`figures/s04_g1.png`, `s04_g2.png`).
+
+```{r}
+#| results: asis
+show("s04_g1")
+show("s04_g2")
+```
+
+## 05 Why TNF differs between 1.0.2 and 1.8.8
+
+Swapping all 1.0.2 variants into the 1.8.8 setup raises the CD8T TNF squeezed share from 0.12 to 0.38; the 1.0.2 AF set alone gives 0.19. The TNF–IFNg odds ratio cannot tell which arm keeps the real TNF signal (`figures/s05_swap.png`, `s05_count.png`, `s05_af_swap.png`, `s05_coherence_or.png`).
+
+```{r}
+#| results: asis
+show("s05_swap")
+show("s05_count")
+show("s05_af_swap")
+show("s05_bv510_by_set")
+show("s05_coherence_or")
+# One figure per x marker: the three side by side do not fit a 183 mm column.
+walk(c("IFNg", "GLUT1", "SSC"), \(x) show_kept(
+  sprintf("05_tnf_cause/per_dye_v8/fig_per_dye_ggcyto_%s.png", x),
+  sprintf("CD8T TNF against %s per donor (rows) and arm (columns): SpectroFlo (reference), 1.8.8, opt188, then one or two dyes given their 1.0.2 variants (SBUV510, AF405, both) and all 1.0.2 variants; ggcyto hexbins, red line at the TNF+ cut (arcsinh 1). One figure per x marker. Latest arm set of script 72 (run per-dye-ggcyto-v8), redrawn by 95_restyle_events_scatter.R per_dye_v8: needs raw events.", x)
+))
+walk(c("IFNg", "AF", "SSC"), \(x) show_kept(
+  sprintf("05_tnf_cause/af_swap_v3/fig_af_swap_ggcyto_%s.png", x),
+  sprintf("CD8T TNF against %s: SpectroFlo (reference), then the AF set by variants 2×2 on the 1.8.8 spectra, plus the 1.0.2 spectra with each AF set; red line at the TNF+ cut (arcsinh 1). One figure per x marker. Latest arm set of script 72 (run af-swap-ggcyto-v3), redrawn by 95_restyle_events_scatter.R af_swap_v3: needs raw events.", x)
+))
+```
+
+## 06 What differs in the spectra sets
+
+The BV510 dye spectrum differs by only 1.2° between versions, but the variant sets differ (2596 vs 858 variants; table fallback: counts from `06_spectra_variants/variants_shipped.csv`) (`figures/s06_spectra_angle.png`).
+
+```{r}
+#| results: asis
+show("s06_spectra_angle")
+```
+
+## 07 IL-2, IL-10 and Th2 across arms
+
+The 1.0.2 variants squeeze the negatives of TNF, Th2 and IL-10 towards 0 but not those of IFNg or IL-2 (`figures/s07_neg_spread.png`, `s07_pct_pos.png`).
+
+```{r}
+#| results: asis
+show("s07_neg_spread")
+show("s07_pct_pos")
+```
+
+## 08 Offline dashboard
+
+The dashboard is the single deliverable: the Quarto dashboard in `2026-11-11_bmv-dashboard-v4/` and its artifact page. The separate report render is retired.
+
+## 09 Ablation: which 1.0.2 input moves TNF
+
+Only arms with the 1.0.2 variants close the gap (`rev_af188` 0.84/0.89). Once the objects are rebuilt along the 1.0.2 route, the legacy pipeline closes 1.13 and the joint pipeline 0.20 (`figures/s09_block_a.png`, `s09_chain7a8.png`).
+
+```{r}
+#| results: asis
+show("s09_block_a")
+show("s09_chain")
+show("s09_chain7a8")
+```
+
+## 10 The BV510 part of the 1.0.2 Alexa Fluor 405 variants
+
+Removing the BV510-like part of the 1.0.2 AF405 variants gives a CD8T squeezed share of 0.11, and adding it to 1.8.8 gives 0.45. Scaling the spread by 0, 0.25, 0.5 and 1 gives 0.13, 0.14, 0.19 and 0.38 (`figures/s10_interventions.png`, `s10_dose.png`).
+
+```{r}
+#| results: asis
+show("s10_interventions")
+show("s10_dose")
+show("s10_spike")
+show_kept(
+  "10_af405_proof/absorption_fig_r_distribution.png",
+  "Absorption test: BV510 lost per unit of AF405 abundance for cells TNF+ in 1.8.8 and TNF- in the AF405-only swap, against the variants' coefficient range. Kept from script 70_af405_absorption_test.R: no saved table of the plotted values."
+)
+```
+
+## 11 Noise-weighted GLS unmixing (1.8.8)
+
+`gls188_noise` narrows the TNF negatives to about 0.7–0.8 of the `as188_joint` rSD in CD4T and CD8T, and its squeezed share stays at or below `as188_joint` (`figures/s11_gls.png`). The TNF share above arcsinh 1 rises slightly (donor median about 0.65 → 0.69 in CD4T and 0.54 → 0.59 in CD8T). The density plot shows why: GLS removes the small pile-up at 0 that `as188_joint` has, but its TNF-negative peak sits at about 0.5–0.8 arcsinh rather than 0, near the cut at 1 (`2026-11-10_bmv-gls-noise/scores/fig_bv510_density.png`). So part of the narrowing is an upward shift, and the higher TNF+ share may include negatives nudged over the cut. GLS has not been spike-tested, so recovered signal and shifted negatives cannot be told apart yet.
+
+```{r}
+#| results: asis
+show("s11_gls")
+show_run("2026-11-10_bmv-gls-noise/scores/fig_bv510_density.png", "TNF (BV510-A) density per donor in CD4T and CD8T for as188_joint, as102_var, gls188_noise and gls188_noise_spill; dotted line = cut at arcsinh 1. Original style from script 43, not redrawn at Nature spec.")
+```
+
+## 12 Passes grid (1.8.8 joint)
+
+Going from 1 to ≥5 AF passes raises the TNF squeezed share from 0.12 to 0.16–0.19, a small shift next to the donor ranges (`figures/s12_passes.png`).
+
+```{r}
+#| results: asis
+show("s12_passes")
+```
+
+## 13 Documentation-optimised 1.8.8 arm (descriptive)
+
+In CD8T, opt188 matches `as188_joint` closely on TNF, with a squeezed share of about 0.11 and a TNF+ share of 0.59 (`figures/s13_opt188.png`).
+
+```{r}
+#| results: asis
+show("s13_opt188")
+```
+
+## 14 What the AutoSpectral articles say
+
+The articles site (https://drcytometer.github.io/AutoSpectral/articles/) documents version 1.8.7; these runs used 1.8.8. A web-fetch subagent fetched the quotes below on 2026-11-10, and nobody checked them by hand.
+
+- **Variants (§05, §10).** “we’re only allowing variation within the range seen in the single-colour control, nothing more.” ([11 Per Cell Optimization](https://drcytometer.github.io/AutoSpectral/articles/11_Per_Cell_Optimization.html)).
+- **Dim signal (§10).** “can understate a dimmer collinear fluorophore’s true abundance” (article 11, joint-pipeline tuning).
+- **Joint vs legacy (§09).** “So, the covariance approach is now the default option for unmixing when you supply variant information.” (article 11). The 1.6.0 changelog adds that legacy workflows “must be accessed via a `legacy` argument” ([15 Updates](https://drcytometer.github.io/AutoSpectral/articles/15_Updates_And_Issues.html)).
+- **speed.** “The options are “fast” = 1, “medium” = 3, and “slow” = 10.” (article 11, “Legacy pipeline notes”).
+- **Passes (§12).** n.passes: “Most datasets I have tested show good results with a single pass.” n.af.passes: “is most useful for tissue samples with more heterogeneous autofluorescence; PBMC data typically shows negligible benefit.” (both article 11).
+- **Unstained and negatives (§05, §13).** “Prepare a truly unstained sample.” ([10 Single Cell Autofluorescence](https://drcytometer.github.io/AutoSpectral/articles/10_Single_Cell_AutoFluorescence.html)). “Using a universal negative is strongly recommended.” ([02 Control File](https://drcytometer.github.io/AutoSpectral/articles/02_Control_File_example.html)).
+- **Landmark gates (§13).** “This method is highly robust for cell samples.” ([08 Controlled Gating](https://drcytometer.github.io/AutoSpectral/articles/08_Advanced_Gating.html)).
+- **Checking unmixing (§03).** “features such as hypernegative events or correlations (those skews) are likely to be wrong” ([19 Correcting Unmixing Errors](https://drcytometer.github.io/AutoSpectral/articles/19_Correcting_Unmixing_Errors.html)).
+- **GLS (§11).** `estimate.noise.model()` and `unmix.gls()` appear in no article read; [18 Weighted Least Squares](https://drcytometer.github.io/AutoSpectral/articles/18_Weighted_Least_Squares.html) covers Poisson-weighted WLS only.
+
+## 15 Control diagnosis
+
+The 1.0.2 variant code makes the AF405 BV510 spread even from clean controls (median 0.010 vs 0.0018 for zip 1.8.8). CD3 spreads into TNF (SSM 7.55), and Th2 is squeezed more than TNF (`figures/s15_102code_spread.png`, `s15_ssm_zip.png`, `s15_screen.png`).
+
+```{r}
+#| results: asis
+show("s15_102code_spread")
+show("s15_102code_gap")
+show("s15_origin_spread")
+show("s15_origin_shape")
+show("s15_offsets")
+show("s15_sbuv510")
+show("s15_ssm_zip")
+show("s15_screen")
+show("s15_channel_map")
+```
+
+AutoSpectral quotes for this section (same source and caveat as section 14):
+
+- “As of version 1.6.0, we no longer provide autofluorescence information via `af.spectra` when calling `get.spectral.variants()`.” (01 Full Legacy Workflow, "Per-cell Fluorophore Optimization").
+- “we’re only allowing variation within the range seen in the single-colour control, nothing more.” (11 Per Cell Optimization).
+- “Prepare a truly unstained sample.” (10 Single Cell Autofluorescence).
+- “This is now done using k-nearest neighbours, and should be essentially perfect.” (01 Automated Spectral Workflow, "Outputs").
+- Beads may not match cells (paraphrase of 05 Preparing Controls, "Recommendations for controls").
+- “there is a lot of spillover spread (uncertainty) from BUV661 into APC (but not the other way around).” (19 Correcting Unmixing Errors).
+
+## 16 TNF and Th2 scatter with SpectroFlo as reference
+
+SpectroFlo, 1.8.8 zip and opt188 show no CD8T TNF band at 0 (TNF+ 35.3–71.1%, 28.6–69.4% and 31.3–73.3% across donors); every arm with the 1.0.2 AF405 variants shows one. SBUV510 + AF405 together give the same TNF+ as AF405 alone. SpectroFlo's Th2 rises with GLUT1 along a spillover-like diagonal (29.8–58.0% Th2+), so SpectroFlo is no Th2 reference (`16_scatter_spectroflo/per_dye_TNF_vs_GLUT1.png`, `sbuv510_af405_gap_closed.png`, `th2_Th2_vs_GLUT1.png`). AutoSpectral: “features such as hypernegative events or correlations (those skews) are likely to be wrong” (19 Correcting Unmixing Errors).
+
+```{r}
+#| results: asis
+show_kept(
+  "16_scatter_spectroflo/per_dye_TNF_vs_GLUT1.png",
+  "CD8T TNF against GLUT1; rows donors, columns arms (SpectroFlo first, then 1.8.8 zip, opt188 and the 1.0.2 variants swapped in by dye); red line at the arcsinh 1 cut, % above it printed; each arm on its own gates. Kept from script 72_per_dye_scatter_ggcyto.R: needs raw events."
+)
+show_kept(
+  "16_scatter_spectroflo/sbuv510_af405_gap_closed.png",
+  "Gap closed by the SBUV510 + AF405 1.0.2 variant arm, CD8T TNF; donors as points. Kept from script 51_score_ablation.R."
+)
+show_kept(
+  "16_scatter_spectroflo/tnf_new_TNF_vs_GLUT1.png",
+  "CD8T TNF against GLUT1 for the newer arms (opt188, refined AF, AF405 1.0.2 code on clean controls, 1.0.2 code with 1.8.8 spectra, 1.0.2 zip); red line at the arcsinh 1 cut; each arm on its own gates. Kept from script 72: needs raw events."
+)
+show_kept(
+  "16_scatter_spectroflo/th2_Th2_vs_GLUT1.png",
+  "CD8T Th2 (eFluor 450) against GLUT1 (Alexa Fluor 405) per donor and arm; red line at the arcsinh 1 cut; each arm on its own CD8T gate, so SpectroFlo A3 reads 41.3% Th2+ here vs 39.8% in the section 17 flag view, which uses the 1.8.8 zip gate. The strip \"AF405 KO (no BV510)\" is the AF405 knock-out without its BV510 part. Kept from script 72: needs raw events."
+)
+```
+
+## 17 Marker flags, Th2 proof and the refined and AF-removed AF405 arms
+
+Under the revised flag rule, `as102_var` flags ten CD8T markers, led by CD4 (0.46), TNF (0.43) and Th2 (0.37). The AF405 knock-out without its BV510 part still squeezes Th2 (+0.26) but not TNF. Refined AF moves TNF away from 1.0.2 (gap closed −0.053 and −0.227), and removing AF from the AF405 control changes nothing (median 0.003 and 0.015) (`17_flags_th2_af/flags_screen_CD8T.png`, `flags_th2_proof_CD8T.png`, `afrefine_gap_closed.png`, `afremove_gap_closed.png`). AutoSpectral: “we’re only allowing variation within the range seen in the single-colour control, nothing more.” (11 Per Cell Optimization).
+
+```{r}
+#| results: asis
+show_kept("17_flags_th2_af/flags_screen_CD8T.png", "Change in CD8T squeezed share vs as188_joint per marker and arm; boxed cells are flagged (donor median ≥0.10, a rise in all 5 donors). Kept from script 86b.")
+show_kept("17_flags_th2_af/flags_th2_proof_CD8T.png", "The same readout for the AF405 proof arms, TNF, Th2 and IL-10. Kept from script 86b.")
+show_kept("17_flags_th2_af/afrefine_gap_closed.png", "Refined AF on the zip 1.8.8 setup: CD8T TNF gap closed; donors as points. Kept from script 87.")
+show_kept("17_flags_th2_af/afremove_gap_closed.png", "AF removed from the AF405 control: CD8T TNF gap closed; donors as points. Kept from script 87b.")
+```
+
+Raw views of the flags (script 93; all 16 flagged markers are in `21_raw_companions/flag_raw/`). IFNg+ in CD4T barely moves (A3 18.3% in 1.8.8 zip vs 19.6% in the 1.0.2 code with 1.8.8 spectra), so its flag comes from negatives packed into a band at 0 at high GLUT1. For Th2 in CD8T, both 1.0.2 arms flatten cells at 0 at high GLUT1, and opt188 calls 2.3–4.2% Th2+ against 5.1–9.1% in 1.8.8 zip (`21_raw_companions/flag_raw/fig_flag_IFNg_CD4T.png`, `fig_flag_Th2_CD8T.png`).
+
+```{r}
+#| results: asis
+show_kept("21_raw_companions/flag_raw/fig_flag_IFNg_CD4T.png", "CD4T IFNg against GLUT1 per arm, on the 1.8.8 zip gates with rows paired across arms; red line at the arcsinh 1 cut, % above it per panel; rows donors. Kept from script 93.")
+show_kept("21_raw_companions/flag_raw/fig_flag_Th2_CD8T.png", "The same for CD8T Th2; on the 1.8.8 zip CD8T gate with rows paired across arms, so SpectroFlo A3 reads 39.8% Th2+ here vs 41.3% on its own gate in section 16. Kept from script 93.")
+```
+
+## 18 Spike-in recovery, five setups
+
+With a +1 arcsinh spike, 1.8.8 zip loses most of the spike in 2.1% of CD8T cells for TNF and 13.7% for Th2. Refined AF loses it in 3.8% and 17.7%, opt188 in 4.0% and 22.9% (Th2 median recovery 0.85), and 1.0.2 zip in 14.5% and 48.8%. No setup loses most of an IL-10 spike (at most 0.011% of cells). Per cell, Th2 recovery in CD8T sits left of 1.8.8 zip for opt188 and refined AF (`18_spike_in/fig_spike_TNF.png`, `fig_spike_Th2.png`, `fig_spike_IL10.png`, `fig_spike_recovery_ecdf.png`). AutoSpectral: the joint pipeline “can understate a dimmer collinear fluorophore’s true abundance” (11 Per Cell Optimization).
+
+```{r}
+#| results: asis
+show_kept("18_spike_in/fig_spike_TNF.png", "TNF (BV510) spike +1 arcsinh: share of cells losing more than half of the spike (top) and median recovery (bottom), CD4T and CD8T, five setups; donors as points, median line. Kept from script 88.")
+show_kept("18_spike_in/fig_spike_Th2.png", "The same for Th2 (eFluor 450). Kept from script 88.")
+show_kept("18_spike_in/fig_spike_IL10.png", "The same for IL-10 (BB700). Kept from script 88.")
+show_kept("18_spike_in/fig_spike_recovery_ecdf.png", "Per-cell recovered fraction of the +1 spike, cumulative, TNF, Th2 and IL-10, five setups (the old 88 figure dropped refined AF; the redraw draws all five); dashed lines at 0.5 and 1. Kept from script 88.")
+```
+
+Raw views per cell (script 88c; all 24 marker × population figures are in `21_raw_companions/spike_raw/`). For TNF in CD8T, the 1.8.8-based setups follow the full-recovery curve. Both 1.0.2-code arms show a column of cells at unspiked TNF ≈ 0, and 1.0.2 zip keeps many of them near the loss diagonal (11.6–15.6%). For Th2 in CD8T, the 1.8.8 zip loss (11.8–16.1%) sits in cells near Th2 ≈ 0, and opt188 loses more there (15.8–31.0%) (`21_raw_companions/spike_raw/fig_raw_TNF_CD8T.png`, `fig_raw_Th2_CD8T.png`).
+
+```{r}
+#| results: asis
+show_kept("21_raw_companions/spike_raw/fig_raw_TNF_CD8T.png", "CD8T TNF per spiked cell: value without the spike (x) against with the +1 arcsinh spike (y); dashed curve full recovery, solid diagonal spike lost; % of cells losing more than half per panel; rows donors, columns setups. Kept from script 88c.")
+show_kept("21_raw_companions/spike_raw/fig_raw_Th2_CD8T.png", "The same for CD8T Th2. Kept from script 88c.")
+```
+
+## 19 opt188 downstream and the UMAP neighbourhood test
+
+opt188 raises CD8T TNF+ at the fixed cut by a median 3.6 points and flags only Th2 in CD8T (no CD4T flag). Its SOM clusters agree with 1.8.8 zip at the low end of seed noise (ARI 0.41 vs 0.38–0.57), while MC06 and MC09 grow in every donor. The UMAP kNN overlap puts every arm, the known-bad 1.0.2 zip included, below the seed noise floor, so it cannot rank the arms (`19_downstream_umap/fig_pop_pct.png`, `fig_marker_flags.png`, `fig_ari.png`, `fig_cluster_abundance.png`, `fig_knn_overlap.png`). No AutoSpectral article quoted in section 14 covers embeddings.
+
+```{r}
+#| results: asis
+show_kept("19_downstream_umap/fig_pop_pct.png", "Gated populations, % of parent, as188_joint and opt188, each on its own gates; donors joined by lines. Kept from script 89b.")
+show_kept("19_downstream_umap/fig_marker_flags.png", "opt188 minus as188_joint squeezed share per marker, donor median; flag marked. Kept from script 89.")
+show_kept("19_downstream_umap/fig_ari.png", "SOM cluster agreement (ARI) with as188_joint seed 42: opt188 and as188_joint at seeds 1-3; one point per donor. Kept from script 89.")
+show_kept("19_downstream_umap/fig_cluster_abundance.png", "Matched metacluster abundance, % of live events; donors joined by lines; J = Jaccard of the match. Kept from script 89.")
+show_kept("19_downstream_umap/fig_knn_overlap.png", "Median share of 30 UMAP neighbours kept vs 1.8.8 zip (top) or SpectroFlo (bottom), CD3+ T cells, four marker-set × scaling panels; the noise floor is 1.8.8 zip at seeds 1-3. Kept from script 92b.")
+show_kept("19_downstream_umap/fig_umap_lineage_zscore.png", "UMAP on 14 z-scored lineage markers, coloured by TNF (top) and Th2 (bottom), per arm. Kept from script 92b.")
+```
+
+Raw views of the shifted clusters (script 94). The 1.8.8 zip MC09 sits at CD38 ≈ 1; its opt188 counterpart sits at CD38 ≈ 0.3 and holds 22.1–34.8% of live cells against 1.2–19.8%. MC06 maps to the same opt188 cluster, in the same CD3+ CD7-low region, so the rise reads as two clusters merging after a CD38 shift. The opt188 MC02 counterpart sits higher on CD7, and MC12 loses its CD45RA-high CD3− cells (1.6–9.7% → 0.7–5.2%) (`21_raw_companions/cluster_raw/fig_cluster_MC09.png`, `fig_cluster_MC06.png`, `fig_cluster_MC02.png`, `fig_cluster_MC12.png`).
+
+```{r}
+#| results: asis
+show_kept("21_raw_companions/cluster_raw/fig_cluster_MC09.png", "MC09 cells (black) on its two defining lineage markers over all live cells, as188_joint and the matched opt188 cluster; % of live cells per panel; rows donors. Kept from script 94.")
+show_kept("21_raw_companions/cluster_raw/fig_cluster_MC06.png", "The same for MC06. Kept from script 94.")
+show_kept("21_raw_companions/cluster_raw/fig_cluster_MC02.png", "The same for MC02. Kept from script 94.")
+show_kept("21_raw_companions/cluster_raw/fig_cluster_MC12.png", "The same for MC12. Kept from script 94.")
+```
+
+## 20 Spike-in recovery, other cytokines and metabolic markers
+
+Under 1.8.8 zip, at most 1.4% of CD4T or CD8T cells lose most of a +1 arcsinh spike in IFNg, IL-2, GLUT1, ATP5A, CS, CPT1A, ATGL, G6PD or CD71. CS reads 3–4% high in every donor. GLUT1 is the weakest marker of this panel (0.7% / 1.4%), and refined AF makes it slightly worse (2.1% / 2.3%). Only CD4T and CD8T cells were spiked, and opt188 and the 1.0.2 setups were not tested on this panel. Per cell, the refined AF and 1.8.8 zip curves overlap for all nine markers; refined AF sits slightly higher for GLUT1 below a recovery of 1 (cells pooled over donors at ≤0.5: 2.0% vs 0.8% in CD4T, 2.7% vs 1.2% in CD8T; `fig_spike_recovery_ecdf.png`) (`20_spike_in_panel2/fig_spike_GLUT1.png`, `fig_spike_CS.png`, `fig_spike_IFNg.png`, `fig_spike_IL2.png`, `fig_spike_ATP5A.png`, `fig_spike_CPT1A.png`, `fig_spike_ATGL.png`, `fig_spike_G6PD.png`, `fig_spike_CD71.png`). AutoSpectral: “we’re only allowing variation within the range seen in the single-colour control, nothing more.” (11 Per Cell Optimization).
+
+```{r}
+#| results: asis
+show_kept("20_spike_in_panel2/fig_spike_recovery_ecdf.png", "Per-cell recovered fraction of the +1 spike, cumulative, nine markers, as188_joint and refined AF (the old 88b figure dropped refined AF; the redraw draws both); dashed lines at 0.5 and 1. Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_GLUT1.png", "GLUT1 (Alexa Fluor 405) spike +1 arcsinh: share of cells losing more than half (top) and median recovery (bottom); donors as points, median line. Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_CS.png", "The same for CS (Alexa Fluor 594). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_IFNg.png", "The same for IFNg (BV570). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_IL2.png", "The same for IL-2 (BV605). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_ATP5A.png", "The same for ATP5A (Alexa Fluor 488). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_CPT1A.png", "The same for CPT1A (PE-Cy5.5). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_ATGL.png", "The same for ATGL (PE-Cy7). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_G6PD.png", "The same for G6PD (APC-Cy7). Kept from script 88b.")
+show_kept("20_spike_in_panel2/fig_spike_CD71.png", "The same for CD71 (Spark YG 593). Kept from script 88b.")
+show_kept("21_raw_companions/spike_raw/fig_raw_CS_CD8T.png", "CD8T CS per spiked cell, as for TNF in section 18; every cell follows the full-recovery curve, slightly above it. Kept from script 88c.")
+```
+
+## 22 Spike-in recovery in live CD3− cells
+
+In live CD3− cells (870–2,903 per donor and level), 1.8.8 zip loses most of a +1 arcsinh spike in 6.8% of cells for TNF (CD8T: 2.1%), 2.5% for Th2, 1.3% for GLUT1 and at most 0.4% for the other nine markers. Refined AF loses most of the GLUT1 spike in 15.3% (9.4–33.7%) and the TNF spike in 10.7%. Per cell, the refined AF curve separates from 1.8.8 zip only for GLUT1 (cells pooled over donors at ≤0.5: 17.4% vs 1.6%) and TNF (11.3% vs 6.6%); the other ten markers overlap (`22_spike_cd3neg/fig_spike_GLUT1.png`, `fig_spike_TNF.png`, `raw/fig_raw_GLUT1_CD3neg.png`, `raw/fig_raw_TNF_CD3neg.png`, `fig_spike_recovery_ecdf.png`). AutoSpectral: “Prepare a truly unstained sample.” (10 Single Cell Autofluorescence).
+
+```{r}
+#| results: asis
+show_kept("22_spike_cd3neg/fig_spike_GLUT1.png", "GLUT1 spike +1 arcsinh in live CD3− cells: share of cells losing more than half (top) and median recovery (bottom), as188_joint and refined AF; donors as points, median line. Kept from script 88e.")
+show_kept("22_spike_cd3neg/raw/fig_raw_GLUT1_CD3neg.png", "GLUT1 per spiked CD3− cell, as in section 18. Kept from script 88g.")
+show_kept("22_spike_cd3neg/fig_spike_TNF.png", "The same as the first panel for TNF. Kept from script 88e.")
+show_kept("22_spike_cd3neg/raw/fig_raw_TNF_CD3neg.png", "TNF per spiked CD3− cell. Kept from script 88g.")
+show_kept("22_spike_cd3neg/fig_spike_recovery_ecdf.png", "Per-cell recovered fraction of the +1 spike in live CD3− cells, cumulative, 12 markers, as188_joint and refined AF (the old 88e figure dropped refined AF; the redraw draws both); dashed lines at 0.5 and 1. Kept from script 88e.")
+```
+
+## 23 TNF + GLUT1 co-spike
+
+With TNF at +1 arcsinh and GLUT1 added at +0, +1 and +2 in the same cells, 1.8.8 zip loses most of the TNF spike in 2.1, 2.3 and 2.5% of CD8T cells, and refined AF in 3.8, 2.8 and 4.0%. The 1.0.2 zip control rises from 14.5 to 21.3 and 43.3%, so the test detects the known failure. Split by natural GLUT1, only 1.0.2 zip loses more TNF at higher GLUT1 (CD8T 11.0% in Q1 to 16.1% in Q4); this is an association, because natural GLUT1 is not randomised (`23_cospike/fig_cospike_tnf_loss.png`, `fig_cospike_raw_CD8T_v2.png`, `fig_cospike_glut1_recovery.png`, `by_glut1_fig_loss_by_glut1.png`). AutoSpectral: the joint pipeline “can understate a dimmer collinear fluorophore’s true abundance” (11 Per Cell Optimization).
+
+```{r}
+#| results: asis
+show_kept("23_cospike/fig_cospike_tnf_loss.png", "Share of cells losing more than half of the TNF spike by GLUT1 co-spike dose, CD4T and CD8T, three setups; donors as points, median line. Kept from script 88d.")
+show_kept("23_cospike/fig_cospike_raw_CD8T_v2.png", "CD8T TNF per co-spiked cell, rows GLUT1 dose, columns setups; 5 donors pooled, % = donor median. Kept from script 88d (figures_raw).")
+show_kept("23_cospike/fig_cospike_glut1_recovery.png", "Median GLUT1 recovery at GLUT1 +1 and +2; dashed line at 1. Kept from script 88d.")
+show_kept("23_cospike/by_glut1_fig_loss_by_glut1.png", "Share of cells losing more than half of the section 18 TNF spike by natural GLUT1 quartile per donor, five setups. Kept from script 88f.")
+```
+
+## 24 Decision
+
+The user chose 1.8.8 zip (`as188_joint`) on 2026-11-11 (README row 113). Across 12 markers in CD4T, CD8T and live CD3− cells, its spike losses are among the lowest tested, without the overshoot of the 1.0.2 code, and it passes the TNF + GLUT1 co-spike. Its caveats are Th2 in CD8T (13.7%; Th2 is analysed in CD4T), TNF in CD3− cells (6.8%) and CS reading 3–4% high. Refined AF (GLUT1 15.3% in CD3− cells) and opt188 (Th2 22.9% in CD8T; CD38 shift) were rejected (`18_spike_in/fig_spike_Th2.png`, `22_spike_cd3neg/fig_spike_GLUT1.png`, `23_cospike/fig_cospike_tnf_loss.png`).
+
+## 25 Spike recovery vs n.passes / n.af.passes
+
+Raising n.passes, n.af.passes or both to 5 leaves spike loss within about 1 point of the 1/1 setting for every marker and population (descriptive; the final setting stays 1/1, README row "Spike passes"). CD8T Th2 loss is 13.7, 13.8, 14.5 and 13.9% at 1/1, 5/1, 1/5 and 5/5. IL-10 loses no cells at any setting (median recovery 0.993–0.998), and 5 AF passes raise TNF loss slightly (CD8T 2.1% to 2.5–2.7%, CD3− 6.8% to 7.6–7.8%) (`2026-11-11_bmv-spike-passes/fig_passes_Th2.png`, `fig_passes_IL10.png`, `fig_passes_TNF.png`, `raw/fig_raw_Th2_CD8T.png`). At 5 AF passes, unmixing is not strictly per cell. Spiking some cells moved at most 0.26% of unspiked CD4T and CD8T cells by more than 0.05 arcsinh in any channel, and at most 0.02% by more than 0.5; in CD3− cells the shares were at most 0.08% and 0%. The largest single shift was 0.81 arcsinh (TNF set, CD4T, 5/5), and at 5/1 no unspiked cell moved (table fallback: drift is a count, no figure; `2026-11-11_bmv-spike-passes/drift_summary.csv`, written by `88h_spike_passes.R drift`; all fluorescence channels, arcsinh units). AutoSpectral: n.passes, “Most datasets I have tested show good results with a single pass”; n.af.passes, “PBMC data typically shows negligible benefit” (11 Per Cell Optimization).
+
+```{r}
+#| results: asis
+show_run("2026-11-11_bmv-spike-passes/fig_passes_Th2.png", "Th2 spike +1 arcsinh by n.passes / n.af.passes (1/1 = as188_joint): share of cells losing more than half (left) and median recovery (right), rows CD4T, CD8T and live CD3−; donors as points, median line. Script 88h.")
+show_run("2026-11-11_bmv-spike-passes/raw/fig_raw_Th2_CD8T.png", "Th2 per spiked CD8T cell: unspiked unmix (x) against +1 spiked unmix (y), rows donors, columns pass settings; dashed curve = full recovery, solid diagonal = spike lost; % = share losing more than half. Script 88h (raw mode).")
+show_run("2026-11-11_bmv-spike-passes/fig_passes_IL10.png", "The same as the first panel for IL-10 (BB700). Script 88h.")
+show_run("2026-11-11_bmv-spike-passes/fig_passes_TNF.png", "The same as the first panel for TNF (BV510), the control marker. Script 88h.")
+```
+
+## Open item
+
+No unstimulated control exists, so the true TNF+ % cannot be settled. The fixed cut compares arms; it does not measure true positivity.
+
+```{r}
+#| label: session
+writeLines(capture.output(sessionInfo()), file.path(FIG_DIR, "sessionInfo.txt"))
+```
