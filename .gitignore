@@ -64,3 +64,6 @@ experiments/slurm/logs/
 experiments/bmv_test/**/*.zip
 experiments/bmv_test/**/data/
 experiments/bmv_test/**/*.fcs
+
+/.quarto/
+**/*.quarto_ipynb

@@ -1,0 +1,306 @@
+---
+title: "BMV Unmix Dashboard"
+subtitle: "AutoSpectral 1.0.2 vs 1.8.8 on 3-day CD3/CD28-stimulated BMV cells, 5 donors"
+date: today
+format:
+  html:
+    output-file: dashboard.html
+    embed-resources: true
+    theme: none
+    css: dashboard/dashboard.css
+    include-before-body: dashboard/header.html
+    include-after-body: dashboard/footer.html
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    fig-align: center
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: params
+# Purpose: one-page dashboard of the BMV unmix comparison, built only from the figures the
+#          2026-11-11 freshness audit certified as current (Nature-spec restyle). Each section
+#          carries the report's finding, then tabs: figures, the plotted data, AutoSpectral notes.
+# Run:     pixi run quarto render experiments/benchmarks/05_bmv-unmix-compare/96_dashboard.qmd
+#          then move dashboard.html into OUT_DIR (OUT_DIR must not exist before the render).
+# Inputs:  experiments/benchmarks/05_bmv-unmix-compare/90_report.qmd   section prose, figure calls, captions
+#          experiments/runs/2026-11-10_bmv-summary/INDEX.md              conclusions list
+#          experiments/runs/2026-11-11_bmv-restyle/audit_freshness.csv   certified figures (current = TRUE)
+#          <figure>.pdf, <figure>.csv beside every cited PNG             [save_panel, 95_restyle_*, report_figures.R]
+# Outputs: <OUT_DIR>/img/*.png         WEB_DPI web copies made from each figure's PDF
+#          <OUT_DIR>/img_log.csv       figure, source used (pdf or png fallback), web image
+#          <OUT_DIR>/sessionInfo.txt
+# Parameters --------------------------------------------------------------------
+RUNS_DIR <- "experiments/runs"
+REPORT_QMD <- "experiments/benchmarks/05_bmv-unmix-compare/90_report.qmd" # section order and prose
+INDEX_MD <- "experiments/runs/2026-11-10_bmv-summary/INDEX.md"
+AUDIT_CSV <- "experiments/runs/2026-11-11_bmv-restyle/audit_freshness.csv"
+FIG_DIR <- "experiments/runs/2026-11-10_bmv-report/figures-v7" # report redraws, as 90_report.qmd
+KEPT_DIR <- "experiments/runs/2026-11-11_bmv-restyle" # restyled per-cell and summary figures
+OUT_DIR <- "experiments/runs/2026-11-11_bmv-dashboard"
+WEB_DPI <- 120 # web copy resolution (150 gave a 17.7 MB page, over the 16 MB publish limit); the 300-dpi PNG and vector PDF stay in the run folders
+MAX_ROWS <- 500 # rows shown per data table; larger tables show the first MAX_ROWS
+```
+
+```{r}
+#| label: setup
+knitr::opts_knit$set(root.dir = normalizePath("../../.."))
+```
+
+```{r}
+#| label: libraries
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(purrr)
+  library(readr)
+  library(stringr)
+  library(tibble)
+  library(reactable)
+})
+```
+
+```{r}
+#| label: sections
+# Parse the report into sections --------------------------------------------------------------
+# Each "## " heading of 90_report.qmd is one section; prose is every line outside code chunks.
+report <- read_lines(REPORT_QMD)
+in_chunk <- cumsum(str_detect(report, "^```")) %% 2 == 1 | str_detect(report, "^```")
+heading_at <- which(str_detect(report, "^## "))
+sections <- tibble(
+  start = heading_at,
+  end = c(heading_at[-1] - 1, length(report)),
+  heading = str_remove(report[heading_at], "^## ")
+) |>
+  mutate(
+    prose = map2_chr(start, end, \(s, e) {
+      keep <- (s + 1):e
+      keep <- keep[!in_chunk[keep]]
+      str_trim(paste(report[keep], collapse = "\n"))
+    }),
+    code = map2_chr(start, end, \(s, e) {
+      keep <- (s + 1):e
+      paste(report[keep[in_chunk[keep]]], collapse = "\n")
+    })
+  )
+
+# Report redraws: key -> title from the FIGURES table; s06 is drawn in the report itself.
+redraw_titles <- str_match_all(
+  paste(report, collapse = "\n"),
+  '"(s\\d\\d_[a-z0-9_]+)"\\s*,\\s*"[^"]*"\\s*,\\s*"[^"]*"\\s*,\\s*"([^"]*)"'
+)[[1]]
+redraw_titles <- set_names(redraw_titles[, 3], redraw_titles[, 2])
+redraw_titles[["s06_spectra_angle"]] <- "Angle between each dye's 1.0.2 and 1.8.8 spectrum; each point is one dye."
+
+# Figures per section, in report order: show("key"), show_kept("path", "caption") and the
+# section 05 walk() over x markers, expanded the way the report expands it.
+unescape <- \(x) str_replace_all(x, '\\\\"', '"')
+section_figures <- \(code) {
+  calls <- str_match_all(
+    code,
+    regex(
+      paste0(
+        'show\\("(s\\d\\d_[a-z0-9_]+)"\\)',
+        '|show_kept\\(\\s*"([^"]+)"\\s*,\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\)',
+        '|walk\\(c\\(([^)]*)\\),\\s*\\\\\\(x\\) show_kept\\(\\s*sprintf\\("([^"]+)", x\\),\\s*sprintf\\(\\s*"((?:[^"\\\\]|\\\\.)*)",\\s*x\\s*\\)'
+      ),
+      dotall = TRUE
+    )
+  )[[1]]
+  if (nrow(calls) == 0) {
+    return(tibble(path = character(), caption = character()))
+  }
+  map(seq_len(nrow(calls)), \(i) {
+    m <- calls[i, ]
+    if (!is.na(m[2])) {
+      tibble(path = file.path(FIG_DIR, paste0(m[2], ".png")), caption = redraw_titles[[m[2]]])
+    } else if (!is.na(m[3])) {
+      tibble(path = file.path(KEPT_DIR, m[3]), caption = unescape(m[4]))
+    } else {
+      xs <- str_match_all(m[5], '"([^"]+)"')[[1]][, 2]
+      tibble(path = file.path(KEPT_DIR, sprintf(m[6], xs)), caption = sprintf(unescape(m[7]), xs))
+    }
+  }) |>
+    list_rbind()
+}
+figures <- sections |>
+  mutate(fig = map(code, section_figures)) |>
+  select(heading, fig) |>
+  tidyr::unnest(fig) |>
+  mutate(
+    caption = str_remove(caption, "\\s*(Kept|Restyled) (from|by) .*$"),
+    rel = str_remove(path, paste0("^", RUNS_DIR, "/"))
+  )
+
+# Only figures the freshness audit certified enter the dashboard.
+certified <- read_csv(AUDIT_CSV, show_col_types = FALSE) |>
+  filter(current) |>
+  pull(figure) |>
+  unique()
+stopifnot("every dashboard figure is certified current" = all(figures$rel %in% certified))
+```
+
+```{r}
+#| label: web-images
+# Web copies of every figure ------------------------------------------------------------------
+# Web PNGs rendered at WEB_DPI from each figure's vector PDF; a PNG is downsized only when no PDF exists.
+stopifnot("output dir is new" = !dir.exists(OUT_DIR))
+dir.create(file.path(OUT_DIR, "img"), recursive = TRUE)
+img_log <- figures |>
+  distinct(rel, path) |>
+  mutate(
+    web = file.path(OUT_DIR, "img", str_replace_all(str_remove(rel, "\\.png$"), "/", "__")),
+    pdf = str_replace(path, "\\.png$", ".pdf"),
+    source = if_else(file.exists(pdf), "pdf", "png")
+  )
+pwalk(img_log, \(rel, path, web, pdf, source) {
+  if (source == "pdf") {
+    system2("pdftoppm", c("-r", WEB_DPI, "-png", "-singlefile", shQuote(pdf), shQuote(web)))
+  } else {
+    # 300-dpi PNG halved to the web resolution
+    system2("convert", c(shQuote(path), "-resize", sprintf("%d%%", round(100 * WEB_DPI / 300)), shQuote(paste0(web, ".png"))))
+  }
+})
+img_log <- mutate(img_log, web = paste0(web, ".png"))
+stopifnot("every web image was written" = all(file.exists(img_log$web)))
+write_csv(select(img_log, rel, source, web), file.path(OUT_DIR, "img_log.csv"))
+figures <- left_join(figures, select(img_log, rel, web), by = join_by(rel), relationship = "many-to-one")
+```
+
+```{r}
+#| label: helpers
+# The plotted data of one figure: the source CSV save_panel wrote beside the PNG.
+data_table <- \(png) {
+  csv <- str_replace(png, "\\.png$", ".csv")
+  d <- read_csv(csv, show_col_types = FALSE, guess_max = 5000)
+  n <- nrow(d)
+  d <- d |>
+    head(MAX_ROWS) |>
+    mutate(across(where(is.double), \(x) signif(x, 3)))
+  note <- if (n > MAX_ROWS) sprintf("First %d of %d rows; full table: `%s`.", MAX_ROWS, n, csv) else sprintf("%d rows; file: `%s`.", n, csv)
+  list(
+    widget = reactable(
+      d,
+      searchable = TRUE,
+      sortable = TRUE,
+      compact = TRUE,
+      striped = TRUE,
+      defaultPageSize = 10,
+      wrap = FALSE,
+      resizable = TRUE
+    ),
+    note = note
+  )
+}
+
+# AutoSpectral quotes in a section's prose: an inline "AutoSpectral: ..." sentence or quote bullets.
+autospectral_notes <- \(prose) {
+  inline <- str_extract_all(prose, "AutoSpectral: .*?\\)\\.")[[1]]
+  bullets <- str_subset(str_split(prose, "\n")[[1]], "^- .*“")
+  c(inline, bullets)
+}
+finding <- \(prose) {
+  prose |>
+    str_remove_all("\\s*AutoSpectral: .*?\\)\\.") |>
+    str_split("\n") |>
+    pluck(1) |>
+    discard(\(l) str_detect(l, "^- .*“|^AutoSpectral quotes for this section")) |>
+    paste(collapse = "\n") |>
+    str_trim()
+}
+```
+
+```{=html}
+<div class="verdict-row">
+  <div class="verdict good">
+    <div class="v-label">Final setting</div>
+    <div class="v-value">1.8.8 zip (as188_joint)</div>
+    <div class="v-note">User decision 2026-11-11, README row 113</div>
+  </div>
+  <div class="verdict good">
+    <div class="v-label">CD8T TNF spike, % cells losing most</div>
+    <div class="v-value">2.1% vs 14.5% (1.0.2 zip)</div>
+    <div class="v-note">18_spike_in/fig_spike_TNF.png</div>
+  </div>
+  <div class="verdict warn">
+    <div class="v-label">CD8T Th2 spike, % cells losing most</div>
+    <div class="v-value">13.7% vs 48.8% (1.0.2 zip)</div>
+    <div class="v-note">18_spike_in/fig_spike_Th2.png · Th2 is analysed in CD4T</div>
+  </div>
+  <div class="verdict good">
+    <div class="v-label">9 more markers, CD4T and CD8T</div>
+    <div class="v-value">≤1.4% lose most</div>
+    <div class="v-note">20_spike_in_panel2/fig_spike_*.png · CS reads 3–4% high</div>
+  </div>
+  <div class="verdict bad">
+    <div class="v-label">CD3− GLUT1 spike, refined AF rejected</div>
+    <div class="v-value">1.3% vs 15.3% (refined AF)</div>
+    <div class="v-note">22_spike_cd3neg/fig_spike_GLUT1.png</div>
+  </div>
+</div>
+```
+
+> **How to read this page.** Each section states the finding with the figures that support it. Tabs hold the figures (Nature spec, 120-dpi web copies of the vector PDFs), the plotted data behind each figure (sortable and searchable), and the AutoSpectral documentation quoted for that section. Arms are the unmixing setups compared; donors (A3, A6, B11, B2, D1) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell.
+
+## Conclusions
+
+```{r}
+#| label: conclusions
+#| results: asis
+# The conclusion bullets of INDEX.md, verbatim.
+index <- read_lines(INDEX_MD)
+from <- which(index == "## Conclusions") + 1
+to <- which(str_detect(index, "^## "))
+to <- min(to[to > from]) - 1
+cat(index[from:to], sep = "\n")
+```
+
+```{r}
+#| label: body
+#| results: asis
+# One section per report heading -------------------------------------------------------------
+# Built as child markdown so each reactable keeps its HTML dependencies.
+render_section <- \(which_heading, prose) {
+  figs <- filter(figures, heading == which_heading)
+  notes <- autospectral_notes(prose)
+  lines <- c(sprintf("## %s", which_heading), "", finding(prose), "")
+  if (nrow(figs) > 0 || length(notes) > 0) {
+    lines <- c(lines, "::: {.panel-tabset}", "")
+    if (nrow(figs) > 0) {
+      lines <- c(lines, "### Figures", "")
+      lines <- c(
+        lines,
+        pmap_chr(figs, \(caption, rel, web, ...) {
+          sprintf("![%s `%s`](%s){width=100%%}\n", caption, rel, file.path("../../..", web))
+        })
+      )
+      lines <- c(lines, "### Data", "")
+      for (i in seq_len(nrow(figs))) {
+        lines <- c(
+          lines,
+          sprintf("**%s**", basename(figs$rel[i])),
+          "",
+          sprintf("```{r, results='asis'}\ntab <- data_table(%s)\ncat(tab$note)\n```\n", deparse(figs$path[i])),
+          sprintf("```{r}\ntab$widget\n```\n")
+        )
+      }
+    }
+    if (length(notes) > 0) {
+      lines <- c(lines, "### AutoSpectral notes", "", paste0("- ", str_remove(notes, "^- ")), "")
+    }
+    lines <- c(lines, ":::", "")
+  }
+  knitr::knit_child(text = lines, envir = environment(), quiet = TRUE)
+}
+# Section 08 points at the superseded offline dashboard that this page replaces.
+out <- pmap_chr(select(filter(sections, !str_starts(heading, "08 ")), heading, prose), \(heading, prose) render_section(heading, prose))
+cat(out, sep = "\n\n")
+```
+
+```{r}
+#| label: session
+writeLines(capture.output(sessionInfo()), file.path(OUT_DIR, "sessionInfo.txt"))
+```

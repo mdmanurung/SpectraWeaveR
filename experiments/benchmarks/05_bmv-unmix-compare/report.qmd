@@ -1,0 +1,401 @@
+---
+title: "BMV 3-day stim: four unmixing pipelines compared"
+format:
+  html:
+    embed-resources: true
+    toc: true
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| label: params
+# Parameters ------------------------------------------------------------------------------
+RUN_DIR <- Sys.getenv("RUN_DIR", "experiments/runs/2026-11-09_bmv-unmix-compare-final")
+REF_ARM <- "as188_joint" # reference arm (user, 2026-11-09)
+ARM_LEVELS <- c("spectroflo", "as102_basic", "as102_var", "best102_neg", "best102_af", "as188_joint", "as188_fast_csv", "best188_p1", "best188_p5", "s102_c188", "s188_c102")
+ARM_COLOURS <- c(spectroflo = "#E69F00", as102_basic = "#56B4E9", as102_var = "#009E73", best102_neg = "#00573F", best102_af = "#66C2A5", as188_joint = "#444444", as188_fast_csv = "#7A7A7A", best188_p1 = "#000000", best188_p5 = "#4B0082", s102_c188 = "#CC79A7", s188_c102 = "#D55E00", as188_reseed = "#BBBBBB")
+MIN_NEG <- 200 # only for the sensitivity line below: fewest negatives per channel and sample
+# the 2x2: spectra source x code version, variants on in all four cells (user, grill Q5, 2026-11-09)
+CELLS_2X2 <- tibble::tribble(
+  ~arm,          ~spectra, ~code,
+  "as102_var",   "1.0.2",  "1.0.2",
+  "s102_c188",   "1.0.2",  "1.8.8",
+  "s188_c102",   "1.8.8",  "1.0.2",
+  "as188_joint", "1.8.8",  "1.8.8"
+)
+# pinned cuts (user, grill Q21, 2026-11-09): a mindensity cut within PIN_TOL of the window edge in any arm means no valley
+SET <- Sys.getenv("SET", "all") # "all" = every channel; "unpinned" = drop sample-channel cells with a pinned cut
+CUT_WINDOW <- c(0, 3) # the window used by 02_metrics.R
+PIN_TOL <- 0.02
+NORMAL_TAIL <- pnorm(-3) # lower-tail fraction expected for a normal negative at median - 3 rSD
+```
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(readr)
+  library(stringr)
+  library(ggplot2)
+  library(cowplot)
+})
+theme_set(theme_classic(base_size = 8))
+rd <- \(f) read_csv(file.path(RUN_DIR, f), show_col_types = FALSE) |> mutate(across(any_of("arm"), \(x) factor(x, levels = ARM_LEVELS)))
+save_fig <- \(p, name, w = 180, h = 100) {
+  if (SET != "all") name <- sub("\\.png$", paste0("_", SET, ".png"), name)
+  ggsave(file.path(RUN_DIR, "figures", name), p, width = w, height = h, units = "mm", dpi = 150)
+  p
+}
+pinned_cells <- read_csv(file.path(RUN_DIR, "mindensity_cuts.csv"), show_col_types = FALSE) |>
+  summarise(pinned = any(cut < CUT_WINDOW[[1]] + PIN_TOL | cut > CUT_WINDOW[[2]] - PIN_TOL), .by = c(sample, channel)) |>
+  filter(pinned)
+# negative-based tables: with SET = "unpinned", drop rows whose channel(s) have a pinned cut in this sample
+rd_neg <- \(f) {
+  d <- rd(f)
+  if (SET == "all") return(d)
+  for (col in intersect(c("channel", "channel_a", "channel_b", "channel_i", "channel_j"), names(d))) {
+    d <- anti_join(d, rename(pinned_cells, !!col := channel), by = c("sample", col))
+  }
+  d
+}
+# per-donor point plot: one point per donor, a bar for the median across donors
+donor_points <- \(d, y, ylab, hline = NULL) {
+  ggplot(d, aes(arm, .data[[y]], colour = arm)) +
+    stat_summary(fun = median, geom = "crossbar", width = 0.5, colour = "grey30") +
+    geom_point(aes(shape = sample), size = 2, position = position_jitter(width = 0.08, height = 0, seed = 1)) +
+    {if (!is.null(hline)) geom_hline(yintercept = hline, linetype = "dashed")} +
+    scale_colour_manual(values = ARM_COLOURS, guide = "none") +
+    theme(axis.text.x = element_text(angle = 40, hjust = 1)) +
+    labs(x = NULL, y = ylab, shape = "donor sample")
+}
+```
+
+Rendered with channel set: **`r SET`** (`all` keeps every channel; `unpinned` drops the sample-channel cells whose mindensity cut sits within 0.02 of the 0 to 3 window edge in any arm, user grill Q21).
+
+## Gates
+
+Gate plots from step 1 are in `figures/gates_<sample>.png` (all five opened and checked on 2026-11-09).
+
+```{r}
+#| label: gates
+shared <- read_csv(file.path(RUN_DIR, "shared_live_counts.csv"), show_col_types = FALSE)
+gc <- rd("gate_counts.csv") |>
+  filter(Population == "/nonDebris/singlets/live") |>
+  summarise(best_arm = max(Count), .by = name) |>
+  left_join(shared, by = join_by(name == sample), relationship = "one-to-one") |>
+  mutate(loss_vs_best_arm_pct = round(100 * (1 - n_shared / best_arm), 2))
+knitr::kable(gc)
+```
+
+## Negative spread (rank 1)
+
+```{r}
+#| label: f1-spread
+#| fig-width: 7
+#| fig-height: 3.5
+ns <- rd_neg("negative_spread.csv")
+ratio <- ns |>
+  left_join(
+    ns |> filter(arm == REF_ARM) |> select(sample, channel, rsd_ref = rsd_neg, n_ref = n_neg),
+    by = join_by(sample, channel), relationship = "many-to-one"
+  ) |>
+  filter(arm != REF_ARM) |>
+  mutate(log2_ratio = log2(rsd_neg / rsd_ref), sparse = pmin(n_neg, n_ref) < MIN_NEG)
+by_donor <- ratio |> summarise(med_log2 = median(log2_ratio, na.rm = TRUE), .by = c(arm, sample))
+by_donor_dense <- ratio |> filter(!sparse) |> summarise(med_log2_dense = median(log2_ratio, na.rm = TRUE), .by = c(arm, sample))
+p_a <- donor_points(by_donor, "med_log2", "median over channels\nlog2(rSD arm / rSD as188_joint)", 0) +
+  labs(title = "Per donor")
+by_channel <- ratio |> summarise(med_log2 = median(log2_ratio, na.rm = TRUE), .by = c(arm, channel))
+p_b <- ggplot(by_channel, aes(arm, med_log2, colour = arm)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(size = 0.6, position = position_jitter(width = 0.15, height = 0, seed = 1)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_colour_manual(values = ARM_COLOURS, guide = "none") +
+  labs(title = "Per channel (median over donors)", x = NULL, y = "log2(rSD arm / rSD as188_joint)")
+save_fig(plot_grid(p_a, p_b, nrow = 1), "f1_negative_spread.png", 190, 95)
+```
+
+```{r}
+by_donor |> left_join(by_donor_dense, by = join_by(arm, sample), relationship = "one-to-one") |> mutate(across(where(is.numeric), \(x) round(x, 3))) |> knitr::kable(caption = "Median log2 ratio per donor; right column drops channel/sample cells with fewer than MIN_NEG negatives in either arm")
+```
+
+## Spread matrix
+
+```{r}
+#| label: f2-matrix
+#| fig-width: 7.5
+#| fig-height: 4
+sm <- rd_neg("spread_matrix.csv")
+sm_mean <- sm |>
+  summarise(ss = mean(ss, na.rm = TRUE), .by = c(arm, marker_i, channel_j))
+sm_diff <- sm_mean |>
+  left_join(sm_mean |> filter(arm == REF_ARM) |> select(marker_i, channel_j, ss_ref = ss), by = join_by(marker_i, channel_j), relationship = "many-to-one") |>
+  filter(arm != REF_ARM) |>
+  mutate(delta = ss - ss_ref)
+lim <- quantile(abs(sm_diff$delta), 0.98, na.rm = TRUE)
+p_m <- ggplot(sm_diff, aes(channel_j, marker_i, fill = pmax(pmin(delta, lim), -lim))) +
+  geom_tile() +
+  facet_wrap(vars(arm), ncol = 1) +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", name = "spread\nminus as188\n(donor mean)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), axis.text.y = element_text(size = 6)) +
+  labs(x = "target channel j", y = "source marker i")
+save_fig(p_m, "f2_spread_matrix_delta.png", 190, 160)
+sm |>
+  summarise(median_ss = median(ss, na.rm = TRUE), p90_ss = quantile(ss, 0.9, na.rm = TRUE), .by = arm) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2))) |>
+  knitr::kable(caption = "Spread values over all marker pairs and donors")
+```
+
+## Artefacts
+
+```{r}
+#| label: f3-artefacts
+#| fig-width: 7
+#| fig-height: 3.5
+art <- rd_neg("artefacts.csv") |> summarise(med = median(lower_tail_frac, na.rm = TRUE), .by = c(arm, sample))
+p_t <- donor_points(art, "med", "median over channels\nlower-tail fraction (< median - 3 rSD)", NORMAL_TAIL) +
+  labs(title = "Lower tail (dashed: normal expectation)")
+nc <- rd_neg("neg_correlation.csv") |> summarise(med_abs_rho = median(abs(rho), na.rm = TRUE), .by = c(arm, sample))
+p_c <- donor_points(nc, "med_abs_rho", "median |Spearman rho| over channel pairs\namong events negative for both") +
+  labs(title = "Leaning")
+save_fig(plot_grid(p_t, p_c, nrow = 1), "f3_artefacts.png", 190, 95)
+```
+
+```{r}
+#| label: worst-pairs
+rd_neg("neg_correlation.csv") |>
+  summarise(rho = mean(rho, na.rm = TRUE), .by = c(arm, channel_a, channel_b)) |>
+  slice_max(abs(rho), n = 10, by = arm) |>
+  mutate(rho = round(rho, 2)) |>
+  arrange(arm, desc(abs(rho))) |>
+  knitr::kable(caption = "Ten strongest negative-population correlations per arm (donor mean rho)")
+```
+
+## Stain index
+
+```{r}
+#| label: f4-stain
+#| fig-width: 7.5
+#| fig-height: 4
+si <- rd_neg("stain_index.csv")
+si_ratio <- si |>
+  left_join(si |> filter(arm == REF_ARM) |> select(sample, marker, si_ref = stain_index), by = join_by(sample, marker), relationship = "many-to-one") |>
+  filter(arm != REF_ARM) |>
+  mutate(log2_si = log2(stain_index / si_ref))
+si_donor <- si_ratio |> summarise(med = median(log2_si, na.rm = TRUE), .by = c(arm, sample))
+p_s1 <- donor_points(si_donor, "med", "median over markers\nlog2(SI arm / SI as188_joint)", 0) + labs(title = "Per donor")
+p_s2 <- ggplot(si_ratio, aes(marker, log2_si, colour = arm)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(size = 1, position = position_dodge(width = 0.6)) +
+  scale_colour_manual(values = ARM_COLOURS) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(title = "Per marker (points are donors)", x = NULL, y = "log2(SI arm / SI as188_joint)")
+save_fig(plot_grid(p_s1, p_s2, nrow = 1, rel_widths = c(1, 1.8)), "f4_stain_index.png", 190, 95)
+si |> count(pos_rule, name = "cells") |> knitr::kable(caption = "Which positives defined each stain-index value")
+```
+
+## Shape of the negative populations (inside rank 3)
+
+Ideal values: centring 0 (median / rSD), symmetry 0 (log2 of lower over upper half width; positive means a heavier negative side), roundness 1 (axis ratio of the standardised, winsorised negative cloud; a monotone function of the correlation, so it overlaps the leaning metric), and few strongly negative cells (below -3 x the as188 negative rSD, over all shared events).
+
+```{r}
+#| label: f10-shape
+#| eval: !expr file.exists(file.path(RUN_DIR, "shape_negatives.csv"))
+#| fig-width: 9
+#| fig-height: 6
+sh <- rd_neg("shape_negatives.csv") |>
+  summarise(`abs centring (median / rSD)` = median(abs(centring), na.rm = TRUE), `abs symmetry (log2 half-width ratio)` = median(abs(symmetry_log2), na.rm = TRUE), .by = c(arm, sample))
+ncell <- rd_neg("negative_cells.csv") |> summarise(`fraction below -3 x reference rSD` = median(frac_below), .by = c(arm, sample))
+rnd <- rd_neg("roundness.csv") |> summarise(`roundness (axis ratio, 1 = round)` = median(axis_ratio, na.rm = TRUE), .by = c(arm, sample))
+shape_long <- sh |>
+  left_join(ncell, by = join_by(arm, sample), relationship = "one-to-one") |>
+  left_join(rnd, by = join_by(arm, sample), relationship = "one-to-one") |>
+  pivot_longer(-c(arm, sample), names_to = "metric", values_to = "value")
+p_shape <- ggplot(shape_long, aes(arm, value, colour = arm)) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.5, colour = "grey30") +
+  geom_point(aes(shape = sample), size = 1.8, position = position_jitter(width = 0.08, height = 0, seed = 1)) +
+  facet_wrap(vars(metric), scales = "free_y", ncol = 2) +
+  scale_colour_manual(values = ARM_COLOURS, guide = "none") +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) +
+  labs(x = NULL, y = NULL, shape = "donor sample")
+save_fig(p_shape, "f10_shape.png", 230, 170)
+shape_long |> summarise(median = signif(median(value), 3), .by = c(arm, metric)) |> pivot_wider(names_from = metric, values_from = median) |> knitr::kable(caption = "Median over 5 donors")
+```
+
+## Downstream agreement
+
+```{r}
+#| label: f5-downstream
+#| fig-width: 9
+#| fig-height: 3.5
+ari <- rd("clusters_ari.csv") |> filter(arm != REF_ARM)
+noise <- read_csv(file.path(RUN_DIR, "ari_noise_floor.csv"), show_col_types = FALSE) |>
+  mutate(arm = factor("as188_reseed", levels = c(ARM_LEVELS, "as188_reseed")))
+ari <- ari |> mutate(arm = factor(arm, levels = c(ARM_LEVELS, "as188_reseed"))) |> bind_rows(noise)
+p_ari <- donor_points(ari, "ari", "ARI vs as188_joint metaclusters\n(14 lineage markers)") +
+  scale_x_discrete(drop = TRUE) +
+  labs(title = "Clustering agreement (grey: as188 reseeded)")
+cy <- rd("cytokine_freq.csv")
+p_cy <- ggplot(cy, aes(cytokine, pct_positive, colour = arm)) +
+  geom_point(position = position_dodge(width = 0.7), size = 1) +
+  facet_wrap(vars(parent)) +
+  scale_colour_manual(values = ARM_COLOURS) +
+  labs(title = "Cytokine+ (per-arm mindensity cut, window 1 to 4)", x = NULL, y = "% positive")
+save_fig(plot_grid(p_ari, p_cy, nrow = 1, rel_widths = c(1.2, 1.3)), "f5_downstream.png", 230, 95)
+```
+
+## Spectra
+
+```{r}
+#| label: f6-spectra
+#| fig-width: 7.5
+#| fig-height: 4
+sc <- read_csv(file.path(RUN_DIR, "spectra_compare.csv"), show_col_types = FALSE) |> filter(status == "both")
+p_sp <- ggplot(sc, aes(reorder(fluorophore, angle_deg), angle_deg, colour = stamp_188)) +
+  geom_point(size = 1.2) +
+  coord_flip() +
+  labs(title = "Angle between 1.0.2 and 1.8.8 spectra, per 1.8.8 run", x = NULL, y = "angle (degrees)", colour = "1.8.8 run")
+save_fig(p_sp, "f6_spectra_angle.png", 150, 140)
+read_csv(file.path(RUN_DIR, "spectra_checks.csv"), show_col_types = FALSE) |>
+  filter(check_id %in% c("max_sif", "condition_number")) |>
+  summarise(max_value = max(value, na.rm = TRUE), median_value = median(value, na.rm = TRUE), .by = c(set, check_id)) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2))) |>
+  knitr::kable(caption = "Spectra checks (no cutoff applied)")
+```
+
+## Cytokine cuts (per arm, window 1 to 4)
+
+```{r}
+#| label: f7-cytokine-density
+#| fig-width: 9
+#| fig-height: 7
+dens <- rd("cytokine_density.csv")
+thr <- rd("cytokine_freq.csv")
+for (s in sort(unique(dens$sample))) {
+  p <- ggplot(filter(dens, sample == s), aes(x, y, colour = arm)) +
+    geom_line() +
+    geom_vline(data = filter(thr, sample == s), aes(xintercept = threshold, colour = arm), linetype = "dashed") +
+    facet_grid(cytokine ~ parent, scales = "free_y") +
+    scale_colour_manual(values = ARM_COLOURS) +
+    labs(title = paste("Sample", s, "- cytokine arcsinh density, dashed = per-arm cut"), x = "arcsinh", y = "density")
+  save_fig(p, paste0("f7_cytokine_density_", s, ".png"), 230, 180)
+}
+knitr::include_graphics(file.path(RUN_DIR, "figures", paste0("f7_cytokine_density_", sort(unique(dens$sample)), ".png")))
+```
+
+## Spectra effect and code effect (2x2)
+
+Each value is (1.8.8) minus (1.0.2), averaged over the other factor, per donor. For spread and leaning, negative means 1.8.8 is lower; for stain index, positive means 1.8.8 is higher. The 1.0.2 code runs per-cell optimisation at 10 variants; the 1.8.8 code runs the joint pipeline, where `speed` has no effect (slow and fast outputs are byte-identical).
+
+```{r}
+#| label: f8-contrasts
+#| fig-width: 8
+#| fig-height: 5.5
+cell_values_all <- bind_rows(
+  by_donor |> transmute(arm, sample, readout = "spread (median log2 rSD ratio)", value = med_log2),
+  tibble(arm = factor(REF_ARM, levels = ARM_LEVELS), sample = unique(by_donor$sample), readout = "spread (median log2 rSD ratio)", value = 0),
+  si_donor |> transmute(arm, sample, readout = "stain index (median log2 SI ratio)", value = med),
+  tibble(arm = factor(REF_ARM, levels = ARM_LEVELS), sample = unique(si_donor$sample), readout = "stain index (median log2 SI ratio)", value = 0),
+  nc |> transmute(arm, sample, readout = "leaning (median abs rho)", value = med_abs_rho)
+)
+effects_for <- \(cells, design) {
+  cell_values_all |>
+    inner_join(cells, by = join_by(arm), relationship = "many-to-one") |>
+    pivot_wider(id_cols = c(sample, readout), names_from = c(spectra, code), values_from = value, names_sep = "_") |>
+    mutate(
+      `code effect (1.8.8 - 1.0.2)` = ((`1.0.2_1.8.8` - `1.0.2_1.0.2`) + (`1.8.8_1.8.8` - `1.8.8_1.0.2`)) / 2,
+      `spectra effect (1.8.8 - 1.0.2)` = ((`1.8.8_1.0.2` - `1.0.2_1.0.2`) + (`1.8.8_1.8.8` - `1.0.2_1.8.8`)) / 2,
+      design = design
+    ) |>
+    pivot_longer(c(`code effect (1.8.8 - 1.0.2)`, `spectra effect (1.8.8 - 1.0.2)`), names_to = "factor", values_to = "effect")
+}
+effects <- effects_for(CELLS_2X2, "as released (1.0.2 per-cell at 10 variants; 1.8.8 joint)")
+p_fx <- ggplot(effects, aes(factor, effect, shape = sample)) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.5, colour = "grey30") +
+  geom_point(size = 2, position = position_jitter(width = 0.08, height = 0, seed = 1)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_grid(design ~ readout, scales = "free_y") +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1)) +
+  labs(x = NULL, y = "effect", shape = "donor sample")
+save_fig(p_fx, "f8_2x2_effects.png", 220, 95)
+effects |> summarise(median_effect = round(median(effect), 3), donors_same_sign = sum(sign(effect) == sign(median(effect))), .by = c(design, readout, factor)) |> knitr::kable(caption = "Median over 5 donors and how many donors share the median's sign")
+```
+
+## Best-form steps (documented settings, user grill Q14 to Q16)
+
+Each value is the later arm minus the earlier arm, per donor. For spread and leaning, negative is better; for stain index, positive is better.
+
+```{r}
+#| label: f9-best-steps
+#| fig-width: 9
+#| fig-height: 3.8
+step_pairs <- tibble::tribble(
+  ~to,           ~from,            ~step,
+  "best188_p1",  "as188_fast_csv", "1.8.8: AF refine on",
+  "best188_p5",  "best188_p1",     "1.8.8: n.passes 1 to 5",
+  "best102_neg", "as102_var",      "1.0.2: AF and variants refine on",
+  "best102_af",  "best102_neg",    "1.0.2: AF clean up spectra"
+)
+step_fx <- step_pairs |>
+  pmap(\(to, from, step) {
+    cell_values_all |>
+      filter(arm %in% c(to, from)) |>
+      mutate(which = if_else(arm == to, "to", "from")) |>
+      pivot_wider(id_cols = c(sample, readout), names_from = which, values_from = value) |>
+      mutate(effect = to - from, step = step)
+  }) |>
+  list_rbind() |>
+  mutate(step = factor(step, levels = step_pairs$step))
+p_steps <- ggplot(step_fx, aes(step, effect, shape = sample)) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.5, colour = "grey30") +
+  geom_point(size = 2, position = position_jitter(width = 0.08, height = 0, seed = 1)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_wrap(vars(readout), scales = "free_y", nrow = 1) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  labs(x = NULL, y = "later minus earlier arm", shape = "donor sample")
+save_fig(p_steps, "f9_best_steps.png", 230, 100)
+step_fx |> summarise(median_effect = round(median(effect), 3), donors_same_sign = sum(sign(effect) == sign(median(effect))), .by = c(readout, step)) |> knitr::kable(caption = "Effect of each documented setting")
+```
+
+## Decision table (priority order fixed before results: spread > stain index > artefacts incl. shape > agreement)
+
+Every value was read from a figure opened on 2026-11-09. Values are medians over 5 donor samples from one batch of per-donor medians, **unpinned channel set** (88 of 160 sample-channel cells remain) (cells whose mindensity cut sits on the window edge are removed, user grill Q21). The all-channels spread figure was also opened and agrees in sign and ordering (`figures/f1_negative_spread.png`). No cutoffs are applied (ROADMAP:186).
+
+Arms: **1.0.2 as released** = `as102_var`; **1.0.2 best** = `best102_neg` (AF and variants refine on, Matching Negative spectra); **1.8.8 as released** = `as188_joint` (its CSV-based rebuild `as188_fast_csv` matches it in spread); **1.8.8 best** = `best188_p5` (AF refine on, `n.passes` 5); **crossed** = `s188_c102` (1.8.8 spectra, 1.0.2 code).
+
+| Rank | Readout (ideal) | SpectroFlo | 1.0.2 as released | 1.0.2 best | 1.8.8 as released | 1.8.8 best | Crossed | Figure |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Negative spread, log2 vs 1.8.8 as released (lower) | +0.14 | -0.02 | -0.09 | 0 | +0.005 | -0.075 | `figures/f1_negative_spread_unpinned.png` |
+| 2 | Stain index, log2 vs 1.8.8 as released (higher) | -0.17 | +0.145 | +0.13 | 0 | -0.04 | +0.30 | `figures/f4_stain_index_unpinned.png` |
+| 3 | Leaning, median abs rho (lower) | 0.105 | 0.060 | 0.068 | 0.098 | 0.113 | 0.072 | `figures/f3_artefacts_unpinned.png` |
+| 3 | Centring, abs median / rSD (0) | 0.51 | 0.315 | 0.41 | 0.60 | 0.585 | 0.395 | `figures/f10_shape_unpinned.png` |
+| 3 | Symmetry, abs log2 half-width ratio (0) | 0.41 | 0.37 | 0.43 | 0.45 | 0.335 | 0.33 | `figures/f10_shape_unpinned.png` |
+| 3 | Cells below -3 x reference rSD (lower) | 0.97% | 0.49% | 0.48% | 0.66% | 0.63% | 0.49% | `figures/f10_shape_unpinned.png` |
+| 3 | Roundness, axis ratio (1) | 0.884 | 0.93 | 0.928 | 0.90 | 0.887 | 0.92 | `figures/f10_shape_unpinned.png` |
+| 4 | ARI vs 1.8.8 as released | 0.40 | 0.37 | 0.50 | 1 (by definition) | 0.46 | 0.48 | `figures/f5_downstream.png` |
+
+The lower-tail fraction is 3 to 7 times the normal expectation (SpectroFlo 7.2, 1.0.2 variants 3.7) with large donor scatter, and does not separate the arms (`figures/f3_artefacts_unpinned.png`).
+
+## What the figures support
+
+**1.8.8 against SpectroFlo (supported).** 1.8.8 as released has narrower negatives (SpectroFlo about 10% wider, 2^0.14) and a higher stain index (SpectroFlo about 12% lower, 2^-0.17), in all five donors for both readouts, and fewer strongly negative cells (0.66% against 0.97%, lower in all five donors). Leaning and roundness differ little and are mixed across donors. SpectroFlo is a little better on centring (0.51 against 0.60) and symmetry (0.41 against 0.45) (`figures/f1_negative_spread_unpinned.png`, `figures/f4_stain_index_unpinned.png`, `figures/f10_shape_unpinned.png`).
+
+**1.8.8 against 1.0.2 (not exceeded on this dataset).**
+- As released, 1.0.2 matches 1.8.8 on spread (-0.02, below zero in 4 of 5 donors, within noise) and is ahead on stain index (+0.145 log2, about 10%, in all five donors), leaning, negative cells and roundness (`figures/f1_negative_spread_unpinned.png`, `figures/f4_stain_index_unpinned.png`, `figures/f3_artefacts_unpinned.png`, `figures/f10_shape_unpinned.png`).
+- In documented best form the ordering holds. 1.0.2 best is ahead of 1.8.8 best on spread (-0.09 against +0.002; below zero in 5 of 5 donors against a 3-2 split), stain index (+0.13 against -0.04, a 5 of 5 donor difference), centring, negative cells and roundness (0.928 against 0.887); 1.8.8 best is ahead only on symmetry (0.335 against 0.43).
+- **Best settings, step by step** (`figures/f9_best_steps_unpinned.png`): in 1.8.8, turning the AF refine on (the package default, off in the original run) widens negatives, lowers the stain index and adds leaning in all five donors; `n.passes` 5 then narrows negatives slightly in all five donors and raises the stain index slightly. In 1.0.2, turning both refines on narrows negatives in all five donors; the stain index changes little and not consistently (median +0.014, range -0.03 to +0.06). The AF clean up spectra do not improve it (stain index mostly lower).
+- **Spectra against code** (`figures/f8_2x2_effects_unpinned.png`): averaged over the two code versions, the 1.8.8 spectra raise the stain index (+0.11 to +0.24) and narrow negatives in all five donors (leg by leg, the 1.0.2-code leg is negative in one donor for stain index and one donor for spread; leg medians +0.066 and +0.149 for stain index); the 1.8.8 joint code lowers the stain index (about -0.27 log2) and widens negatives and leaning in all five donors, relative to the 1.0.2 per-cell code. The `speed` setting has no effect in the 1.8.8 joint pipeline (slow and fast outputs are byte-identical). The crossed arm (1.8.8 spectra with 1.0.2 code, a combination no one runs) is best on stain index (+0.30); on spread the 1.0.2 best-form arms are slightly lower (-0.088 and -0.081 against -0.074) with overlapping donor ranges.
+
+**Readouts that cannot rank the arms.** Reseeding the 1.8.8 clustering (seeds 1, 2, 3 and 42, pairwise) gives ARI of median 0.51 (range 0.36 to 0.69); every arm's median ARI against 1.8.8 sits inside that range, and a few per-donor values (SpectroFlo 0.35, 1.0.2 variants 0.34, 1.0.2 AF clean up 0.31) fall below it (`figures/f5_downstream.png`). TNF and IL-2 positivity depends on where the cut lands (no valley in their densities, `figures/f7_cytokine_density_B11.png`) and is dropped; IFNg is 11 to 30% across arms.
+
+## Limits
+
+- Five donor samples from one batch of clean PBMC. The 1.8.8 documentation aims the joint pipeline, AF refine and extra passes at messier samples (tissue, tumour); none of that is tested here.
+- **Best form** means the documented quality settings fixed before scoring (grill Q14), not tuned. SpectroFlo was compared as exported; its settings cannot be changed from here.
+- **Pinned cuts:** 72 of 160 sample-channel cells (70 in the 6-arm run) have a mindensity cut on the window edge in some arm; they are excluded in the primary set and kept in the all-channels render (`report_all/report.html`).
+- **Validation:** the 1.0.2 install reproduces the shipped files to within 0.002. The CSV-based 1.8.8 rebuild matches in every marker channel but differs in the AF channel in 15% of cells. An independent recomputation reproduced D1 spread and stain-index tables to 1e-15.
+- **Reference arm:** as188_joint is the reference of every ratio; the two forms of 1.8.8 are not exact replicates of it.

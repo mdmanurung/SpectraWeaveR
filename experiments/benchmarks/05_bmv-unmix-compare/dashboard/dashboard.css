@@ -1,0 +1,145 @@
+/* BMV unmix dashboard: own stylesheet (2026-11-11). Layout pattern after a Quarto report
+   template (custom CSS, theme: none, header/footer partials); no code copied. */
+
+:root {
+  --ink:        #1d2733;
+  --ink-soft:   #4a5868;
+  --paper:      #ffffff;
+  --panel:      #f5f7fa;
+  --rule:       #dde3ea;
+  --brand:      #24456b;   /* headings, header band */
+  --brand-soft: #e6eef7;
+  --good:       #2e7d4f;
+  --warn:       #b26a00;
+  --bad:        #b3261e;
+  --band:       #24456b;   /* header band fill */
+  --band-ink:   #ffffff;
+  --fig-bg:     #ffffff;   /* figures are white-background PNGs */
+  --font:       "Helvetica Neue", Helvetica, "Nimbus Sans", Arial, sans-serif;
+  --mono:       "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e4e9ef; --ink-soft: #a9b4c0; --paper: #12171d; --panel: #1b222b;
+    --rule: #2c3540; --brand: #8fb4dc; --brand-soft: #1f2c3b;
+    --good: #6cc48f; --warn: #e0a64a; --bad: #ef7d74; --band: #1e3a5a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #e4e9ef; --ink-soft: #a9b4c0; --paper: #12171d; --panel: #1b222b;
+  --rule: #2c3540; --brand: #8fb4dc; --brand-soft: #1f2c3b;
+  --good: #6cc48f; --warn: #e0a64a; --bad: #ef7d74; --band: #1e3a5a;
+  color-scheme: dark;
+}
+
+/* keep white-background figures readable on a dark page */
+.figure img, figure img, p img { background: var(--fig-bg); border-radius: 4px; }
+
+html { font-size: 16px; }
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.55;
+  margin: 0;
+}
+
+main.content, #quarto-content, .page-columns {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main.content > *, .panel-tabset, .tab-content { min-width: 0; }
+.reactable { overflow-x: auto; }
+h1, h2, h3 { text-wrap: balance; }
+.verdict .v-value { font-variant-numeric: tabular-nums; }
+.verdict .v-note { font-size: 0.78rem; color: var(--ink-soft); margin-top: 4px; word-break: break-word; }
+
+/* Header band */
+/* header band */
+.sw-header {
+  background: var(--band);
+  color: var(--band-ink);
+  padding-block: 28px 22px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.sw-header-inner { max-width: 1180px; margin: 0 auto; }
+.sw-header .sw-kicker {
+  font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8;
+}
+.sw-header .sw-title { font-size: 1.6rem; font-weight: 700; margin: 4px 0 0; }
+
+/* Quarto title block sits under the band */
+#title-block-header { margin: 24px 0 8px; }
+#title-block-header h1.title { font-size: 1.8rem; color: var(--brand); margin-bottom: 4px; }
+.subtitle { color: var(--ink-soft); font-size: 1.05rem; }
+
+h2 {
+  color: var(--brand);
+  font-size: 1.35rem;
+  border-bottom: 2px solid var(--rule);
+  padding-bottom: 6px;
+  margin-top: 2.4rem;
+}
+h3 { color: var(--ink); font-size: 1.1rem; margin-top: 1.6rem; }
+
+a { color: var(--brand); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--panel); padding: 1px 4px; border-radius: 3px; }
+
+/* Figures: full width up to their 300-dpi-equivalent size, centred, captions muted */
+.figure, figure { margin: 1rem 0 1.4rem; text-align: center; }
+.figure img, figure img { max-width: 100%; height: auto; }
+.figure-caption, figcaption {
+  color: var(--ink-soft); font-size: 0.9rem; text-align: left; margin-top: 6px;
+}
+
+/* Verdict cards */
+.verdict-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 1rem 0 1.6rem; }
+.verdict {
+  background: var(--panel); border: 1px solid var(--rule); border-left: 5px solid var(--brand);
+  border-radius: 6px; padding: 12px 14px;
+}
+.verdict .v-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+.verdict .v-value { font-size: 1.25rem; font-weight: 700; margin-top: 2px; }
+.verdict.good { border-left-color: var(--good); }
+.verdict.warn { border-left-color: var(--warn); }
+.verdict.bad  { border-left-color: var(--bad); }
+
+/* Callouts render as blockquotes under theme: none */
+blockquote { border: 1px solid var(--rule); border-left: 5px solid var(--brand); border-radius: 6px; background: var(--panel); padding: 8px 14px; margin: 1rem 0; }
+blockquote p:first-child strong { color: var(--brand); }
+
+/* Tabsets under theme: none use Quarto's Tabby script (aria-selected, hidden panes) */
+.panel-tabset-tabby { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 0 0 -1px; border-bottom: 1px solid var(--rule); }
+.panel-tabset-tabby li { margin: 0; }
+.panel-tabset-tabby a {
+  display: block; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px 6px 0 0;
+  color: var(--ink-soft); text-decoration: none; font-size: 0.92rem;
+}
+.panel-tabset-tabby a[aria-selected="true"] { color: var(--brand); border-color: var(--rule) var(--rule) var(--paper); background: var(--paper); font-weight: 700; }
+.panel-tabset .tab-content { border: 1px solid var(--rule); border-top: none; padding: 12px 14px; }
+.panel-tabset [role="tabpanel"][hidden] { display: none; }
+
+/* TOC */
+#TOC, nav#TOC { font-size: 0.9rem; }
+#TOC ul { list-style: none; padding-left: 1rem; }
+#TOC a { text-decoration: none; color: var(--ink-soft); }
+#TOC a.active, #TOC a:hover { color: var(--brand); }
+
+/* Tables */
+table { border-collapse: collapse; font-size: 0.9rem; }
+th, td { border-bottom: 1px solid var(--rule); padding: 4px 8px; }
+th { text-align: left; color: var(--ink-soft); }
+
+/* Footer */
+.sw-footer { margin-top: 3rem; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 0.85rem; padding: 16px; text-align: center; }
+
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+  .sw-header .sw-title { font-size: 1.3rem; }
+}
