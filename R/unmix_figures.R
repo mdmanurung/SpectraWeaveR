@@ -50,7 +50,7 @@ NULL
   F1 = c(183, 140),
   F2 = c(89, 85),
   F3 = c(183, 110),
-  F4 = c(183, 110)
+  F4 = c(183, 90)
 )
 
 # Nature final artwork: column widths in mm and the drawn text range in pt.
@@ -924,7 +924,7 @@ sw_unmix_figure_biplot <- function(
     ggplot2::labs(
       x = sprintf("%s (a.u., pseudo-log)", x_channel),
       y = sprintf("%s (a.u., pseudo-log)", y_channel),
-      caption = .sw_fig_wrap(caption)
+      caption = .sw_fig_wrap(caption, width = 120) # double column holds ~120 characters at 6 pt
     ) +
     .sw_fig_theme() +
     ggplot2::theme(
