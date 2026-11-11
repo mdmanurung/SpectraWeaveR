@@ -169,7 +169,7 @@ Batch-side steps 1 to 3 are frozen and B3 to B8 are parked (see the decisions at
 
 | # | Item | Function(s) | Status |
 |---|---|---|---|
-| B11 | Spike-in recovery with an independence check, negative shape and marker screen, scatter and spike figures (F6 to F8), Nature theme for all unmix figures, as diagnostics on AutoSpectral outputs (from benchmark 05). Unmixing stays with the user. Limits unsourced: `not_judged`. Plan: `plans/unmix_diagnostics_plan_v2.md`; decisions: `plans/unmix_diagnostics_decisions.md`. | `sw_unmix_spike_*()`, `sw_unmix_negative_shape()`, `sw_unmix_marker_screen()`, `sw_unmix_figure_scatter_grid()`, `sw_unmix_figure_spike_*()` | **in progress**. PR 1 (theme, F1 to F4 migration, Nature save check) on branch `feat/unmix-theme-nature`; PRs 2 to 4 follow. |
+| B11 | Spike-in recovery with an independence check, negative shape and marker screen, scatter and spike figures (F6 to F8), Nature theme for all unmix figures, as diagnostics on AutoSpectral outputs (from benchmark 05). Unmixing stays with the user. Limits unsourced: `not_judged`. Plan: `plans/unmix_diagnostics_plan_v2.md`; decisions: `plans/unmix_diagnostics_decisions.md`. | `sw_unmix_spike_*()`, `sw_unmix_negative_shape()`, `sw_unmix_marker_screen()`, `sw_unmix_figure_scatter_grid()`, `sw_unmix_figure_spike_*()` | **in progress**. PR 1 (theme, F1 to F4 migration, Nature save check) merged to main (2026-11-11). PR 2 (spike build, co-spike, score with independence check, helpers) on branch `feat/unmix-spike`; PRs 3 and 4 follow. |
 
 Module 1 is not a rebuild of AutoSpectral (rule 3 of "Gold standard"): AutoSpectral 1.8.8 has `sim.flow.data()` for simulated events but no spike into real cells, so spike build and score are new code that calls no AutoSpectral routine.
 
