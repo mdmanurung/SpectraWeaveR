@@ -79,15 +79,18 @@ x1.5 stretch, 15% leak, 0.5 SD batch shift, x1.3 batch stretch, 0.5 SD batch
 drift); other classes use the smallest size tested on real files. The check is
 the one built for the fault, fixed in advance.
 
-Of 32 class-and-dataset rows with an AUROC, 19 reach the mean and lower-CI bar
-(`figures/scorecard.png`). Only one of them, a fault most files share under the
-frozen reference, also has a measured null (0.51); the other 18 are "met (null
-untested)". Thirteen rows miss the bar: all markers widened, composition
-changes, batch stretch and drift, spread at 0.5 negative SD, doublets at
-quantile 0.95, and every two-mode split except the Aurora row. That row reaches
-1.00 only because its markers already had two populations; at ±1 SD it scores
-0.65. All CBF rows miss, except the doublets at quantile 0.99 and the frozen
-reference. Six classes (header, instrument gain and batch, gate, gain drift, a
+Of 32 class-and-dataset rows with an AUROC, 18 meet the whole bar
+(`figures/scorecard.png`). The null comes from each script rerun with the same
+draws and no fault; every rerun reproduced its saved fault AUROCs exactly. Four
+nulls first came out just above 0.55 at 5 or 10 seeds; rerun over 30 seeds,
+three fell under it (clog 0.48, spillover pair 0.50, rare population 0.54). The
+batch shift at 0.5 SD stays at 0.56 (CI ±0.11), so it misses on the null alone
+(AUROC 0.92). Thirteen more rows miss on AUROC: all markers widened,
+composition changes, batch stretch and drift, spread at 0.5 negative SD,
+doublets at quantile 0.95, and every two-mode split except the Aurora row. That
+row reaches 1.00 only because its markers already had two populations; at ±1 SD
+it scores 0.65. All CBF rows miss, except the doublets at quantile 0.99 and the
+frozen reference. Six classes (header, instrument gain and batch, gate, gain drift, a
 weak CD3 anchor) are observed on real data with no AUROC. The table with each
 row's source is `figures/scorecard-source.csv`.
 

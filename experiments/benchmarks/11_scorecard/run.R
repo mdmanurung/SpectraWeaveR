@@ -62,7 +62,9 @@ read_row <- function(i) {
   best <- grp[which.max(grp[[m$auroc_col]]), ]
   null_auroc <- NA_real_
   if (!is.na(m$null_filter)) {
-    nul <- pick(d, m$null_filter)
+    # G41: a 30-seed null run, when there is one, replaces the null in the source file.
+    nd <- if (!is.na(m$null_source)) read.csv(m$null_source) else d
+    nul <- pick(nd, m$null_filter)
     stopifnot("one null row" = nrow(nul) == 1)
     null_auroc <- nul[[m$auroc_col]]
   }
