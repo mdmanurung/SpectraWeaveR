@@ -169,7 +169,7 @@ Batch-side steps 1 to 3 are frozen and B3 to B8 are parked (see the decisions at
 
 | # | Item | Function(s) | Status |
 |---|---|---|---|
-| B11 | Spike-in recovery with an independence check, negative shape and marker screen, scatter and spike figures (F6 to F8), Nature theme for all unmix figures, as diagnostics on AutoSpectral outputs (from benchmark 05). Unmixing stays with the user. Limits unsourced: `not_judged`. Plan: `plans/unmix_diagnostics_plan_v2.md`; decisions: `plans/unmix_diagnostics_decisions.md`. | `sw_unmix_spike_*()`, `sw_unmix_negative_shape()`, `sw_unmix_marker_screen()`, `sw_unmix_figure_scatter_grid()`, `sw_unmix_figure_spike_*()` | **in progress**. PR 1 (theme, F1 to F4 migration, Nature save check) merged to main (2026-11-11). PR 2 (spike build, co-spike, score with independence check, helpers) on branch `feat/unmix-spike`; PRs 3 and 4 follow. |
+| B11 | Spike-in recovery with an independence check, negative shape and marker screen, scatter and spike figures (F6 to F8), Nature theme for all unmix figures, as diagnostics on AutoSpectral outputs (from benchmark 05). Unmixing stays with the user. Limits unsourced: `not_judged`. Plan: `plans/unmix_diagnostics_plan_v2.md`; decisions: `plans/unmix_diagnostics_decisions.md`. | `sw_unmix_spike_*()`, `sw_unmix_negative_shape()`, `sw_unmix_marker_screen()`, `sw_unmix_figure_scatter_grid()`, `sw_unmix_figure_spike_*()` | **done** (2026-11-11). All four PRs are merged into main: theme and F1 to F4, spike build and score, screen and F6 to F8, diagnose, report, dashboard and quarto. `baseline_tol` and `min_negatives`: caller chooses; no recommended value (benchmark 05 used 0.05 and 1 as test values only). |
 
 Module 1 is not a rebuild of AutoSpectral (rule 3 of "Gold standard"): AutoSpectral 1.8.8 has `sim.flow.data()` for simulated events but no spike into real cells, so spike build and score are new code that calls no AutoSpectral routine.
 
@@ -195,9 +195,9 @@ Each item below changes a result, so none has a package default.
 | Verdict limits for unmix diagnostics | `sw_unmix_limits_autospectral()` | AutoSpectral article 01: `max_sif` above 6 most likely causes problems, 4 to 6 is worth reviewing (Mage, Konecny, Mair 2026, Cytometry A 109(6):436-455, doi:10.1002/cyto.a.70044; preprint doi 10.1101/2025.04.17.649396). Mage's own diagonal cutoffs are 3 and 8, rough guidelines. User chose warn 4, fail 6 on 2026-11-09. Condition number, max cosine and negative spread have no sourced cutoff and stay not judged. |
 
 | Spike levels; cofactor; spiked fraction; seed; populations | `sw_unmix_spike_build()` (B11) | user, 2026-11-11, grill R3, R4, R5. Benchmark 05 used levels 0 to 3, cofactor 6000, fraction 0.75 (implied by levels 0 to 3), seed 42, CD4T, CD8T and CD3- |
-| Loss cut; baseline tolerance | `sw_unmix_spike_score()` (B11) | user, 2026-11-11, grill R7, R2. Benchmark 05 used loss cut 0.5; no baseline tolerance chosen yet |
+| Loss cut; baseline tolerance | `sw_unmix_spike_score()` (B11) | user, 2026-11-11, grill R7, R2. Benchmark 05 used loss cut 0.5; `baseline_tol`: caller chooses; no recommended value (benchmark 05 used 0.05 and 1 as test values only) |
 | Co-spike level, second dye and its levels | `sw_unmix_spike_cospike()` (B11) | user, 2026-11-11, grill R2.9, R8. Benchmark 05 used level 1, GLUT1 at 0, 1, 2 |
-| Positive cut, squeeze fraction, minimum negatives, reference setup | `sw_unmix_negative_shape()` (B11) | user, 2026-11-11, grill R9, R10. Benchmark 05 used arcsinh 1 and `as188_joint`; minimum negatives is new, no value chosen |
+| Positive cut, squeeze fraction, minimum negatives, reference setup | `sw_unmix_negative_shape()` (B11) | user, 2026-11-11, grill R9, R10. Benchmark 05 used arcsinh 1 and `as188_joint`; `min_negatives`: caller chooses; no recommended value (benchmark 05 used 0.05 and 1 as test values only) |
 | Minimum median rise; minimum donors | `sw_unmix_marker_screen()` (B11) | user, 2026-11-11, grill R11. Benchmark 05 used 0.10 and 5 |
 | Verdict limits for spike and screen checks | `sw_unmix_diagnose()` (B11) | user, 2026-11-11, grill Q16: none sourced, so `not_judged` unless the caller passes a limit |
 
