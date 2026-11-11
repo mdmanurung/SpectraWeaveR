@@ -974,7 +974,8 @@ sw_unmix_figure_biplot <- function(
 #'
 #' @param figures Named list of figure results keyed by panel (`F1` to `F4`,
 #'   `F6` to `F8`), as returned by the `sw_unmix_figure_*()` builders. A
-#'   result that carries a `stem` (F6 to F8) is written under that stem.
+#'   result that carries a `stem` (F6 to F8) is written under that stem; one
+#'   that carries a `size` (F6) is saved at that size unless `sizes` names it.
 #' @param dir Output folder. Required. Created if absent.
 #' @param sizes Optional named list of `c(width, height)` in mm, keyed by
 #'   panel, replacing the default size of those panels.
@@ -1049,7 +1050,16 @@ sw_unmix_save_figures <- function(
       call. = FALSE
     )
   }
-  sizes <- utils::modifyList(.sw_fig_sizes, as.list(sizes))
+  # Size order: panel default, then a size the builder carries (F6 follows its
+  # grid), then `sizes`.
+  own_sizes <- Filter(
+    Negate(is.null),
+    lapply(stats::setNames(figures, keys), \(f) f[["size"]])
+  )
+  sizes <- utils::modifyList(
+    utils::modifyList(.sw_fig_sizes, own_sizes),
+    as.list(sizes)
+  )
 
   # Journal spec: widths and drawn text sizes, checked before anything is written.
   text_pt <- matrix(NA_real_, nrow = length(keys), ncol = 2)

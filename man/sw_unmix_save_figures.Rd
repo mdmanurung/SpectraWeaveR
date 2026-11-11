@@ -9,7 +9,8 @@ sw_unmix_save_figures(figures, dir, sizes = NULL, check = c("none", "nature"))
 \arguments{
 \item{figures}{Named list of figure results keyed by panel (\code{F1} to \code{F4},
 \code{F6} to \code{F8}), as returned by the \verb{sw_unmix_figure_*()} builders. A
-result that carries a \code{stem} (F6 to F8) is written under that stem.}
+result that carries a \code{stem} (F6 to F8) is written under that stem; one
+that carries a \code{size} (F6) is saved at that size unless \code{sizes} names it.}
 
 \item{dir}{Output folder. Required. Created if absent.}
 

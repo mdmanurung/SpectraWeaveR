@@ -2,7 +2,7 @@
 % Please edit documentation in R/unmix_figures_spike.R
 \name{sw_unmix_figure_scatter_grid}
 \alias{sw_unmix_figure_scatter_grid}
-\title{F6: hexbin grid of two channels per setup and sample}
+\title{F6: hexbin grid per setup and sample}
 \usage{
 sw_unmix_figure_scatter_grid(
   events,
@@ -14,22 +14,28 @@ sw_unmix_figure_scatter_grid(
   setup_fill,
   stem,
   level = NULL,
+  pop = NULL,
   bins = 50,
   limits = NULL,
   font_family = "sans"
 )
 }
 \arguments{
-\item{events}{Data frame with \code{setup}, \code{sample}, the columns named by \code{x}
-and \code{y} (linear scale), and in spike mode a logical \code{lost}.}
+\item{events}{Scatter mode: a data frame with \code{setup}, \code{sample} and the
+channels named by \code{x} and \code{y} (linear scale). Spike mode: an
+\code{sw_spike_score} from \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}.}
 
-\item{x, y}{Column names to plot.}
+\item{x}{Scatter mode: x channel. Spike mode: the spiked marker.}
+
+\item{y}{Scatter mode: y channel. Not used in spike mode (an error if
+given).}
 
 \item{mode}{\code{"scatter"} or \code{"spike"}.}
 
 \item{cut}{Cut on the arcsinh scale. Required in scatter mode.}
 
-\item{cofactor}{arcsinh cofactor.}
+\item{cofactor}{arcsinh cofactor. In spike mode it must match the score's
+\code{k = cofactor * sinh(level)}.}
 
 \item{setup_fill}{Named colours, one per setup; a setup without a colour is
 an error.}
@@ -37,8 +43,11 @@ an error.}
 \item{stem}{File stem for \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}}, for example
 \code{"scatter-grid_TNF_CD8T"}.}
 
-\item{level}{Spike level on the arcsinh scale (k = cofactor x sinh(level)).
-Required in spike mode; it places the full-recovery curve.}
+\item{level}{Spike level on the arcsinh scale. Required in spike mode; it
+selects the spiked cells and places the full-recovery curve.}
+
+\item{pop}{Population to draw in spike mode. Required when the marker was
+spiked into more than one population.}
 
 \item{bins}{Hexagons per axis. Display only.}
 
@@ -49,20 +58,24 @@ Display only.}
 }
 \value{
 A list with \code{panel} (\code{"F6"}), \code{plot}, \code{source} (one row per setup
-and sample: \code{n}, \code{pct}) and \code{stem}.
+and sample: \code{n}, \code{pct}), \code{stem} and \code{size} (\code{c(width, height)} in mm, the
+height set by the number of sample rows).
 }
 \description{
-One hexbin panel per setup (columns) and sample (rows), on the arcsinh
-scale with equal axes.
+One square hexbin panel per setup (columns) and sample (rows), on the
+arcsinh scale with equal axes. The saved height follows the grid.
 }
 \details{
 \itemize{
-\item \code{mode = "scatter"}: \code{y} against \code{x}, a red line at \code{cut} and the
-percentage of events above it printed per panel.
-\item \code{mode = "spike"}: a spike's unmixed value before (\code{x}, base unmix) and
-after (\code{y}, spiked unmix) per cell, with the full-recovery curve (dashed)
-and the spike-lost diagonal (solid), and the percentage of cells in
-\code{lost} printed per panel.
+\item \code{mode = "scatter"}: channel \code{y} against channel \code{x} from \code{events}, a red
+line at \code{cut} and the percentage of events above it per panel.
+\item \code{mode = "spike"}: one marker before and after the spike, from an
+\code{sw_spike_score}. x is the marker in the unspiked (base) unmix
+(\code{base_value}); y is the same marker in the spiked unmix
+(\code{base_value + recovered}). The dashed curve is full recovery
+(\code{asinh(sinh(x) + sinh(level))}), the solid diagonal is a lost spike, and
+each panel prints the percentage of cells with recovery below the score's
+\code{loss_cut}.
 }
 
 Strips are filled with \code{setup_fill} when ggh4x is installed (the colour is

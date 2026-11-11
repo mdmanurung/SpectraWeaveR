@@ -89,40 +89,50 @@
 
 # ---- F6: hexbin grid ---------------------------------------------------------
 
-#' F6: hexbin grid of two channels per setup and sample
+#' F6: hexbin grid per setup and sample
 #'
-#' One hexbin panel per setup (columns) and sample (rows), on the arcsinh
-#' scale with equal axes.
+#' One square hexbin panel per setup (columns) and sample (rows), on the
+#' arcsinh scale with equal axes. The saved height follows the grid.
 #'
-#' * `mode = "scatter"`: `y` against `x`, a red line at `cut` and the
-#'   percentage of events above it printed per panel.
-#' * `mode = "spike"`: a spike's unmixed value before (`x`, base unmix) and
-#'   after (`y`, spiked unmix) per cell, with the full-recovery curve (dashed)
-#'   and the spike-lost diagonal (solid), and the percentage of cells in
-#'   `lost` printed per panel.
+#' * `mode = "scatter"`: channel `y` against channel `x` from `events`, a red
+#'   line at `cut` and the percentage of events above it per panel.
+#' * `mode = "spike"`: one marker before and after the spike, from an
+#'   `sw_spike_score`. x is the marker in the unspiked (base) unmix
+#'   (`base_value`); y is the same marker in the spiked unmix
+#'   (`base_value + recovered`). The dashed curve is full recovery
+#'   (`asinh(sinh(x) + sinh(level))`), the solid diagonal is a lost spike, and
+#'   each panel prints the percentage of cells with recovery below the score's
+#'   `loss_cut`.
 #'
 #' Strips are filled with `setup_fill` when ggh4x is installed (the colour is
 #' a key of the setups); plain otherwise.
 #'
-#' @param events Data frame with `setup`, `sample`, the columns named by `x`
-#'   and `y` (linear scale), and in spike mode a logical `lost`.
-#' @param x,y Column names to plot.
+#' @param events Scatter mode: a data frame with `setup`, `sample` and the
+#'   channels named by `x` and `y` (linear scale). Spike mode: an
+#'   `sw_spike_score` from [sw_unmix_spike_score()].
+#' @param x Scatter mode: x channel. Spike mode: the spiked marker.
+#' @param y Scatter mode: y channel. Not used in spike mode (an error if
+#'   given).
 #' @param mode `"scatter"` or `"spike"`.
 #' @param cut Cut on the arcsinh scale. Required in scatter mode.
-#' @param cofactor arcsinh cofactor.
+#' @param cofactor arcsinh cofactor. In spike mode it must match the score's
+#'   `k = cofactor * sinh(level)`.
 #' @param setup_fill Named colours, one per setup; a setup without a colour is
 #'   an error.
 #' @param stem File stem for [sw_unmix_save_figures()], for example
 #'   `"scatter-grid_TNF_CD8T"`.
-#' @param level Spike level on the arcsinh scale (k = cofactor x sinh(level)).
-#'   Required in spike mode; it places the full-recovery curve.
+#' @param level Spike level on the arcsinh scale. Required in spike mode; it
+#'   selects the spiked cells and places the full-recovery curve.
+#' @param pop Population to draw in spike mode. Required when the marker was
+#'   spiked into more than one population.
 #' @param bins Hexagons per axis. Display only.
 #' @param limits Optional `c(min, max)` on the arcsinh scale for both axes.
 #'   Display only.
 #' @param font_family Font family. Display only.
 #'
 #' @return A list with `panel` (`"F6"`), `plot`, `source` (one row per setup
-#'   and sample: `n`, `pct`) and `stem`.
+#'   and sample: `n`, `pct`), `stem` and `size` (`c(width, height)` in mm, the
+#'   height set by the number of sample rows).
 #'
 #' @examples
 #' \dontrun{
@@ -150,24 +160,18 @@ sw_unmix_figure_scatter_grid <- function(
   setup_fill,
   stem,
   level = NULL,
+  pop = NULL,
   bins = 50,
   limits = NULL,
   font_family = "sans"
 ) {
   .sw_fig_require(missing(events), "events")
   .sw_fig_require(missing(x), "x")
-  .sw_fig_require(missing(y), "y")
   .sw_fig_require(missing(mode), "mode")
   .sw_fig_require(missing(cofactor), "cofactor")
   .sw_fig_require(missing(setup_fill), "setup_fill")
   .sw_fig_require(missing(stem), "stem")
   mode <- match.arg(mode, c("scatter", "spike"))
-  if (mode == "scatter") {
-    .sw_fig_require(missing(cut), "cut")
-  }
-  if (mode == "spike" && is.null(level)) {
-    stop("`level` is required in spike mode and has no default.", call. = FALSE)
-  }
   .sw_fig_need_ggplot2()
   if (!requireNamespace("hexbin", quietly = TRUE)) {
     stop(
@@ -175,15 +179,54 @@ sw_unmix_figure_scatter_grid <- function(
       call. = FALSE
     )
   }
-  need <- c("setup", "sample", x, y, if (mode == "spike") "lost")
-  absent <- setdiff(need, names(events))
-  if (length(absent) > 0L) {
-    stop(
-      sprintf("`events` lacks column(s): %s.", paste(absent, collapse = ", ")),
-      call. = FALSE
+
+  # Linear x and y per event, plus the per-panel share, for either mode.
+  if (mode == "scatter") {
+    .sw_fig_require(missing(y), "y")
+    .sw_fig_require(missing(cut), "cut")
+    absent <- setdiff(c("setup", "sample", x, y), names(events))
+    if (length(absent) > 0L) {
+      stop(
+        sprintf(
+          "`events` lacks column(s): %s.",
+          paste(absent, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+    ev <- tibble::tibble(
+      setup = as.character(events$setup),
+      sample = as.character(events$sample),
+      x_lin = events[[x]],
+      y_lin = events[[y]]
     )
+    ev$hit <- asinh(ev$y_lin / cofactor) > cut
+    x_lab <- sprintf("%s (arcsinh, cofactor %s)", x, format(cofactor))
+    y_lab <- sprintf("%s (arcsinh, cofactor %s)", y, format(cofactor))
+    label_fmt <- "above cut %.1f%%"
+  } else {
+    if (!missing(y)) {
+      stop(
+        "`y` is not used in spike mode: x and y are the marker before and after the spike.",
+        call. = FALSE
+      )
+    }
+    if (is.null(level)) {
+      stop(
+        "`level` is required in spike mode and has no default.",
+        call. = FALSE
+      )
+    }
+    ev <- .sw_fig_spike_cells(events, x, level, pop, cofactor)
+    x_lab <- sprintf(
+      "%s, unspiked unmix (arcsinh, cofactor %s)",
+      x,
+      format(cofactor)
+    )
+    y_lab <- sprintf("%s, +%s arcsinh spiked unmix", x, format(level))
+    label_fmt <- "lost %.1f%%"
   }
-  setups <- unique(as.character(events$setup))
+  setups <- unique(ev$setup)
   no_fill <- setdiff(setups, names(setup_fill))
   if (length(no_fill) > 0L) {
     stop(
@@ -195,28 +238,23 @@ sw_unmix_figure_scatter_grid <- function(
     )
   }
 
-  # Plot frame on the arcsinh scale; setups in the order given.
+  # Plot frame on the arcsinh scale; setups and samples in the order given.
+  samples <- unique(ev$sample)
   df <- tibble::tibble(
-    setup = factor(events$setup, levels = setups),
-    sample = factor(
-      events$sample,
-      levels = unique(as.character(events$sample))
-    ),
-    x = asinh(events[[x]] / cofactor),
-    y = asinh(events[[y]] / cofactor)
+    setup = factor(ev$setup, levels = setups),
+    sample = factor(ev$sample, levels = samples),
+    x = asinh(ev$x_lin / cofactor),
+    y = asinh(ev$y_lin / cofactor),
+    hit = ev$hit
   )
-  if (mode == "spike") {
-    df$lost <- as.logical(events$lost)
-  }
   src <- df |>
     dplyr::summarise(
       n = dplyr::n(),
-      pct = 100 *
-        if (mode == "scatter") mean(.data$y > cut) else mean(.data$lost),
+      pct = 100 * mean(.data$hit),
       .by = c("setup", "sample")
     )
-  label_fmt <- if (mode == "scatter") "above cut %.1f%%" else "lost %.1f%%"
   lim <- if (is.null(limits)) range(c(df$x, df$y), finite = TRUE) else limits
+  size <- .sw_fig_grid_size(n_cols = length(setups), n_rows = length(samples))
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x, y)) +
     ggplot2::geom_hex(bins = bins) +
@@ -259,10 +297,7 @@ sw_unmix_figure_scatter_grid <- function(
       family = font_family
     ) +
     ggplot2::coord_equal(xlim = lim, ylim = lim) +
-    ggplot2::labs(
-      x = sprintf("%s (arcsinh, cofactor %s)", x, format(cofactor)),
-      y = sprintf("%s (arcsinh, cofactor %s)", y, format(cofactor))
-    ) +
+    ggplot2::labs(x = x_lab, y = y_lab) +
     .sw_fig_theme()
 
   # Strips filled with the setup colours when ggh4x is present (a data key, rule r-0010).
@@ -283,7 +318,74 @@ sw_unmix_figure_scatter_grid <- function(
       ggplot2::facet_grid(sample ~ setup, axes = "all", axis.labels = "margins")
   }
 
-  list(panel = "F6", plot = p, source = src, stem = stem)
+  list(panel = "F6", plot = p, source = src, stem = stem, size = size)
+}
+
+# Spiked cells of one marker as linear before (base unmix) and after (spiked
+# unmix) values, with `hit` = spike lost (recovery below the score's loss cut).
+.sw_fig_spike_cells <- function(score, marker, level, pop, cofactor) {
+  if (!inherits(score, "sw_spike_score")) {
+    stop(
+      "In spike mode `events` must be an sw_spike_score; x and y are the marker before and after the spike.",
+      call. = FALSE
+    )
+  }
+  cells <- score$cells[
+    score$cells$marker == marker & score$cells$level == level,
+  ]
+  if (nrow(cells) == 0L) {
+    stop(
+      sprintf(
+        "No spiked cells for marker '%s' at level %s.",
+        marker,
+        format(level)
+      ),
+      call. = FALSE
+    )
+  }
+  pops <- unique(cells$pop)
+  if (is.null(pop) && length(pops) > 1L) {
+    stop(
+      sprintf(
+        "Marker '%s' was spiked into several populations (%s); choose one with `pop`.",
+        marker,
+        paste(pops, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  if (!is.null(pop)) {
+    cells <- cells[cells$pop == pop, ]
+    if (nrow(cells) == 0L) {
+      stop(sprintf("No spiked cells in population '%s'.", pop), call. = FALSE)
+    }
+  }
+  # The score's spike size must match this cofactor, or the curve is misplaced.
+  if (!isTRUE(all.equal(unique(cells$k), cofactor * sinh(level)))) {
+    stop(
+      sprintf(
+        "The score's spike size k does not equal cofactor * sinh(level) for cofactor %s; use the cofactor the spike was built with.",
+        format(cofactor)
+      ),
+      call. = FALSE
+    )
+  }
+  tibble::tibble(
+    setup = as.character(cells$setup),
+    sample = as.character(cells$sample),
+    x_lin = cells$base_value,
+    y_lin = cells$base_value + cells$recovered,
+    hit = cells$recovery < score$loss_cut
+  )
+}
+
+# Saved size of a grid of square panels: Nature double width, height from the
+# rows (panel side = free width / columns, plus strips, axes and legend room).
+.sw_fig_grid_size <- function(n_cols, n_rows) {
+  width <- 183
+  side <- (width - 12 - 30 - 5 - 2 * (n_cols - 1)) / n_cols
+  height <- n_rows * side + 2 * (n_rows - 1) + 5 + 14
+  c(width, max(height, 60))
 }
 
 # ---- F7: spike summary -------------------------------------------------------
