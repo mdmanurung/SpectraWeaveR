@@ -581,26 +581,16 @@ test_that("sw_correct_evaluate_emd and _mad run on data without an id column", {
   expect_true(all(c("score", "mad") %in% names(mad_eval)))
 })
 
-test_that("sw_correct_evaluate_quick runs in a session with no attached packages", {
-  skip_if_not_installed("callr")
-
-  # testthat attaches magrittr, which hides a missing %>% import; use a clean session
-  improved <- callr::r(
-    function(lib_paths) {
-      .libPaths(lib_paths)
-      uncorrected <- data.frame(
-        CD3 = c(rep(1, 50), rep(3, 50)) + rep(c(-0.1, 0.1), 50),
-        batch = rep(c("B1", "B2"), each = 50)
-      )
-      corrected <- data.frame(
-        CD3 = c(rep(2, 50), rep(2.1, 50)) + rep(c(-0.1, 0.1), 50),
-        batch = rep(c("B1", "B2"), each = 50)
-      )
-      suppressMessages(
-        SpectraWeaveR::sw_correct_evaluate_quick(uncorrected, corrected, markers = "CD3")
-      )$improved
+test_that("no package function uses the magrittr pipe, which the namespace does not import", {
+  # testthat attaches magrittr, which hides a missing %>% import at test time
+  ns <- asNamespace("SpectraWeaveR")
+  uses_magrittr_pipe <- vapply(
+    ls(ns, all.names = TRUE),
+    \(nm) {
+      obj <- get(nm, envir = ns)
+      is.function(obj) && "%>%" %in% all.names(body(obj))
     },
-    args = list(lib_paths = .libPaths())
+    logical(1)
   )
-  expect_true(improved)
+  expect_identical(names(uses_magrittr_pipe)[uses_magrittr_pipe], character(0))
 })
