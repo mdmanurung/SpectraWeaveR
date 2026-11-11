@@ -210,6 +210,7 @@ Each item below changes a result, so none has a package default.
 | Positive cut, squeeze fraction, minimum negatives, reference setup | `sw_unmix_negative_shape()` (B11) | user, 2026-11-11, grill R9, R10. Benchmark 05 used arcsinh 1 and `as188_joint`; `min_negatives`: caller chooses; no recommended value (benchmark 05 used 0.05 and 1 as test values only) |
 | Minimum median rise; minimum donors | `sw_unmix_marker_screen()` (B11) | user, 2026-11-11, grill R11. Benchmark 05 used 0.10 and 5 |
 | Verdict limits for spike and screen checks | `sw_unmix_diagnose()` (B11) | user, 2026-11-11, grill Q16: none sourced, so `not_judged` unless the caller passes a limit |
+| `n_events` and `seed`: events drawn per file and the seed of the draw, for figures F3 and F4 | `sw_unmix_sample_events()` (B11) | caller chooses; no recommended value (benchmark 01, Mendeley 7-colour, used 50,000 events and seed 1 as test values only; `experiments/benchmarks/01_mendeley-7color/README.md`, user, 2026-11-09). Both are required arguments with no default. |
 
 Note, 2026-11-09: `sw_unmix_assess_mismatch()`, `sw_unmix_assess_mismatch_clusters()`, `sw_unmix_assess_variability()`, `sw_unmix_assess_alignment()`, `sw_unmix_compare()`, `sw_unmix_compare_data()` and `sw_unmix_compare_af()` became internal (`@keywords internal`, no export) because no run used them. Code, help text and tests are kept.
 
