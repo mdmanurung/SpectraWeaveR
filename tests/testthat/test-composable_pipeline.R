@@ -692,6 +692,41 @@ test_that("sw_pipeline_run enforces declared input_type at each step", {
   )
 })
 
+test_that("sw_pipeline_step_run enforces input_type on its own", {
+  skip_if_not_installed("S7")
+  step <- sw_pipeline_step("double", function(x) x * 2, input_type = "numeric")
+  expect_equal(sw_pipeline_step_run(step, 4), 8)
+  expect_error(
+    sw_pipeline_step_run(step, "four"),
+    "Step 'double' type check failed: expected input of type numeric, got character.",
+    fixed = TRUE
+  )
+  expect_error(
+    sw_pipeline_step_run(step, "four", pipeline_name = "p", step_index = 3),
+    "Pipeline 'p' type check failed at step 3 ('double'): expected input of type numeric, got character.",
+    fixed = TRUE
+  )
+})
+
+test_that("sw_pipeline_step_run does not check a step without input_type", {
+  skip_if_not_installed("S7")
+  step <- sw_pipeline_step("len", function(x) length(x))
+  expect_equal(sw_pipeline_step_run(step, "abc"), 1L)
+})
+
+test_that("sw_pipeline_run reports the type check error without the step wrapper", {
+  skip_if_not_installed("S7")
+  pip <- sw_pipeline("p", list(
+    sw_pipeline_step("double", function(x) x * 2, input_type = "numeric")
+  ))
+  msg <- tryCatch(sw_pipeline_run(pip, input = "x", trace = FALSE),
+                  error = function(e) conditionMessage(e))
+  expect_identical(
+    msg,
+    "Pipeline 'p' type check failed at step 1 ('double'): expected input of type numeric, got character."
+  )
+})
+
 test_that("sw_pipeline_run skips type check when input_type is empty", {
   skip_if_not_installed("S7")
   pip <- sw_pipeline("any", list(
