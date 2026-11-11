@@ -15,42 +15,52 @@ NULL
 # Spillover Spreading Matrix
 # ---------------------------------------------------------------------------
 
-#' Compute Spillover Spreading Matrix
+#' Cosine Similarity Matrix of Reference Spectra
 #'
-#' Estimates a fluorophore-by-fluorophore spreading matrix from the reference
-#' spectra used for unmixing.  The SSM quantifies how much spectral overlap
-#' between fluorophores contributes to measurement uncertainty: higher values
-#' indicate more cross-talk and therefore noisier unmixed signals.
+#' Computes a fluorophore-by-fluorophore matrix of absolute cosine similarity
+#' between the reference spectra used for unmixing.  High values mark pairs
+#' with similar spectra, which are harder to unmix.
+#'
+#' This is \strong{not} a spillover spreading matrix (SSM).  A true SSM
+#' measures the spread in a channel caused by another fluorophore, and it is
+#' computed from unmixed single-stain controls.  This function uses only the
+#' reference spectra, so it cannot show spread.  For a real SSM, use the one
+#' AutoSpectral writes during unmixing.  The unmix report and dashboard
+#' (\code{\link{sw_unmix_report}()}, \code{\link{sw_unmix_dashboard}()}) read
+#' it from the run folder.  The name \code{sw_unmix_spillover_matrix} is kept
+#' for backward compatibility.
 #'
 #' @param reference_spectra A numeric matrix of reference spectra with
 #'   fluorophore names as row names and detector names as column names.
 #'   Each row is the emission spectrum of one fluorophore (as returned by
 #'   \code{\link{sw_unmix_prepare}()$spectra}).
 #' @param unmixed_ff An optional \code{flowFrame} of unmixed data.  When
-#'   provided, empirical spreading is estimated from the data and combined
-#'   with the spectra-based estimate.  When \code{NULL} (default), only the
-#'   spectra-based (theoretical) SSM is computed.
+#'   provided, the cosine similarity is averaged with the absolute Pearson
+#'   correlation of the unmixed fluorophore channels.  When \code{NULL}
+#'   (default), only the cosine similarity of the spectra is returned.
 #'
-#' @return A named list with class \code{"sw_ssm"} containing:
+#' @return A named list with class \code{"sw_ssm"} (the class name and the
+#'   \code{spreading} column names say "SSM" and "spreading" but hold cosine
+#'   similarity, not spillover spreading) containing:
 #'   \describe{
 #'     \item{\code{matrix}}{Numeric matrix (fluorophores x fluorophores) of
-#'       spreading coefficients.  Diagonal entries are zero.}
+#'       absolute cosine similarity.  Diagonal entries are zero.}
 #'     \item{\code{summary}}{A \code{tibble} with per-fluorophore
 #'       \code{max_spreading}, \code{mean_spreading}, and
-#'       \code{worst_partner} (the fluorophore causing the most spread).}
+#'       \code{worst_partner} (the fluorophore with the highest similarity).
+#'       The first two are the row maximum and mean of \code{matrix}.}
 #'   }
 #'
 #' @details
-#' The spectra-based SSM is computed as the absolute normalised cross-talk
-#' between reference spectra:
+#' The spectra-based matrix is the absolute normalised dot product between
+#' reference spectra:
 #'
-#' \deqn{SSM_{ij} = \frac{|R_i \cdot R_j|}{\|R_i\| \, \|R_j\|}}
+#' \deqn{S_{ij} = \frac{|R_i \cdot R_j|}{\|R_i\| \, \|R_j\|}}
 #'
 #' where \eqn{R_i} is the reference spectrum (row vector) of fluorophore
 #' \eqn{i}.
 #' This is equivalent to the absolute cosine similarity and ranges from 0
-#' (orthogonal spectra, no spreading) to 1 (identical spectra, maximum
-#' spreading).
+#' (orthogonal spectra) to 1 (identical spectra).
 #'
 #' @seealso \code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_quality}},
 #'   \code{\link{sw_unmix_prepare}}
@@ -160,9 +170,11 @@ sw_unmix_spillover_matrix <- function(reference_spectra,
 # Plot SSM
 # ---------------------------------------------------------------------------
 
-#' Plot Spillover Spreading Matrix
+#' Plot Reference-Spectra Similarity Matrix
 #'
-#' Produces a heatmap of the spillover spreading matrix.  Uses
+#' Produces a heatmap of the \code{"sw_ssm"} object.  Its values are cosine
+#' similarity, not spillover spreading (see
+#' \code{\link{sw_unmix_spillover_matrix}}).  Uses
 #' \pkg{pheatmap} if available, otherwise falls back to
 #' \code{stats::heatmap()}.
 #'
