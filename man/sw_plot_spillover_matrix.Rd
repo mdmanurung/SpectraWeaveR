@@ -2,7 +2,7 @@
 % Please edit documentation in R/unmix_diagnostics.R
 \name{sw_plot_spillover_matrix}
 \alias{sw_plot_spillover_matrix}
-\title{Plot Spillover Spreading Matrix}
+\title{Plot Reference-Spectra Similarity Matrix}
 \usage{
 sw_plot_spillover_matrix(ssm, plot_file = NULL, ...)
 }
@@ -19,7 +19,9 @@ function.}
 Invisible \code{NULL}; called for its side effect (plot).
 }
 \description{
-Produces a heatmap of the spillover spreading matrix.  Uses
+Produces a heatmap of the \code{"sw_ssm"} object.  Its values are cosine
+similarity, not spillover spreading (see
+\code{\link{sw_unmix_spillover_matrix}}).  Uses
 \pkg{pheatmap} if available, otherwise falls back to
 \code{stats::heatmap()}.
 }
