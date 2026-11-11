@@ -354,3 +354,11 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 - Runner writes `report/dashboard.html`; `sw_unmix_app()` and `sw_unmix_dashboard()` share one argument check; reference pages added.
 - Left alone after measuring: the 300-row checks table costs 22 to 27 ms of browser layout per rebuild (handler 2 to 7 ms); similarity hover and biplot hover were already under 0.5 ms.
 - AutoSpectral tab (2026-11-09): `sw_unmix_dashboard()` now reads `<run>/unmix`. Interactive: the CSV matrices in `figure_similarity_heatmap` (hotspot, similarity, spillover spread), the autofluorescence spectra, and the spectra of each stage. Linked, not embedded: the JPG and PDF figures (about 100 MB per run). Not read: `Spectral_variants.rds` (76 MB); its 40 variants plots are in the gallery. Dashboards: `experiments/runs/2026-11-09_dashboard_v3/` (links are relative, so keep the folder next to the run folders).
+
+## Session 16 (2026-11-11): unmix diagnostics PR 4 (integration)
+
+- `sw_unmix_diagnose(spike=, screen=)` adds `spike_recovery` and `marker_screen` rows (item `setup|marker|pop`, donor median, n donors and range); limits `max_share_lost`, `min_median_recovery`, `max_share_moved`, `max_delta_squeezed`; the limit spec is built from a named limit-to-metric vector whose prefix sets the direction.
+- `sw_unmix_report()` adds the Spike-in recovery and Marker screen sections and writes `spike_summary.csv`, `baseline_check.csv`, `marker_screen.csv`.
+- `sw_unmix_dashboard()` has a Spike & screen tab; new `sw_unmix_dashboard_quarto()` (template `inst/quarto_dashboard`, reactable in Suggests, local file only).
+- Real-data regression (`experiments/integration/spike_bmv.R`, `screen_bmv.R`): 88, 88b, 88e, 88d and 88h summaries match the benchmark to 2.2e-16 (1800 rows, n identical); the build reproduces 88's spiked raw files to float32 rounding (relative 6e-8); 88h p1_af5 has 26 of 30 files coupled, p5_af1 none. Screen metrics match 75 (2970 rows, max 5.6e-17); 485 of 495 flags equal 86b, the other 10 are NA where 86b wrote FALSE (expected, R11). Runs: `experiments/runs/2026-11-11_pkg-{spike,screen}-regression/`.
+- Rendered dashboards: `experiments/runs/2026-11-11_pkg-dashboard/`.
