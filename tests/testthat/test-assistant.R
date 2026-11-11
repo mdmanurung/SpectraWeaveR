@@ -496,7 +496,12 @@ test_that("sw_pipeline_config_type returns ellmer type object", {
   skip_if_not_installed("ellmer")
 
   config_type <- sw_pipeline_config_type()
-  expect_true(inherits(config_type, "TypeObject"))
+  # ellmer >= 0.3.0 uses S7 classes, so the class is "ellmer::TypeObject"
+  expect_true(inherits(config_type, "ellmer::TypeObject"))
+  expect_true(all(
+    c("fcs_dir", "batch_col", "markers", "cofactor", "seed") %in%
+      names(config_type@properties)
+  ))
 })
 
 # ===========================================================================
@@ -521,6 +526,17 @@ test_that(".sw_tool_list returns list of tools", {
   tools <- SpectraWeaveR:::.sw_tool_list()
   expect_true(is.list(tools))
   expect_true(length(tools) == 9)  # 9 SpectraWeaveR custom tools
+  # the system prompts in inst/prompts refer to these tools by name
+  expect_identical(
+    vapply(tools, \(tool) tool@name, character(1)),
+    c("list_fcs_files", "list_directory", "read_fcs_header",
+      "read_csv_columns", "read_xlsx_columns", "validate_sample_meta",
+      "detect_channels", "check_batch_balance", "validate_markers")
+  )
+  expect_identical(
+    names(tools[[4]]@arguments@properties),
+    c("file_path", "n_rows", "columns_only")
+  )
 })
 
 test_that("sw_assistant accepts include_btw parameter", {
