@@ -144,15 +144,15 @@ that step removed, and `NA` for `raw`. The margin step removes the events at
 the observed minimum and maximum of every scatter and fluorescence channel,
 so it removes a few events even when none reach `margin_range` or the
 instrument range. On real 40-colour Aurora files, look at the `margins` row
-first. `margin_range` has no default. In a failed smoke run on 5 BMV donors
-with PeacoQC's default ranges, PeacoQC warned that more than 99.34 % (A3),
-99.81 % (A6), 99.48 % (B11), 99.16 % (B2) and 99.86 % (D1) of the events were
-margin events
-(`experiments/runs/2026-11-11_clean-run-smoke/warnings.txt`, a run folder that
-git does not track). The comment on `MAX_MARGIN_FRAC` in
-`experiments/benchmarks/05_bmv-unmix-compare/12_cleanup.R` notes that the
-defaults removed 99.9%. The user approved `margin_range` as a required argument
-in the 2026-11-11 session.
+first. `margin_range` has no default. In a smoke run on 5 BMV files (A3, A6,
+B11, B2, D1), made before `sw_clean_run()` had a margin argument, PeacoQC
+printed "More than X % is considered as a margin event" warnings of 99.34 %
+(A3), 99.81 % (A6), 99.48 % (B11), 99.16 % (B2) and 99.86 % (D1)
+(`experiments/runs/2026-11-11_clean-run-smoke/warnings.txt`; git does not track
+the run folder). A comment in
+`experiments/benchmarks/05_bmv-unmix-compare/12_cleanup.R` records that PeacoQC
+defaults removed 99.9% of events in benchmark 05. That is a different run, not
+the same measurement.
 
 ```{r}
 #| label: clean-audit
