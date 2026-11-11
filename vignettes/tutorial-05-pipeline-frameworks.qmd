@@ -46,7 +46,9 @@ dir.create(fcs_dir, showWarnings = FALSE, recursive = TRUE)
 out_dir <- file.path(tempdir(), "tutorial_pipeline_output")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-make_fcs <- function(filename, n = 300, batch_shift = 0) {
+# PeacoQC splits events into bins of 500 and needs at least four bins to
+# smooth the peaks, so each file needs several thousand events.
+make_fcs <- function(filename, n = 5000, batch_shift = 0) {
   mat <- matrix(
     c(abs(rnorm(n, 150000, 30000)),
       abs(rnorm(n,  50000, 15000)),
@@ -76,7 +78,8 @@ result <- sw_pipeline_run_all(
   markers = c("CD3", "CD4", "CD8"),
   lineage_markers = c("CD3", "CD4", "CD8"),
   gating_template = NULL,
-  output_dir = out_dir
+  output_dir = out_dir,
+  cofactor = 6000 # spectral flow cofactor, as in the other tutorials
 )
 
 stopifnot(is.list(result))

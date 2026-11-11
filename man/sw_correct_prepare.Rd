@@ -21,7 +21,9 @@ optionally \code{condition}.}
 \value{
 A \code{tibble} with one row per cell, arcsinh-transformed marker
 columns, metadata columns (sample, batch, condition), and a
-\code{.cell_id} column for per-sample cell tracking.
+\code{.cell_id} column for per-sample cell tracking, and an \code{id}
+column (1 to the number of rows, unique across samples) that
+\pkg{cyCombine} uses to order rows in its evaluation functions.
 }
 \description{
 Converts a list of \code{flowFrame} objects into a single tibble with
