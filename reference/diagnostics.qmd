@@ -553,6 +553,26 @@ using a fixed cutoff.
 
 ![Fault in 80% of files: frozen reference against cohort z, 10 seeds](figures/frozen_reference.png)
 
+The later batches do carry an offset against the reference, and it shows in the
+z of clean files. With no fault, 9.4% of the frozen |z| values (file x marker,
+`median_z` and `sd_z`) reach 3 or more, against 5.2% for the cohort z and 4.1%
+for the reference files scored against themselves (`figures/frozen_cutoff.png`).
+So the offset roughly doubles false flags; real files are heavy-tailed even
+without it. The offset does not grow with time: the Spearman correlation of
+|z| with acquisition date is 0.12 for `median_z` and 0.03 for `sd_z`, and the
+batch medians sit between about 0.5 and 1.3 (`figures/frozen_null_z.png`).
+Batch 17 has a few very large values under both arms, so it is an odd batch,
+not a reference effect. At the same cutoff, 75% of the faulty files' hit
+markers reach |z| 3 under the frozen reference and 1% under the cohort z.
+Pick a cutoff from the reference files' own |z| plus a margin, rank per check
+and marker as `sw_diagnosis_top()` does, and refit the reference when the
+instrument or panel changes; a rolling or bridge-sample reference is not
+built yet.
+
+![Clean files: |z| per batch under the cohort z, the reference in-sample and the frozen z](figures/frozen_null_z.png)
+
+![Share of |z| at or above 2 to 5: false flags on clean files and hits on faulty files](figures/frozen_cutoff.png)
+
 ## What the checks cannot see
 
 - The negative checks assume a channel splits into a negative and a positive
