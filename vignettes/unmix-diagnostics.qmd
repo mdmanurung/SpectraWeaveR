@@ -1,0 +1,189 @@
+---
+title: "Unmixing diagnostics: spike-in recovery and marker screen"
+vignette: >
+  %\VignetteIndexEntry{Unmixing diagnostics: spike-in recovery and marker screen}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_fig <- requireNamespace("ggplot2", quietly = TRUE) &&
+  requireNamespace("hexbin", quietly = TRUE)
+```
+
+## What the two tests answer
+
+The spike-in test asks whether an unmixing setup returns a signal that was
+added to known cells. It adds `k = cofactor * sinh(level)` times a dye's
+spectrum to the raw detector values of chosen cells. Each setup then unmixes
+the spiked files and the unspiked files. Recovery is the change in the dye's
+unmixed channel of the same cell, divided by `k`. A cell "loses" the spike
+when its recovery falls below `loss_cut`.
+
+The score also checks an assumption of the method: unmixing is per cell, so
+cells that were not spiked must not move. A file where any unspiked cell
+moves by more than `baseline_tol` (arcsinh, any fluorescence channel) is
+`coupled`; its recovery values are kept and marked.
+
+The marker screen asks whether a setup squeezes a channel's negatives
+towards zero compared with a reference setup. It flags a setup, population
+and channel when the squeezed share rises in every donor and the donor
+median rise is at least `min_delta`.
+
+The package never runs unmixing for these tests. You unmix the files it
+writes with your own setups (on a cluster, for AutoSpectral), then score.
+
+## Mock example
+
+This section runs on simulated data. Two mock setups unmix the same files:
+`ols` is per-cell least squares; `clip` is the same with negative values set
+to zero, which squeezes the negatives.
+
+```{r}
+#| label: mock-data
+library(SpectraWeaveR)
+set.seed(1)
+det <- paste0("D", 1:6)
+spectra <- rbind(
+  A = c(1, 0.6, 0.2, 0.1, 0, 0),
+  B = c(0, 0.1, 0.3, 1, 0.5, 0.2)
+)
+colnames(spectra) <- det
+
+# Raw events: 300 per donor, abundances around 0 with noise.
+raw <- lapply(c(d1 = 1, d2 = 2, d3 = 3), function(i) {
+  ab <- matrix(rnorm(600, 0, 400), ncol = 2)
+  x <- ab %*% spectra + matrix(rnorm(300 * 6, 0, 50), ncol = 6)
+  cbind(Time = seq_len(300) + i / 10, x)
+})
+
+design <- sw_unmix_spike_build(
+  raw = raw,
+  populations = lapply(raw, \(x) list(T = 1:200)),
+  spectra = spectra,
+  dyes = c(markerA = "A"),
+  levels = c(0, 1, 2),
+  cofactor = 6000,
+  spike_fraction = 0.5,
+  seed = 42,
+  key_cols = "Time",
+  output_dir = NULL
+)
+design
+```
+
+```{r}
+#| label: mock-unmix
+# Two mock unmixers. Rows stay in raw order and keep the key column.
+unmix_ols <- function(x) {
+  coef <- x[, det] %*% t(spectra) %*% solve(spectra %*% t(spectra))
+  colnames(coef) <- paste0(rownames(spectra), "-A")
+  cbind(x[, "Time", drop = FALSE], coef)
+}
+unmix_clip <- function(x) {
+  u <- unmix_ols(x)
+  u[, -1] <- pmax(u[, -1], 0)
+  u
+}
+unmixers <- list(ols = unmix_ols, clip = unmix_clip)
+grid <- expand.grid(
+  setup = names(unmixers),
+  sample = names(raw),
+  set = c("markerA", "base"),
+  stringsAsFactors = FALSE
+)
+grid$data <- lapply(seq_len(nrow(grid)), function(i) {
+  x <- if (grid$set[i] == "base") raw[[grid$sample[i]]] else design$data$markerA[[grid$sample[i]]]
+  unmixers[[grid$setup[i]]](x)
+})
+score <- sw_unmix_spike_score(design, grid, loss_cut = 0.5, baseline_tol = 0.05)
+score
+score$by_setup
+```
+
+The `ols` setup recovers every spike (recovery 1) and its unspiked cells do
+not move. The `clip` setup changes recovery for cells whose unspiked value
+was negative.
+
+```{r}
+#| label: mock-screen
+base <- grid[grid$set == "base", ]
+x <- lapply(split(base, base$setup), \(d) setNames(d$data, d$sample))
+shape <- sw_unmix_negative_shape(
+  x,
+  reference = "ols",
+  populations = lapply(raw, \(r) list(T = 1:200)),
+  channels = c("A-A", "B-A"),
+  cofactor = 6000,
+  cut = 1,
+  squeeze_frac = 0.5,
+  min_negatives = 20,
+  key_cols = "Time"
+)
+screen <- sw_unmix_marker_screen(shape, min_delta = 0.1, min_donors = 3)
+screen$flags
+```
+
+## Diagnostics and report
+
+`sw_unmix_diagnose()` turns both results into rows of the checks table. The
+item is `setup|marker|pop`, the value is the donor median, and the reason
+gives the number of donors and their range. **No limit is built in**: rows
+stay `not_judged` until you pass one. The limit below is an example, not a
+recommendation.
+
+```{r}
+#| label: mock-diagnose
+res <- sw_unmix_result(spectra = spectra, run_id = "mock")
+dx <- sw_unmix_diagnose(
+  res,
+  limits = list(max_share_lost = c(warn = 0.05, fail = 0.2)),
+  spike = score,
+  screen = screen
+)
+dx$checks[dx$checks$check_id %in% c("spike_recovery", "marker_screen"), ]
+out <- sw_unmix_report(res, dx, path = file.path(tempdir(), "mock_report"), notes = "Mock data.")
+basename(out)
+```
+
+The report adds the sections "Spike-in recovery" and "Marker screen" and
+writes `spike_summary.csv`, `baseline_check.csv` and `marker_screen.csv`.
+
+## Figures
+
+F7 shows the share of cells losing the spike and each donor's median
+recovery; F8 shows the cumulative distribution of per-cell recovery.
+
+```{r}
+#| label: mock-figures
+#| eval: !expr has_fig
+f7 <- sw_unmix_figure_spike_summary(score, readout_level = 1, stem = "spike-summary_markerA_T")
+f8 <- sw_unmix_figure_spike_ecdf(score, readout_level = 1, stem = "spike-ecdf_markerA_T")
+f7$plot
+f8$plot
+```
+
+## Dashboards
+
+`sw_unmix_dashboard()` reads run folders (a `report/` folder and a
+`figures*/panels` folder) and writes one offline HTML file; a run with the
+three CSVs gets a "Spike & screen" tab with the tables and the F7 and F8
+images. `sw_unmix_dashboard_quarto()` writes a Quarto page with verdict
+cards and one section per finding, each with Figures, Data and notes tabs.
+Both write local files only.
+
+## Real data
+
+This section runs only when `SW_DATA_DIR` points at a folder with unmixed
+benchmark files; the scripts `experiments/integration/spike_bmv.R` and
+`screen_bmv.R` in the source repository show the full real-data calls.
+
+```{r}
+#| label: real-data
+#| eval: !expr nzchar(Sys.getenv("SW_DATA_DIR"))
+data_dir <- Sys.getenv("SW_DATA_DIR")
+list.files(data_dir)
+```

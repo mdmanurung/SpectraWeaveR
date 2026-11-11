@@ -1,0 +1,59 @@
+---
+title: "Unmixing Diagnostics"
+---
+
+Spike-in recovery, the negative-shape marker screen, and how both enter the
+diagnostics table, the report and the dashboards. The package builds spiked
+files and scores unmixed ones; it never runs unmixing. Every threshold is a
+required argument with no default. The vignette "Unmixing diagnostics" runs
+the full chain on mock data.
+
+## Spike-in recovery
+
+| Function | Purpose |
+|---|---|
+| `sw_unmix_spike_build(raw, populations, spectra, dyes, levels, cofactor, spike_fraction, seed, key_cols, output_dir, assignment = NULL, write_base = TRUE)` | Add `k = cofactor * sinh(level)` times a dye's spectrum to chosen raw cells; one set per marker. `assignment` replaces the draw with a saved key. |
+| `sw_unmix_spike_cospike(design, marker, dye2, levels2, level1, output_dir)` | Co-spike a second dye into the cells of one level. |
+| `sw_unmix_spike_rows()`, `sw_unmix_spike_jobs()`, `sw_unmix_spike_pairs()` | Population rows from a GatingSet, the unmix job table, the table of unmixed files. |
+| `sw_unmix_spike_score(design, unmixed, loss_cut, baseline_tol, results = NULL, channel_suffix = "-A")` | Recovery per spiked cell, donor summaries with quantiles, and the independence check (`file_status`: `independent` or `coupled`). |
+
+## Marker screen
+
+| Function | Purpose |
+|---|---|
+| `sw_unmix_negative_shape(x, reference, populations, channels, cofactor, cut, squeeze_frac, min_negatives, key_cols)` | Nguyen rSD of each setup's below-cut events, its ratio to the reference, squeezed share and positive share. |
+| `sw_unmix_marker_screen(shape, min_delta, min_donors, channel_populations = NULL)` | Flag when the squeezed share rises in every donor and the donor median rise is at least `min_delta`; `NA` under `min_donors`. |
+
+## Diagnostics, report and dashboards
+
+`sw_unmix_diagnose(result, limits = list(), unmixed_files = NULL, unmixed_data = NULL, spike = NULL, screen = NULL, ...)`
+adds rows with `check_id` `spike_recovery` and `marker_screen`. The item is
+`setup|marker|pop`, the value is the donor median, and the reason gives the
+number of donors and their range. The rows stay `not_judged` unless you pass
+a limit:
+
+| limit | metric | direction |
+|---|---|---|
+| `max_share_lost` | `share_lost` | fails above |
+| `min_median_recovery` | `median_recovery` | fails below |
+| `max_share_moved` | `share_moved` | fails above |
+| `max_delta_squeezed` | `delta_squeezed` | fails above |
+
+`sw_unmix_report()` adds the sections "Spike-in recovery" and "Marker
+screen" and writes `spike_summary.csv`, `baseline_check.csv` and
+`marker_screen.csv`.
+
+`sw_unmix_dashboard()` shows a "Spike & screen" tab for runs that hold these
+CSVs, with the F7 and F8 images. `sw_unmix_dashboard_quarto(sections, path, title, verdicts = NULL, ...)`
+writes a self-contained Quarto page: verdict cards, then one section per
+finding with Figures, Data and notes tabs; images are 300-dpi copies of each
+figure's PDF. It needs quarto and reactable, and writes a local folder only.
+
+## Figures
+
+| Function | Panel |
+|---|---|
+| `sw_unmix_figure_scatter_grid()` | F6: hexbin grid per setup and donor; spike mode plots one marker before vs after. |
+| `sw_unmix_figure_spike_summary(score, readout_level, stem)` | F7: % of cells losing the spike and donor median recovery. |
+| `sw_unmix_figure_spike_ecdf(score, readout_level, stem, xlim)` | F8: cumulative distribution of per-cell recovery. |
+| `sw_unmix_save_figures(figures, dir, sizes = NULL, check = c("none", "nature"))` | PNG (300 dpi), PDF and source CSV per panel. |

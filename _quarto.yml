@@ -17,6 +17,8 @@ website:
         menu:
           - text: "Spectral Unmixing"
             href: vignettes/spectral-unmixing.qmd
+          - text: "Unmixing Diagnostics"
+            href: vignettes/unmix-diagnostics.qmd
           - text: "Batch Correction"
             href: vignettes/batch-correction.qmd
           - text: "LLM Pipeline Builder"
@@ -42,6 +44,8 @@ website:
             href: reference/utils.qmd
           - text: "Unmixing"
             href: reference/unmix.qmd
+          - text: "Unmixing Diagnostics"
+            href: reference/unmix-diagnostics.qmd
           - text: "Gating"
             href: reference/gate.qmd
           - text: "Signal QC"
