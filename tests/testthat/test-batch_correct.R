@@ -534,3 +534,73 @@ test_that("sw_plot_batch_densities produces a ggplot object", {
   p <- sw_plot_batch_densities(uncorrected, corrected, markers = "CD3")
   expect_s3_class(p, "gg")
 })
+
+# ===========================================================================
+# Row id column required by cyCombine >= 0.3.0 evaluation functions
+# ===========================================================================
+
+test_that("sw_correct_prepare adds a unique row id column", {
+  skip_if_not_installed("flowCore")
+
+  mat <- matrix(c(1000, 2000, 3000, 4000), ncol = 2,
+                dimnames = list(NULL, c("CD3", "CD4")))
+  ff <- flowCore::flowFrame(mat)
+  result <- sw_correct_prepare(
+    list(S1 = ff, S2 = ff),
+    tibble::tibble(sample = c("S1", "S2"), batch = c("B1", "B2")),
+    markers = c("CD3", "CD4")
+  )
+
+  expect_identical(result$id, seq_len(nrow(result)))
+})
+
+test_that("sw_correct_evaluate_emd and _mad run on data without an id column", {
+  skip_if_not_installed("cyCombine")
+  skip_if_not_installed("emdist")
+
+  set.seed(42)
+  n <- 60
+  uncorrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3)),
+    CD4 = c(rnorm(n, mean = 2), rnorm(n, mean = 4)),
+    batch = rep(c("B1", "B2"), each = n),
+    label = rep(c(1L, 2L), times = n)
+  )
+  corrected <- uncorrected
+  corrected$CD3 <- corrected$CD3 - c(rep(0, n), rep(2, n))
+  expect_false("id" %in% names(uncorrected))
+
+  emd_eval <- suppressMessages(
+    sw_correct_evaluate_emd(uncorrected, corrected, markers = c("CD3", "CD4"))
+  )
+  expect_true(all(c("reduction", "emd") %in% names(emd_eval)))
+
+  mad_eval <- suppressMessages(
+    sw_correct_evaluate_mad(uncorrected, corrected, markers = c("CD3", "CD4"))
+  )
+  expect_true(all(c("score", "mad") %in% names(mad_eval)))
+})
+
+test_that("sw_correct_evaluate_quick runs in a session with no attached packages", {
+  skip_if_not_installed("callr")
+
+  # testthat attaches magrittr, which hides a missing %>% import; use a clean session
+  improved <- callr::r(
+    function(lib_paths) {
+      .libPaths(lib_paths)
+      uncorrected <- data.frame(
+        CD3 = c(rep(1, 50), rep(3, 50)) + rep(c(-0.1, 0.1), 50),
+        batch = rep(c("B1", "B2"), each = 50)
+      )
+      corrected <- data.frame(
+        CD3 = c(rep(2, 50), rep(2.1, 50)) + rep(c(-0.1, 0.1), 50),
+        batch = rep(c("B1", "B2"), each = 50)
+      )
+      suppressMessages(
+        SpectraWeaveR::sw_correct_evaluate_quick(uncorrected, corrected, markers = "CD3")
+      )$improved
+    },
+    args = list(lib_paths = .libPaths())
+  )
+  expect_true(improved)
+})

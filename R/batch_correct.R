@@ -44,6 +44,17 @@ NULL
   }
 }
 
+# ---------------------------------------------------------------------------
+# Internal helper: add the row id that cyCombine >= 0.3.0 evaluate_emd() and
+# evaluate_mad() require (they only sort by it). An existing id is kept.
+# ---------------------------------------------------------------------------
+.ensure_row_id <- function(df) {
+  if (!"id" %in% names(df)) {
+    df$id <- seq_len(nrow(df))
+  }
+  df
+}
+
 #' Prepare Data for Batch Correction
 #'
 #' Converts a list of \code{flowFrame} objects into a single tibble with
@@ -60,7 +71,9 @@ NULL
 #'
 #' @return A \code{tibble} with one row per cell, arcsinh-transformed marker
 #'   columns, metadata columns (sample, batch, condition), and a
-#'   \code{.cell_id} column for per-sample cell tracking.
+#'   \code{.cell_id} column for per-sample cell tracking, and an \code{id}
+#'   column (1 to the number of rows, unique across samples) that
+#'   \pkg{cyCombine} uses to order rows in its evaluation functions.
 #'
 #' @examples
 #' if (requireNamespace("flowCore", quietly = TRUE)) {
@@ -158,6 +171,8 @@ sw_correct_prepare <- function(ff_list, sample_meta, markers,
   }
 
   result <- dplyr::bind_rows(dfs)
+  # cyCombine::evaluate_emd() and evaluate_mad() need a row id unique across samples
+  result$id <- seq_len(nrow(result))
   message("Prepared ", nrow(result), " cells from ", length(ff_list),
           " samples for batch correction")
 
@@ -690,7 +705,7 @@ sw_correct_evaluate_emd <- function(uncorrected, corrected, markers,
           length(markers), " markers")
 
   cyCombine::evaluate_emd(
-    uncorrected, corrected, markers = markers,
+    .ensure_row_id(uncorrected), .ensure_row_id(corrected), markers = markers,
     cell_col = cell_col, batch_col = batch_col,
     binSize = binSize, ...
   )
@@ -755,7 +770,7 @@ sw_correct_evaluate_mad <- function(uncorrected, corrected, markers,
           length(markers), " markers")
 
   cyCombine::evaluate_mad(
-    uncorrected, corrected, markers = markers,
+    .ensure_row_id(uncorrected), .ensure_row_id(corrected), markers = markers,
     cell_col = cell_col, batch_col = batch_col, ...
   )
 }
