@@ -283,14 +283,21 @@ sw_pipeline_run_targets <- function(pipeline, input,
 
   reporter <- if (isTRUE(trace)) "verbose" else "silent"
 
+  # targets evaluates the script in `envir`, which defaults to the caller's
+  # frame. Inside tryCatch() that frame has an empty `...`, and tar_make()
+  # fails with 'argument "..." is missing'. Use the global env unless the
+  # caller passes `envir` in `...`.
+  make_args <- list(
+    script         = info$script,
+    store          = store_abs,
+    callr_function = callr_function,
+    reporter       = reporter,
+    ...
+  )
+  if (is.null(make_args[["envir"]])) make_args[["envir"]] <- globalenv()
+
   tryCatch(
-    targets::tar_make(
-      script         = info$script,
-      store          = store_abs,
-      callr_function = callr_function,
-      reporter       = reporter,
-      ...
-    ),
+    do.call(targets::tar_make, make_args),
     error = function(e) {
       stop(sprintf("Pipeline '%s' failed under targets backend: %s",
                    pipeline@name, conditionMessage(e)),
