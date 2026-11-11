@@ -19,7 +19,9 @@
   if (!is.character(runs) || length(runs) < 1L || anyNA(runs)) {
     stop("`runs` must be a character vector of run folders.", call. = FALSE)
   }
-  if (!is.numeric(sigma) || length(sigma) != 1L || !is.finite(sigma) || sigma <= 0) {
+  if (
+    !is.numeric(sigma) || length(sigma) != 1L || !is.finite(sigma) || sigma <= 0
+  ) {
     stop("`pseudo_log_sigma` must be one positive number.", call. = FALSE)
   }
   if (
@@ -95,13 +97,29 @@
 # it. scan() with fixed types reads a 1.2 million row table in about half the
 # time read.csv() needs and gives the same vectors.
 .sw_dash_read_columns <- function(path, what) {
-  header <- strsplit(readLines(path, n = 1L, warn = FALSE), ",", fixed = TRUE)[[1L]]
+  header <- strsplit(readLines(path, n = 1L, warn = FALSE), ",", fixed = TRUE)[[
+    1L
+  ]]
   header <- gsub("\"", "", header, fixed = TRUE)
   if (length(header) != length(what)) {
-    stop("Unexpected columns in ", path, ": ", paste(header, collapse = ", "), call. = FALSE)
+    stop(
+      "Unexpected columns in ",
+      path,
+      ": ",
+      paste(header, collapse = ", "),
+      call. = FALSE
+    )
   }
   types <- lapply(what, function(w) if (is.null(w)) NULL else vector(w, 0L))
-  cols <- scan(path, what = types, sep = ",", skip = 1L, quote = "\"", na.strings = "NA", quiet = TRUE)
+  cols <- scan(
+    path,
+    what = types,
+    sep = ",",
+    skip = 1L,
+    quote = "\"",
+    na.strings = "NA",
+    quiet = TRUE
+  )
   keep <- !vapply(what, is.null, logical(1))
   names(cols)[keep] <- header[keep]
   cols[keep]
@@ -110,7 +128,10 @@
 # One 1D histogram per method and channel on a common edge set, in the
 # pseudo-log space.
 .sw_dash_bin_distributions <- function(path, sigma, bins) {
-  d <- .sw_dash_read_columns(path, list("character", NULL, NULL, "character", "numeric"))
+  d <- .sw_dash_read_columns(
+    path,
+    list("character", NULL, NULL, "character", "numeric")
+  )
   trans <- scales::transform_pseudo_log(sigma = sigma)
   tv_all <- trans$transform(d$value)
   channels <- unique(d$channel)
@@ -129,7 +150,12 @@
       tabulate(i[i >= 1L & i <= bins], nbins = bins)
     })
     names(counts) <- methods
-    list(channel = ch, edges = edges, counts = counts, n = tabulate(mid, nbins = length(methods)))
+    list(
+      channel = ch,
+      edges = edges,
+      counts = counts,
+      n = tabulate(mid, nbins = length(methods))
+    )
   })
   names(out) <- channels
   list(channels = channels, methods = methods, panels = out)
@@ -137,7 +163,10 @@
 
 # Sparse 2D histogram per method, as triples (x bin, y bin, count), 0-based.
 .sw_dash_bin_biplot <- function(path, sigma, bins) {
-  d <- .sw_dash_read_columns(path, list("character", NULL, NULL, "numeric", "numeric"))
+  d <- .sw_dash_read_columns(
+    path,
+    list("character", NULL, NULL, "numeric", "numeric")
+  )
   trans <- scales::transform_pseudo_log(sigma = sigma)
   tx <- trans$transform(d$x)
   ty <- trans$transform(d$y)
@@ -210,7 +239,9 @@
   limits <- .sw_dash_parse_limit(sif_rows$limit)
   sif_source <- "run"
   if (nrow(sif_rows) == 0L && nrow(spectra_long) > 0L) {
-    sif_rows <- .sw_diag_sif(.sw_dash_spectra_matrix(list(spectra_long = spectra_long)))
+    sif_rows <- .sw_diag_sif(.sw_dash_spectra_matrix(list(
+      spectra_long = spectra_long
+    )))
     sif_rows$status <- ifelse(is.na(sif_rows$value), "not_run", "not_judged")
     sif_source <- "computed"
   }
@@ -222,7 +253,11 @@
     fluorophore = sif_rows$item,
     value = sif_rows$value,
     status = sif_rows$status,
-    partner = vapply(partner, \(m) if (length(m) == 3L) m[[2L]] else NA_character_, ""),
+    partner = vapply(
+      partner,
+      \(m) if (length(m) == 3L) m[[2L]] else NA_character_,
+      ""
+    ),
     partner_value = vapply(
       partner,
       \(m) if (length(m) == 3L) as.numeric(m[[3L]]) else NA_real_,
@@ -232,9 +267,15 @@
   )
 
   fig <- .sw_dash_find_figures(run_dir, figures_dir)
-  src <- if (is.na(fig)) NA_character_ else file.path(run_dir, fig, "panels", "source_data")
+  src <- if (is.na(fig)) {
+    NA_character_
+  } else {
+    file.path(run_dir, fig, "panels", "source_data")
+  }
   panel_path <- \(key) {
-    if (is.na(src)) return(NA_character_)
+    if (is.na(src)) {
+      return(NA_character_)
+    }
     p <- file.path(src, .sw_dash_panel_files[[key]])
     if (file.exists(p)) p else NA_character_
   }
@@ -243,7 +284,15 @@
   if (!is.na(p <- panel_path("spectra"))) {
     spectra_overlay <- utils::read.csv(
       p,
-      colClasses = c("character", "character", "character", "numeric", "numeric", "numeric", "NULL"),
+      colClasses = c(
+        "character",
+        "character",
+        "character",
+        "numeric",
+        "numeric",
+        "numeric",
+        "NULL"
+      ),
       stringsAsFactors = FALSE
     )
   }
@@ -325,7 +374,9 @@
 # exist. The dashboard links images this way so the pair of folders can be moved
 # together.
 .sw_dash_relpath <- function(from_dir, to) {
-  f <- strsplit(normalizePath(from_dir, mustWork = TRUE), "/", fixed = TRUE)[[1L]]
+  f <- strsplit(normalizePath(from_dir, mustWork = TRUE), "/", fixed = TRUE)[[
+    1L
+  ]]
   t <- strsplit(normalizePath(to, mustWork = TRUE), "/", fixed = TRUE)[[1L]]
   k <- 0L
   while (k < min(length(f), length(t)) && identical(f[[k + 1L]], t[[k + 1L]])) {
@@ -341,7 +392,9 @@
     as.matrix(utils::read.csv(path, row.names = 1L, check.names = FALSE)),
     error = function(e) NULL
   )
-  if (is.null(m) || !is.numeric(m) || any(dim(m) > max_dim) || any(dim(m) < 1L)) {
+  if (
+    is.null(m) || !is.numeric(m) || any(dim(m) > max_dim) || any(dim(m) < 1L)
+  ) {
     return(NULL)
   }
   m
@@ -368,63 +421,94 @@
   }
   csv <- \(sub, pattern) {
     d <- file.path(as_dir, sub)
-    if (!dir.exists(d)) return(character())
+    if (!dir.exists(d)) {
+      return(character())
+    }
     list.files(d, pattern = pattern, full.names = TRUE)
   }
   # Matrices.
   mat_files <- csv("figure_similarity_heatmap", "matrix\\.csv$")
-  matrices <- Filter(Negate(is.null), lapply(mat_files, function(p) {
-    m <- .sw_dash_read_matrix_csv(p)
-    if (is.null(m)) return(NULL)
-    label <- gsub("_", " ", sub("\\.csv$", "", basename(p)))
-    # AutoSpectral writes "Automatedhotspot_matrix.csv": put a space after the stage.
-    label <- sub("^(Automated|Clean|Normalized)(?=[a-z])", "\\1 ", label, perl = TRUE)
-    .sw_dash_matrix_entry(label, m)
-  }))
+  matrices <- Filter(
+    Negate(is.null),
+    lapply(mat_files, function(p) {
+      m <- .sw_dash_read_matrix_csv(p)
+      if (is.null(m)) {
+        return(NULL)
+      }
+      label <- gsub("_", " ", sub("\\.csv$", "", basename(p)))
+      # AutoSpectral writes "Automatedhotspot_matrix.csv": put a space after the stage.
+      label <- sub(
+        "^(Automated|Clean|Normalized)(?=[a-z])",
+        "\\1 ",
+        label,
+        perl = TRUE
+      )
+      .sw_dash_matrix_entry(label, m)
+    })
+  )
   # Autofluorescence spectra (one set per unstained file).
   af_files <- csv("table_spectra", "Autofluorescence spectra.*\\.csv$")
-  af <- Filter(Negate(is.null), lapply(af_files, function(p) {
-    m <- .sw_dash_read_matrix_csv(p)
-    if (is.null(m)) return(NULL)
-    list(
-      label = sub(" Autofluorescence spectra.*$", "", basename(p)),
-      detectors = colnames(m),
-      names = rownames(m),
-      values = .sw_dash_round(as.vector(t(m)), 4L)
-    )
-  }))
+  af <- Filter(
+    Negate(is.null),
+    lapply(af_files, function(p) {
+      m <- .sw_dash_read_matrix_csv(p)
+      if (is.null(m)) {
+        return(NULL)
+      }
+      list(
+        label = sub(" Autofluorescence spectra.*$", "", basename(p)),
+        detectors = colnames(m),
+        names = rownames(m),
+        values = .sw_dash_round(as.vector(t(m)), 4L)
+      )
+    })
+  )
   # Spectra of each stage.
   sp_files <- csv("table_spectra", "autospectral_spectra.*\\.csv$")
-  versions <- Filter(Negate(is.null), lapply(sp_files, function(p) {
-    m <- .sw_dash_read_matrix_csv(p)
-    if (is.null(m)) return(NULL)
-    label <- gsub("_", " ", sub("_autospectral_spectra.*$", "", basename(p)))
-    list(
-      label = label,
-      detectors = colnames(m),
-      fluorophores = rownames(m),
-      values = .sw_dash_round(as.vector(t(m)), 4L)
-    )
-  }))
+  versions <- Filter(
+    Negate(is.null),
+    lapply(sp_files, function(p) {
+      m <- .sw_dash_read_matrix_csv(p)
+      if (is.null(m)) {
+        return(NULL)
+      }
+      label <- gsub("_", " ", sub("_autospectral_spectra.*$", "", basename(p)))
+      list(
+        label = label,
+        detectors = colnames(m),
+        fluorophores = rownames(m),
+        values = .sw_dash_round(as.vector(t(m)), 4L)
+      )
+    })
+  )
   # Image and PDF files, grouped by AutoSpectral's output folder.
   folders <- sort(list.dirs(as_dir, recursive = FALSE, full.names = FALSE))
   folders <- folders[grepl("^figure_", folders)]
-  files <- do.call(rbind, lapply(folders, function(fd) {
-    f <- list.files(
-      file.path(as_dir, fd),
-      pattern = "\\.(jpe?g|png|pdf)$",
-      ignore.case = TRUE,
-      full.names = TRUE
-    )
-    if (length(f) == 0L) return(NULL)
-    data.frame(
-      folder = fd,
-      name = basename(f),
-      href = vapply(f, \(x) utils::URLencode(.sw_dash_relpath(out_dir, x)), ""),
-      pdf = grepl("\\.pdf$", f, ignore.case = TRUE),
-      stringsAsFactors = FALSE
-    )
-  }))
+  files <- do.call(
+    rbind,
+    lapply(folders, function(fd) {
+      f <- list.files(
+        file.path(as_dir, fd),
+        pattern = "\\.(jpe?g|png|pdf)$",
+        ignore.case = TRUE,
+        full.names = TRUE
+      )
+      if (length(f) == 0L) {
+        return(NULL)
+      }
+      data.frame(
+        folder = fd,
+        name = basename(f),
+        href = vapply(
+          f,
+          \(x) utils::URLencode(.sw_dash_relpath(out_dir, x)),
+          ""
+        ),
+        pdf = grepl("\\.pdf$", f, ignore.case = TRUE),
+        stringsAsFactors = FALSE
+      )
+    })
+  )
   list(
     matrices = matrices,
     af = af,

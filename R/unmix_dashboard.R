@@ -87,14 +87,27 @@ sw_unmix_dashboard <- function(
   labels <- .sw_dash_run_labels(runs)
   run_data <- Map(
     function(dir, nm) {
-      .sw_dash_read_run(dir, pseudo_log_sigma, as.integer(bins), figures_dir, nm)
+      .sw_dash_read_run(
+        dir,
+        pseudo_log_sigma,
+        as.integer(bins),
+        figures_dir,
+        nm
+      )
     },
     unname(runs),
     labels
   )
   run_data <- unname(run_data)
   out_dir <- normalizePath(dirname(path), mustWork = TRUE)
-  payload <- .sw_dash_payload(run_data, title, pseudo_log_sigma, bins, axis_labels, out_dir)
+  payload <- .sw_dash_payload(
+    run_data,
+    title,
+    pseudo_log_sigma,
+    bins,
+    axis_labels,
+    out_dir
+  )
   html <- .sw_dash_render(payload)
   writeLines(html, path, useBytes = TRUE)
   invisible(path)
@@ -139,7 +152,12 @@ sw_unmix_dashboard <- function(
       list(ours = .sw_dash_round(mat[i, ] / peak[[i]]), angle = list(ours = 0))
     })
     names(items) <- fl
-    return(list(detectors = dt, fluorophores = fl, methods = "ours", items = items))
+    return(list(
+      detectors = dt,
+      fluorophores = fl,
+      methods = "ours",
+      items = items
+    ))
   }
   dt <- unique(ov$detector)
   fl <- unique(ov$fluorophore)
@@ -148,7 +166,9 @@ sw_unmix_dashboard <- function(
     sub <- ov[ov$fluorophore == f, , drop = FALSE]
     vals <- lapply(methods, function(m) {
       s <- sub[sub$method == m, , drop = FALSE]
-      if (nrow(s) == 0L) return(NULL)
+      if (nrow(s) == 0L) {
+        return(NULL)
+      }
       .sw_dash_round(s$value_norm[match(dt, s$detector)])
     })
     names(vals) <- methods
@@ -165,7 +185,9 @@ sw_unmix_dashboard <- function(
 
 .sw_dash_similarity_payload <- function(run) {
   s <- run$similarity
-  if (is.null(s)) return(NULL)
+  if (is.null(s)) {
+    return(NULL)
+  }
   fl <- unique(s$fluorophore_x)
   m <- matrix(
     NA_real_,
@@ -179,7 +201,9 @@ sw_unmix_dashboard <- function(
 
 .sw_dash_dist_payload <- function(run) {
   d <- run$distributions
-  if (is.null(d)) return(NULL)
+  if (is.null(d)) {
+    return(NULL)
+  }
   panels <- lapply(d$panels, function(p) {
     list(
       channel = p$channel,
@@ -197,7 +221,9 @@ sw_unmix_dashboard <- function(
 # it back to (x, y) and the same counts.
 .sw_dash_biplot_payload <- function(run, axis_labels, bins) {
   b <- run$biplot
-  if (is.null(b)) return(NULL)
+  if (is.null(b)) {
+    return(NULL)
+  }
   list(
     methods = b$methods,
     ex = .sw_dash_round(b$ex, 6L),
@@ -217,8 +243,16 @@ sw_unmix_dashboard <- function(
     figures_dir = if (is.na(run$figures_dir)) NULL else run$figures_dir,
     status_counts = run$status_counts,
     limits = list(
-      warn = if (is.na(run$limits[["warn"]])) NULL else unname(run$limits[["warn"]]),
-      fail = if (is.na(run$limits[["fail"]])) NULL else unname(run$limits[["fail"]])
+      warn = if (is.na(run$limits[["warn"]])) {
+        NULL
+      } else {
+        unname(run$limits[["warn"]])
+      },
+      fail = if (is.na(run$limits[["fail"]])) {
+        NULL
+      } else {
+        unname(run$limits[["fail"]])
+      }
     ),
     provenance = as.list(run$provenance),
     checks = as.list(run$checks),
@@ -228,12 +262,23 @@ sw_unmix_dashboard <- function(
     similarity = .sw_dash_similarity_payload(run),
     distributions = .sw_dash_dist_payload(run),
     biplot = .sw_dash_biplot_payload(run, axis_labels, bins),
-    spectracle = if (is.null(run$compare_spectracle)) NULL else as.list(run$compare_spectracle),
+    spectracle = if (is.null(run$compare_spectracle)) {
+      NULL
+    } else {
+      as.list(run$compare_spectracle)
+    },
     autospectral = .sw_dash_read_autospectral(run$run_dir, out_dir)
   )
 }
 
-.sw_dash_payload <- function(run_data, title, sigma, bins, axis_labels, out_dir) {
+.sw_dash_payload <- function(
+  run_data,
+  title,
+  sigma,
+  bins,
+  axis_labels,
+  out_dir
+) {
   methods <- unique(unlist(lapply(run_data, function(r) {
     c(
       r$spectra_overlay$method,
@@ -257,7 +302,13 @@ sw_unmix_dashboard <- function(
     settings = list(pseudo_log_sigma = sigma, bins = as.integer(bins)),
     palette = as.list(.sw_fig_palette(methods)),
     package_version = as.character(utils::packageVersion("SpectraWeaveR")),
-    runs = lapply(run_data, .sw_dash_run_payload, axis_labels = axis_labels, bins = as.integer(bins), out_dir = out_dir),
+    runs = lapply(
+      run_data,
+      .sw_dash_run_payload,
+      axis_labels = axis_labels,
+      bins = as.integer(bins),
+      out_dir = out_dir
+    ),
     compare = compare
   )
 }
@@ -265,7 +316,11 @@ sw_unmix_dashboard <- function(
 # ---- HTML ----------------------------------------------------------------------
 
 .sw_dash_render <- function(payload) {
-  tpl_path <- system.file("dashboard", "dashboard.html", package = "SpectraWeaveR")
+  tpl_path <- system.file(
+    "dashboard",
+    "dashboard.html",
+    package = "SpectraWeaveR"
+  )
   if (!nzchar(tpl_path)) {
     # Source-tree fallback for devtools::load_all().
     tpl_path <- file.path("inst", "dashboard", "dashboard.html")
@@ -273,7 +328,10 @@ sw_unmix_dashboard <- function(
   if (!file.exists(tpl_path)) {
     stop("Dashboard template not found.", call. = FALSE)
   }
-  tpl <- paste(readLines(tpl_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  tpl <- paste(
+    readLines(tpl_path, warn = FALSE, encoding = "UTF-8"),
+    collapse = "\n"
+  )
   json <- jsonlite::toJSON(
     payload,
     auto_unbox = TRUE,
