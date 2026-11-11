@@ -16,7 +16,7 @@ vector of length 2, \code{c(lower_bound, upper_bound)}, named by channel
 name. When given, only the named channels are checked, and the ranges
 are passed to \code{PeacoQC::RemoveMargins(channel_specifications =)}.
 PeacoQC keeps events with \code{max(min(lower, 0), min(x)) < x <
-  min(upper, max(x))}. So the upper bound is exact, but a positive lower
+min(upper, max(x))}. So the upper bound is exact, but a positive lower
 bound acts as 0, and the observed minimum is always removed.}
 }
 \value{
