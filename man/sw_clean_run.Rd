@@ -34,7 +34,9 @@ a lower limit above 0 as 0 (\code{min(minRange, 0)}), so when
 \code{margin_range[1]} is above 0 the function warns, naming
 \code{margin_range} and the value, and continues; the result is the same
 as with a lower limit of 0. The value sets how many events every later
-step sees. See Details for a smoke run with PeacoQC margin warnings.}
+step sees. To choose it, look at the raw fluorescence densities and at
+the share of events the margin step flags per channel; the \code{margins}
+row of the \code{audit} table shows \code{n_removed}.}
 
 \item{debris_window}{Numeric length 2; required, no default. Lower and
 upper FSC-A limit (raw scale) of the events the \code{nonDebris} density
@@ -138,17 +140,6 @@ hands them to \code{PeacoQC::RemoveMargins()}, which writes them over the
 keep the \code{minRange} and \code{maxRange} of the FCS parameters. The
 \code{debris_window} and the singlet gate act on raw scatter; the
 viability cut acts on the arcsinh scale.
-
-\strong{Smoke run behind the required \code{margin_range}.} In a smoke run
-on 5 BMV files (A3, A6, B11, B2, D1), made before \code{sw_clean_run()} had
-a margin argument, PeacoQC printed \dQuote{More than X \\% is considered as a
-margin event} warnings of 99.34 \\% (A3), 99.81 \\% (A6), 99.48 \\% (B11),
-99.16 \\% (B2) and 99.86 \\% (D1)
-(\code{experiments/runs/2026-11-11_clean-run-smoke/warnings.txt}; git does
-not track the run folder). A comment in
-\code{experiments/benchmarks/05_bmv-unmix-compare/12_cleanup.R} records that
-PeacoQC defaults removed 99.9\\% of events in benchmark 05. That is a
-different run, not the same measurement.
 
 \strong{The margin step removes more than events on the range limit.}
 PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
