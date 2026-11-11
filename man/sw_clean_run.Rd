@@ -82,7 +82,7 @@ non-debris, QC-cleaned events, fluorescence on the arcsinh scale.}
 or \code{"outside"} the shape; the live gate keeps events outside) and
 \code{cut_at_window_floor} (\code{nonDebris} rows only, \code{NA}
 otherwise: \code{TRUE} when the cut sits on the lowest event inside
-\code{debris_window} because no valley was found there).}
+\code{debris_window} because it held one peak or no valley).}
 \item{\code{qc}}{The per-sample PeacoQC summary tibble of
 \code{\link{sw_qc_batch}} (\code{sample}, \code{n_before},
 \code{n_after}, \code{n_removed}, \code{pct_removed}), with the
@@ -121,12 +121,15 @@ on raw scatter; the viability cut acts on the arcsinh scale.
 \strong{The margin step removes more than events on the range limit.}
 PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
 and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
-\code{e < min(maxRange, max(e))} (PeacoQC source; \code{Time} is not
-checked). Both comparisons are strict, so in each channel of each sample
-the events at the observed minimum and the observed maximum are removed,
-even when no event reaches the instrument range. The \code{margins} row of
-the \code{audit} table (\code{n_removed}) shows how many events this step
-removed per sample.
+\code{e < min(maxRange, max(e))}. The package wrapper
+\code{sw_filter_margins_peacoqc()} picks these channels with
+\code{sw_channel_is_signal()}, which leaves out \code{Time},
+\code{Original_ID}, \code{File}, \code{SampleID} and \code{AF Index} by
+default, so \code{Time} is not checked. Both comparisons are strict, so in
+each channel of each sample the events at the observed minimum and the
+observed maximum are removed, even when no event reaches the instrument
+range. The \code{margins} row of the \code{audit} table
+(\code{n_removed}) shows how many events this step removed per sample.
 
 \strong{What \code{debris_window} does.} The \code{nonDebris} gate is the
 openCyto \code{mindensity} method on FSC-A, called with \code{min} and

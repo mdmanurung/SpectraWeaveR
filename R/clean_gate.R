@@ -22,7 +22,8 @@ NULL
       "before it looks for peaks and valleys, so the cut is a valley of the ",
       "density of the events inside the window and lies inside it. Events ",
       "below the cut are debris. Events above max are kept. If the window ",
-      "holds no valley, the cut falls on the lowest event in the window."
+      "holds one peak or no valley, the cut falls on the lowest event in the ",
+      "window."
     ),
     how = paste0(
       "Plot raw FSC-A as a density and FSC-A against SSC-A (ggplot2::geom_hex() ",
@@ -245,12 +246,15 @@ NULL
 #' \strong{The margin step removes more than events on the range limit.}
 #' PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
 #' and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
-#' \code{e < min(maxRange, max(e))} (PeacoQC source; \code{Time} is not
-#' checked). Both comparisons are strict, so in each channel of each sample
-#' the events at the observed minimum and the observed maximum are removed,
-#' even when no event reaches the instrument range. The \code{margins} row of
-#' the \code{audit} table (\code{n_removed}) shows how many events this step
-#' removed per sample.
+#' \code{e < min(maxRange, max(e))}. The package wrapper
+#' \code{sw_filter_margins_peacoqc()} picks these channels with
+#' \code{sw_channel_is_signal()}, which leaves out \code{Time},
+#' \code{Original_ID}, \code{File}, \code{SampleID} and \code{AF Index} by
+#' default, so \code{Time} is not checked. Both comparisons are strict, so in
+#' each channel of each sample the events at the observed minimum and the
+#' observed maximum are removed, even when no event reaches the instrument
+#' range. The \code{margins} row of the \code{audit} table
+#' (\code{n_removed}) shows how many events this step removed per sample.
 #'
 #' \strong{What \code{debris_window} does.} The \code{nonDebris} gate is the
 #' openCyto \code{mindensity} method on FSC-A, called with \code{min} and
@@ -297,7 +301,7 @@ NULL
 #'       or \code{"outside"} the shape; the live gate keeps events outside) and
 #'       \code{cut_at_window_floor} (\code{nonDebris} rows only, \code{NA}
 #'       otherwise: \code{TRUE} when the cut sits on the lowest event inside
-#'       \code{debris_window} because no valley was found there).}
+#'       \code{debris_window} because it held one peak or no valley).}
 #'     \item{\code{qc}}{The per-sample PeacoQC summary tibble of
 #'       \code{\link{sw_qc_batch}} (\code{sample}, \code{n_before},
 #'       \code{n_after}, \code{n_removed}, \code{pct_removed}), with the
@@ -730,9 +734,9 @@ sw_clean_run <- function(
       paste(signif(debris_cut[at_floor], 6), collapse = ", "),
       ") for sample(s): ",
       paste(sample_names[at_floor], collapse = ", "),
-      ". openCyto found no density valley inside the window, so it removes ",
-      "nothing at or above debris_window[1]. Check the window against the ",
-      "FSC-A density.",
+      ". openCyto found one density peak or no density valley inside the ",
+      "window, so it removes nothing at or above debris_window[1]. Check the ",
+      "window against the FSC-A density.",
       call. = FALSE
     )
   }
