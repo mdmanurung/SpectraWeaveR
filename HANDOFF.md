@@ -1,18 +1,20 @@
-# Handoff — diagnostics for technical problems and batch effects (cytoscan-diagnostics worktree)
+# Handoff — diagnostics for technical problems and batch effects (merged to main)
 
-**Written:** 2026-11-11 (after the four-gap round) · **Branch:** worktree-cytoscan-diagnostics @ 1dd1882 + uncommitted G40–G41 · **Status:** scorecard committed; nulls (G40, G41) run, uncommitted; ledger 128/150
+**Written:** 2026-11-11 (after the dataset search) · **Branch:** main (worktree-cytoscan-diagnostics merged and deleted) · **Status:** scorecard with nulls committed; dataset search done, user decision open; ledger 129/150
 
 ## Check first
-Run `git log --oneline 1dd1882..HEAD` and `git status --short`. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
+Run `git log --oneline -5` and `git status --short` on main; the last diagnostics commit is the merge of worktree-cytoscan-diagnostics. If either shows work this file does not mention, say so before anything else: State, Next action and Read first may be out of date, so re-check each against the code before acting on it.
 
 ## Goal
 Active /goal: "work autonomously until we can consistently diagnose for any technical problems including but not limited to batch effects extensively". Bar per fault class: real-file AUROC mean >= 0.90, lower 95% CI >= 0.80 (D1). tusoskill ledger target 150 (G4); stop gate: `/usr/bin/python3.12 /home/mdmanurung/.claude/skills/tusoskill/scripts/biomni_method_state.py stop-check --root experiments/runs/2026-11-09_tusoskill`.
 
 ## Next action
-Commit G40–G41 when the user asks. Then, with the user: a second dataset decision (W8, D5) for the CBF and batch rows, or accept the scorecard. Nothing is running.
+Ask the user the open dataset question (Open items, first row): (a) accept the scorecard, (b) approve downloading FR-FCM-Z4KT, (c) approve downloading FR-FCM-Z3WR. Recommended: (b). Nothing is running. Nothing is running.
 
 ## State
-- G40–G41 nulls (2026-11-11, uncommitted): null arm (no injection, same draws) in scripts 10, 05, 13, 06, 08, 09, 11, 03; every rerun reproduced its saved fault AUROCs exactly; runs `experiments/runs/2026-11-11_nulls-*`. Four nulls over 0.55 rerun null-only over 30 seeds (`SW_SEEDS`, `SW_NULL_ONLY`, `SW_ONLY_CASE`; runs `experiments/runs/2026-11-11_null30-aurora-{10,13,09}`): clog 0.48, spillover pair 0.50, rare 0.54 pass; batch shift 0.56 ± 0.11 does not. Scorecard v4: 18 met, 14 not met, 6 observed only — `reference/figures/scorecard.png`; run `experiments/runs/2026-11-11_scorecard-v4`.
+- Run outputs (git-ignored) moved from the deleted worktree to main's `experiments/runs/`, including the tusoskill ledger `experiments/runs/2026-11-09_tusoskill` and `reports/final_round3.md`. Run commands now use the main checkout as the repo root.
+- G42 dataset search (2026-11-11): no public dataset meets D5 on verified evidence — `plans/2026-11-11_dataset-search.md` (table fallback: a search has no figure). FlowRepository HTTPS has an expired certificate; record pages load over plain HTTP, the `/list/<id>` API returns 403; skipping the certificate check was blocked by the auto-mode classifier. FR-FCM-Z4KT: Aurora 31-colour healthy controls, 6 batches with 2 QC samples per run per the paper, files and donors per batch unknown. FR-FCM-Z3WR: 84 COVID-19 PBMC files, 36-colour spectral, repeat donors over time, no bridge sample and no batch variable.
+- G40–G41 nulls (2026-11-11, committed 85feda3, c0ccee8): null arm (no injection, same draws) in scripts 10, 05, 13, 06, 08, 09, 11, 03; every rerun reproduced its saved fault AUROCs exactly; runs `experiments/runs/2026-11-11_nulls-*`. Four nulls over 0.55 rerun null-only over 30 seeds (`SW_SEEDS`, `SW_NULL_ONLY`, `SW_ONLY_CASE`; runs `experiments/runs/2026-11-11_null30-aurora-{10,13,09}`): clog 0.48, spillover pair 0.50, rare 0.54 pass; batch shift 0.56 ± 0.11 does not. Scorecard v4: 18 met, 14 not met, 6 observed only — `reference/figures/scorecard.png`; run `experiments/runs/2026-11-11_scorecard-v4`.
 - G39 scorecard (2026-11-11, committed 1dd1882): 1 met, 18 met (null untested), 13 not met, 6 observed only — `reference/figures/scorecard.png`, `reference/figures/scorecard-source.csv`; script `experiments/benchmarks/11_scorecard/run.R` with `scorecard_map.csv`; run `experiments/runs/2026-11-11_scorecard-v2` (v1: same numbers, unlabelled frozen row, clipped label); report `experiments/runs/2026-11-09_tusoskill/reports/final_round3.md`.
 - G38 (2026-11-11, committed fcb4ecc): `bimodality_z` added to `.sw_signed_checks`; `spread_z` and `rest_emd_z` stay one-sided on purpose (comment in `R/diagnose.R`); test-diagnose 39 pass.
 - G37 rolling and bridge reference (2026-11-11, committed 35591aa): no arm meets the rule. Means over 4 bridge controls, false flags at |z| >= 3: frozen 10.9%, rolling 9.7%, bridge 14.8%, in-sample 5.7%; 80% fault AUROC 0.88 / 0.59 / 0.93; only tcu1 as bridge lowers flags (8.5%, AUROC 0.90, wide CI); excess sits in batches 11, 14, 15, 17 — `reference/figures/rolling_bridge_cutoff.png`, `reference/figures/rolling_bridge_null_z.png`; run `experiments/runs/2026-11-11_rolling-bridge`.
@@ -60,7 +62,8 @@ Commit G40–G41 when the user asks. Then, with the user: a second dataset decis
 - `experiments/runs/2026-11-09_tusoskill/reports/final_round3.md` — scorecard report (replaces round 2).
 
 ## Open items
-- Ledger 128 → 150: 22 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
+- Dataset (open, user): (a) accept the scorecard, (b) download FR-FCM-Z4KT (recommended; only candidate with a bridge in every run), (c) download FR-FCM-Z3WR and take batches from `$DATE`.
+- Ledger 129 → 150: 21 iterations left; replenish from diagnosis. The AF700 thread is closed (user, 2026-11-10): shift fits APC under-compensation, width stays a documented open cause. lean (not a decision): ask before any new impactful choice.
 - Frozen reference: offset doubles clean false flags (G36); rolling and single-file bridge do not fix it (G37). A bridge averaging several files per batch is untested. lean (not a decision): document, do not pursue without new bridge data.
 - `fig_batch_rest.png` and `fig_frozen_reference.png` have a clipped x label (cosmetic).
 - Old `HANDOFF.md` (unmixing beta, main @ 6c99bd6) is replaced here; its open items live in git: `git show a3711c0:HANDOFF.md`.
