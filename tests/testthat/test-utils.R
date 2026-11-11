@@ -227,6 +227,16 @@ test_that("sw_channel_is_fluor excludes scatter and metadata", {
   expect_true(result["APC-A"])
 })
 
+test_that("AF Index (AutoSpectral AF label) is neither signal nor fluor", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(rnorm(400), ncol = 4,
+                dimnames = list(NULL, c("FSC-A", "AF-A", "AF Index", "BV421-A")))
+  ff <- flowCore::flowFrame(mat)
+  expect_false(sw_channel_is_signal(ff)[["AF Index"]])
+  expect_false(sw_channel_is_fluor(ff)[["AF Index"]])
+  expect_true(sw_channel_is_fluor(ff)[["AF-A"]])
+})
+
 test_that("sw_channel_is_signal rejects non-flowFrame/flowSet", {
   skip_if_not_installed("flowCore")
   expect_error(sw_channel_is_signal("not_ff"), "flowFrame or flowSet")

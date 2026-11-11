@@ -303,7 +303,8 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
          "is given without 'transform_func'.", call. = FALSE)
   }
 
-  # openCyto resolves some flowCore generics from the search path
+  # openCyto calls flowCore functions such as rectangleGate() and exprs() unqualified,
+  # so flowCore has to be attached while gating.
   if (!"package:flowCore" %in% search()) {
     suppressPackageStartupMessages(attachNamespace("flowCore"))
   }
@@ -311,7 +312,7 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
   # Load FCS data
   message("Loading FCS files...")
   fs <- sw_io_read_fcs(fcs_files)
-  # A single file is read as a flowFrame; GatingSet needs a flowSet
+  # A single file comes back as a flowFrame; GatingSet() needs a flowSet.
   if (methods::is(fs, "flowFrame")) {
     fs <- flowCore::flowSet(fs)
   }
@@ -325,15 +326,24 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
     message("Applying transformation to ", length(transform_channels),
             " channels...")
 
+    # flowWorkspace::transform() on a GatingSet needs a transformerList (it
+    # rejects flowCore::transformList), so the default arcsinh is a
+    # flow_trans() with its inverse; the inverse lets gates be drawn back on
+    # the raw scale.
     if (is.null(transform_func)) {
-      # Default: arcsinh for spectral flow
-      trans_list <- flowCore::transformList(
-        transform_channels,
-        flowCore::arcsinhTransform(a = 0, b = 1 / cofactor, c = 0)
+      # Default: arcsinh for spectral flow, asinh(x / cofactor)
+      transform_func <- flowWorkspace::flow_trans(
+        "arcsinh",
+        function(x) asinh(x / cofactor),
+        function(x) sinh(x) * cofactor
       )
-    } else {
-      trans_list <- flowCore::transformList(transform_channels, transform_func)
     }
+    if (!inherits(transform_func, "transform")) {
+      stop("'transform_func' must be a transformer, e.g. ",
+           "flowWorkspace::flow_trans().", call. = FALSE)
+    }
+    trans_list <- flowWorkspace::transformerList(transform_channels,
+                                                 transform_func)
 
     gs <- flowWorkspace::transform(gs, trans_list)
   }

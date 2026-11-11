@@ -295,7 +295,9 @@ sw_channel_set_markers <- function(ff, marker_map) {
 #' @param x A \code{flowCore::flowFrame} or \code{flowCore::flowSet}.
 #' @param exclude_patterns Character vector of patterns to exclude
 #'   (case-insensitive grep). Default: \code{c("Time", "Original_ID",
-#'   "File", "SampleID")}.
+#'   "File", "SampleID", "AF Index")}. \code{AF Index} is the AutoSpectral
+#'   label of the autofluorescence spectrum assigned to each event, not a
+#'   measured signal.
 #'
 #' @return A named logical vector with length equal to \code{ncol(x)}.
 #'
@@ -311,7 +313,7 @@ sw_channel_set_markers <- function(ff, marker_map) {
 sw_channel_is_signal <- function(x,
                                exclude_patterns = c(
                                  "Time", "Original_ID",
-                                 "File", "SampleID"
+                                 "File", "SampleID", "AF Index"
                                )) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
@@ -346,7 +348,7 @@ sw_channel_is_signal <- function(x,
 #' @param x A \code{flowCore::flowFrame} or \code{flowCore::flowSet}.
 #' @param exclude_patterns Character vector of patterns to exclude
 #'   (case-insensitive grep). Default: \code{c("FSC", "SSC", "Time",
-#'   "Original_ID", "File", "SampleID")}.
+#'   "Original_ID", "File", "SampleID", "AF Index")}.
 #'
 #' @return A named logical vector with length equal to \code{ncol(x)}.
 #'
@@ -355,7 +357,7 @@ sw_channel_is_fluor <- function(x,
                               exclude_patterns = c(
                                 "FSC", "SSC",
                                 "Time", "Original_ID",
-                                "File", "SampleID"
+                                "File", "SampleID", "AF Index"
                               )) {
   sw_channel_is_signal(x, exclude_patterns = exclude_patterns)
 }

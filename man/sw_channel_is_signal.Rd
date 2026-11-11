@@ -6,7 +6,7 @@
 \usage{
 sw_channel_is_signal(
   x,
-  exclude_patterns = c("Time", "Original_ID", "File", "SampleID")
+  exclude_patterns = c("Time", "Original_ID", "File", "SampleID", "AF Index")
 )
 }
 \arguments{
@@ -14,7 +14,9 @@ sw_channel_is_signal(
 
 \item{exclude_patterns}{Character vector of patterns to exclude
 (case-insensitive grep). Default: \code{c("Time", "Original_ID",
-"File", "SampleID")}.}
+"File", "SampleID", "AF Index")}. \code{AF Index} is the AutoSpectral
+label of the autofluorescence spectrum assigned to each event, not a
+measured signal.}
 }
 \value{
 A named logical vector with length equal to \code{ncol(x)}.
