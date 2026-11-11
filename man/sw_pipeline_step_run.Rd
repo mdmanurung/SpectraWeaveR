@@ -4,12 +4,19 @@
 \alias{sw_pipeline_step_run}
 \title{Execute a Processing Step}
 \usage{
-sw_pipeline_step_run(step, input)
+sw_pipeline_step_run(step, input, pipeline_name = NULL, step_index = NA_integer_)
 }
 \arguments{
 \item{step}{A \code{ProcessingStep} object.}
 
 \item{input}{The data to pass as the first argument to the step's function.}
+
+\item{pipeline_name}{Optional pipeline name, used only to word the type
+check error. Runners set it; direct callers can leave it \code{NULL}.}
+
+\item{step_index}{Optional position of the step in its pipeline, used only
+to word the type check error. Ignored when \code{pipeline_name} is
+\code{NULL}.}
 }
 \value{
 The result of calling \code{step@FUN(input, ...)}.
@@ -17,4 +24,11 @@ The result of calling \code{step@FUN(input, ...)}.
 \description{
 Runs the function wrapped by a \code{ProcessingStep}, passing \code{input}
 as the first argument followed by the step's \code{ARGS}.
+}
+\details{
+If the step declares an \code{input_type}, \code{input} must satisfy
+\code{methods::is()} for at least one of the declared classes. Otherwise
+the call stops with a "type check failed" error before the step function
+runs. Steps with no \code{input_type} are not checked. Every runner,
+including the \code{targets} backend, goes through this check.
 }

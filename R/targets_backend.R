@@ -133,8 +133,9 @@ NULL
               sym, q(def_path)),
       sprintf("  targets::tar_target(%s_def, readRDS(%s_def_path)),",
               sym, sym),
-      sprintf("  targets::tar_target(%s, SpectraWeaveR::sw_pipeline_step_run(%s_def, %s))%s",
-              sym, sym, prev_sym, sep),
+      sprintf(paste0("  targets::tar_target(%s, SpectraWeaveR::sw_pipeline_step_run(",
+                     "%s_def, %s, pipeline_name = %s, step_index = %d))%s"),
+              sym, sym, prev_sym, q(pipeline@name), i, sep),
       ""
     )
     prev_sym <- sym

@@ -48,7 +48,7 @@ Execute a single processing step.
 #### Usage
 
 ```r
-sw_pipeline_step_run(step, input)
+sw_pipeline_step_run(step, input, pipeline_name = NULL, step_index = NA_integer_)
 ```
 
 #### Arguments
@@ -57,6 +57,12 @@ sw_pipeline_step_run(step, input)
 |----------|-------------|
 | `step` | A `ProcessingStep` object. |
 | `input` | Input data (passed as first argument to the step's function). |
+| `pipeline_name` | Optional pipeline name, used only to word the type check error. |
+| `step_index` | Optional step position, used only to word the type check error. |
+
+#### Details
+
+If the step declares an `input_type`, `input` must satisfy `methods::is()` for at least one declared class. Otherwise the call stops with a "type check failed" error before the step function runs. Steps with no `input_type` are not checked. Every runner, including the `targets` backend, goes through this check.
 
 #### Value
 
