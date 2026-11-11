@@ -73,3 +73,7 @@ The audit corrects the inventory in these places:
 - **Consequences of the new gates.** The spike level assignment is reshuffled (already accepted under G5). The 92 UMAP sample and the 89 SOM sample change. The 51, 39b, 45b and 87 squeeze cuts are refitted on the new populations.
 
 The audit also raised three open choices for the user. They are logged below as G10 to G12.
+
+## Status
+
+Closed 2026-11-11. Final index: `experiments/runs/2026-11-11_bmv-summary-common/INDEX.md`. Decision: `as188_joint`.

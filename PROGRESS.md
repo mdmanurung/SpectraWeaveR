@@ -362,3 +362,12 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 - `sw_unmix_dashboard()` has a Spike & screen tab; new `sw_unmix_dashboard_quarto()` (template `inst/quarto_dashboard`, reactable in Suggests, local file only).
 - Real-data regression (`experiments/integration/spike_bmv.R`, `screen_bmv.R`): 88, 88b, 88e, 88d and 88h summaries match the benchmark to 2.2e-16 (1800 rows, n identical); the build reproduces 88's spiked raw files to float32 rounding (relative 6e-8); 88h p1_af5 has 26 of 30 files coupled, p5_af1 none. Screen metrics match 75 (2970 rows, max 5.6e-17); 485 of 495 flags equal 86b, the other 10 are NA where 86b wrote FALSE (expected, R11). Runs: `experiments/runs/2026-11-11_pkg-{spike,screen}-regression/`.
 - Rendered dashboards: `experiments/runs/2026-11-11_pkg-dashboard/`.
+
+## Session 17 (2026-11-11): benchmark 05 rerun on common SpectroFlo gates — analysis closed
+
+- Plan and decisions G1–G17: `plans/common_gates_plan.md`. Pooled SpectroFlo gates on clean3, labels carried to all 70 arms by row (350 files pair on Time, FSC-A, FSC-H, SSC-A), cytokine cut arcsinh 1.5, negatives below 1.5; spikes rebuilt and re-unmixed on SLURM.
+- Final index: `experiments/runs/2026-11-11_bmv-summary-common/INDEX.md`; `CHANGES.md` lists 126 old claims (85 hold, 29 weakened, 8 reversed, 4 dropped).
+- Decision unchanged: AutoSpectral 1.8.8 joint, zip settings (`as188_joint`). Caveats: Th2 in CD8T (14.0% lose most of a spike), TNF in CD3− cells (6.8%), CS about 4% high. Failed pre-registrations: §10 knock-out (0.160 vs ≤0.15), CD4T absorption P2 (70% vs 80%).
+- Deliverables: dashboard artifact https://claude.ai/artifact/AMvG73XbSU1La32hEJVjxR (v9), local `experiments/runs/2026-11-11_bmv-dashboard-common-v3/dashboard.html`; group deck https://claude.ai/artifact/HkUGBqTSpb6HYee4HMuaZE (17 slides).
+- Open, needs new samples: unstimulated control (true TNF+ %), eFluor 450 FMO (Th2–GLUT1 tilt). Planned, not run: CD38 spike for opt188, TNF/IFNg spike for GLS.
+- Status: closed 2026-11-11.
