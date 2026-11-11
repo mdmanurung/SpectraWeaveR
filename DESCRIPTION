@@ -73,7 +73,8 @@ Suggests:
     scamp,
     knitr,
     rmarkdown,
-    quarto
+    quarto,
+    reactable
 Remotes:
     AUMC-HEMA/CytoScan,
     AUMC-HEMA/CytoTools,

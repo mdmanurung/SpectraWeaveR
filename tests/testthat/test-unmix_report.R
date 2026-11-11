@@ -676,7 +676,10 @@ test_that("SIF matches the closed form for two spectra", {
 })
 
 test_that("AutoSpectral SIF limits judge 4 to 6 as warn, above 6 as fail", {
-  expect_identical(sw_unmix_limits_autospectral(), list(max_sif = c(warn = 4, fail = 6)))
+  expect_identical(
+    sw_unmix_limits_autospectral(),
+    list(max_sif = c(warn = 4, fail = 6))
+  )
   mk <- function(cc) {
     sp <- rbind(A = c(1, 0, 0), B = c(cc, sqrt(1 - cc^2), 0), C = c(0, 0, 1))
     colnames(sp) <- paste0("D", 1:3)
@@ -709,4 +712,219 @@ test_that("max_sif equals the diagonal of AutoSpectral's hotspot matrix", {
     unname(diag(hotspot)[rownames(spectra)]),
     tolerance = 1e-6
   )
+})
+
+
+# ---- Spike-in recovery and marker screen -------------------------------------
+
+# Setup "a", set TNF, pop T, three donors. Spiked recoveries per donor:
+# d1 1, 1, 0.2, 1 (share lost 0.25, median 1); d2 1, 0.2, 0.2, 1 (0.5, 0.6);
+# d3 all 1 (0, 1). Level-0 rows are ignored. Worst share_moved per donor:
+# d1 0.1, d2 0, d3 0.2.
+mock_spike <- function() {
+  rec <- list(d1 = c(1, 1, 0.2, 1), d2 = c(1, 0.2, 0.2, 1), d3 = rep(1, 4))
+  cells <- dplyr::bind_rows(lapply(names(rec), \(d) {
+    tibble::tibble(
+      setup = "a",
+      set = "TNF",
+      sample = d,
+      pop = "T",
+      raw_row = 1:5,
+      marker = "TNF",
+      level = c(1, 2, 1, 2, 0),
+      recovery = c(rec[[d]], 0)
+    )
+  }))
+  baseline <- tibble::tibble(
+    setup = "a",
+    sample = rep(c("d1", "d2", "d3"), each = 2),
+    set = "TNF",
+    group = "level0",
+    channel = rep(c("c1", "c2"), 3),
+    n = 10L,
+    max_abs_diff = 0,
+    share_moved = c(0, 0.1, 0, 0, 0.2, 0)
+  )
+  file_status <- tibble::tibble(
+    setup = "a",
+    sample = c("d1", "d2", "d3"),
+    set = "TNF",
+    file_status = c("coupled", "independent", "coupled")
+  )
+  structure(
+    list(
+      cells = cells,
+      summary = tibble::tibble(setup = "a", sample = "d1", share_lost = 0.25),
+      baseline_check = baseline,
+      file_status = file_status,
+      notes = "2 of 3 unmixed file(s) are coupled.",
+      loss_cut = 0.5,
+      baseline_tol = 0.01,
+      design_id = "mock",
+      type = "single"
+    ),
+    class = "sw_spike_score"
+  )
+}
+
+# Setup "b" against reference "a": TNF in T rises by 0.1, 0.2, 0.3; CD4 in T
+# has one donor, so its flag is NA.
+mock_screen <- function() {
+  per_donor <- tibble::tibble(
+    setup = "b",
+    sample = c("d1", "d2", "d3", "d1"),
+    pop = "T",
+    channel = c("TNF", "TNF", "TNF", "CD4"),
+    d_squeezed = c(0.1, 0.2, 0.3, 0.05)
+  )
+  flags <- tibble::tibble(
+    setup = "b",
+    pop = "T",
+    channel = c("TNF", "CD4"),
+    n_donors = c(3L, 1L),
+    median_d_squeezed = c(0.2, 0.05),
+    median_rsd_ratio = c(0.5, 0.9),
+    all_donors_up = TRUE,
+    flag = c(TRUE, NA)
+  )
+  structure(
+    list(
+      flags = flags,
+      per_donor = per_donor,
+      rule = list(min_delta = 0.1, min_donors = 2, text = "mock rule"),
+      reference = "a"
+    ),
+    class = "sw_marker_screen"
+  )
+}
+
+test_that("spike and screen rows are absent without the arguments", {
+  dx <- sw_unmix_diagnose(sw_unmix_result(spectra = mock_spectra()))
+  expect_false(any(
+    dx$checks$check_id %in% c("spike_recovery", "marker_screen")
+  ))
+  expect_null(dx$spike)
+  expect_null(dx$screen)
+})
+
+test_that("spike and screen rows carry setup|marker|pop items and donor medians", {
+  dx <- sw_unmix_diagnose(
+    sw_unmix_result(spectra = mock_spectra()),
+    spike = mock_spike(),
+    screen = mock_screen()
+  )
+  ck <- dx$checks
+  sp <- ck[ck$check_id == "spike_recovery", ]
+  expect_setequal(sp$item, c("a|TNF|T", "a|TNF|level0"))
+  parts <- strsplit(sp$item, "|", fixed = TRUE)
+  expect_true(all(lengths(parts) == 3L))
+  expect_identical(vapply(parts, `[`, "", 1L), rep("a", nrow(sp)))
+  expect_equal(sp$value[sp$metric == "share_lost"], 0.25)
+  expect_equal(sp$value[sp$metric == "median_recovery"], 1)
+  expect_equal(sp$value[sp$metric == "share_moved"], 0.1)
+  expect_match(
+    sp$reason[sp$metric == "share_lost"],
+    "3 donor(s), range 0 to 0.5",
+    fixed = TRUE
+  )
+  expect_match(sp$reason[sp$metric == "share_lost"], "2 coupled", fixed = TRUE)
+  expect_true(all(sp$status == "not_judged"))
+
+  sc <- ck[ck$check_id == "marker_screen", ]
+  expect_identical(sc$item, c("b|TNF|T", "b|CD4|T"))
+  expect_equal(sc$value, c(0.2, 0.05))
+  expect_match(
+    sc$reason[1],
+    "range 0.1 to 0.3; screen flag TRUE",
+    fixed = TRUE
+  )
+  expect_match(sc$reason[2], "screen flag NA", fixed = TRUE)
+  expect_true(all(sc$status == "not_judged"))
+  expect_true("2 of 3 unmixed file(s) are coupled." %in% dx$notes)
+})
+
+test_that("a supplied limit judges spike and screen rows", {
+  dx <- sw_unmix_diagnose(
+    sw_unmix_result(spectra = mock_spectra()),
+    limits = list(
+      max_share_lost = c(warn = 0.2, fail = 0.3),
+      min_median_recovery = 0.9,
+      max_share_moved = 0.05,
+      max_delta_squeezed = c(warn = 0.1)
+    ),
+    spike = mock_spike(),
+    screen = mock_screen()
+  )
+  expect_identical(status_of(dx, "share_lost"), "warn")
+  expect_identical(status_of(dx, "median_recovery"), "pass")
+  expect_identical(status_of(dx, "share_moved"), "fail")
+  expect_identical(status_of(dx, "delta_squeezed"), c("warn", "pass"))
+})
+
+test_that("every limit name's prefix sets its direction", {
+  spec <- SpectraWeaveR:::.sw_unmix_limit_spec
+  expect_identical(spec$direction, sub("_.*$", "", spec$limit))
+  expect_true(all(spec$direction %in% c("max", "min")))
+  expect_identical(anyDuplicated(spec$limit), 0L)
+  # Each new limit fails a value just past it and passes the value itself.
+  res <- sw_unmix_result(spectra = mock_spectra())
+  values <- c(
+    share_lost = 0.25,
+    median_recovery = 1,
+    share_moved = 0.1,
+    delta_squeezed = 0.2
+  )
+  new_limits <- c(
+    "max_share_lost",
+    "min_median_recovery",
+    "max_share_moved",
+    "max_delta_squeezed"
+  )
+  for (nm in new_limits) {
+    metric <- spec$metric[spec$limit == nm]
+    v <- values[[metric]]
+    past <- if (startsWith(nm, "max")) v - 0.01 else v + 0.01
+    for (case in list(c(limit = past, want = 1), c(limit = v, want = 2))) {
+      dx <- sw_unmix_diagnose(
+        res,
+        limits = stats::setNames(list(case[["limit"]]), nm),
+        spike = mock_spike(),
+        screen = mock_screen()
+      )
+      expect_identical(
+        status_of(dx, metric)[1],
+        c("fail", "pass")[case[["want"]]],
+        info = nm
+      )
+    }
+  }
+})
+
+test_that("spike and screen arguments reject other objects", {
+  res <- sw_unmix_result(spectra = mock_spectra())
+  expect_error(sw_unmix_diagnose(res, spike = list()), "sw_spike_score")
+  expect_error(sw_unmix_diagnose(res, screen = list()), "sw_marker_screen")
+})
+
+test_that("report writes spike and screen CSVs and replaces them on overwrite", {
+  root <- withr::local_tempdir()
+  path <- file.path(root, "rep")
+  res <- sw_unmix_result(spectra = mock_spectra())
+  dx <- sw_unmix_diagnose(res, spike = mock_spike(), screen = mock_screen())
+  out <- sw_unmix_report(res, dx, path = path, notes = "Mock data.")
+  csvs <- c("spike_summary.csv", "baseline_check.csv", "marker_screen.csv")
+  expect_true(all(csvs %in% basename(out)))
+  screen_csv <- utils::read.csv(out[["marker_screen"]])
+  expect_identical(screen_csv$channel, c("TNF", "CD4"))
+  expect_identical(nrow(utils::read.csv(out[["baseline_check"]])), 6L)
+  html <- paste(readLines(out[["html"]]), collapse = "\n")
+  heads <- regmatches(html, gregexpr("<h2>[^<]+</h2>", html))[[1]]
+  expect_true(all(
+    c("<h2>Spike-in recovery</h2>", "<h2>Marker screen</h2>") %in% heads
+  ))
+  expect_false(grepl("<img", html, fixed = TRUE))
+
+  # Overwrite without spike or screen removes the old CSVs.
+  sw_unmix_report(res, path = path, overwrite = TRUE, notes = "Mock data.")
+  expect_false(any(file.exists(file.path(path, csvs))))
 })

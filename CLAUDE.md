@@ -55,6 +55,7 @@ SpectraWeaveR/
 │   ├── unmix_assess.R            # AutoSpectral diagnostic wrappers (7 internal, 2 exported)
 │   ├── unmix_correct.R           # Spectra correction wrappers (AutoSpectral)
 │   ├── unmix_dashboard.R         # Unmix dashboard and app (another worker)
+│   ├── unmix_dashboard_quarto.R  # Quarto HTML dashboard (inst/quarto_dashboard template)
 │   ├── unmix_dashboard_data.R    # Data model for the unmix dashboard
 │   ├── unmix_diagnostics.R       # Unmixing quality: spillover matrix, CV
 │   ├── unmix_figures.R           # Approved unmix figure panels F1 to F4
@@ -106,6 +107,7 @@ SpectraWeaveR/
 | Unmix report | `sw_unmix_result()`, `sw_unmix_diagnose()`, `sw_unmix_report()`, `sw_unmix_limits_autospectral()` | AutoSpectral 1.8.8 (reference) | unmix results → tables (incl. `max_sif`, check `spectra_sif`), provenance, HTML/CSV/JSON report; the limits helper gives `max_sif` warn 4, fail 6 |
 | Unmix dashboard | `sw_unmix_dashboard()`, `sw_unmix_app()` | run folders (report/ and figures*/panels/source_data) | one offline HTML file with what-if SIF sliders (display only) and an AutoSpectral tab (its hotspot, similarity and spillover-spread matrices, AF spectra and per-stage spectra as interactive views; its JPG and PDF figures as a linked gallery), or a Shiny app that redraws events for any channel pair; `inst/dashboard/dashboard.html` is the page template |
 | Unmix figures | `sw_unmix_sample_events()`, `sw_unmix_figure_*()`, `sw_unmix_save_figures()` | ggplot2 | approved panels F1 to F4 with source data |
+| Unmix diagnostics | `sw_unmix_spike_build()`, `sw_unmix_spike_cospike()`, `sw_unmix_spike_score()`, `sw_unmix_negative_shape()`, `sw_unmix_marker_screen()`, `sw_unmix_diagnose(spike=, screen=)`, `sw_unmix_dashboard_quarto()` | benchmark 05 scripts 75, 86b, 88-88h (ported) | spiked raw files and unmixed files → recovery, independence check, squeeze flags; check rows `spike_recovery` and `marker_screen` (item `setup|marker|pop`, not_judged unless `max_share_lost`, `min_median_recovery`, `max_share_moved` or `max_delta_squeezed` is passed); report CSVs `spike_summary.csv`, `baseline_check.csv`, `marker_screen.csv`; a Spike & screen dashboard tab; a Quarto dashboard from `inst/quarto_dashboard` (local file only). Real-data regression: `experiments/integration/spike_bmv.R`, `screen_bmv.R` |
 | Unmix correction | `sw_unmix_correct()`, `sw_unmix_correct_signatures()`, `sw_unmix_correct_spillover()`, `sw_unmix_compare_spectra()` | AutoSpectral (wrapped) | spectra → candidate corrected spectra, change table |
 | Manifest and correctors | `sw_sample_manifest()`, `sw_corrector_*()` | cyTether design (paired shift engine) | manifest + frozen model → corrected data with per-cell-group actions |
 | FCS header audit | `sw_fcs_header_audit()`, `sw_fcs_header_summary()` | CytoTools idea (clean rewrite) | FCS paths + required keywords + reference file → long tibble of channel and keyword differences |
