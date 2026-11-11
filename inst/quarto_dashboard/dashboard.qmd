@@ -1,0 +1,106 @@
+---
+title: "__TITLE__"
+subtitle: "__SUBTITLE__"
+date: today
+params:
+  spec: "spec.rds"
+format:
+  html:
+    output-file: dashboard.html
+    embed-resources: true
+    theme: none
+    css: dashboard.css
+    include-before-body: header.html
+    include-after-body: footer.html
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    fig-align: center
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: spec
+# Template of sw_unmix_dashboard_quarto(). The function prepares everything in
+# spec.rds (sections, web images, figure tables); this page only lays it out.
+spec <- readRDS(params$spec)
+```
+
+```{r}
+#| label: verdicts
+#| results: asis
+# Verdict cards: label, value, note; the status sets the border colour.
+if (!is.null(spec$verdicts) && nrow(spec$verdicts) > 0) {
+  v <- spec$verdicts
+  cards <- sprintf(
+    '<div class="verdict %s"><div class="v-label">%s</div><div class="v-value">%s</div><div class="v-note">%s</div></div>',
+    v$status,
+    v$label,
+    v$value,
+    v$note
+  )
+  cat("```{=html}", '<div class="verdict-row">', cards, "</div>", "```", sep = "\n")
+}
+if (!is.null(spec$intro)) {
+  cat("\n\n", spec$intro, "\n\n", sep = "")
+}
+```
+
+```{r}
+#| label: body
+#| results: asis
+# One section per entry: the finding, then tabs for figures, the plotted data
+# and notes. Built as child markdown so each reactable keeps its dependencies.
+data_widget <- function(tab) {
+  reactable::reactable(
+    tab,
+    searchable = TRUE,
+    sortable = TRUE,
+    compact = TRUE,
+    striped = TRUE,
+    defaultPageSize = 10,
+    wrap = FALSE,
+    resizable = TRUE
+  )
+}
+render_section <- function(sec, k) {
+  lines <- c(sprintf("## %s", sec$heading), "", sec$finding, "")
+  figs <- sec$figures
+  has_figs <- !is.null(figs) && nrow(figs) > 0
+  has_notes <- length(sec$notes) > 0
+  if (has_figs || has_notes) {
+    lines <- c(lines, "::: {.panel-tabset}", "")
+    if (has_figs) {
+      lines <- c(
+        lines,
+        "### Figures",
+        "",
+        sprintf("![%s `%s`](%s){width=100%%}\n", figs$caption, figs$label, figs$web)
+      )
+      lines <- c(lines, "### Data", "")
+      for (i in seq_len(nrow(figs))) {
+        lines <- c(
+          lines,
+          sprintf("**%s**", figs$label[i]),
+          "",
+          figs$data_note[i],
+          "",
+          if (figs$has_data[i]) {
+            sprintf("```{r}\ndata_widget(spec$sections[[%d]]$tables[[%d]])\n```\n", k, i)
+          }
+        )
+      }
+    }
+    if (has_notes) {
+      lines <- c(lines, sprintf("### %s", spec$notes_label), "", paste0("- ", sec$notes), "")
+    }
+    lines <- c(lines, ":::", "")
+  }
+  knitr::knit_child(text = lines, envir = environment(), quiet = TRUE)
+}
+out <- vapply(seq_along(spec$sections), \(k) render_section(spec$sections[[k]], k), "")
+cat(out, sep = "\n\n")
+```

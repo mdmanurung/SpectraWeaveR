@@ -60,7 +60,8 @@ Suggests:
     withr,
     knitr,
     rmarkdown,
-    quarto
+    quarto,
+    reactable
 Remotes:
     biosurf/cyCombine,
     DrCytometer/AutoSpectral,
