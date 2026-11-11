@@ -2,7 +2,7 @@
 % Please edit documentation in R/unmix_figures.R
 \name{unmix_figures}
 \alias{unmix_figures}
-\title{Unmixing Report Figures (F1 to F4)}
+\title{Unmixing Report Figures (F1 to F4, F6 to F8)}
 \description{
 Build the four figures approved in
 \code{plans/beta_unmix_report_figure_plan.md}. Each builder returns the ggplot
@@ -14,7 +14,11 @@ until you call \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}}.
 \item \code{\link[=sw_unmix_figure_similarity]{sw_unmix_figure_similarity()}} is F2, the cosine-similarity matrix.
 \item \code{\link[=sw_unmix_figure_distributions]{sw_unmix_figure_distributions()}} is F3, per-channel densities.
 \item \code{\link[=sw_unmix_figure_biplot]{sw_unmix_figure_biplot()}} is F4, a two-channel biplot per method.
-\item \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}} writes PNG, PDF and source CSV per panel.
+\item \code{\link[=sw_unmix_figure_scatter_grid]{sw_unmix_figure_scatter_grid()}} is F6, a hexbin grid per setup and
+sample (marker vs marker, or a spike before vs after per cell).
+\item \code{\link[=sw_unmix_figure_spike_summary]{sw_unmix_figure_spike_summary()}} is F7 and \code{\link[=sw_unmix_figure_spike_ecdf]{sw_unmix_figure_spike_ecdf()}}
+is F8, the spike-in recovery summaries.
+\item \code{\link[=sw_unmix_save_figures]{sw_unmix_save_figures()}} writes PNG (300 dpi), PDF and source CSV per panel.
 }
 }
 \details{
@@ -26,8 +30,12 @@ Methods are coloured from one fixed palette keyed by method label
 \code{spectroflo}, \code{ols}, \code{autospectral_fast} and \code{autospectral_slow}. Any other
 label is an error in every builder.
 
-The figures use \code{ggpubr::theme_pubr(base_size = 8)} when ggpubr is
-installed, else \code{ggplot2::theme_classic(base_size = 8)}. The theme is
-added to each plot; the session theme is not changed.
+The figures use the package's Nature-spec theme: a prism-style
+black-and-white theme at 7 pt, plain text with bold titles, strips and axis
+titles, line width 0.4 and the legend on the right, so every drawn text sits
+in 5 to 7 pt (user decision 2026-11-11, grill Q20). Faceted panels draw axis
+lines and ticks on every panel, with tick labels on the outer edges only.
+Saved widths are Nature column widths, 89 or 183 mm. The theme is added to
+each plot; the session theme is not changed.
 }
 \keyword{internal}

@@ -59,6 +59,8 @@ optional_pkgs <- c(
   "btw",                          # R environment tools for LLMs
   "mcptools",                     # Model Context Protocol server/client
   "ggplot2",                      # Plotting
+  "ggh4x",                        # Coloured facet strips (unmix figures)
+  "hexbin",                       # Hexbin layers (unmix figures)
   "uwot",                         # UMAP dimensionality reduction
   "pheatmap",                     # Cluster annotation heatmaps
   "testthat",                     # Unit testing

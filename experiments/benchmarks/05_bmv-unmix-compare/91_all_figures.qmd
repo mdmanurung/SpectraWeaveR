@@ -1,0 +1,221 @@
+---
+title: "BMV run figures, redrawn"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 2
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: params
+# Parameters --------------------------------------------------------------------
+# Every figure in every 2026-11 run folder (user, 2026-11-10), superseded ones included.
+RUNS_DIR <- "experiments/runs"
+RUN_PATTERN <- "^2026-11-"
+# The summary and this report are outputs of the report, not runs.
+SKIP_RUNS <- c("2026-11-10_bmv-summary", "2026-11-10_bmv-report")
+OUT_DIR <- "experiments/runs/2026-11-10_bmv-report/figures_all"
+# Runs whose figures already came from lucid-coder save_panel (pdf + png + csv, 2026-11-10 forks).
+LUCID_RUNS <- c(
+  "2026-11-10_bmv-marker-flags",
+  "2026-11-10_bmv-th2-proof",
+  "2026-11-10_bmv-downstream-opt188",
+  "2026-11-10_bmv-af405-forced-af",
+  "2026-11-10_bmv-spike-in"
+)
+```
+
+```{r}
+#| label: setup
+# Paths are repo-root relative; the notebook sits three levels below the root.
+knitr::opts_knit$set(root.dir = normalizePath("../../.."))
+# Markdown image links resolve from this folder, so they carry the "../../.." prefix.
+```
+
+```{r}
+#| label: libraries
+source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R")
+suppressPackageStartupMessages({
+  library(stringr)
+  library(tibble)
+})
+```
+
+```{r}
+#| label: inventory
+# Figure files ------------------------------------------------------------------
+# One row per figure stem; a stem saved as png and pdf is one figure.
+fig_files <- list.files(RUNS_DIR, pattern = "\\.(png|pdf|jpg)$", recursive = TRUE)
+inventory <- tibble(file = fig_files) |>
+  mutate(
+    run = str_extract(.data$file, "^[^/]+"),
+    stem = str_remove(.data$file, "\\.(png|pdf|jpg)$"),
+    ext = str_extract(.data$file, "[a-z]+$")
+  ) |>
+  filter(str_detect(.data$run, RUN_PATTERN), !.data$run %in% SKIP_RUNS) |>
+  summarise(formats = paste(sort(unique(ext)), collapse = "+"), .by = c(run, stem))
+
+# Saved source table ------------------------------------------------------------
+# A figure's table is <stem>_source.csv, a <prefix>_source*.csv whose prefix starts the stem
+# (fig_a_source.csv for fig_a_pct_pos), or source_data/<stem>.csv beside a panels folder.
+find_source <- function(stem) {
+  dir <- file.path(RUNS_DIR, dirname(stem))
+  base <- basename(stem)
+  in_dir <- list.files(dir, pattern = "_source.*\\.csv$")
+  prefix <- str_remove(in_dir, "_source.*\\.csv$")
+  hits <- in_dir[base == prefix | str_starts(base, paste0(prefix, "_"))]
+  hits <- hits[order(-nchar(hits))]
+  panel <- file.path(dir, "source_data", paste0(base, ".csv"))
+  cands <- c(file.path(dir, hits), panel[file.exists(panel)])
+  if (length(cands) > 0) cands[[1]] else NA_character_
+}
+
+# Run tables that hold the plotted values of a figure with no _source.csv (checked by hand
+# against the producing scripts 37b, 39b, 43, 66, 67, 69, 81, 82).
+MANUAL_SOURCES <- tribble(
+  ~stem                                                     , ~src                                                      ,
+  "2026-11-10_bmv-swap-test/fig_scores"                     , "2026-11-10_bmv-swap-test/scores.csv"                     ,
+  "2026-11-10_bmv-variant-count/fig_scores"                 , "2026-11-10_bmv-variant-count/scores.csv"                 ,
+  "2026-11-10_bmv-gls-noise/scores/fig_scores"              , "2026-11-10_bmv-gls-noise/scores/scores.csv"              ,
+  "2026-11-10_bmv-opt188/report/fig_opt188_readouts"        , "2026-11-10_bmv-opt188/report/opt188_readouts.csv"        ,
+  "2026-11-10_bmv-coherence-or/fig_coherence_or"            , "2026-11-10_bmv-coherence-or/coherence_or.csv"            ,
+  "2026-11-10_bmv-ssm-188/fig_ssm_188"                      , "2026-11-10_bmv-ssm-188/ssm_long.csv"                     ,
+  "2026-11-10_bmv-own-ssm/fig_own_ssm"                      , "2026-11-10_bmv-own-ssm/own_ssm.csv"                      ,
+  "2026-11-10_bmv-ifng-tnfneg-v2/fig_b_share_tnfpos"        , "2026-11-10_bmv-ifng-tnfneg-v2/share_tnfpos.csv"
+) |>
+  mutate(src = file.path(RUNS_DIR, .data$src))
+
+with_source <- inventory |>
+  mutate(src = map_chr(.data$stem, find_source)) |>
+  rows_update(MANUAL_SOURCES, by = "stem", unmatched = "ignore")
+with_source <- with_source |>
+  mutate(
+    sig = map_chr(
+      .data$src,
+      \(s) if (is.na(s)) NA_character_ else paste(names(read_csv(s, n_max = 1, show_col_types = FALSE)), collapse = ",")
+    )
+  )
+```
+
+
+```{r}
+#| label: redraw
+# Redraw ------------------------------------------------------------------------
+# A figure with a mapped table is redrawn; a stem copied into bmv-figures-v2 points to its original.
+stopifnot("output dir is new" = !dir.exists(OUT_DIR))
+dir.create(OUT_DIR, recursive = TRUE)
+
+to_draw <- with_source |>
+  mutate(layout = unname(LAYOUTS[.data$sig])) |>
+  filter(!is.na(.data$layout), !.data$run %in% LUCID_RUNS)
+
+drawn <- to_draw |>
+  mutate(
+    res = pmap(
+      list(.data$src, .data$layout, .data$stem, .data$run),
+      \(src, layout, stem, run) {
+        name <- str_replace_all(str_remove(stem, paste0("^", run, "/")), "/", "__")
+        redraw_panel(src, layout, basename(stem), file.path(OUT_DIR, run), name)
+      }
+    )
+  ) |>
+  unnest(res)
+```
+
+```{r}
+#| label: inventory-write
+# Inventory ---------------------------------------------------------------------
+# One row per original figure: the redrawn path, or why it was not redrawn.
+PER_CELL <- "tnf_vs|ssc_vs|fsc_vs|cd3_tnf|cd3_cd8|strategy_|gates?_|tree_|_vs_|hex|scatter|pseudocolor|ggcyto|cell_rectangles|bv510_density"
+status <- with_source |>
+  left_join(select(drawn, stem, redrawn, caption), by = join_by(stem), relationship = "one-to-one") |>
+  mutate(
+    status = case_when(
+      .data$run %in% LUCID_RUNS ~ "already lucid style (save_panel)",
+      # save_panel writes <stem>.pdf, .png and .csv side by side; forks that started after this list.
+      .data$formats == "pdf+png" & file.exists(file.path(RUNS_DIR, paste0(.data$stem, ".csv"))) ~
+        "already lucid style (save_panel)",
+      !is.na(.data$redrawn) ~ .data$redrawn,
+      str_detect(.data$stem, "/figure_[^/]+/") | .data$formats == "jpg" ~
+        "not redrawn: AutoSpectral package diagnostic, no saved table",
+      !is.na(.data$src) ~ paste0("not redrawn: table layout not mapped (", basename(.data$src), ")"),
+      str_detect(basename(.data$stem), PER_CELL) ~ "not redrawn: needs raw events (per-cell plot)",
+      .default = "not redrawn: no saved table"
+    )
+  )
+
+# Copies under bmv-figures-v2 take the status of the figure they copy.
+copies <- status |>
+  filter(.data$run == "2026-11-10_bmv-figures-v2", is.na(.data$redrawn)) |>
+  mutate(
+    original = str_remove(.data$stem, "^2026-11-10_bmv-figures-v2/") |>
+      str_replace("^gated-pooled/", "2026-11-10_bmv-gated-pooled/")
+  ) |>
+  left_join(
+    select(status, original = stem, original_status = status),
+    by = join_by(original),
+    relationship = "many-to-one"
+  ) |>
+  mutate(
+    status = if_else(
+      is.na(.data$original_status),
+      .data$status,
+      paste0("copy of ", .data$original, "; ", str_remove(.data$original_status, "^not redrawn: "))
+    )
+  )
+inventory_out <- status |>
+  rows_update(select(copies, stem, status), by = "stem") |>
+  transmute(run, original_figure = paste0(stem, " [", formats, "]"), redrawn_or_reason = status)
+write_csv(inventory_out, file.path(OUT_DIR, "inventory.csv"))
+```
+
+```{r}
+#| label: counts
+inventory_counts <- inventory_out |>
+  mutate(
+    outcome = case_when(
+      str_starts(.data$redrawn_or_reason, OUT_DIR) ~ "redrawn",
+      str_starts(.data$redrawn_or_reason, "already") ~ "already lucid style",
+      str_starts(.data$redrawn_or_reason, "copy of") ~ "copy of another run's figure",
+      .default = str_remove(.data$redrawn_or_reason, " \\(.*\\)$")
+    )
+  ) |>
+  count(outcome, sort = TRUE)
+knitr::kable(inventory_counts, col.names = c("Outcome", "Figures"))
+```
+
+`r nrow(inventory_out)` figures sit in the run folders; `r nrow(drawn)` were redrawn from their saved tables and the rest are listed in `figures_all/inventory.csv` with the reason.
+
+```{r}
+#| label: show
+#| results: asis
+# One section per run folder: its sentence, then each redrawn figure with its caption.
+for (one_run in unique(status$run)) {
+  run_rows <- filter(drawn, .data$run == one_run)
+  run_status <- filter(status, .data$run == one_run)
+  cat("\n\n## ", one_run, "\n\n", sep = "")
+  cat(sprintf(
+    "%d of %d figures in this folder were redrawn from saved tables.\n\n",
+    nrow(run_rows),
+    nrow(run_status)
+  ))
+  for (i in seq_len(nrow(run_rows))) {
+    cat(sprintf(
+      "![%s %s](%s){width=100%%}\n\n",
+      basename(run_rows$stem[[i]]),
+      run_rows$caption[[i]],
+      file.path("../../..", run_rows$redrawn[[i]])
+    ))
+  }
+}
+```
+
+```{r}
+#| label: session
+writeLines(capture.output(sessionInfo()), file.path(OUT_DIR, "sessionInfo.txt"))
+```

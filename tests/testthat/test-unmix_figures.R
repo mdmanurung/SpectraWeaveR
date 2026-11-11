@@ -468,7 +468,7 @@ test_that("save uses per-panel sizes and accepts named overrides", {
   f2 <- sw_unmix_figure_similarity(mock_spectra())
   dir <- tempfile("figs")
   out <- sw_unmix_save_figures(list(F2 = f2), dir)
-  expect_identical(c(out$width_mm, out$height_mm), c(120, 100))
+  expect_identical(c(out$width_mm, out$height_mm), c(89, 85))
   dir2 <- tempfile("figs")
   out2 <- sw_unmix_save_figures(
     list(F2 = f2),
@@ -486,7 +486,7 @@ test_that("save uses per-panel sizes and accepts named overrides", {
       sum(as.integer(raw[21:24]) * 256^(3:0))
     )
   }
-  expect_lt(abs(dims(out$png)[1] - 120 / 25.4 * 300), 2)
+  expect_lt(abs(dims(out$png)[1] - 89 / 25.4 * 300), 2)
   expect_lt(abs(dims(out2$png)[1] - 60 / 25.4 * 300), 2)
   expect_error(
     sw_unmix_save_figures(
@@ -510,4 +510,111 @@ test_that("save checks panel names against the results", {
     sw_unmix_save_figures(list(F1 = f2), tempfile()),
     "do not match their `panel`"
   )
+})
+
+
+# ---- Nature theme and journal check ------------------------------------------
+
+test_that("F1, F3 and F4 draw facet axes on every panel, labels on the margins", {
+  skip_if_not_installed("ggplot2", "3.5.0")
+  ev <- sw_unmix_sample_events(mock_events_list(), n_events = 20, seed = 1)
+  s <- mock_spectra()
+  plots <- list(
+    sw_unmix_figure_spectra(list(ours = s))$plot,
+    sw_unmix_figure_distributions(ev, c("A", "B"), pseudo_log_sigma = 10)$plot,
+    sw_unmix_figure_biplot(ev, "A", "B", pseudo_log_sigma = 10, bins = 10)$plot
+  )
+  for (p in plots) {
+    expect_identical(p$facet$params$draw_axes, list(x = TRUE, y = TRUE))
+    expect_identical(p$facet$params$axis_labels, list(x = FALSE, y = FALSE))
+  }
+})
+
+test_that("the house theme puts the legend right and keeps text at 7 pt", {
+  skip_if_not_installed("ggplot2")
+  th <- .sw_fig_theme()
+  expect_identical(th$legend.position, "right")
+  expect_identical(th$text$size, 7)
+  expect_identical(th$text$face, "plain")
+  expect_identical(th$axis.title$face, "bold")
+})
+
+test_that("default sizes use Nature column widths", {
+  widths <- vapply(.sw_fig_sizes, \(s) s[1], numeric(1))
+  expect_true(all(widths %in% c(89, 183)))
+})
+
+test_that("nature check passes F1 to F4 at their default sizes", {
+  skip_if_not_installed("ggplot2")
+  s <- mock_spectra()
+  ev <- sw_unmix_sample_events(mock_events_list(), n_events = 40, seed = 1)
+  figs <- list(
+    F1 = sw_unmix_figure_spectra(list(ours = s, spectroflo = s * 0.9)),
+    F2 = sw_unmix_figure_similarity(s),
+    F3 = sw_unmix_figure_distributions(ev, c("A", "B"), pseudo_log_sigma = 10),
+    F4 = sw_unmix_figure_biplot(ev, "A", "B", pseudo_log_sigma = 10, bins = 10)
+  )
+  local_mocked_bindings(.sw_pdffonts = function(path) NULL)
+  dir <- tempfile("figs")
+  out <- sw_unmix_save_figures(figs, dir, check = "nature")
+  expect_true(all(out$text_pt_min >= 5 & out$text_pt_max <= 7))
+  expect_true(all(is.na(out$fonts_embedded)))
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("nature check refuses a 120 mm width before writing anything", {
+  skip_if_not_installed("ggplot2")
+  f2 <- sw_unmix_figure_similarity(mock_spectra())
+  dir <- tempfile("figs")
+  expect_error(
+    sw_unmix_save_figures(
+      list(F2 = f2),
+      dir,
+      sizes = list(F2 = c(120, 100)),
+      check = "nature"
+    ),
+    "width 120 mm"
+  )
+  expect_false(dir.exists(dir))
+  # The default check does not judge widths.
+  out <- sw_unmix_save_figures(
+    list(F2 = f2),
+    dir,
+    sizes = list(F2 = c(120, 100))
+  )
+  expect_true(all(is.na(out$text_pt_min)))
+  unlink(dir, recursive = TRUE)
+})
+
+test_that("nature check refuses a 9 pt label", {
+  skip_if_not_installed("ggplot2")
+  f2 <- sw_unmix_figure_similarity(mock_spectra())
+  f2$plot <- f2$plot +
+    ggplot2::theme(axis.title = ggplot2::element_text(size = 9))
+  expect_error(
+    sw_unmix_save_figures(list(F2 = f2), tempfile("figs"), check = "nature"),
+    "Panel F2: drawn text .* 9.0 pt"
+  )
+})
+
+test_that("nature check reads font embedding through the pdffonts wrapper", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not(isTRUE(capabilities("cairo")))
+  f2 <- sw_unmix_figure_similarity(mock_spectra())
+  header <- c(
+    "name                                 type              encoding         emb sub uni object ID",
+    "------------------------------------ ----------------- ---------------- --- --- --- ---------"
+  )
+  embedded <- "ABCDEF+DejaVuSans                    TrueType          WinAnsi          yes yes yes      7  0"
+  not_embedded <- "Helvetica                            Type 1            Standard         no  no  no       7  0"
+  local_mocked_bindings(.sw_pdffonts = function(path) c(header, embedded))
+  dir <- tempfile("figs")
+  out <- sw_unmix_save_figures(list(F2 = f2), dir, check = "nature")
+  expect_true(out$fonts_embedded)
+  local_mocked_bindings(.sw_pdffonts = function(path) c(header, not_embedded))
+  expect_error(
+    sw_unmix_save_figures(list(F2 = f2), tempfile("figs"), check = "nature"),
+    "font is not embedded"
+  )
+  unlink(dir, recursive = TRUE)
 })

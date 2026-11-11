@@ -1,0 +1,163 @@
+<title>BMV Unmix Dashboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column under a sticky section rail; verdict cards first, then one section per
+   INDEX heading with its prose, its certified figures and a lazily loaded data table per figure. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2230;
+  --muted: #5a6577;
+  --rule: #dfe3ea;
+  --accent: #5639c9;          /* 405 nm violet laser line */
+  --accent-soft: #ece8fb;
+  --good: #1f7a4d;
+  --warn: #a35f00;
+  --bad: #b3261e;
+  --plate: #ffffff;           /* behind white-background figure PNGs in both themes */
+  --code-bg: #eef0f4;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181d26; --fg: #e3e7ee; --muted: #9aa5b5; --rule: #2a313d;
+    --accent: #a593f5; --accent-soft: #241f3d; --good: #5cc28f; --warn: #e3a54a; --bad: #f08079;
+    --plate: #ffffff; --code-bg: #222935; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181d26; --fg: #e3e7ee; --muted: #9aa5b5; --rule: #2a313d;
+  --accent: #a593f5; --accent-soft: #241f3d; --good: #5cc28f; --warn: #e3a54a; --bad: #f08079;
+  --plate: #ffffff; --code-bg: #222935; color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.6 var(--font-body);
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--surface);
+}
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header.top { background: var(--surface); border-bottom: 1px solid var(--rule); }
+header.top .wrap { padding-block: 28px 20px; display: grid; gap: 6px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { margin: 0; font-size: clamp(24px, 4vw, 32px); line-height: 1.15; font-weight: 700; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 70ch; }
+
+nav.rail {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--surface); border-bottom: 1px solid var(--rule);
+}
+nav.rail .wrap { display: flex; gap: 6px; overflow-x: auto; padding-block: 8px; scrollbar-width: thin; }
+nav.rail a {
+  flex: none; white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 13px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px;
+}
+nav.rail a:hover, nav.rail a:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.num { font-family: var(--font-mono); font-weight: 500; color: var(--accent); margin-right: 6px; }
+
+main .wrap { padding-block: 24px 64px; display: grid; gap: 40px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card {
+  background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--accent);
+  border-radius: 6px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0;
+}
+.card.good { border-top-color: var(--good); }
+.card.warn { border-top-color: var(--warn); }
+.card.bad { border-top-color: var(--bad); }
+.c-label { font: 500 11px/1.3 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.c-value { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.c-note { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+section { display: grid; gap: 16px; min-width: 0; scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 56px); }
+h2 {
+  margin: 0; font-size: 21px; line-height: 1.25; font-weight: 600; text-wrap: balance;
+  padding-bottom: 8px; border-bottom: 1px solid var(--rule);
+}
+.prose { max-width: 78ch; min-width: 0; }
+.prose p, .prose ul, .prose ol { margin: 0 0 0.8em; }
+.prose li { margin-bottom: 0.35em; }
+.prose h3 { font-size: 16px; margin: 1.2em 0 0.4em; }
+.prose code, figcaption code, .data-note {
+  font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg);
+  padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere;
+}
+.prose table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; display: block; overflow-x: auto; max-width: 100%; }
+.prose th, .prose td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+.prose th { color: var(--muted); font-weight: 600; }
+a { color: var(--accent); }
+
+.figs { display: grid; gap: 24px; }
+.fig { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.fig img { display: block; width: 100%; max-width: 100%; height: auto; background: var(--plate); border-radius: 3px; }
+.fig figcaption { font-size: 13px; color: var(--muted); }
+details.data summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); width: max-content; max-width: 100%; }
+details.data summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.data-note { display: inline-block; margin: 8px 0; background: none; padding: 0; color: var(--muted); }
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.table-wrap table { border-collapse: collapse; font: 12px/1.4 var(--font-mono); font-variant-numeric: tabular-nums; }
+.table-wrap th, .table-wrap td { padding: 3px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; text-align: left; }
+.table-wrap th { position: sticky; top: 0; background: var(--surface); color: var(--muted); }
+.table-wrap td.n { text-align: right; }
+
+footer { color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule); }
+footer .wrap { padding-block: 16px 32px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">SpectraWeaveR · benchmark 05 · 5 donors · {{N_FIG}} figures</div>
+    <h1>BMV unmixing comparison: AutoSpectral 1.0.2 vs 1.8.8</h1>
+    <p class="lede">Text from INDEX.md as of 2026-11-11. Figures are the certified current set at Nature spec (300-dpi images, shown scaled to the column); open a figure for the full-resolution image and expand "Plotted data" for the table behind it.</p>
+  </div>
+</header>
+<nav class="rail" aria-label="Sections"><div class="wrap">{{NAV}}</div></nav>
+<main>
+  <div class="wrap">
+    <div class="cards">{{CARDS}}</div>
+    <div class="prose">{{INTRO}}</div>
+    {{SECTIONS}}
+  </div>
+</main>
+<footer><div class="wrap">Built by <code>dashboard/artifact/build.py</code> from INDEX.md, 90_report.qmd and audit_freshness.csv. Full-resolution PNGs, vector PDFs and complete tables stay in <code>experiments/runs/</code>.</div></footer>
+
+<script>
+// Load a figure's plotted data the first time its panel opens.
+const isNum = (v) => v !== "" && !isNaN(Number(v));
+const fmt = (v) => (isNum(v) && /\.\d{4,}/.test(v) ? String(Number(Number(v).toPrecision(3))) : v);
+document.querySelectorAll("details.data[data-src]").forEach((d) => {
+  d.addEventListener("toggle", async () => {
+    if (!d.open || d.dataset.loaded) return;
+    d.dataset.loaded = "1";
+    const box = d.querySelector(".table-wrap");
+    try {
+      const res = await fetch(d.dataset.src);
+      if (!res.ok) throw new Error(res.status);
+      const t = await res.json();
+      const table = document.createElement("table");
+      const head = table.createTHead().insertRow();
+      t.columns.forEach((c) => { const th = document.createElement("th"); th.textContent = c; head.appendChild(th); });
+      const body = table.createTBody();
+      t.rows.forEach((r) => {
+        const tr = body.insertRow();
+        r.forEach((v) => { const td = tr.insertCell(); td.textContent = fmt(v); if (isNum(v)) td.className = "n"; });
+      });
+      box.appendChild(table);
+    } catch (e) {
+      box.textContent = "The table could not be loaded (" + e.message + "). The CSV path is named above.";
+    }
+  });
+});
+</script>

@@ -21,4 +21,12 @@ cd /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR
 
 # threads for AutoSpectral and BLAS follow the job allocation
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
-pixi run Rscript "$script" "$run_dir" "${@:3}"
+# Run a frozen copy: Rscript reads the script lazily, so an edit during the run breaks the job.
+snap="$(mktemp -d)/$(basename "$script")"
+cp "$script" "$snap"
+# freeze sourced helpers too: copy the benchmark scripts beside it and point source() at the copies
+cp experiments/benchmarks/05_bmv-unmix-compare/*.R "$(dirname "$snap")"/
+# freeze the helper folders too (lib/theme.R and the style/ and lucid/ pointers to it)
+cp -r experiments/benchmarks/05_bmv-unmix-compare/{lib,style,lucid} "$(dirname "$snap")"/
+sed -i "s#source(\"experiments/benchmarks/05_bmv-unmix-compare/#source(\"$(dirname "$snap")/#" "$(dirname "$snap")"/*.R "$(dirname "$snap")"/{lib,style,lucid}/*.R
+pixi run Rscript "$snap" "$run_dir" "${@:3}"
