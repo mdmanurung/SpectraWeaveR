@@ -364,8 +364,13 @@ sw_diagnose <- function(
   "spill_corr_z",
   "kept_share_z",
   "kept_share_log_ratio",
-  "centroid_shift"
+  "centroid_shift",
+  # A split blurs two populations, so the bimodality coefficient drops (G38).
+  "bimodality_z"
 )
+# Not here on purpose (G38): `spread_z` and `rest_emd_z` rank by their raw value,
+# because spillover spread only adds width and an EMD only grows with a fault; a
+# negative z means a file or batch is closer to normal than the others.
 # Novelty log-density: low is unusual. GMM separation: a small value means the
 # channel did not split into a negative and a positive, so it ranks first.
 .sw_low_first_checks <- c("novelty_log_density", "separation")

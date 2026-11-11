@@ -285,6 +285,15 @@ test_that("ranking keys: signed, low-first and ratio checks, without spurious wa
   expect_no_warning(.sw_diag_key(c("offset", "gain_batch_ratio"), c(-5, 2)))
 })
 
+test_that("bimodality_z ranks by size; spread_z and rest_emd_z stay one-sided (G38)", {
+  # A split blurs two populations, so the coefficient drops: a large negative z is the fault.
+  key <- .sw_diag_key(
+    c("bimodality_z", "spread_z", "rest_emd_z"),
+    c(-4, -4, -4)
+  )
+  expect_equal(key, c(4, -4, -4))
+})
+
 test_that("the gate module stacks sw_gate_qc rows with gate/channel items", {
   set.seed(3)
   files <- lapply(c(0, 0, 0, 0, 1.5), function(shift) {
