@@ -36,9 +36,15 @@ NULL
 #'   biological choice.
 #' @param pool_samples Logical; required, no default. Written to the
 #'   \code{collapseDataForGating} column of every row, with \code{groupBy}
-#'   left empty. \code{TRUE}: openCyto pools the events of all samples in
-#'   the GatingSet, fits one gate, and applies that gate to every sample.
-#'   \code{FALSE}: each sample gets its own gate fitted on its own events.
+#'   left empty. \code{TRUE}: \code{\link{sw_gate_run}} fits each gate once
+#'   on the pooled events of all samples and applies it to every sample. It
+#'   does so by setting \code{groupBy} to the number of samples when it reads
+#'   the template, because openCyto 2.18.0 pools only when
+#'   \code{collapseDataForGating} is \code{TRUE} and \code{groupBy} is not
+#'   empty (a number N pools N samples per group). \code{FALSE}: each sample
+#'   gets its own gate fitted on its own events. The CSV written here keeps
+#'   \code{groupBy} empty; set it yourself in the CSV to pool in groups of
+#'   fewer samples.
 #'
 #' @return The file path (invisibly).
 #'
@@ -237,6 +243,48 @@ sw_gate_template <- function(output_file, template_type = "lymphocyte",
 }
 
 
+# ---------------------------------------------------------------------------
+# Internal: make collapseDataForGating = TRUE pool
+# ---------------------------------------------------------------------------
+
+# openCyto 2.18.0 fits a gate on pooled events only when collapseDataForGating
+# is TRUE and groupBy is not empty; with an empty groupBy it fits one gate per
+# sample. A number N in groupBy puts N samples in one group, so the number of
+# samples gives one group for the whole run. This returns the path of the
+# template to use: the input file when no row needs a change, otherwise a
+# temporary copy with groupBy set to n_samples on the rows that have
+# collapseDataForGating TRUE and an empty or NA groupBy. Rows with an explicit
+# groupBy are not touched. The copy is read as text, so every other cell
+# keeps its spelling.
+.sw_gate_pool_template <- function(template_file, n_samples) {
+  tmpl <- utils::read.csv(
+    template_file,
+    stringsAsFactors = FALSE,
+    colClasses = "character"
+  )
+  if (!all(c("collapseDataForGating", "groupBy") %in% names(tmpl))) {
+    return(template_file)
+  }
+  pools <- toupper(trimws(tmpl$collapseDataForGating)) %in% c("TRUE", "T")
+  no_group <- is.na(tmpl$groupBy) | !nzchar(trimws(tmpl$groupBy))
+  needs <- pools & no_group
+  if (!any(needs)) {
+    return(template_file)
+  }
+  message(
+    "collapseDataForGating is TRUE and groupBy is empty for: ",
+    paste(tmpl$alias[needs], collapse = ", "),
+    ". Setting groupBy to ",
+    n_samples,
+    " (the number of samples), because openCyto pools only when groupBy ",
+    "is not empty."
+  )
+  tmpl$groupBy[needs] <- as.character(n_samples)
+  pooled_file <- tempfile(fileext = ".csv")
+  utils::write.csv(tmpl, pooled_file, row.names = FALSE)
+  pooled_file
+}
+
 #' Apply Automated Gating
 #'
 #' Full openCyto gating workflow: loads FCS files into a GatingSet, applies
@@ -264,6 +312,15 @@ sw_gate_template <- function(output_file, template_type = "lymphocyte",
 #' \code{collapseDataForGating} and \code{groupBy} columns of the CSV are
 #' read by \code{openCyto::gatingTemplate()}; see the \code{pool_samples}
 #' argument of \code{\link{sw_gate_template}}.
+#'
+#' openCyto 2.18.0 pools events for a gate only when
+#' \code{collapseDataForGating} is \code{TRUE} and \code{groupBy} is not
+#' empty. For every template row with \code{collapseDataForGating} \code{TRUE}
+#' and an empty or \code{NA} \code{groupBy}, \code{sw_gate_run()} sets
+#' \code{groupBy} to the number of samples in \code{fcs_files}, so the gate is
+#' fitted once on all samples and applied to each. It reports this with a
+#' message and works on a temporary copy; your template file is not changed.
+#' Rows with an explicit \code{groupBy} are not touched.
 #'
 #' @return A \code{GatingSet} object with gates applied.
 #'
@@ -360,7 +417,11 @@ sw_gate_run <- function(fcs_files, gating_template, transform_channels = NULL,
 
   # Load and apply gating template
   message("Loading gating template: ", gating_template)
-  gt <- openCyto::gatingTemplate(gating_template)
+  template_file <- .sw_gate_pool_template(gating_template, length(fs))
+  if (!identical(template_file, gating_template)) {
+    on.exit(unlink(template_file), add = TRUE)
+  }
+  gt <- openCyto::gatingTemplate(template_file)
 
   message("Applying gates...")
   openCyto::gt_gating(gt, gs)

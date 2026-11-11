@@ -6,6 +6,7 @@
 \usage{
 sw_clean_run(
   x,
+  margin_range,
   debris_window,
   singlet_wider_gate,
   pool_samples,
@@ -23,6 +24,20 @@ sw_clean_run(
 \code{flowSet}, or a list of \code{flowFrame}s. A list or flowSet keeps its
 names; otherwise samples are named after the files or \code{sample_<i>}.}
 
+\item{margin_range}{Numeric length 2, \code{c(min, max)}; required, no
+default. Lower and upper limit (raw scale) of the margin step, applied to
+every fluorescence channel; two finite numbers with \code{min} below
+\code{max}. Scatter channels keep the range stored in the FCS file. It
+is passed to \code{PeacoQC::RemoveMargins()} as the \code{minRange} and
+\code{maxRange} of every fluorescence channel (see Details). PeacoQC reads
+a lower limit above 0 as 0 (\code{min(minRange, 0)}), so when
+\code{margin_range[1]} is above 0 the function warns, naming
+\code{margin_range} and the value, and continues; the result is the same
+as with a lower limit of 0. The value sets how many events every later
+step sees. To choose it, look at the raw fluorescence densities and at
+the share of events the margin step flags per channel; the \code{margins}
+row of the \code{audit} table shows \code{n_removed}.}
+
 \item{debris_window}{Numeric length 2; required, no default. Lower and
 upper FSC-A limit (raw scale) of the events the \code{nonDebris} density
 is built from. It is written as \code{min} and \code{max} of the openCyto
@@ -38,8 +53,11 @@ of the openCyto \code{singletGate}. \code{TRUE} keeps more events near the
 edge of the singlet diagonal.}
 
 \item{pool_samples}{Logical; required, no default. \code{TRUE}: one gate per
-node is fitted on the pooled events of all samples and applied to each.
-\code{FALSE}: one gate per sample. It changes the cut of every sample.}
+node is fitted on the pooled events of all samples and applied to each,
+so every sample has the same cut. \code{FALSE}: one gate per sample. The
+template records this as \code{collapseDataForGating} and, when pooling,
+\code{groupBy} set to the number of samples (openCyto pools only when
+\code{groupBy} is not empty). It changes the cut of every sample.}
 
 \item{viability_channel}{Character; required, no default. Channel of the
 viability dye, used by the \code{live} gate. A wrong channel gates on the
@@ -95,8 +113,8 @@ otherwise: \code{TRUE} when the cut sits on the lowest event inside
 Runs the cleaning stage of the validated pipeline order on FCS files,
 flowFrames or a flowSet, in this order:
 \enumerate{
-\item margin events removed on the raw scale
-(\code{\link{sw_filter_margins_peacoqc}});
+\item margin events removed on the raw scale, with \code{margin_range} on
+the fluorescence channels (\code{\link{sw_filter_margins_peacoqc}});
 \item arcsinh transformation of all fluorescence channels
 (\code{\link{sw_transform_apply}}); scatter channels stay raw;
 \item PeacoQC signal QC (\code{\link{sw_qc_batch}} and
@@ -113,22 +131,29 @@ function stops once and its message names all of them, with what each
 controls, how to choose it, and the benchmark 05 reference value (not a
 recommendation). No step runs before that check.
 
-Margins use PeacoQC's per-channel ranges from the FCS parameters (the
-package's existing \code{\link{sw_filter_margins_peacoqc}} with no
-channel specifications). The \code{debris_window} and the singlet gate act
-on raw scatter; the viability cut acts on the arcsinh scale.
+The margin step calls \code{\link{sw_filter_margins_peacoqc}} with
+\code{channel_specifications = list(AllFluoChannels = margin_range)}. The
+wrapper turns \code{AllFluoChannels} into one \code{c(minRange, maxRange)}
+entry for each fluorescence channel (\code{sw_channel_is_fluor()}) and
+hands them to \code{PeacoQC::RemoveMargins()}, which writes them over the
+\code{minRange} and \code{maxRange} of those channels. Scatter channels
+keep the \code{minRange} and \code{maxRange} of the FCS parameters. The
+\code{debris_window} and the singlet gate act on raw scatter; the
+viability cut acts on the arcsinh scale.
 
 \strong{The margin step removes more than events on the range limit.}
 PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
 and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
-\code{e < min(maxRange, max(e))}. The package wrapper
-\code{sw_filter_margins_peacoqc()} picks these channels with
-\code{sw_channel_is_signal()}, which leaves out \code{Time},
+\code{e < min(maxRange, max(e))}. A lower limit above 0 therefore acts as 0:
+\code{sw_clean_run()} warns when \code{margin_range[1]} is above 0 and
+continues.
+The package wrapper \code{sw_filter_margins_peacoqc()} picks these channels
+with \code{sw_channel_is_signal()}, which leaves out \code{Time},
 \code{Original_ID}, \code{File}, \code{SampleID} and \code{AF Index} by
 default, so \code{Time} is not checked. Both comparisons are strict, so in
 each channel of each sample the events at the observed minimum and the
-observed maximum are removed, even when no event reaches the instrument
-range. The \code{margins} row of the \code{audit} table
+observed maximum are removed, even when no event reaches \code{margin_range}
+or the instrument range. The \code{margins} row of the \code{audit} table
 (\code{n_removed}) shows how many events this step removed per sample.
 
 \strong{What \code{debris_window} does.} The \code{nonDebris} gate is the
@@ -151,13 +176,21 @@ inside the window, openCyto sets
 \code{cutpoint <- ifelse(positive, gate_range[1], gate_range[2])}: the cut
 falls on the lowest event inside the window and removes nothing at or
 above \code{min}. \code{sw_clean_run()} reports this case: it warns and sets
-\code{cut_at_window_floor} to \code{TRUE} in the \code{gates} table. A
+\code{cut_at_window_floor} to \code{TRUE} in the \code{gates} table. With
+\code{pool_samples = TRUE} the one pooled cut is compared with the lowest
+in-window event of all samples together; with \code{FALSE} each sample's cut
+is compared with the lowest in-window event of that sample. A
 window that leaves out the real valley can also put the cut at a different
 valley inside it, so check the \code{nonDebris} \code{definition} in the
 \code{gates} table against the FSC-A density.
 
 A sample with no events left after any step stops the run, with the
-sample and the step named. The run never skips a sample.
+sample and the step named. After the margin step the message also gives the
+events before and after, the percentage removed and \code{margin_range}. If
+PeacoQC raises an error on a sample (for example when too few events are
+left for its analysis), the run stops with the sample name, the number of
+events handed to PeacoQC and the original PeacoQC message. The run never
+skips a sample and sets no minimum event count.
 }
 \examples{
 if (all(vapply(c("flowCore", "flowWorkspace", "openCyto", "PeacoQC"),
@@ -201,6 +234,7 @@ if (all(vapply(c("flowCore", "flowWorkspace", "openCyto", "PeacoQC"),
   # tree analysis; real files have more events.
   res <- sw_clean_run(
     ff,
+    margin_range = c(-21761, 1e7), # PLACEHOLDER for this synthetic frame
     debris_window = c(1e4, 1.5e6), # PLACEHOLDER: must hold the debris valley
     singlet_wider_gate = TRUE, # PLACEHOLDER: TRUE or FALSE
     pool_samples = TRUE, # PLACEHOLDER: TRUE or FALSE

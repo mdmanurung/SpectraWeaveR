@@ -3,6 +3,7 @@
 
 # Values for the tests only. They are not defaults of sw_clean_run().
 clean_args <- list(
+  margin_range = c(-21761, 1e7),
   debris_window = c(2e5, 1.5e6),
   singlet_wider_gate = TRUE,
   pool_samples = TRUE,
@@ -29,15 +30,17 @@ make_clean_ff <- function(
   n_cells = 3000,
   n_debris = 200,
   n_doublet = 200,
-  n_dead = 300
+  n_dead = 300,
+  fsc_scale = 1
 ) {
   set.seed(seed)
+  # fsc_scale moves every FSC-A peak, so samples can have different valleys.
   a <- c(
-    rnorm(n_cells, 6e5, 3e4),
-    rnorm(n_debris, 5e4, 1.5e4),
-    rnorm(n_doublet, 6e5, 3e4),
-    rnorm(n_dead, 6e5, 3e4),
-    5.5e5
+    rnorm(n_cells, 6e5 * fsc_scale, 3e4),
+    rnorm(n_debris, 5e4 * fsc_scale, 1.5e4),
+    rnorm(n_doublet, 6e5 * fsc_scale, 3e4),
+    rnorm(n_dead, 6e5 * fsc_scale, 3e4),
+    5.5e5 * fsc_scale
   )
   # flowFrames hold single precision: put FSC-A on a 0.25 grid and make every
   # value unique, so FSC-A tags each event with its class.
@@ -143,7 +146,7 @@ test_that("the required-argument table matches the arguments without a default",
 
 test_that("with nothing supplied one message names every missing argument", {
   msg <- msg_of(sw_clean_run("sample.fcs"))
-  expect_match(msg, "needs 9 required argument", fixed = TRUE)
+  expect_match(msg, "needs 10 required argument", fixed = TRUE)
   for (nm in names(.sw_clean_args)) {
     expect_match(msg, paste0("\n", nm, "\n"), fixed = TRUE)
     a <- .sw_clean_args[[nm]]
@@ -161,10 +164,10 @@ test_that("with nothing supplied one message names every missing argument", {
     )
   }
   # One how-to line and one labelled reference per argument.
-  expect_equal(lengths(regmatches(msg, gregexpr("How to choose:", msg))), 9)
+  expect_equal(lengths(regmatches(msg, gregexpr("How to choose:", msg))), 10)
   expect_equal(
     lengths(regmatches(msg, gregexpr("not a recommendation", msg))),
-    9
+    10
   )
 })
 
@@ -189,8 +192,9 @@ test_that("a partial call reports only the remaining arguments", {
     cofactor = 6000,
     IT_limit = 0.55
   ))
-  expect_match(msg, "needs 5 required argument", fixed = TRUE)
+  expect_match(msg, "needs 6 required argument", fixed = TRUE)
   for (nm in c(
+    "margin_range",
     "singlet_wider_gate",
     "viability_channel",
     "viability_method",
@@ -202,7 +206,7 @@ test_that("a partial call reports only the remaining arguments", {
   for (nm in c("debris_window", "pool_samples", "cofactor", "IT_limit")) {
     expect_no_match(msg, paste0("\n", nm, "\n"), fixed = TRUE)
   }
-  expect_equal(lengths(regmatches(msg, gregexpr("How to choose:", msg))), 5)
+  expect_equal(lengths(regmatches(msg, gregexpr("How to choose:", msg))), 6)
 })
 
 test_that("a missing argument stops before any processing step", {
@@ -225,9 +229,9 @@ test_that("a missing argument stops before any processing step", {
   )
   expect_error(
     sw_clean_run("sample.fcs", debris_window = c(2e5, 1.5e6)),
-    "needs 8 required argument"
+    "needs 9 required argument"
   )
-  expect_error(sw_clean_run(), "needs 9 required argument")
+  expect_error(sw_clean_run(), "needs 10 required argument")
   expect_length(called, 0)
 })
 
@@ -254,6 +258,13 @@ test_that("invalid argument types error before any dependency check", {
   )
   bad <- list(
     list(list(x = 42), "'x' must be"),
+    list(list(margin_range = c(5, 1)), "'margin_range' must be"),
+    list(list(margin_range = c(5, 5)), "'margin_range' must be"),
+    list(list(margin_range = c(-1, Inf)), "'margin_range' must be"),
+    list(list(margin_range = c(NA, 1)), "'margin_range' must be"),
+    list(list(margin_range = 1), "'margin_range' must be"),
+    list(list(margin_range = c(0, 1, 2)), "'margin_range' must be"),
+    list(list(margin_range = c("a", "b")), "'margin_range' must be"),
     list(list(debris_window = c(5, 1)), "'debris_window' must be"),
     list(list(debris_window = "a"), "'debris_window' must be"),
     list(list(singlet_wider_gate = "yes"), "'singlet_wider_gate' must be"),
@@ -445,6 +456,240 @@ test_that("a sample emptied by a step stops the run", {
   expect_error(run_clean(m$ff), "No events left after step 'margins'")
 })
 
+test_that("margin_range reaches the margin step as the fluorescence range", {
+  skip_if_no_clean_stack()
+  m <- make_clean_ff()
+  seen <- NULL
+  orig_margins <- sw_filter_margins_peacoqc
+  local_mocked_bindings(
+    sw_filter_margins_peacoqc = function(
+      x,
+      channel_specifications = NULL,
+      ...
+    ) {
+      seen <<- channel_specifications
+      orig_margins(x, channel_specifications = channel_specifications, ...)
+    }
+  )
+  res <- run_clean(m$ff)
+  expect_equal(seen, list(AllFluoChannels = clean_args$margin_range))
+  expect_equal(res$parameters$margin_range, clean_args$margin_range)
+})
+
+test_that("margin_range sets the range of fluorescence channels, scatter keeps the FCS range", {
+  skip_if_no_clean_stack()
+  # PeacoQC::RemoveMargins() always drops the observed minimum and maximum of
+  # every channel (strict comparisons). Two planted events, hi_all and lo_all,
+  # hold the extremes of every channel, so no other event is an observed
+  # extreme and only margin_range or the FCS range can remove the rest.
+  m <- make_clean_ff()
+  mat <- flowCore::exprs(m$ff)
+  planted <- function(...) {
+    row <- mat[1, , drop = FALSE]
+    row[1, ] <- c(
+      "FSC-A" = 6e5,
+      "FSC-H" = 4.8e5,
+      "SSC-A" = 1e5,
+      "Time" = 0,
+      "BV421-A" = 2000,
+      "PE-A" = 3000,
+      "LIVE DEAD NIR-A" = 1000
+    )
+    over <- c(...)
+    row[1, names(over)] <- over
+    row
+  }
+  extra <- rbind(
+    # Observed extremes of every channel: removed whatever margin_range is.
+    planted(
+      "FSC-A" = 3e6, "FSC-H" = 3e6, "SSC-A" = 3e6,
+      "BV421-A" = 5e7, "PE-A" = 5e7, "LIVE DEAD NIR-A" = 5e7
+    ),
+    planted(
+      "FSC-A" = 10, "FSC-H" = 10, "SSC-A" = 10,
+      "BV421-A" = -3e5, "PE-A" = -3e5, "LIVE DEAD NIR-A" = -3e5
+    ),
+    # Scatter above the FCS range of FSC-A (1e6), not the observed maximum:
+    # removed whatever margin_range is.
+    planted("FSC-A" = 2e6),
+    # Scatter inside the FCS range: kept, also when margin_range is narrow.
+    planted("FSC-A" = 9e5),
+    # Fluorescence above the narrow maximum (5e5), inside the wide one (1e7).
+    planted("BV421-A" = 1e6),
+    planted("BV421-A" = 1e6),
+    planted("BV421-A" = 1e6),
+    # Fluorescence above both maxima, not the observed maximum.
+    planted("PE-A" = 2e7),
+    planted("PE-A" = 2e7),
+    # Fluorescence below the narrow minimum (-1e4), above the wide one (-1e5).
+    planted("PE-A" = -5e4),
+    planted("PE-A" = -5e4),
+    # Fluorescence below both minima, not the observed minimum.
+    planted("BV421-A" = -2e5),
+    planted("BV421-A" = -2e5),
+    # Inside both ranges: kept.
+    planted("BV421-A" = 5e4),
+    planted("BV421-A" = 5e4)
+  )
+  extra[, "Time"] <- max(mat[, "Time"]) + seq_len(nrow(extra)) / 100
+  ff <- flowCore::flowFrame(rbind(mat, extra))
+  pd <- flowCore::pData(flowCore::parameters(ff))
+  pd$minRange <- -1e6
+  pd$maxRange <- 4e6
+  pd$maxRange[pd$name == "FSC-A"] <- 1e6
+  flowCore::pData(flowCore::parameters(ff)) <- pd
+
+  # Run sw_clean_run() up to the margin step: its real call of
+  # sw_filter_margins_peacoqc() counts the events removed, then the stub that
+  # replaces the transformation stops the run.
+  removed_by_margins <- function(margin_range) {
+    n_kept <- NULL
+    orig_margins <- sw_filter_margins_peacoqc
+    local_mocked_bindings(
+      sw_filter_margins_peacoqc = function(x, ...) {
+        out <- orig_margins(x, ...)
+        n_kept <<- nrow(out)
+        out
+      },
+      sw_transform_apply = function(...) stop("stop after the margin step")
+    )
+    expect_error(
+      run_clean(ff, margin_range = margin_range),
+      "stop after the margin step"
+    )
+    unname(nrow(ff) - n_kept)
+  }
+  # Wide range: the two extreme events, the FSC-A event above the FCS range,
+  # the two PE events at 2e7 and the two BV421 events at -2e5. The FCS range
+  # (-1e6, 4e6) would remove the two PE events but keep the two BV421 events
+  # at -2e5 and remove the make_clean_ff event at BV421 4e6.
+  expect_equal(removed_by_margins(c(-1e5, 1e7)), 7)
+  # Narrow range: also the three BV421 events at 1e6, the make_clean_ff event
+  # at BV421 4e6 and the two PE events at -5e4. The 3900 scatter events near
+  # 6e5 lie above the narrow maximum, so they show that scatter keeps the FCS
+  # range.
+  expect_equal(removed_by_margins(c(-1e4, 5e5)), 13)
+})
+
+test_that("a margin_range minimum above 0 warns and gives the same audit as 0", {
+  skip_if_no_clean_stack()
+  m <- make_clean_ff()
+  warnings_of <- function(margin_range) {
+    msgs <- character()
+    res <- withCallingHandlers(
+      run_clean_warn(m$ff, margin_range = margin_range),
+      warning = function(w) {
+        msgs <<- c(msgs, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(res = res, msgs = msgs)
+  }
+  positive <- warnings_of(c(500, 1e7))
+  zero <- warnings_of(c(0, 1e7))
+
+  # The warning names margin_range and the value, and says PeacoQC reads it as 0.
+  hit <- grepl("'margin_range' lower limit is 500", positive$msgs, fixed = TRUE)
+  expect_equal(sum(hit), 1)
+  expect_match(positive$msgs[hit], "reads a lower limit above 0 as 0", fixed = TRUE)
+  # A lower limit of 0 raises no such warning.
+  expect_false(any(grepl("'margin_range' lower limit", zero$msgs, fixed = TRUE)))
+
+  # The run continues and the counts equal those of margin_range[1] = 0.
+  expect_equal(positive$res$audit, zero$res$audit)
+  expect_equal(positive$res$parameters$margin_range, c(500, 1e7))
+})
+
+# Frame lists for the margin and PeacoQC error tests: b is the one that fails.
+two_samples <- function() {
+  list(a = make_clean_ff(1)$ff, b = make_clean_ff(2, n_cells = 2500)$ff)
+}
+
+test_that("a sample emptied by the margin step is named with counts and margin_range", {
+  skip_if_no_clean_stack()
+  fr <- two_samples()
+  n_b <- nrow(fr$b)
+  local_mocked_bindings(
+    sw_filter_margins_peacoqc = function(x, ...) {
+      if (nrow(x) == n_b) x[0, ] else x
+    }
+  )
+  msg <- msg_of(run_clean(fr))
+  expect_match(
+    msg,
+    "No events left after step 'margins' in sample(s): b",
+    fixed = TRUE
+  )
+  expect_match(
+    msg,
+    sprintf("b: %d events before, 0 after, 100%% removed", n_b),
+    fixed = TRUE
+  )
+  expect_match(msg, "margin_range = c(-21761, 1e+07)", fixed = TRUE)
+  expect_no_match(msg, "a: ", fixed = TRUE)
+})
+
+test_that("every sample the margin step emptied is listed in one error", {
+  skip_if_no_clean_stack()
+  fr <- two_samples()
+  local_mocked_bindings(sw_filter_margins_peacoqc = function(x, ...) x[0, ])
+  msg <- msg_of(run_clean(fr))
+  expect_match(msg, "in sample(s): a, b", fixed = TRUE)
+  expect_match(msg, "a: ", fixed = TRUE)
+  expect_match(msg, "b: ", fixed = TRUE)
+})
+
+test_that("a PeacoQC error names the sample, the event count and the original message", {
+  skip_if_no_clean_stack()
+  fr <- two_samples()
+  n_b <- nrow(fr$b)
+  n_to_qc <- NULL
+  orig_qc <- sw_qc_run
+  local_mocked_bindings(
+    sw_filter_margins_peacoqc = function(x, ...) x,
+    sw_qc_run = function(ff, ...) {
+      if (nrow(ff) == n_b) {
+        n_to_qc <<- nrow(ff)
+        stop("need at least four unique x values", call. = FALSE)
+      }
+      orig_qc(ff, ...)
+    }
+  )
+  msg <- msg_of(run_clean(fr))
+  expect_match(msg, "PeacoQC failed on sample 'b'", fixed = TRUE)
+  expect_match(msg, sprintf("with %d events handed to it", n_b), fixed = TRUE)
+  expect_match(
+    msg,
+    "PeacoQC said: need at least four unique x values",
+    fixed = TRUE
+  )
+  expect_equal(n_to_qc, n_b)
+})
+
+test_that("a sample left with a few events reaches PeacoQC; no event-count threshold stops it", {
+  skip_if_no_clean_stack()
+  fr <- two_samples()
+  n_b <- nrow(fr$b)
+  handed <- NULL
+  orig_qc <- sw_qc_run
+  local_mocked_bindings(
+    sw_filter_margins_peacoqc = function(x, ...) {
+      if (nrow(x) == n_b) x[1:5, ] else x
+    },
+    sw_qc_run = function(ff, ...) {
+      if (nrow(ff) == 5) {
+        handed <<- nrow(ff)
+        stop("need at least four unique x values", call. = FALSE)
+      }
+      orig_qc(ff, ...)
+    }
+  )
+  msg <- msg_of(run_clean(fr))
+  expect_equal(handed, 5L)
+  expect_match(msg, "PeacoQC failed on sample 'b' with 5 events", fixed = TRUE)
+  expect_no_match(msg, "No events left", fixed = TRUE)
+})
+
 test_that("a gating failure is reported with the settings to check", {
   skip_if_no_clean_stack()
   m <- make_clean_ff()
@@ -543,6 +788,174 @@ test_that("a window that leaves out the valley is reported, not silent", {
     min(x[x >= window[1] & x <= window[2]]),
     tolerance = 1e-4
   )
+})
+
+# =========================================================================
+# Pooling: one shared cut or one cut per sample
+# =========================================================================
+
+# Definition column of one gate, one entry per sample.
+gate_definitions <- function(res, gate) {
+  res$gates$definition[res$gates$gate == gate]
+}
+
+test_that("the template pools through groupBy: the number of samples when TRUE, empty when FALSE", {
+  for (method in c("mindensity", "boundary")) {
+    cut <- if (method == "boundary") 3 else NULL
+    pooled <- .sw_clean_template(
+      c(1e4, 1.5e6),
+      TRUE,
+      TRUE,
+      "LIVE DEAD NIR-A",
+      method,
+      cut,
+      n_samples = 4
+    )
+    expect_true(all(pooled$collapseDataForGating))
+    expect_equal(as.integer(pooled$groupBy), rep(4L, 3))
+
+    single <- .sw_clean_template(
+      c(1e4, 1.5e6),
+      TRUE,
+      FALSE,
+      "LIVE DEAD NIR-A",
+      method,
+      cut,
+      n_samples = 4
+    )
+    expect_false(any(single$collapseDataForGating))
+    expect_true(all(is.na(single$groupBy)))
+  }
+})
+
+test_that("pool_samples = TRUE gives one shared cut for every gate", {
+  skip_if_no_clean_stack()
+  # Peaks of the three samples sit at different FSC-A, so their own valleys
+  # differ; a pooled fit must give them the same cut.
+  fr <- list(
+    a = make_clean_ff(1, fsc_scale = 0.9)$ff,
+    b = make_clean_ff(2)$ff,
+    c = make_clean_ff(3, fsc_scale = 1.1)$ff
+  )
+  res <- suppressWarnings(run_clean(
+    fr,
+    debris_window = c(1e4, 1.5e6),
+    pool_samples = TRUE
+  ))
+  expect_equal(unique(as.integer(res$template$groupBy)), 3L)
+  for (g in c("nonDebris", "singlets", "live")) {
+    expect_length(unique(gate_definitions(res, g)), 1)
+  }
+})
+
+test_that("pool_samples = FALSE gives each sample its own cut", {
+  skip_if_no_clean_stack()
+  fr <- list(
+    a = make_clean_ff(1, fsc_scale = 0.9)$ff,
+    b = make_clean_ff(2)$ff,
+    c = make_clean_ff(3, fsc_scale = 1.1)$ff
+  )
+  res <- suppressWarnings(run_clean(
+    fr,
+    debris_window = c(1e4, 1.5e6),
+    pool_samples = FALSE
+  ))
+  expect_true(all(is.na(res$template$groupBy)))
+  for (g in c("nonDebris", "singlets", "live")) {
+    expect_length(unique(gate_definitions(res, g)), 3)
+  }
+})
+
+test_that("the window floor is one pooled value when pooling and one value per sample otherwise", {
+  skip_if_not_installed("flowCore")
+  frame_of <- function(fsc) {
+    flowCore::flowFrame(cbind("FSC-A" = fsc, "FSC-H" = fsc))
+  }
+  fr <- list(a = frame_of(c(10, 20, 30, 500)), b = frame_of(c(5, 25, 40, 90)))
+  # Pooled: one value for every sample, the lowest event of all samples.
+  expect_equal(.sw_clean_window_floor(fr, c(8, 90), TRUE), c(10, 10))
+  expect_equal(.sw_clean_window_floor(fr, c(1, 90), TRUE), c(5, 5))
+  # Not pooled: the lowest event of each sample.
+  expect_equal(.sw_clean_window_floor(fr, c(1, 90), FALSE), c(a = 10, b = 5))
+  # Window limits are inclusive, as in the openCyto truncation.
+  expect_equal(.sw_clean_window_floor(fr, c(10, 90), FALSE), c(a = 10, b = 25))
+})
+
+# Frames handed to the gates, and the lowest FSC-A of each inside a window.
+spy_gate_input <- function() {
+  env <- new.env()
+  orig_gate <- sw_gate_run
+  list(
+    env = env,
+    mock = function(fcs_files, ...) {
+      env$fs <- fcs_files
+      orig_gate(fcs_files, ...)
+    }
+  )
+}
+
+floor_of <- function(fs, window, pool) {
+  v <- lapply(flowCore::sampleNames(fs), function(sn) {
+    x <- flowCore::exprs(fs[[sn]])[, "FSC-A"]
+    x[x >= window[1] & x <= window[2]]
+  })
+  if (pool) rep(min(unlist(v)), length(v)) else vapply(v, min, numeric(1))
+}
+
+test_that("cut_at_window_floor compares the one pooled cut with the pooled floor", {
+  skip_if_no_clean_stack()
+  # The window starts above the debris peak, so each sample and their pool
+  # have one peak: the cut sits on the lowest event inside the window.
+  fr <- list(
+    a = make_clean_ff(1)$ff,
+    b = make_clean_ff(2)$ff,
+    c = make_clean_ff(3)$ff
+  )
+  window <- c(3e5, 1.5e6)
+  spy <- spy_gate_input()
+  local_mocked_bindings(sw_gate_run = spy$mock)
+  res <- run_clean(fr, debris_window = window, pool_samples = TRUE)
+
+  pooled_floor <- floor_of(spy$env$fs, window, pool = TRUE)[1]
+  own_floor <- floor_of(spy$env$fs, window, pool = FALSE)
+  # The samples have different own floors, so the pooled floor tells the cases apart.
+  expect_gt(length(unique(own_floor)), 1)
+
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  cuts <- vapply(
+    seq_len(nrow(d)),
+    function(i) debris_cut_of(res, i),
+    numeric(1)
+  )
+  expect_equal(cuts, rep(pooled_floor, 3), tolerance = 1e-4)
+  expect_true(all(d$cut_at_window_floor))
+})
+
+test_that("cut_at_window_floor compares each per-sample cut with that sample's floor", {
+  skip_if_no_clean_stack()
+  fr <- list(
+    a = make_clean_ff(1)$ff,
+    b = make_clean_ff(2)$ff,
+    c = make_clean_ff(3)$ff
+  )
+  window <- c(3e5, 1.5e6)
+  spy <- spy_gate_input()
+  local_mocked_bindings(sw_gate_run = spy$mock)
+  res <- run_clean(fr, debris_window = window, pool_samples = FALSE)
+
+  own_floor <- floor_of(spy$env$fs, window, pool = FALSE)
+  pooled_floor <- floor_of(spy$env$fs, window, pool = TRUE)[1]
+  d <- res$gates[res$gates$gate == "nonDebris", ]
+  cuts <- vapply(
+    seq_len(nrow(d)),
+    function(i) debris_cut_of(res, i),
+    numeric(1)
+  )
+  expect_equal(cuts, own_floor, tolerance = 1e-4)
+  # Against the pooled floor, samples whose own floor is higher would look
+  # like valley cuts. Against their own floor all three are at the floor.
+  expect_gt(sum(own_floor > pooled_floor), 0)
+  expect_true(all(d$cut_at_window_floor))
 })
 
 test_that("a viability channel absent from a sample is an error", {
