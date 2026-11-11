@@ -523,7 +523,9 @@ sw_clean_run <- function(
   ffs <- lapply(ffs, sw_transform_apply, trans_list = trans_list)
 
   # --- 3. PeacoQC ---------------------------------------------------------
-  qc <- sw_qc_batch(ffs, IT_limit = IT_limit, MAD = MAD)
+  # QC runs on the transformed channels only: the Original_ID column that
+  # the margin step appends is a counter, not a signal.
+  qc <- sw_qc_batch(ffs, channels = fluor, IT_limit = IT_limit, MAD = MAD)
   ffs <- qc$cleaned[sample_names]
   record("qc", ffs)
   qc_summary <- qc$summary

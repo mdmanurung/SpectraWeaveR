@@ -305,6 +305,7 @@ test_that("steps run in order: margins, transform, PeacoQC, gates", {
     sw_qc_run = function(ff, ...) {
       log <<- c(log, "qc")
       seen$qc_in <<- ff
+      seen$qc_channels <<- list(...)$channels
       orig_qc(ff, ...)
     },
     sw_gate_run = function(fcs_files, ...) {
@@ -321,6 +322,9 @@ test_that("steps run in order: margins, transform, PeacoQC, gates", {
   e <- flowCore::exprs(seen$qc_in)
   expect_lt(max(abs(e[, "LIVE DEAD NIR-A"])), 20)
   expect_gt(max(e[, "FSC-A"]), 1e5)
+  # PeacoQC evaluates the fluorescence channels, not the Original_ID counter.
+  expect_setequal(seen$qc_channels, c("BV421-A", "PE-A", "LIVE DEAD NIR-A"))
+
   # The gates see the QC-cleaned events, not the raw ones.
   expect_equal(nrow(seen$gate_in), nrow(seen$qc_in))
 
@@ -467,4 +471,26 @@ test_that("sw_gate_run accepts an in-memory flowSet", {
     gs <- sw_gate_run(fs, tmpl, transform_channels = NULL)
   )))
   expect_true(methods::is(gs, "GatingSet"))
+})
+
+test_that("the dependency-check probe sees the package's own calls", {
+  skip_if_not_installed("flowCore")
+  checked <- FALSE
+  local_mocked_bindings(
+    requireNamespace = function(...) {
+      if (identical(topenv(parent.frame()), asNamespace("SpectraWeaveR"))) {
+        checked <<- TRUE
+      }
+      TRUE
+    },
+    .package = "base"
+  )
+  local_mocked_bindings(
+    sw_filter_margins_peacoqc = function(...) stop("margins reached")
+  )
+  expect_error(
+    do.call(sw_clean_run, c(list(x = make_clean_ff()$ff), clean_args)),
+    "margins reached"
+  )
+  expect_true(checked)
 })
