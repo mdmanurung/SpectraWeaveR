@@ -17,7 +17,7 @@ an empty pipeline. Steps are executed in order. Default: \code{NULL}.}
 A \code{Pipeline} S7 object.
 }
 \description{
-Constructs a \code{Pipeline} object — an ordered collection of
+Constructs a \code{Pipeline} object - an ordered collection of
 \code{ProcessingStep} objects that can be composed, modified, and executed.
 }
 \examples{

@@ -59,7 +59,7 @@ long format with one row per cluster-marker pair and columns:
 \item{\code{mean_A}}{Mean arcsinh expression in group A.}
 \item{\code{mean_B}}{Mean arcsinh expression in group B.}
 }
-Attributes: \code{groups} (character\link{2}), \code{group_col} (character),
+Attributes: \code{groups} (character(2)), \code{group_col} (character),
 \code{fdr_threshold} (numeric).
 }
 \description{

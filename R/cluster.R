@@ -342,7 +342,7 @@ sw_plot_clusters <- function(cluster_result,
 #' Map New Data onto Trained SOM
 #'
 #' Projects new samples onto an existing trained kohonen SOM model using
-#' \code{kohonen::map.kohonen()}. Only available when the clustering was
+#' \code{kohonen::map()}. Only available when the clustering was
 #' performed with \code{method = "som"}.
 #'
 #' @param cluster_result An \code{sw_cluster_result} object (output from
@@ -374,7 +374,7 @@ sw_cluster_predict <- function(cluster_result, newdata) {
 
   message("Mapping ", nrow(new_mat), " new cells onto trained SOM")
 
-  mapped <- kohonen::map.kohonen(cluster_result$model, newdata = new_mat)
+  mapped <- kohonen::map(cluster_result$model, newdata = new_mat)
   node_metaclusters <- cluster_result$node_metaclusters
   cell_assignments <- node_metaclusters[mapped$unit.classif]
 

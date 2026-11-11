@@ -20,6 +20,6 @@ the existing SOM and metacluster assignments.
 }
 \description{
 Projects new samples onto an existing trained kohonen SOM model using
-\code{kohonen::map.kohonen()}. Only available when the clustering was
+\code{kohonen::map()}. Only available when the clustering was
 performed with \code{method = "som"}.
 }

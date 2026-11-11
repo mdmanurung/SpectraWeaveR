@@ -171,7 +171,7 @@ NULL
 #'     \item{\code{mean_prop_A}}{Mean proportion of this cluster in group A.}
 #'     \item{\code{mean_prop_B}}{Mean proportion of this cluster in group B.}
 #'   }
-#'   Attributes: \code{groups} (character[2]), \code{group_col} (character),
+#'   Attributes: \code{groups} (character(2)), \code{group_col} (character),
 #'   \code{fdr_threshold} (numeric).
 #'
 #' @seealso \code{\link{sw_diff_expression}},
@@ -364,7 +364,7 @@ sw_diff_abundance <- function(x, meta, group_col,
 #'     \item{\code{mean_A}}{Mean arcsinh expression in group A.}
 #'     \item{\code{mean_B}}{Mean arcsinh expression in group B.}
 #'   }
-#'   Attributes: \code{groups} (character[2]), \code{group_col} (character),
+#'   Attributes: \code{groups} (character(2)), \code{group_col} (character),
 #'   \code{fdr_threshold} (numeric).
 #'
 #' @seealso \code{\link{sw_diff_abundance}},

@@ -304,8 +304,8 @@ sw_correct_evaluate_quick <- function(uncorrected, corrected, markers) {
 
   # Compute per-marker MAD across batch medians
   compute_mad_scores <- function(df, markers_vec) {
-    batch_medians <- df %>%
-      dplyr::group_by(.data$batch) %>%
+    batch_medians <- df |>
+      dplyr::group_by(.data$batch) |>
       dplyr::summarise(
         dplyr::across(dplyr::all_of(markers_vec), stats::median),
         .groups = "drop"
@@ -322,8 +322,8 @@ sw_correct_evaluate_quick <- function(uncorrected, corrected, markers) {
   mad_after <- compute_mad_scores(corrected, markers)
 
   mad_df <- dplyr::left_join(
-    mad_before %>% dplyr::rename(mad_before = "mad"),
-    mad_after %>% dplyr::rename(mad_after = "mad"),
+    mad_before |> dplyr::rename(mad_before = "mad"),
+    mad_after |> dplyr::rename(mad_after = "mad"),
     by = "marker"
   )
 
@@ -357,8 +357,8 @@ sw_correct_evaluate_quick <- function(uncorrected, corrected, markers) {
         intersect(names(emd_before), names(emd_after)), "emd"
       )
       emd_result <- dplyr::left_join(
-        emd_before %>% dplyr::rename(emd_before = "emd"),
-        emd_after %>% dplyr::rename(emd_after = "emd"),
+        emd_before |> dplyr::rename(emd_before = "emd"),
+        emd_after |> dplyr::rename(emd_after = "emd"),
         by = join_cols
       )
       emd_median_before <- stats::median(emd_before$emd, na.rm = TRUE)

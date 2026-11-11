@@ -21,7 +21,7 @@ Character string containing generated R code.
 }
 \description{
 Provides a natural language description of your experiment and data, and
-receives generated SpectraWeaveR pipeline code in return — without an
+receives generated SpectraWeaveR pipeline code in return - without an
 interactive conversation.
 }
 \examples{

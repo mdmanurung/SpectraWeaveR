@@ -475,6 +475,11 @@ sw_unmix_figure_spike_summary <- function(
     xintercept = c(score$loss_cut, 1)
   )
 
+  zero <- df |>
+    dplyr::filter(.data$readout == readouts[["lost"]]) |>
+    dplyr::distinct(.data$row, .data$readout) |>
+    dplyr::mutate(value = 0, y = 1)
+
   p <- ggplot2::ggplot(df, ggplot2::aes(.data$value, .data$y)) +
     ggplot2::geom_vline(
       data = refs,
@@ -500,6 +505,9 @@ sw_unmix_figure_spike_summary <- function(
       linewidth = 0.3
     ) +
     ggplot2::geom_point(ggplot2::aes(shape = .data$sample), size = 1.2) +
+    # Blank point at 0 so the share panel starts at 0; the recovery panel's
+    # free scale is left as it was.
+    ggplot2::geom_blank(data = zero, ggplot2::aes(.data$value, .data$y)) +
     .sw_fig_donor_scale(donors) +
     ggplot2::scale_y_continuous(
       breaks = seq_along(setups),

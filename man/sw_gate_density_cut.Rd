@@ -28,7 +28,7 @@ Required for \code{"valley"}.}
 \item{min_peak_distance}{Number >= 0 in data units. Required for
 \code{"valley"}.}
 
-\item{prob}{Number in \link{0, 1}. Required for \code{"percentile"}.}
+\item{prob}{Number between 0 and 1. Required for \code{"percentile"}.}
 
 \item{k}{Positive number of MADs. Required for \code{"mad"}.}
 

@@ -33,7 +33,7 @@
 #' @param min_peak_height Number in (0, 1]. Required for `"valley"`.
 #' @param min_peak_distance Number >= 0 in data units. Required for
 #'   `"valley"`.
-#' @param prob Number in [0, 1]. Required for `"percentile"`.
+#' @param prob Number between 0 and 1. Required for `"percentile"`.
 #' @param k Positive number of MADs. Required for `"mad"`.
 #' @param mad_side `"upper"` or `"lower"`. Required for `"mad"`.
 #'

@@ -58,7 +58,7 @@ one row per (tested) cluster and columns:
 \item{\code{mean_prop_A}}{Mean proportion of this cluster in group A.}
 \item{\code{mean_prop_B}}{Mean proportion of this cluster in group B.}
 }
-Attributes: \code{groups} (character\link{2}), \code{group_col} (character),
+Attributes: \code{groups} (character(2)), \code{group_col} (character),
 \code{fdr_threshold} (numeric).
 }
 \description{

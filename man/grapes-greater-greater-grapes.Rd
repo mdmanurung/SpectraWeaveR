@@ -23,14 +23,14 @@ but adapted for SpectraWeaveR's functional, linear pipeline model.
 }
 \details{
 The four supported cases all return a fresh \code{Pipeline} and are
-purely functional — the left- and right-hand operands are never
+purely functional - the left- and right-hand operands are never
 modified:
 
 \itemize{
-\item \code{step \%>>\% step}  — build a 2-step pipeline
-\item \code{step \%>>\% pipe}  — prepend the step to the pipeline
-\item \code{pipe \%>>\% step}  — append the step to the pipeline
-\item \code{pipe \%>>\% pipe}  — concatenate the two pipelines
+\item \code{step \%>>\% step}  - build a 2-step pipeline
+\item \code{step \%>>\% pipe}  - prepend the step to the pipeline
+\item \code{pipe \%>>\% step}  - append the step to the pipeline
+\item \code{pipe \%>>\% pipe}  - concatenate the two pipelines
 }
 
 Duplicate step names across the operands raise an error, inherited from

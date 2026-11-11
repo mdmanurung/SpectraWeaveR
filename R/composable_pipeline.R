@@ -76,7 +76,7 @@ NULL
 }
 
 # ---------------------------------------------------------------------------
-# ProcessingStep — R7 class
+# ProcessingStep - R7 class
 # ---------------------------------------------------------------------------
 
 #' Create an R7 ProcessingStep Class
@@ -270,7 +270,7 @@ sw_pipeline_step_run <- function(step, input) {
 
 
 # ---------------------------------------------------------------------------
-# Pipeline — R7 class
+# Pipeline - R7 class
 # ---------------------------------------------------------------------------
 
 #' Create an R7 Pipeline Class
@@ -337,7 +337,7 @@ sw_pipeline_step_run <- function(step, input) {
 
 #' Create a Pipeline
 #'
-#' Constructs a \code{Pipeline} object — an ordered collection of
+#' Constructs a \code{Pipeline} object - an ordered collection of
 #' \code{ProcessingStep} objects that can be composed, modified, and executed.
 #'
 #' @param name Character; a descriptive name for the pipeline
@@ -676,7 +676,7 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
   # --- Static pre-run type-compatibility walk -----------------------------
   # Consumes `output_type` declarations so they are not dead metadata.
   # Uses string intersection (we only have class names here, no live
-  # object), so we emit warnings rather than errors — the actual guarantee
+  # object), so we emit warnings rather than errors - the actual guarantee
   # comes from the runtime `methods::is()` check in the loop below.
   if (length(steps) >= 2) {
     for (i in seq_len(length(steps) - 1)) {
@@ -732,7 +732,7 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
           call. = FALSE)
       }
     } else if (trace && any_typed) {
-      message(sprintf("    (step '%s': type check skipped — no input_type declared)",
+      message(sprintf("    (step '%s': type check skipped - no input_type declared)",
                       step_name))
     }
 
@@ -825,14 +825,14 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
 #' but adapted for SpectraWeaveR's functional, linear pipeline model.
 #'
 #' The four supported cases all return a fresh \code{Pipeline} and are
-#' purely functional — the left- and right-hand operands are never
+#' purely functional - the left- and right-hand operands are never
 #' modified:
 #'
 #' \itemize{
-#'   \item \code{step \%>>\% step}  — build a 2-step pipeline
-#'   \item \code{step \%>>\% pipe}  — prepend the step to the pipeline
-#'   \item \code{pipe \%>>\% step}  — append the step to the pipeline
-#'   \item \code{pipe \%>>\% pipe}  — concatenate the two pipelines
+#'   \item \code{step \%>>\% step}  - build a 2-step pipeline
+#'   \item \code{step \%>>\% pipe}  - prepend the step to the pipeline
+#'   \item \code{pipe \%>>\% step}  - append the step to the pipeline
+#'   \item \code{pipe \%>>\% pipe}  - concatenate the two pipelines
 #' }
 #'
 #' Duplicate step names across the operands raise an error, inherited from
@@ -964,7 +964,7 @@ sw_pipeline_show <- function(pipeline) {
 # These reflect the real first-argument / return types of the underlying
 # SpectraWeaveR functions (verified by reading their roxygen blocks).
 # A `character(0)` entry means "output is a compound list / heterogeneous
-# structure that cannot be cleanly type-matched — opt out of the static
+# structure that cannot be cleanly type-matched - opt out of the static
 # and runtime checks for that edge".
 .SW_STEP_DEFAULT_TYPES <- list(
   read_fcs       = list(input = "character",
