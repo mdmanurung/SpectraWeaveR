@@ -32,36 +32,34 @@ NULL
 .sw_ref_autospectral_version <- "1.8.8"
 .sw_ref_autospectral_commit <- "3c504c4560cf1f0fd5dce298eaabaafaebfae9be"
 
-# Limit name -> metric it judges, and whether larger ("max") or smaller
-# ("min") values are worse.
+# Limit name -> metric it judges. The prefix of the name ("max" or "min")
+# says whether larger or smaller values are worse.
+.sw_unmix_limit_metrics <- c(
+  max_cosine = "max_cosine",
+  max_sif = "max_sif",
+  max_condition_number = "condition_number",
+  max_cv = "cv",
+  max_pct_negative = "pct_negative",
+  max_control_errors = "n_control_errors",
+  max_control_warnings = "n_control_warnings",
+  min_events = "n_events",
+  min_af_spectra = "n_af_spectra",
+  min_variants = "n_variants",
+  max_share_lost = "share_lost",
+  min_median_recovery = "median_recovery",
+  max_share_moved = "share_moved",
+  max_delta_squeezed = "delta_squeezed"
+)
 .sw_unmix_limit_spec <- data.frame(
-  limit = c(
-    "max_cosine",
-    "max_sif",
-    "max_condition_number",
-    "max_cv",
-    "max_pct_negative",
-    "max_control_errors",
-    "max_control_warnings",
-    "min_events",
-    "min_af_spectra",
-    "min_variants"
-  ),
-  metric = c(
-    "max_cosine",
-    "max_sif",
-    "condition_number",
-    "cv",
-    "pct_negative",
-    "n_control_errors",
-    "n_control_warnings",
-    "n_events",
-    "n_af_spectra",
-    "n_variants"
-  ),
-  direction = c(rep("max", 7L), rep("min", 3L)),
+  limit = names(.sw_unmix_limit_metrics),
+  metric = unname(.sw_unmix_limit_metrics),
+  direction = sub("_.*$", "", names(.sw_unmix_limit_metrics)),
   stringsAsFactors = FALSE
 )
+
+# Delimiter of the `item` column for spike-in and screen rows:
+# "setup|marker|pop".
+.sw_unmix_item_sep <- "|"
 
 .sw_unmix_statuses <- c("pass", "warn", "fail", "not_judged", "not_run")
 
@@ -72,7 +70,10 @@ NULL
   "spectra.csv",
   "provenance.csv",
   "files.csv",
-  "report.json"
+  "report.json",
+  "spike_summary.csv",
+  "baseline_check.csv",
+  "marker_screen.csv"
 )
 
 
@@ -1161,6 +1162,131 @@ print.sw_unmix_result <- function(x, ...) {
   )
 }
 
+# Donor range text for the reason column.
+.sw_donor_reason <- function(n, lo, hi) {
+  sprintf("%d donor(s), range %s to %s", n, signif(lo, 3), signif(hi, 3))
+}
+
+# Spike-in recovery rows from an sw_spike_score. One row per setup x set x
+# pop for share_lost and median_recovery (spiked levels pooled per donor),
+# and one per setup x set x group for share_moved (worst channel per donor).
+# The value is the donor median.
+.sw_diag_spike <- function(spike) {
+  if (is.null(spike)) {
+    return(NULL)
+  }
+  if (!inherits(spike, "sw_spike_score")) {
+    stop("`spike` must be an sw_spike_score.", call. = FALSE)
+  }
+  sep <- .sw_unmix_item_sep
+  coupled <- spike$file_status |>
+    dplyr::summarise(
+      n_coupled = sum(.data$file_status == "coupled"),
+      .by = c("setup", "set")
+    )
+  per_donor <- spike$cells[spike$cells$level > 0, ] |>
+    dplyr::summarise(
+      share_lost = mean(.data$recovery < spike$loss_cut),
+      median_recovery = stats::median(.data$recovery),
+      levels = paste(sort(unique(.data$level)), collapse = ", "),
+      .by = c("setup", "set", "pop", "sample")
+    )
+  recovery <- lapply(c("share_lost", "median_recovery"), \(metric) {
+    per_donor |>
+      dplyr::summarise(
+        value = stats::median(.data[[metric]]),
+        lo = min(.data[[metric]]),
+        hi = max(.data[[metric]]),
+        n = dplyr::n(),
+        levels = dplyr::first(.data$levels),
+        .by = c("setup", "set", "pop")
+      ) |>
+      dplyr::left_join(
+        coupled,
+        by = c("setup", "set"),
+        relationship = "many-to-one"
+      ) |>
+      dplyr::mutate(metric = .env$metric)
+  }) |>
+    dplyr::bind_rows()
+  rows_recovery <- .sw_check_rows(
+    "spike_recovery",
+    "setup",
+    paste(recovery$setup, recovery$set, recovery$pop, sep = sep),
+    recovery$metric,
+    recovery$value,
+    reason = sprintf(
+      "%s; levels %s pooled; loss cut %s; %d coupled file(s).",
+      .sw_donor_reason(recovery$n, recovery$lo, recovery$hi),
+      recovery$levels,
+      format(spike$loss_cut),
+      dplyr::coalesce(recovery$n_coupled, 0L)
+    )
+  )
+  moved <- spike$baseline_check |>
+    dplyr::summarise(
+      share_moved = max(.data$share_moved, na.rm = TRUE),
+      .by = c("setup", "set", "group", "sample")
+    ) |>
+    dplyr::summarise(
+      value = stats::median(.data$share_moved),
+      lo = min(.data$share_moved),
+      hi = max(.data$share_moved),
+      n = dplyr::n(),
+      .by = c("setup", "set", "group")
+    )
+  rows_moved <- .sw_check_rows(
+    "spike_recovery",
+    "setup",
+    paste(moved$setup, moved$set, moved$group, sep = sep),
+    "share_moved",
+    moved$value,
+    reason = sprintf(
+      "%s; worst channel per donor; tolerance %s arcsinh.",
+      .sw_donor_reason(moved$n, moved$lo, moved$hi),
+      format(spike$baseline_tol)
+    )
+  )
+  dplyr::bind_rows(rows_recovery, rows_moved)
+}
+
+# Marker screen rows from an sw_marker_screen: one row per setup x channel x
+# pop; the value is the donor-median rise in squeezed share.
+.sw_diag_screen <- function(screen) {
+  if (is.null(screen)) {
+    return(NULL)
+  }
+  if (!inherits(screen, "sw_marker_screen")) {
+    stop("`screen` must be an sw_marker_screen.", call. = FALSE)
+  }
+  ranges <- screen$per_donor |>
+    dplyr::filter(!is.na(.data$d_squeezed)) |>
+    dplyr::summarise(
+      lo = min(.data$d_squeezed),
+      hi = max(.data$d_squeezed),
+      .by = c("setup", "pop", "channel")
+    )
+  f <- screen$flags |>
+    dplyr::left_join(
+      ranges,
+      by = c("setup", "pop", "channel"),
+      relationship = "one-to-one"
+    )
+  .sw_check_rows(
+    "marker_screen",
+    "setup",
+    paste(f$setup, f$channel, f$pop, sep = .sw_unmix_item_sep),
+    "delta_squeezed",
+    f$median_d_squeezed,
+    reason = sprintf(
+      "%s; screen flag %s (reference %s).",
+      .sw_donor_reason(f$n_donors, f$lo, f$hi),
+      ifelse(is.na(f$flag), "NA", f$flag),
+      screen$reference
+    )
+  )
+}
+
 
 # ---- Diagnose ----------------------------------------------------------------
 
@@ -1232,6 +1358,19 @@ sw_unmix_limits_autospectral <- function() {
 #'   statistics come from those matrices. Otherwise files are read with
 #'   flowCore (`truncate_max_range = FALSE`) and summarised by
 #'   [sw_unmix_quality()] with its flag switched off.
+#' * `spike_recovery` (only with `spike`): from an [sw_unmix_spike_score()]
+#'   result. `item` is `"setup|marker|pop"`, where the marker slot holds the
+#'   spike set (the marker for single spikes, `cospike_<dye2>_<level2>` for
+#'   co-spikes). `share_lost` and `median_recovery` pool each donor's spiked
+#'   cells (levels above 0); `share_moved` is the worst channel per donor of
+#'   the independence check, with `"level0"` or `"untouched"` in the pop slot.
+#' * `marker_screen` (only with `screen`): from [sw_unmix_marker_screen()].
+#'   `item` is `"setup|channel|pop"`; `delta_squeezed` is the rise in squeezed
+#'   share against the reference setup. The screen's own flag is in `reason`;
+#'   the status still follows `limits` only.
+#'
+#' For both, the value is the donor median and `reason` gives the number of
+#' donors and their range.
 #'
 #' `limits` names and the metric each judges. `max_*` limits fail when the
 #' value is larger than the limit; `min_*` limits fail when it is smaller. A
@@ -1249,6 +1388,10 @@ sw_unmix_limits_autospectral <- function() {
 #' | `min_events` | `n_events` |
 #' | `min_af_spectra` | `n_af_spectra` |
 #' | `min_variants` | `n_variants` |
+#' | `max_share_lost` | `share_lost` |
+#' | `min_median_recovery` | `median_recovery` |
+#' | `max_share_moved` | `share_moved` |
+#' | `max_delta_squeezed` | `delta_squeezed` |
 #'
 #' Each element is `c(warn = , fail = )`, either one alone, or a single
 #' unnamed number, which is read as the `fail` limit. Unknown names error.
@@ -1261,12 +1404,15 @@ sw_unmix_limits_autospectral <- function() {
 #' @param unmixed_data Optional named list of numeric matrices (events x
 #'   channels, with column names), one per file. It takes precedence over
 #'   files and needs no flowCore.
+#' @param spike Optional `sw_spike_score` from [sw_unmix_spike_score()].
+#' @param screen Optional `sw_marker_screen` from [sw_unmix_marker_screen()].
 #' @param ... Passed to [sw_unmix_check_controls()].
 #'
 #' @return An object of class `sw_unmix_diagnostics`: a list with `run_id`,
 #'   `checks` (tibble: `check_id`, `scope`, `item`, `metric`, `value`,
 #'   `limit`, `status`, `reason`), `summary` (tibble of counts for all five
-#'   statuses), `limits` (as parsed) and `notes`.
+#'   statuses), `limits` (as parsed), `notes`, and the `spike` and `screen`
+#'   inputs (`NULL` when not given) for [sw_unmix_report()].
 #'
 #' @examples
 #' spectra <- matrix(
@@ -1290,6 +1436,8 @@ sw_unmix_diagnose <- function(
   limits = list(),
   unmixed_files = NULL,
   unmixed_data = NULL,
+  spike = NULL,
+  screen = NULL,
   ...
 ) {
   if (!inherits(result, "sw_unmix_result")) {
@@ -1333,7 +1481,9 @@ sw_unmix_diagnose <- function(
     .sw_diag_condition(result$spectra),
     .sw_diag_af(result$af_spectra),
     .sw_diag_variants(result$variants, fluors),
-    .sw_diag_files(files, unmixed_data, fluors)
+    .sw_diag_files(files, unmixed_data, fluors),
+    .sw_diag_spike(spike),
+    .sw_diag_screen(screen)
   )
   checks <- .sw_apply_limits(checks, lims)
 
@@ -1358,7 +1508,9 @@ sw_unmix_diagnose <- function(
       checks = checks,
       summary = summary_tbl,
       limits = lims,
-      notes = notes
+      notes = c(notes, if (!is.null(spike)) spike$notes),
+      spike = spike,
+      screen = screen
     ),
     class = "sw_unmix_diagnostics"
   )
@@ -1530,7 +1682,9 @@ print.sw_unmix_diagnostics <- function(x, ...) {
 #' Write an unmixing report
 #'
 #' Writes a self-contained HTML page and CSV tables for an unmixing run to a
-#' new folder. The report has tables only; it draws no figures.
+#' new folder. The report has tables only; it draws no figures. Sections
+#' "Spike-in recovery" and "Marker screen" appear when the diagnostics carry
+#' a spike score or a marker screen.
 #'
 #' @details
 #' Files written to `path`:
@@ -1543,6 +1697,11 @@ print.sw_unmix_diagnostics <- function(x, ...) {
 #'   `detector`, `value`).
 #' * `provenance.csv`: provenance as `section`, `field`, `value` rows.
 #' * `files.csv`: the file inventory (role, path, size, MD5).
+#' * `spike_summary.csv` and `baseline_check.csv`: only when `diagnostics`
+#'   was made with `spike`. The per-donor recovery summary and the
+#'   independence check of [sw_unmix_spike_score()].
+#' * `marker_screen.csv`: only when `diagnostics` was made with `screen`. The
+#'   flags table of [sw_unmix_marker_screen()].
 #' * `report.json`: everything above, only when jsonlite is installed.
 #'   Otherwise it is skipped and the HTML says so.
 #'
@@ -1675,6 +1834,22 @@ sw_unmix_report <- function(
   utils::write.csv(spectra_long, out[["spectra"]], row.names = FALSE)
   utils::write.csv(prov_long, out[["provenance"]], row.names = FALSE)
   utils::write.csv(prov$files, out[["files"]], row.names = FALSE)
+  spike <- diagnostics$spike
+  screen <- diagnostics$screen
+  if (!is.null(spike)) {
+    out[["spike_summary"]] <- file.path(path, "spike_summary.csv")
+    out[["baseline_check"]] <- file.path(path, "baseline_check.csv")
+    utils::write.csv(spike$summary, out[["spike_summary"]], row.names = FALSE)
+    utils::write.csv(
+      spike$baseline_check,
+      out[["baseline_check"]],
+      row.names = FALSE
+    )
+  }
+  if (!is.null(screen)) {
+    out[["marker_screen"]] <- file.path(path, "marker_screen.csv")
+    utils::write.csv(screen$flags, out[["marker_screen"]], row.names = FALSE)
+  }
 
   has_json <- .sw_has_jsonlite()
   if (has_json) {
@@ -1687,7 +1862,10 @@ sw_unmix_report <- function(
         spectra = spectra_long,
         checks = checks,
         summary = diagnostics$summary,
-        notes = c(diagnostics$notes, notes)
+        notes = c(diagnostics$notes, notes),
+        spike_summary = spike$summary,
+        baseline_check = spike$baseline_check,
+        marker_screen = screen$flags
       ),
       out[["json"]],
       digits = NA,
@@ -1771,6 +1949,36 @@ sw_unmix_report <- function(
     .sw_html_table(af_tbl),
     "<h2>Variants</h2>",
     .sw_html_table(var_tbl),
+    if (!is.null(spike)) {
+      c(
+        "<h2>Spike-in recovery</h2>",
+        sprintf(
+          "<p>Design <code>%s</code> (%s). Loss cut %s; independence tolerance %s arcsinh. Item is setup|marker|pop; value is the donor median.</p>",
+          .sw_html_escape(spike$design_id),
+          .sw_html_escape(spike$type),
+          .sw_html_escape(format(spike$loss_cut)),
+          .sw_html_escape(format(spike$baseline_tol))
+        ),
+        .sw_html_table(checks[
+          checks$check_id == "spike_recovery",
+          c("item", "metric", "value", "limit", "status", "reason")
+        ]),
+        "<p>File status (independence check):</p>",
+        .sw_html_table(spike$file_status),
+        "<p>Per-donor summary by level: spike_summary.csv.</p>"
+      )
+    },
+    if (!is.null(screen)) {
+      c(
+        "<h2>Marker screen</h2>",
+        sprintf(
+          "<p>Reference setup <code>%s</code>. Rule: %s.</p>",
+          .sw_html_escape(screen$reference),
+          .sw_html_escape(screen$rule$text)
+        ),
+        .sw_html_table(screen$flags)
+      )
+    },
     "<h2>Diagnostics</h2>",
     "<p><strong>Verdicts appear only where you supplied a limit; no cutoff is built in.</strong></p>",
     .sw_html_table(diagnostics$summary),

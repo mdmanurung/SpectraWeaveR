@@ -9,6 +9,8 @@ sw_unmix_diagnose(
   limits = list(),
   unmixed_files = NULL,
   unmixed_data = NULL,
+  spike = NULL,
+  screen = NULL,
   ...
 )
 }
@@ -25,13 +27,18 @@ replaces \code{result$unmixed_files} for this call.}
 channels, with column names), one per file. It takes precedence over
 files and needs no flowCore.}
 
+\item{spike}{Optional \code{sw_spike_score} from \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}.}
+
+\item{screen}{Optional \code{sw_marker_screen} from \code{\link[=sw_unmix_marker_screen]{sw_unmix_marker_screen()}}.}
+
 \item{...}{Passed to \code{\link[=sw_unmix_check_controls]{sw_unmix_check_controls()}}.}
 }
 \value{
 An object of class \code{sw_unmix_diagnostics}: a list with \code{run_id},
 \code{checks} (tibble: \code{check_id}, \code{scope}, \code{item}, \code{metric}, \code{value},
 \code{limit}, \code{status}, \code{reason}), \code{summary} (tibble of counts for all five
-statuses), \code{limits} (as parsed) and \code{notes}.
+statuses), \code{limits} (as parsed), \code{notes}, and the \code{spike} and \code{screen}
+inputs (\code{NULL} when not given) for \code{\link[=sw_unmix_report]{sw_unmix_report()}}.
 }
 \description{
 Computes table-based checks on an \code{\link[=sw_unmix_result]{sw_unmix_result()}} and returns them in
@@ -74,7 +81,20 @@ fluorophore channel, \code{mean}, \code{sd}, \code{cv} (\verb{sd / |mean|}) and
 statistics come from those matrices. Otherwise files are read with
 flowCore (\code{truncate_max_range = FALSE}) and summarised by
 \code{\link[=sw_unmix_quality]{sw_unmix_quality()}} with its flag switched off.
+\item \code{spike_recovery} (only with \code{spike}): from an \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}
+result. \code{item} is \code{"setup|marker|pop"}, where the marker slot holds the
+spike set (the marker for single spikes, \verb{cospike_<dye2>_<level2>} for
+co-spikes). \code{share_lost} and \code{median_recovery} pool each donor's spiked
+cells (levels above 0); \code{share_moved} is the worst channel per donor of
+the independence check, with \code{"level0"} or \code{"untouched"} in the pop slot.
+\item \code{marker_screen} (only with \code{screen}): from \code{\link[=sw_unmix_marker_screen]{sw_unmix_marker_screen()}}.
+\code{item} is \code{"setup|channel|pop"}; \code{delta_squeezed} is the rise in squeezed
+share against the reference setup. The screen's own flag is in \code{reason};
+the status still follows \code{limits} only.
 }
+
+For both, the value is the donor median and \code{reason} gives the number of
+donors and their range.
 
 \code{limits} names and the metric each judges. \verb{max_*} limits fail when the
 value is larger than the limit; \verb{min_*} limits fail when it is smaller. A
@@ -90,6 +110,10 @@ value equal to the limit passes.\tabular{ll}{
    \code{min_events} \tab \code{n_events} \cr
    \code{min_af_spectra} \tab \code{n_af_spectra} \cr
    \code{min_variants} \tab \code{n_variants} \cr
+   \code{max_share_lost} \tab \code{share_lost} \cr
+   \code{min_median_recovery} \tab \code{median_recovery} \cr
+   \code{max_share_moved} \tab \code{share_moved} \cr
+   \code{max_delta_squeezed} \tab \code{delta_squeezed} \cr
 }
 
 

@@ -34,7 +34,9 @@ vector.
 }
 \description{
 Writes a self-contained HTML page and CSV tables for an unmixing run to a
-new folder. The report has tables only; it draws no figures.
+new folder. The report has tables only; it draws no figures. Sections
+"Spike-in recovery" and "Marker screen" appear when the diagnostics carry
+a spike score or a marker screen.
 }
 \details{
 Files written to \code{path}:
@@ -47,6 +49,11 @@ digits.
 \code{detector}, \code{value}).
 \item \code{provenance.csv}: provenance as \code{section}, \code{field}, \code{value} rows.
 \item \code{files.csv}: the file inventory (role, path, size, MD5).
+\item \code{spike_summary.csv} and \code{baseline_check.csv}: only when \code{diagnostics}
+was made with \code{spike}. The per-donor recovery summary and the
+independence check of \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}.
+\item \code{marker_screen.csv}: only when \code{diagnostics} was made with \code{screen}. The
+flags table of \code{\link[=sw_unmix_marker_screen]{sw_unmix_marker_screen()}}.
 \item \code{report.json}: everything above, only when jsonlite is installed.
 Otherwise it is skipped and the HTML says so.
 }
