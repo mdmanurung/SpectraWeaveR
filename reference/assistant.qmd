@@ -48,6 +48,11 @@ The assistant:
 3. Helps select markers and configure pipeline parameters
 4. Generates runnable R code using `sw_pipeline_run_all()` or `sw_pipeline()`
 
+**Tool names (changed with ellmer 0.3.0)**: each tool now has an explicit
+name. Earlier versions took the name from the function symbol. Use the new
+name in prompts and MCP clients. See the mapping under
+[Registered Tools](#registered-tools). The package requires ellmer >= 0.3.0.
+
 **Privacy**: File paths, directory listings, and column names are sent to the
 LLM provider. No cell expression data is transmitted. Use `provider = "ollama"`
 for fully local operation.
@@ -298,6 +303,11 @@ sw_assistant_mcp(include_btw = TRUE, sensitivity = c("standard", "strict"))
 | `include_btw` | If `TRUE` (default), also expose btw tools for R environment introspection. |
 | `sensitivity` | `"standard"` (default): auto-redacts PII. `"strict"`: columns only, btw limited to docs+session. |
 
+### Details
+
+The tool names changed with ellmer 0.3.0; see the mapping under
+[Registered Tools](#registered-tools). The package requires ellmer >= 0.3.0.
+
 ### Setup
 
 **Claude Code:**
@@ -340,6 +350,23 @@ conversation:
 | `detect_channels` | Classify FCS channels into scatter/time/fluorochrome. |
 | `check_batch_balance` | Summarise sample distribution across batches. |
 | `validate_markers` | Check that markers exist in FCS data. |
+
+### Renamed tools
+
+The tool names changed with the ellmer 0.3.0 `tool()` interface. Earlier
+versions took the name from the function symbol. Use the new name.
+
+| Old name (function symbol) | New name |
+|----------------------------|----------|
+| `.tool_list_fcs_files` | `list_fcs_files` |
+| `.tool_list_directory` | `list_directory` |
+| `.tool_read_fcs_header` | `read_fcs_header` |
+| `local_read_csv` | `read_csv_columns` |
+| `local_read_xlsx` | `read_xlsx_columns` |
+| `.tool_validate_sample_meta` | `validate_sample_meta` |
+| `.tool_detect_channels` | `detect_channels` |
+| `local_check_batch` | `check_batch_balance` |
+| `.tool_validate_markers` | `validate_markers` |
 
 ### btw Tools (when installed)
 

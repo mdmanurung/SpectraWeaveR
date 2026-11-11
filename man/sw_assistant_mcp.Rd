@@ -30,6 +30,23 @@ External AI applications - such as Claude Code, VS Code Copilot Chat,
 or Cursor - can connect to this server to inspect FCS files, validate
 sample metadata, detect channels, and check batch balance directly from
 the user's R session.
+
+Since the move to the ellmer 0.3.0 \code{tool()} interface, each tool
+has an explicit name. Earlier versions took the name from the function
+symbol, so a prompt or client that used an old name must use the new one.
+\tabular{ll}{
+Old name (function symbol) \tab New name \cr
+\code{.tool_list_fcs_files} \tab \code{list_fcs_files} \cr
+\code{.tool_list_directory} \tab \code{list_directory} \cr
+\code{.tool_read_fcs_header} \tab \code{read_fcs_header} \cr
+\code{local_read_csv} \tab \code{read_csv_columns} \cr
+\code{local_read_xlsx} \tab \code{read_xlsx_columns} \cr
+\code{.tool_validate_sample_meta} \tab \code{validate_sample_meta} \cr
+\code{.tool_detect_channels} \tab \code{detect_channels} \cr
+\code{local_check_batch} \tab \code{check_batch_balance} \cr
+\code{.tool_validate_markers} \tab \code{validate_markers} \cr
+}
+The package now requires ellmer >= 0.3.0.
 }
 \section{Setup for Claude Code}{
 
