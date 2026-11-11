@@ -245,9 +245,14 @@ stopifnot(nrow(ff_back) == nrow(tbl))
 stopifnot(all(marker_cols %in% colnames(ff_back)))
 
 # Verify round-trip fidelity
+# Subsetting columns drops the "ranges" attribute and the names on the
+# column dimnames, so compare the values, shape and column order directly.
 orig_vals <- exprs(ff_single)[, marker_cols]
 back_vals <- exprs(ff_back)
-stopifnot(all.equal(orig_vals, back_vals, tolerance = 1e-10))
+stopifnot(identical(unname(colnames(back_vals)), marker_cols))
+stopifnot(identical(dim(orig_vals), dim(back_vals)))
+stopifnot(all.equal(orig_vals, back_vals, tolerance = 1e-10,
+                    check.attributes = FALSE))
 cat("Round-trip flowFrame -> tibble -> flowFrame: values match\n")
 ```
 
