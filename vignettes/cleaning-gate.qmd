@@ -26,7 +26,8 @@ suppressPackageStartupMessages({
 one call. It takes FCS paths, a flowFrame, a flowSet or a list of
 flowFrames, and runs these steps in this order:
 
-1. Margin events are removed on the raw scale.
+1. Margin events are removed on the raw scale. `margin_range` sets the
+   limits for the fluorescence channels; scatter keeps the FCS range.
 2. All fluorescence channels get an arcsinh transformation. Scatter stays raw.
 3. PeacoQC removes unstable signal.
 4. The `nonDebris` gate removes the low FSC-A cloud.
@@ -39,7 +40,7 @@ and the step named.
 
 ### Missing arguments stop the run
 
-Nine values change the counts and the cuts, so all nine are required
+Ten values change the counts and the cuts, so all ten are required
 arguments with no default. A call that leaves any out stops once, before any
 step runs. The message lists every missing value with what it controls, how to
 choose it and the benchmark 05 reference value. The reference is a test
@@ -107,7 +108,7 @@ cat(clean_msg)
 
 ### Run it on the synthetic frame
 
-The run below needs a value for each of the nine arguments. Every value in
+The run below needs a value for each of the ten arguments. Every value in
 the `clean_args` list is a placeholder that lets this synthetic frame run. It
 is not a recommendation, and nothing in the package fills it in for you.
 Choose each value for your own data, as the message above describes.
@@ -115,6 +116,7 @@ Choose each value for your own data, as the message above describes.
 ```{r}
 #| label: clean-run
 clean_args <- list(
+  margin_range = c(-21761, 1e7), # placeholder for this synthetic run
   debris_window = c(1e4, 1.5e6), # placeholder for this synthetic frame
   singlet_wider_gate = TRUE, # placeholder: TRUE or FALSE
   pool_samples = TRUE, # placeholder: TRUE or FALSE
@@ -138,7 +140,10 @@ names(clean_res)
 `audit` has one row per sample and step. `n_removed` is the number of events
 that step removed, and `NA` for `raw`. The margin step removes the events at
 the observed minimum and maximum of every scatter and fluorescence channel,
-so it removes a few events even when none reach the instrument range.
+so it removes a few events even when none reach `margin_range` or the
+instrument range. On real 40-colour Aurora files, look at the `margins` row
+first: PeacoQC's own default ranges removed over 99% of the events there,
+which is why `margin_range` has no default.
 
 ```{r}
 #| label: clean-audit
@@ -228,7 +233,7 @@ The figure uses synthetic data made in this vignette.
 
 ### Every value is yours
 
-All nine values are the caller's choice, and the package gives no recommended
+All ten values are the caller's choice, and the package gives no recommended
 value for any of them. The benchmark 05 numbers in the error message are the
 values that benchmark used as test values. They are not a recommendation. The
 placeholders in `clean_args` serve this synthetic frame only. To choose a
