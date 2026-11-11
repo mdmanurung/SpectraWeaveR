@@ -28,6 +28,8 @@ the anchor of \eqn{z_{rbkm} - z_{r,anchor,km}}. The anchor effect is
 zero. \code{se_donor} is the standard deviation of those differences
 over references divided by \eqn{\sqrt{n_{donors}}}, and \code{NA} for
 one reference. No cell-count variance and no variance floor are used.
+The optional column \code{df} (\code{n_donors - 1}) gives the degrees
+of freedom of \code{se_donor}, for t-based intervals.
 \item Correction: \code{corrected = x - effect} for every cell of that
 batch and population, reference or participant. Participant cells are
 never used as calibration evidence.

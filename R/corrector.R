@@ -308,7 +308,11 @@ sw_corrector_engines <- function() {
 }
 
 # The audit must hold an eligible row for this engine and cover the same batches.
-.sw_check_audit <- function(design_audit, engine, batches) {
+# heb with internal anchors (user 2026-11-10): a batch with used anchor rows counts as
+# bridged, so a row that fails only for unbridged batches passes when all of them have anchors.
+# heb with unbridged = "abstain" (plan A15): such a row passes too; the unbridged batches get no effect.
+.sw_check_audit <- function(design_audit, engine, batches, anchored_batches = character(),
+                            unbridged = NULL) {
   if (!inherits(design_audit, "sw_design_audit")) {
     stop("'design_audit' must come from sw_design_audit().", call. = FALSE)
   }
@@ -317,7 +321,16 @@ sw_corrector_engines <- function() {
   if (nrow(row) == 0) {
     stop(sprintf("audit has no %s eligibility row", engine), call. = FALSE)
   }
-  if (!isTRUE(row$eligible[1])) {
+  if (engine == "heb" && !(identical(unbridged, "abstain") || identical(unbridged, "stop"))) {
+    stop("heb needs unbridged = 'abstain' or 'stop' (no default; plan A15).", call. = FALSE)
+  }
+  bridge <- design_audit$anchor_bridge
+  only_bridge <- engine == "heb" &&
+    identical(row$reason_code[1], "batch_without_anchor_bridge")
+  anchor_bridged <- only_bridge &&
+    all(bridge$batch[!bridge$bridged] %in% anchored_batches)
+  abstain_unbridged <- only_bridge && identical(unbridged, "abstain")
+  if (!isTRUE(row$eligible[1]) && !anchor_bridged && !abstain_unbridged) {
     stop(
       sprintf(
         "The design audit marks engine '%s' ineligible: %s",
@@ -628,7 +641,13 @@ sw_corrector_fit <- function(
     )
   }
   eng <- .sw_corrector_engine(engine)
-  .sw_check_audit(design_audit, engine, batches)
+  anchors <- list(...)[["anchors"]]
+  anchored_batches <- if (is.list(anchors) && is.data.frame(anchors$modes)) {
+    unique(as.character(anchors$modes$batch[anchors$modes$use]))
+  } else {
+    character()
+  }
+  .sw_check_audit(design_audit, engine, batches, anchored_batches, list(...)[["unbridged"]])
 
   fitted <- eng$fit(
     xm = d$xm,
@@ -670,7 +689,8 @@ sw_corrector_fit <- function(
       anchor = anchor,
       min_cells = as.integer(min_cells),
       hierarchy = hierarchy,
-      known_batches = batches,
+      # Batches with effects but no fit cells (heb internal anchors) are known too.
+      known_batches = sort(unique(c(batches, effects$batch))),
       effects = effects,
       targets = fitted$targets,
       excluded = excluded,
@@ -967,7 +987,9 @@ sw_corrector_integrate <- function(
     marker = rep(markers, nrow(groups)),
     n_cells = n_cells[idx]
   )
-  eff <- model$effects[, .sw_effect_cols]
+  # Optional scale columns (heb scale_model = "log_sd", plan F12) travel with the effect.
+  scale_cols <- intersect(c("scale", "scale_centre"), names(model$effects))
+  eff <- model$effects[, c(.sw_effect_cols, scale_cols)]
   actions <- dplyr::left_join(
     actions,
     eff,
@@ -1001,6 +1023,10 @@ sw_corrector_integrate <- function(
     is_new ~ "New batch has no reference shared with the anchor (after min_cells); original values kept.",
     .default = "Batch is in the model but has no effect for this population; original values kept. Refit to change this."
   )
+  # Scale vectors, row-aligned with actions (the column subset below keeps the rows).
+  has_scale <- length(scale_cols) == 2
+  scale <- if (has_scale) ifelse(actions$action == "apply", actions$scale, NA_real_) else NULL
+  centre <- if (has_scale) actions$scale_centre else NULL
   actions <- actions[, c(
     "batch",
     "population",
@@ -1026,13 +1052,21 @@ sw_corrector_integrate <- function(
     sep = "\r"
   )
   shift <- ifelse(actions$action == "apply", actions$estimate, NA_real_)
+  # Scale: deviations from the shifted centre are multiplied by `scale`; NA keeps the plain shift.
   for (m in markers) {
-    s <- shift[match(
+    i <- match(
       paste(cells$batch, cells$population, m, sep = "\r"),
       act_key
-    )]
+    )
+    s <- shift[i]
     ok <- !is.na(s)
     out[ok, m] <- xm[ok, m] - s[ok]
+    if (has_scale) {
+      sc <- scale[i]
+      cc <- centre[i]
+      ok_sc <- ok & !is.na(sc) & !is.na(cc)
+      out[ok_sc, m] <- cc[ok_sc] + sc[ok_sc] * (out[ok_sc, m] - cc[ok_sc])
+    }
   }
   list(xm = out, actions = actions)
 }

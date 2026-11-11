@@ -33,6 +33,8 @@
 #'     zero. \code{se_donor} is the standard deviation of those differences
 #'     over references divided by \eqn{\sqrt{n_{donors}}}, and \code{NA} for
 #'     one reference. No cell-count variance and no variance floor are used.
+#'     The optional column \code{df} (\code{n_donors - 1}) gives the degrees
+#'     of freedom of \code{se_donor}, for t-based intervals.
 #'   \item Correction: \code{corrected = x - effect} for every cell of that
 #'     batch and population, reference or participant. Participant cells are
 #'     never used as calibration evidence.
@@ -68,7 +70,8 @@ NULL
     population = character(),
     marker = character(),
     value = double(),
-    n_cells = integer()
+    n_cells = integer(),
+    var_mean = double()
   )
   if (nrow(ref) == 0) {
     return(list(summ = empty, excluded = .sw_empty_excluded()))
@@ -113,6 +116,13 @@ NULL
       apply(xm[ii, , drop = FALSE], 2, function(v) mean(sort(v)))
     })
   )
+  # Sampling variance of each mean, var(cells) / n; used by heb residual_model = "known_plus_extra".
+  var_means <- do.call(
+    rbind,
+    lapply(groups[keep], function(ii) {
+      apply(xm[ii, , drop = FALSE], 2, stats::var) / length(ii)
+    })
+  )
   k <- which(keep)
   n_m <- length(markers)
   summ <- tibble::tibble(
@@ -122,7 +132,8 @@ NULL
     population = rep(info$population[k], each = n_m),
     marker = rep(markers, length(k)),
     value = as.vector(t(means)),
-    n_cells = rep(as.integer(n[k]), each = n_m)
+    n_cells = rep(as.integer(n[k]), each = n_m),
+    var_mean = as.vector(t(var_means))
   )
   list(summ = summ, excluded = excluded)
 }
@@ -176,6 +187,8 @@ NULL
       },
       numeric(1)
     ),
+    # Degrees of freedom of se_donor: the SD over n references has n - 1.
+    df = ifelse(lengths(g) >= 2, lengths(g) - 1, NA_real_),
     n_donors = as.integer(lengths(g)),
     n_aliquots = vapply(g, function(ii) sum(paired$n_aliquots[ii]), integer(1)),
     n_aliquots_anchor = vapply(

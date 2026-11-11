@@ -1,0 +1,62 @@
+# Plan: internal anchors in HEB (CD3 and clean negative modes), 2026-11-10
+
+Source idea: Glehr et al., eBioMedicine 2026, CD3-relativisation (DOI 10.1016/j.ebiom.2026.106427, PMC13488037),
+Box 1. The published method needs CD3 single stains in every channel; CytoBatchFlagR (Zenodo 15388817) has only
+fully stained files, so the exact method is not reproducible here. Review (Fable, 2026-11-10; numbers measured on
+T6, 10,000 cells per sample, scripts in the session scratchpad): CD3 = BUV563-A, clean 2-means split (4.5 to 5.3
+pooled SD); CD3+ median SD over batches 0.27, over donors 0.08, donor x batch residual 0.14 to 0.16; negative
+modes of CD16, CD19, CD4 donor-stable and batch-sensitive; positive modes of CD25, CD56, CD69, HLA-DR, FOXP3
+donor-dominated; stimulated donors wobble more (within-donor SD 0.31 to 0.40 vs 0.23 to 0.26).
+
+Aim: let HEB correct batches without reference donors (now abstained) from internal anchors, with honest SEs,
+without hurting batches it already corrects. This relaxes "reference-only" to "reference donors plus
+donor-invariant internal anchors"; reports must say so.
+
+## Approved rows
+
+| ID | Decision | Source |
+|---|---|---|
+| A0 | Option (b): anchors enter HEB's mixed model as extra observations (not pre-normalisation, not affine-only) | user 2026-11-10 |
+| A1 | Anchors: CD3+ median in the CD3 channel, plus the negative mode of each marker passing A2; other positive modes excluded | user 2026-11-10 |
+| A2 | A marker's split counts when its two k-means modes are separated by >= 3 pooled SDs | user 2026-11-10 |
+| A3 | An anchor informs its own channel only (no latent gain, no cross-channel loadings) | user 2026-11-10 |
+| A4 | Synthetic S18 (shared per batch x channel affine effect on the linear scale) and S18w (S18 plus one stimulated-like donor whose anchor wobbles, SD 0.3 asinh per batch); dev seeds 441-460 only | user 2026-11-10 |
+| A5 | S18: 3 batches per seed without reference donors, seeded draw | user 2026-11-10 |
+| A6 | Anchor rows: residual = known sampling variance var(cells)/n + their own estimated extra variance (separate from donor rows); no donor term | user 2026-11-10 |
+| A7 | Modes: k-means k = 2 per sample and marker, seed 1; mode value = cluster median | user 2026-11-10 |
+| A8 | T6 check: remove the reference role of all 4 controls in 3 batches (seed 1); compare anchor-corrected vs abstained EMD on surface markers; guardrail: stimulated-minus-unstimulated contrast moves <= 0.05 asinh | user 2026-11-10 |
+| A9 | An anchor joins the designs of populations whose anchor-batch median for that marker falls in the anchor's k-means cluster | user 2026-11-10 |
+| A10 | S18 effect sizes: offset SD 0.10 and log-gain SD 0.20 per batch x channel (linear scale) | user 2026-11-10 (unaudited judgement) |
+| A11 | Anchor discrepancy (option d, after the S17 mismatch diagnostic, slope -0.95): anchor rows get a per-batch random effect d_b ~ N(0, tau_d^2) inside each population x marker design, tau_d pooled like the other components, plain REML (no prior) with variance_floor; required argument anchor_discrepancy = "none" or "batch" and a new arm heb_pool_pop_kv_bap_anc_d (old anc arm kept). Pass on f6_dev, shrink, S17: paired difference to the lead, 95% CI upper <= +0.01 asinh; S17 nd1 cov90 >= 0.85; S18/S18w rules as above. Tests: tau_d -> infinity equals the no-anchor fit (analytic), direction checks for shared vs mismatched shifts | user 2026-11-10 (C1-C7) |
+| A12 | HEB audit: a batch with used anchor rows counts as bridged when anchors are supplied | user 2026-11-10 |
+| A13 | Anchors only where needed (option d, after the theta diagnostic: on S17 anchors move the population-specific study variance into the donor residual, th3 1e-8 -> 0.11, study 0.19 -> 0.057, tau_d at the floor; experiments/runs/20261111_theta_diag_v2/fig_theta.png). Per population x marker design, anchor rows stay only in batches without a reference row, plus the anchor batch (it ties the anchor intercept); a design with no such batch gets no anchors. Required argument anchor_batches = "all" or "unreferenced" when anchors are given; new arm heb_pool_pop_kv_bap_anc_u (A11 off). Pass rules as A11: f6_dev, shrink, S17 paired difference to the lead, 95% CI upper <= +0.01 asinh; S17 nd1 cov90 >= 0.85; S18/S18w rules as above. Test: with every batch referenced the fit equals the no-anchor fit | user 2026-11-10 (Q1-Q3, "go d") |
+| A14 | A8 strip check after A12 (the plain heb_kv_bap strip arm is refused by the audit, so it is dropped). Q1 abstain baseline = each anchor arm's corrected matrix with raw values in the stripped batches. Q2 EMD = held-out donor, max over batch pairs with >= 1 stripped batch, median over population x marker (03c_score_strip.R). Q3 markers = O4 lineage set (CD3 CD4 CD8 CD19 CD56 CD16 CD45RA CD103 CCR6). Q4 arms heb_kv_bap_anc and heb_kv_bap_anc_u (anchor_batches "unreferenced"); leak check per arm. Pass per arm as A8: EMD below abstain, leak share >= 0.85 pooled | user 2026-11-11 (Q1-Q4) |
+| A15 | After A14 failed (T6 leak share 0.66 anc / 0.61 anc_u; anchor rows are per sample x marker, so population-specific effects in an anchor-only batch are not identified, R/corrector_heb.R .sw_heb_anchor_rows). Q1 a batch with no reference abstains by default; anchors stay opt-in and experimental (Q3), and A12 still lets supplied anchors fit anchor-only batches. Q2 heb fits the bridged batches and leaves an unbridged batch without effects, so integrate leaves its cells raw and flags them. Q4 new required heb argument unbridged = "abstain" or "stop" (no default; "stop" keeps the audit gate). Q5 heb only; paired_shift keeps its gate. Test: one unbridged batch, "stop" errors, "abstain" gives it no effect and integrate leaves its cells raw | user 2026-11-11 (Q1-Q5) |
+| inherited | min_cells 10 (G1), anchor batch01 (Q8), asinh cofactor 6000 (Q4), heb_pool_pop_kv_bap settings (F6, F8) | earlier plans |
+
+## Notes found during the build (2026-11-10)
+
+- A10: the asinh-scale effect these sizes produce is SD 0.10 to 0.15 over batches (seed 441 smoke test: CD3
+  0.15 in T cells, about 0.10 elsewhere), smaller than the 0.47 run SD of S13 to S16, not "similar" as proposed.
+- A8 guardrail: heb applies one shift per batch x population to all its samples, so a stimulated-minus-unstimulated
+  contrast within a batch cannot move; the guardrail holds by construction. A real leak check compares, in the
+  stripped batches, the anchor-based effect with the reference-based effect of the unstripped fit. To ask the
+  user before reporting A8.
+
+## Pass / fail
+
+- Synthetic (S18, S18w): pass = held-out reference RMSE no worse than heb_pool_pop_kv_bap on batches with reference
+  donors, coverage >= 0.85 on anchor-only effects, and anchor-only batches better than abstaining. Fail = coverage
+  < 0.85, or worse than abstaining under the S18w wobble.
+- T6 (A8): pass = EMD below abstaining on surface markers in the stripped batches, and the leak check holds.
+- A8 leak check (user 2026-11-10, replaces the contrast guardrail): in the stripped batches, at least 85% of the
+  reference-based effects of the unstripped heb_kv_bap fit fall inside the anchor-based 90% t intervals
+  (estimate +/- qt(0.95, df) * se_donor) of heb_kv_bap_anc, pooled over folds.
+
+## Steps
+
+1. Generator: S18 and S18w in gen_scenarios.py (anchor populations and affine effect), dev seeds 441-460.
+2. Engine: anchor summaries (A7) and anchor rows in the HEB design (A6, A9) behind a required argument.
+3. Unit tests: anchors never use held-out cells; a batch with anchors and no reference donors gets finite effects.
+4. SLURM: run lead vs lead+anchors on S18, S18w and the existing dev sets (regression check), score, figure.
+5. T6 check (A8) on SLURM, then figure and ledger record.
