@@ -15,6 +15,25 @@ NULL
 # ---------------------------------------------------------------------------
 
 .sw_clean_args <- list(
+  margin_range = list(
+    controls = paste0(
+      "Lower and upper limit (raw scale) of the margin step, applied to every ",
+      "fluorescence channel. PeacoQC removes an event at or beyond a limit in ",
+      "any fluorescence channel, and the event at the observed minimum or ",
+      "maximum of a channel. Scatter channels keep the range stored in the ",
+      "FCS file. A lower limit above 0 is read as 0."
+    ),
+    how = paste0(
+      "Look at the raw fluorescence densities and the share of events flagged ",
+      "per channel. The PeacoQC default removes over 99% on 40-colour Aurora ",
+      "data."
+    ),
+    reference = paste0(
+      "c(-21761, 1e7) on fluorescence channels (arcsinh -2 to the ",
+      "instrument top) as a test value"
+    ),
+    example = "margin_range = c(<min>, <max>)"
+  ),
   debris_window = list(
     controls = paste0(
       "Lower and upper FSC-A limit (raw scale) of the events the nonDebris ",
@@ -183,8 +202,8 @@ NULL
 #' Runs the cleaning stage of the validated pipeline order on FCS files,
 #' flowFrames or a flowSet, in this order:
 #' \enumerate{
-#'   \item margin events removed on the raw scale
-#'     (\code{\link{sw_filter_margins_peacoqc}});
+#'   \item margin events removed on the raw scale, with \code{margin_range} on
+#'     the fluorescence channels (\code{\link{sw_filter_margins_peacoqc}});
 #'   \item arcsinh transformation of all fluorescence channels
 #'     (\code{\link{sw_transform_apply}}); scatter channels stay raw;
 #'   \item PeacoQC signal QC (\code{\link{sw_qc_batch}} and
@@ -204,6 +223,15 @@ NULL
 #'   \code{truncate_max_range = FALSE}), a \code{flowCore::flowFrame}, a
 #'   \code{flowSet}, or a list of \code{flowFrame}s. A list or flowSet keeps its
 #'   names; otherwise samples are named after the files or \code{sample_<i>}.
+#' @param margin_range Numeric length 2, \code{c(min, max)}; required, no
+#'   default. Lower and upper limit (raw scale) of the margin step, applied to
+#'   every fluorescence channel; two finite numbers with \code{min} below
+#'   \code{max}. Scatter channels keep the range stored in the FCS file. It
+#'   is passed to \code{PeacoQC::RemoveMargins()} as the \code{minRange} and
+#'   \code{maxRange} of every fluorescence channel (see Details). PeacoQC's own
+#'   default ranges (the FCS parameter ranges) removed over 99\% of the events
+#'   on 40-colour Aurora data, so the value sets how many events every later
+#'   step sees.
 #' @param debris_window Numeric length 2; required, no default. Lower and
 #'   upper FSC-A limit (raw scale) of the events the \code{nonDebris} density
 #'   is built from. It is written as \code{min} and \code{max} of the openCyto
@@ -217,8 +245,11 @@ NULL
 #'   of the openCyto \code{singletGate}. \code{TRUE} keeps more events near the
 #'   edge of the singlet diagonal.
 #' @param pool_samples Logical; required, no default. \code{TRUE}: one gate per
-#'   node is fitted on the pooled events of all samples and applied to each.
-#'   \code{FALSE}: one gate per sample. It changes the cut of every sample.
+#'   node is fitted on the pooled events of all samples and applied to each,
+#'   so every sample has the same cut. \code{FALSE}: one gate per sample. The
+#'   template records this as \code{collapseDataForGating} and, when pooling,
+#'   \code{groupBy} set to the number of samples (openCyto pools only when
+#'   \code{groupBy} is not empty). It changes the cut of every sample.
 #' @param viability_channel Character; required, no default. Channel of the
 #'   viability dye, used by the \code{live} gate. A wrong channel gates on the
 #'   wrong cells.
@@ -238,22 +269,27 @@ NULL
 #'   QC and viability cuts.
 #'
 #' @details
-#' Margins use PeacoQC's per-channel ranges from the FCS parameters (the
-#' package's existing \code{\link{sw_filter_margins_peacoqc}} with no
-#' channel specifications). The \code{debris_window} and the singlet gate act
-#' on raw scatter; the viability cut acts on the arcsinh scale.
+#' The margin step calls \code{\link{sw_filter_margins_peacoqc}} with
+#' \code{channel_specifications = list(AllFluoChannels = margin_range)}. The
+#' wrapper turns \code{AllFluoChannels} into one \code{c(minRange, maxRange)}
+#' entry for each fluorescence channel (\code{sw_channel_is_fluor()}) and
+#' hands them to \code{PeacoQC::RemoveMargins()}, which writes them over the
+#' \code{minRange} and \code{maxRange} of those channels. Scatter channels
+#' keep the \code{minRange} and \code{maxRange} of the FCS parameters. The
+#' \code{debris_window} and the singlet gate act on raw scatter; the
+#' viability cut acts on the arcsinh scale.
 #'
 #' \strong{The margin step removes more than events on the range limit.}
 #' PeacoQC's \code{RemoveMargins()} keeps an event only if, in every scatter
 #' and fluorescence channel, \code{e > max(min(minRange, 0), min(e))} and
-#' \code{e < min(maxRange, max(e))}. The package wrapper
-#' \code{sw_filter_margins_peacoqc()} picks these channels with
-#' \code{sw_channel_is_signal()}, which leaves out \code{Time},
+#' \code{e < min(maxRange, max(e))}. A lower limit above 0 therefore acts as 0.
+#' The package wrapper \code{sw_filter_margins_peacoqc()} picks these channels
+#' with \code{sw_channel_is_signal()}, which leaves out \code{Time},
 #' \code{Original_ID}, \code{File}, \code{SampleID} and \code{AF Index} by
 #' default, so \code{Time} is not checked. Both comparisons are strict, so in
 #' each channel of each sample the events at the observed minimum and the
-#' observed maximum are removed, even when no event reaches the instrument
-#' range. The \code{margins} row of the \code{audit} table
+#' observed maximum are removed, even when no event reaches \code{margin_range}
+#' or the instrument range. The \code{margins} row of the \code{audit} table
 #' (\code{n_removed}) shows how many events this step removed per sample.
 #'
 #' \strong{What \code{debris_window} does.} The \code{nonDebris} gate is the
@@ -276,13 +312,21 @@ NULL
 #' \code{cutpoint <- ifelse(positive, gate_range[1], gate_range[2])}: the cut
 #' falls on the lowest event inside the window and removes nothing at or
 #' above \code{min}. \code{sw_clean_run()} reports this case: it warns and sets
-#' \code{cut_at_window_floor} to \code{TRUE} in the \code{gates} table. A
+#' \code{cut_at_window_floor} to \code{TRUE} in the \code{gates} table. With
+#' \code{pool_samples = TRUE} the one pooled cut is compared with the lowest
+#' in-window event of all samples together; with \code{FALSE} each sample's cut
+#' is compared with the lowest in-window event of that sample. A
 #' window that leaves out the real valley can also put the cut at a different
 #' valley inside it, so check the \code{nonDebris} \code{definition} in the
 #' \code{gates} table against the FSC-A density.
 #'
 #' A sample with no events left after any step stops the run, with the
-#' sample and the step named. The run never skips a sample.
+#' sample and the step named. After the margin step the message also gives the
+#' events before and after, the percentage removed and \code{margin_range}. If
+#' PeacoQC raises an error on a sample (for example when too few events are
+#' left for its analysis), the run stops with the sample name, the number of
+#' events handed to PeacoQC and the original PeacoQC message. The run never
+#' skips a sample and sets no minimum event count.
 #'
 #' @return A list with:
 #'   \describe{
@@ -352,6 +396,7 @@ NULL
 #'   # tree analysis; real files have more events.
 #'   res <- sw_clean_run(
 #'     ff,
+#'     margin_range = c(-21761, 1e7), # PLACEHOLDER for this synthetic frame
 #'     debris_window = c(1e4, 1.5e6), # PLACEHOLDER: must hold the debris valley
 #'     singlet_wider_gate = TRUE, # PLACEHOLDER: TRUE or FALSE
 #'     pool_samples = TRUE, # PLACEHOLDER: TRUE or FALSE
@@ -371,6 +416,7 @@ NULL
 #' @export
 sw_clean_run <- function(
   x,
+  margin_range,
   debris_window,
   singlet_wider_gate,
   pool_samples,
@@ -383,6 +429,7 @@ sw_clean_run <- function(
 ) {
   # --- Required arguments: collect all, stop once -------------------------
   is_missing <- c(
+    margin_range = missing(margin_range),
     debris_window = missing(debris_window),
     singlet_wider_gate = missing(singlet_wider_gate),
     pool_samples = missing(pool_samples),
@@ -411,6 +458,18 @@ sw_clean_run <- function(
     stop(
       "'x' must be FCS file paths, a flowFrame, a flowSet or a list of ",
       "flowFrames.",
+      call. = FALSE
+    )
+  }
+  if (
+    !is.numeric(margin_range) ||
+      length(margin_range) != 2 ||
+      !all(is.finite(margin_range)) ||
+      margin_range[1] >= margin_range[2]
+  ) {
+    stop(
+      "'margin_range' must be c(min, max): two finite numbers with min ",
+      "below max.",
       call. = FALSE
     )
   }
@@ -591,7 +650,26 @@ sw_clean_run <- function(
   record("raw", ffs)
 
   # --- 1. Margins (raw scale) --------------------------------------------
-  ffs <- lapply(ffs, sw_filter_margins_peacoqc)
+  # margin_range reaches PeacoQC::RemoveMargins() as channel_specifications:
+  # "AllFluoChannels" gives every fluorescence channel c(minRange, maxRange);
+  # scatter keeps the range of the FCS parameters.
+  n_before_margins <- counts[["raw"]]
+  ffs <- lapply(
+    ffs,
+    sw_filter_margins_peacoqc,
+    channel_specifications = list(AllFluoChannels = margin_range)
+  )
+  n_after_margins <- vapply(ffs, nrow, integer(1))
+  if (any(n_after_margins == 0)) {
+    stop(
+      .sw_clean_margins_empty_message(
+        n_before_margins,
+        n_after_margins,
+        margin_range
+      ),
+      call. = FALSE
+    )
+  }
   record("margins", ffs)
 
   # --- 2. Arcsinh on fluorescence channels --------------------------------
@@ -611,10 +689,35 @@ sw_clean_run <- function(
   # --- 3. PeacoQC ---------------------------------------------------------
   # QC runs on the transformed channels only: the Original_ID column that
   # the margin step appends is a counter, not a signal.
-  qc <- sw_qc_batch(ffs, channels = fluor, IT_limit = IT_limit, MAD = MAD)
-  ffs <- qc$cleaned[sample_names]
+  # One sample per call, so a PeacoQC error can name its sample.
+  qc_each <- lapply(sample_names, function(sn) {
+    n_to_qc <- nrow(ffs[[sn]])
+    tryCatch(
+      sw_qc_batch(
+        ffs[sn],
+        channels = fluor,
+        IT_limit = IT_limit,
+        MAD = MAD
+      ),
+      error = function(e) {
+        stop(
+          "PeacoQC failed on sample '",
+          sn,
+          "' with ",
+          n_to_qc,
+          " events handed to it (after the margin step). PeacoQC said: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+      }
+    )
+  })
+  ffs <- stats::setNames(
+    lapply(qc_each, function(q) q$cleaned[[1]]),
+    sample_names
+  )
   record("qc", ffs)
-  qc_summary <- qc$summary
+  qc_summary <- dplyr::bind_rows(lapply(qc_each, function(q) q$summary))
   qc_summary$IT_limit <- IT_limit
   qc_summary$MAD <- MAD
 
@@ -625,7 +728,8 @@ sw_clean_run <- function(
     pool_samples,
     viability_channel,
     viability_method,
-    viability_cut
+    viability_cut,
+    n_samples = length(sample_names)
   )
   tmpl_file <- tempfile(fileext = ".csv")
   on.exit(unlink(tmpl_file), add = TRUE)
@@ -706,15 +810,7 @@ sw_clean_run <- function(
 
   # mindensity puts the cut on the lowest event inside debris_window when the
   # window holds one peak or no valley. Flag that case per sample.
-  in_window <- lapply(ffs, function(f) {
-    v <- flowCore::exprs(f)[, "FSC-A"]
-    v[v >= debris_window[1] & v <= debris_window[2]]
-  })
-  window_floor <- if (pool_samples) {
-    rep(min(unlist(in_window)), length(sample_names))
-  } else {
-    vapply(in_window, min, numeric(1))
-  }
+  window_floor <- .sw_clean_window_floor(ffs, debris_window, pool_samples)
   debris_cut <- vapply(
     sample_names,
     function(sn) {
@@ -749,6 +845,7 @@ sw_clean_run <- function(
     qc = qc_summary,
     template = template,
     parameters = list(
+      margin_range = margin_range,
       debris_window = debris_window,
       singlet_wider_gate = singlet_wider_gate,
       pool_samples = pool_samples,
@@ -771,7 +868,8 @@ sw_clean_run <- function(
   pool_samples,
   viability_channel,
   viability_method,
-  viability_cut
+  viability_cut,
+  n_samples
 ) {
   tmp <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp))
@@ -785,6 +883,13 @@ sw_clean_run <- function(
   ))
   tmpl <- utils::read.csv(tmp, stringsAsFactors = FALSE)
   tmpl <- tmpl[tmpl$alias %in% c("nonDebris", "singlets"), , drop = FALSE]
+
+  # openCyto pools samples only when collapseDataForGating is TRUE and groupBy
+  # is not empty: with an empty groupBy it fits one gate per sample. A number
+  # N in groupBy puts N samples in one group, so the number of samples gives
+  # one group for the whole run.
+  group_by <- if (pool_samples) as.integer(n_samples) else NA_integer_
+  tmpl$groupBy <- group_by
 
   if (is.finite(debris_window[2])) {
     tmpl$gating_args[tmpl$alias == "nonDebris"] <- paste0(
@@ -802,7 +907,8 @@ sw_clean_run <- function(
       "singlets",
       viability_channel,
       "mindensity",
-      collapseDataForGating = pool_samples
+      collapseDataForGating = pool_samples,
+      groupBy = group_by
     )
   } else {
     .make_gate_row_raw(
@@ -812,10 +918,61 @@ sw_clean_run <- function(
       viability_channel,
       "boundary",
       paste0("min = -Inf, max = ", viability_cut),
-      collapseDataForGating = pool_samples
+      collapseDataForGating = pool_samples,
+      groupBy = group_by
     )
   }
   rbind(tmpl, live)
+}
+
+# Lowest FSC-A inside debris_window, per sample. The cut sits there when the
+# window holds one peak or no valley. Pooled: the gate is fitted once on the
+# events of all samples, so every sample gets the one pooled floor. Not
+# pooled: each sample gets the floor of its own events.
+.sw_clean_window_floor <- function(frames, debris_window, pool_samples) {
+  in_window <- lapply(frames, function(f) {
+    v <- flowCore::exprs(f)[, "FSC-A"]
+    v[v >= debris_window[1] & v <= debris_window[2]]
+  })
+  if (pool_samples) {
+    rep(min(unlist(in_window)), length(frames))
+  } else {
+    vapply(in_window, min, numeric(1))
+  }
+}
+
+# Error text for samples the margin step emptied: counts, share removed and
+# the range that did it.
+.sw_clean_margins_empty_message <- function(n_before, n_after, margin_range) {
+  emptied <- names(n_after)[n_after == 0]
+  lines <- vapply(
+    emptied,
+    function(sn) {
+      sprintf(
+        "  %s: %d events before, %d after, %s%% removed",
+        sn,
+        n_before[[sn]],
+        n_after[[sn]],
+        format(round(
+          100 * (n_before[[sn]] - n_after[[sn]]) / n_before[[sn]],
+          1
+        ))
+      )
+    },
+    character(1)
+  )
+  paste0(
+    "No events left after step 'margins' in sample(s): ",
+    paste(emptied, collapse = ", "),
+    ".\n",
+    paste(lines, collapse = "\n"),
+    "\nmargin_range = c(",
+    paste(
+      vapply(margin_range, format, character(1), digits = 15),
+      collapse = ", "
+    ),
+    "). Check it against the raw fluorescence densities of these samples."
+  )
 }
 
 # One row of the gates table for one sample and one gate.
