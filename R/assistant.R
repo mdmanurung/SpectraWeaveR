@@ -14,11 +14,29 @@ NULL
 # Dependency check
 # ---------------------------------------------------------------------------
 
+# Lowest ellmer with the tool(fun, name, description, arguments) signature.
+# DESCRIPTION must list the same floor; test-assistant.R checks that.
+.SW_ELLMER_MIN_VERSION <- "0.3.0"
+
+.ellmer_version <- function() {
+  utils::packageVersion("ellmer")
+}
+
 .check_ellmer <- function() {
   if (!requireNamespace("ellmer", quietly = TRUE)) {
     stop(
       "Package 'ellmer' is required for the LLM assistant.\n",
       "Install it with: install.packages('ellmer')",
+      call. = FALSE
+    )
+  }
+  installed <- .ellmer_version()
+  if (installed < .SW_ELLMER_MIN_VERSION) {
+    stop(
+      "Package 'ellmer' is too old for the LLM assistant.\n",
+      "Installed version: ", format(installed), "; required: >= ",
+      .SW_ELLMER_MIN_VERSION, ".\n",
+      "Update it with: install.packages('ellmer')",
       call. = FALSE
     )
   }
@@ -653,92 +671,119 @@ NULL
   # --- SpectraWeaveR-specific tools ---
   chat$register_tool(ellmer::tool(
     .tool_list_fcs_files,
-    "List FCS files in a directory to help identify sample files.",
-    dir_path = ellmer::type_string(
-      "Absolute path to directory containing FCS files."
+    name = "list_fcs_files",
+    description = "List FCS files in a directory to help identify sample files.",
+    arguments = list(
+      dir_path = ellmer::type_string(
+        "Absolute path to directory containing FCS files."
+      )
     )
   ))
 
   chat$register_tool(ellmer::tool(
     .tool_list_directory,
-    "List files and subdirectories at a given path.",
-    dir_path = ellmer::type_string("Absolute path to a directory.")
+    name = "list_directory",
+    description = "List files and subdirectories at a given path.",
+    arguments = list(
+      dir_path = ellmer::type_string("Absolute path to a directory.")
+    )
   ))
 
   chat$register_tool(ellmer::tool(
     .tool_read_fcs_header,
-    "Read channel and marker names from the header of an FCS file (no expression data).",
-    file_path = ellmer::type_string("Absolute path to an FCS file.")
+    name = "read_fcs_header",
+    description = "Read channel and marker names from the header of an FCS file (no expression data).",
+    arguments = list(
+      file_path = ellmer::type_string("Absolute path to an FCS file.")
+    )
   ))
 
   chat$register_tool(ellmer::tool(
     local_read_csv,
-    "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
-    file_path = ellmer::type_string("Absolute path to a CSV file."),
-    n_rows = ellmer::type_integer(
-      "Number of rows to preview (default 5).",
-      required = FALSE
-    ),
-    columns_only = ellmer::type_boolean(
-      "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
-      required = FALSE
+    name = "read_csv_columns",
+    description = "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
+    arguments = list(
+      file_path = ellmer::type_string("Absolute path to a CSV file."),
+      n_rows = ellmer::type_integer(
+        "Number of rows to preview (default 5).",
+        required = FALSE
+      ),
+      columns_only = ellmer::type_boolean(
+        "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
+        required = FALSE
+      )
     )
   ))
 
   chat$register_tool(ellmer::tool(
     local_read_xlsx,
-    "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
-    file_path = ellmer::type_string("Absolute path to an XLSX file."),
-    sheet = ellmer::type_integer(
-      "Sheet index (default 1).",
-      required = FALSE
-    ),
-    n_rows = ellmer::type_integer(
-      "Number of rows to preview (default 5).",
-      required = FALSE
-    ),
-    columns_only = ellmer::type_boolean(
-      "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
-      required = FALSE
+    name = "read_xlsx_columns",
+    description = "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
+    arguments = list(
+      file_path = ellmer::type_string("Absolute path to an XLSX file."),
+      sheet = ellmer::type_integer(
+        "Sheet index (default 1).",
+        required = FALSE
+      ),
+      n_rows = ellmer::type_integer(
+        "Number of rows to preview (default 5).",
+        required = FALSE
+      ),
+      columns_only = ellmer::type_boolean(
+        "If TRUE, return only column names and types without row values. Recommended for files that may contain sensitive information.",
+        required = FALSE
+      )
     )
   ))
 
   chat$register_tool(ellmer::tool(
     .tool_validate_sample_meta,
-    "Validate that sample metadata has required columns and matches FCS files.",
-    meta_path = ellmer::type_string(
-      "Absolute path to a CSV or XLSX metadata file."
-    ),
-    fcs_dir = ellmer::type_string(
-      "Absolute path to the FCS files directory."
+    name = "validate_sample_meta",
+    description = "Validate that sample metadata has required columns and matches FCS files.",
+    arguments = list(
+      meta_path = ellmer::type_string(
+        "Absolute path to a CSV or XLSX metadata file."
+      ),
+      fcs_dir = ellmer::type_string(
+        "Absolute path to the FCS files directory."
+      )
     )
   ))
 
   chat$register_tool(ellmer::tool(
     .tool_detect_channels,
-    "Read an FCS file and classify channels into scatter, time, and fluorochrome categories.",
-    file_path = ellmer::type_string("Absolute path to an FCS file.")
+    name = "detect_channels",
+    description = "Read an FCS file and classify channels into scatter, time, and fluorochrome categories.",
+    arguments = list(
+      file_path = ellmer::type_string("Absolute path to an FCS file.")
+    )
   ))
 
   chat$register_tool(ellmer::tool(
     local_check_batch,
-    "Summarise the sample distribution across batches in a metadata file.",
-    meta_path = ellmer::type_string(
-      "Absolute path to a CSV or XLSX metadata file."
-    ),
-    batch_col = ellmer::type_string(
-      "Name of the column containing batch labels."
+    name = "check_batch_balance",
+    description = "Summarise the sample distribution across batches in a metadata file.",
+    arguments = list(
+      meta_path = ellmer::type_string(
+        "Absolute path to a CSV or XLSX metadata file."
+      ),
+      batch_col = ellmer::type_string(
+        "Name of the column containing batch labels."
+      )
     )
   ))
 
   chat$register_tool(ellmer::tool(
     .tool_validate_markers,
-    "Check that specified marker names exist in an FCS file.",
-    markers = ellmer::type_array(
-      items = ellmer::type_string("A marker name."),
-      description = "Character vector of marker names to validate."
-    ),
-    fcs_file = ellmer::type_string("Absolute path to an FCS file.")
+    name = "validate_markers",
+    description = "Check that specified marker names exist in an FCS file.",
+    arguments = list(
+      markers = ellmer::type_array(
+        items = ellmer::type_string("A marker name."),
+        description = "Character vector of marker names to validate."
+      ),
+      fcs_file = ellmer::type_string("Absolute path to an FCS file.")
+    )
   ))
 
   invisible(chat)
@@ -836,9 +881,27 @@ NULL
 #' your experiment, inspects your files and directories, and generates
 #' runnable R code.
 #'
+#' @details
+#' Since the move to the ellmer 0.3.0 \code{tool()} interface, each tool
+#' has an explicit name. Earlier versions took the name from the function
+#' symbol, so a prompt or client that used an old name must use the new one.
+#' \tabular{ll}{
+#'   Old name (function symbol) \tab New name \cr
+#'   \code{.tool_list_fcs_files} \tab \code{list_fcs_files} \cr
+#'   \code{.tool_list_directory} \tab \code{list_directory} \cr
+#'   \code{.tool_read_fcs_header} \tab \code{read_fcs_header} \cr
+#'   \code{local_read_csv} \tab \code{read_csv_columns} \cr
+#'   \code{local_read_xlsx} \tab \code{read_xlsx_columns} \cr
+#'   \code{.tool_validate_sample_meta} \tab \code{validate_sample_meta} \cr
+#'   \code{.tool_detect_channels} \tab \code{detect_channels} \cr
+#'   \code{local_check_batch} \tab \code{check_batch_balance} \cr
+#'   \code{.tool_validate_markers} \tab \code{validate_markers} \cr
+#' }
+#' The package now requires ellmer >= 0.3.0.
+#'
 #' @section Prerequisites:
 #' \itemize{
-#'   \item Install ellmer: \code{install.packages("ellmer")}
+#'   \item Install ellmer (>= 0.3.0): \code{install.packages("ellmer")}
 #'   \item Set an API key for your chosen provider (e.g.
 #'     \code{Sys.setenv(OPENAI_API_KEY = "sk-...")}).
 #'   \item For local models, install and start Ollama.
@@ -1699,84 +1762,111 @@ sw_pipeline_config_type <- function() {
   list(
     ellmer::tool(
       .tool_list_fcs_files,
-      "List FCS files in a directory to help identify sample files.",
-      dir_path = ellmer::type_string(
-        "Absolute path to directory containing FCS files."
+      name = "list_fcs_files",
+      description = "List FCS files in a directory to help identify sample files.",
+      arguments = list(
+        dir_path = ellmer::type_string(
+          "Absolute path to directory containing FCS files."
+        )
       )
     ),
     ellmer::tool(
       .tool_list_directory,
-      "List files and subdirectories at a given path.",
-      dir_path = ellmer::type_string("Absolute path to a directory.")
+      name = "list_directory",
+      description = "List files and subdirectories at a given path.",
+      arguments = list(
+        dir_path = ellmer::type_string("Absolute path to a directory.")
+      )
     ),
     ellmer::tool(
       .tool_read_fcs_header,
-      "Read channel and marker names from the header of an FCS file (no expression data).",
-      file_path = ellmer::type_string("Absolute path to an FCS file.")
+      name = "read_fcs_header",
+      description = "Read channel and marker names from the header of an FCS file (no expression data).",
+      arguments = list(
+        file_path = ellmer::type_string("Absolute path to an FCS file.")
+      )
     ),
     ellmer::tool(
       local_read_csv,
-      "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
-      file_path = ellmer::type_string("Absolute path to a CSV file."),
-      n_rows = ellmer::type_integer(
-        "Number of rows to preview (default 5).",
-        required = FALSE
-      ),
-      columns_only = ellmer::type_boolean(
-        "If TRUE, return only column names and types without row values.",
-        required = FALSE
+      name = "read_csv_columns",
+      description = "Preview column names and first few rows of a CSV file. Potentially sensitive columns are automatically redacted.",
+      arguments = list(
+        file_path = ellmer::type_string("Absolute path to a CSV file."),
+        n_rows = ellmer::type_integer(
+          "Number of rows to preview (default 5).",
+          required = FALSE
+        ),
+        columns_only = ellmer::type_boolean(
+          "If TRUE, return only column names and types without row values.",
+          required = FALSE
+        )
       )
     ),
     ellmer::tool(
       local_read_xlsx,
-      "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
-      file_path = ellmer::type_string("Absolute path to an XLSX file."),
-      sheet = ellmer::type_integer(
-        "Sheet index (default 1).",
-        required = FALSE
-      ),
-      n_rows = ellmer::type_integer(
-        "Number of rows to preview (default 5).",
-        required = FALSE
-      ),
-      columns_only = ellmer::type_boolean(
-        "If TRUE, return only column names and types without row values.",
-        required = FALSE
+      name = "read_xlsx_columns",
+      description = "Preview column names and first few rows of an Excel XLSX file. Potentially sensitive columns are automatically redacted.",
+      arguments = list(
+        file_path = ellmer::type_string("Absolute path to an XLSX file."),
+        sheet = ellmer::type_integer(
+          "Sheet index (default 1).",
+          required = FALSE
+        ),
+        n_rows = ellmer::type_integer(
+          "Number of rows to preview (default 5).",
+          required = FALSE
+        ),
+        columns_only = ellmer::type_boolean(
+          "If TRUE, return only column names and types without row values.",
+          required = FALSE
+        )
       )
     ),
     ellmer::tool(
       .tool_validate_sample_meta,
-      "Validate that sample metadata has required columns and matches FCS files.",
-      meta_path = ellmer::type_string(
-        "Absolute path to a CSV or XLSX metadata file."
-      ),
-      fcs_dir = ellmer::type_string(
-        "Absolute path to the FCS files directory."
+      name = "validate_sample_meta",
+      description = "Validate that sample metadata has required columns and matches FCS files.",
+      arguments = list(
+        meta_path = ellmer::type_string(
+          "Absolute path to a CSV or XLSX metadata file."
+        ),
+        fcs_dir = ellmer::type_string(
+          "Absolute path to the FCS files directory."
+        )
       )
     ),
     ellmer::tool(
       .tool_detect_channels,
-      "Read an FCS file and classify channels into scatter, time, and fluorochrome categories.",
-      file_path = ellmer::type_string("Absolute path to an FCS file.")
+      name = "detect_channels",
+      description = "Read an FCS file and classify channels into scatter, time, and fluorochrome categories.",
+      arguments = list(
+        file_path = ellmer::type_string("Absolute path to an FCS file.")
+      )
     ),
     ellmer::tool(
       local_check_batch,
-      "Summarise the sample distribution across batches in a metadata file.",
-      meta_path = ellmer::type_string(
-        "Absolute path to a CSV or XLSX metadata file."
-      ),
-      batch_col = ellmer::type_string(
-        "Name of the column containing batch labels."
+      name = "check_batch_balance",
+      description = "Summarise the sample distribution across batches in a metadata file.",
+      arguments = list(
+        meta_path = ellmer::type_string(
+          "Absolute path to a CSV or XLSX metadata file."
+        ),
+        batch_col = ellmer::type_string(
+          "Name of the column containing batch labels."
+        )
       )
     ),
     ellmer::tool(
       .tool_validate_markers,
-      "Check that specified marker names exist in an FCS file.",
-      markers = ellmer::type_array(
-        items = ellmer::type_string("A marker name."),
-        description = "Character vector of marker names to validate."
-      ),
-      fcs_file = ellmer::type_string("Absolute path to an FCS file.")
+      name = "validate_markers",
+      description = "Check that specified marker names exist in an FCS file.",
+      arguments = list(
+        markers = ellmer::type_array(
+          items = ellmer::type_string("A marker name."),
+          description = "Character vector of marker names to validate."
+        ),
+        fcs_file = ellmer::type_string("Absolute path to an FCS file.")
+      )
     )
   )
 }
@@ -1791,6 +1881,24 @@ sw_pipeline_config_type <- function() {
 #' or Cursor - can connect to this server to inspect FCS files, validate
 #' sample metadata, detect channels, and check batch balance directly from
 #' the user's R session.
+#'
+#' @details
+#' Since the move to the ellmer 0.3.0 \code{tool()} interface, each tool
+#' has an explicit name. Earlier versions took the name from the function
+#' symbol, so a prompt or client that used an old name must use the new one.
+#' \tabular{ll}{
+#'   Old name (function symbol) \tab New name \cr
+#'   \code{.tool_list_fcs_files} \tab \code{list_fcs_files} \cr
+#'   \code{.tool_list_directory} \tab \code{list_directory} \cr
+#'   \code{.tool_read_fcs_header} \tab \code{read_fcs_header} \cr
+#'   \code{local_read_csv} \tab \code{read_csv_columns} \cr
+#'   \code{local_read_xlsx} \tab \code{read_xlsx_columns} \cr
+#'   \code{.tool_validate_sample_meta} \tab \code{validate_sample_meta} \cr
+#'   \code{.tool_detect_channels} \tab \code{detect_channels} \cr
+#'   \code{local_check_batch} \tab \code{check_batch_balance} \cr
+#'   \code{.tool_validate_markers} \tab \code{validate_markers} \cr
+#' }
+#' The package now requires ellmer >= 0.3.0.
 #'
 #' @section Setup for Claude Code:
 #' \preformatted{
