@@ -26,8 +26,8 @@ Launches a \href{https://modelcontextprotocol.io}{Model Context Protocol}
 optionally, \pkg{btw} R-environment introspection tools.
 }
 \details{
-External AI applications — such as Claude Code, VS Code Copilot Chat,
-or Cursor — can connect to this server to inspect FCS files, validate
+External AI applications - such as Claude Code, VS Code Copilot Chat,
+or Cursor - can connect to this server to inspect FCS files, validate
 sample metadata, detect channels, and check batch balance directly from
 the user's R session.
 }

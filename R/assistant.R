@@ -236,7 +236,7 @@ NULL
       type_info <- paste0("  ", cols, ": ", col_types, collapse = "\n")
       return(paste0(col_info, "\n\nColumn types:\n", type_info,
                     "\n\n(Row preview suppressed",
-                    if (sensitivity == "strict") " — strict privacy mode" else "",
+                    if (sensitivity == "strict") " \u2014 strict privacy mode" else "",
                     ")"))
     }
 
@@ -292,7 +292,7 @@ NULL
       type_info <- paste0("  ", cols, ": ", col_types, collapse = "\n")
       return(paste0(col_info, "\n\nColumn types:\n", type_info,
                     "\n\n(Row preview suppressed",
-                    if (sensitivity == "strict") " — strict privacy mode" else "",
+                    if (sensitivity == "strict") " \u2014 strict privacy mode" else "",
                     ")"))
     }
 
@@ -522,7 +522,7 @@ NULL
       cond_col <- cond_cols[1]
       cross_tab <- table(meta[[batch_col]], meta[[cond_col]])
       result <- paste0(result,
-        "\n\n  Condition ('", cond_col, "') × Batch cross-tabulation:\n",
+        "\n\n  Condition ('", cond_col, "') \u00d7 Batch cross-tabulation:\n",
         paste(utils::capture.output(print(cross_tab)), collapse = "\n"))
       if (sensitivity == "strict") {
         result <- paste0(result,
@@ -601,7 +601,7 @@ NULL
 #' Register all SpectraWeaveR tools with a chat object
 #'
 #' Uses closure-based wrappers so that the \code{sensitivity} level is
-#' baked into each tool function — the LLM cannot override it.
+#' baked into each tool function - the LLM cannot override it.
 #'
 #' @param chat An ellmer Chat object.
 #' @param include_btw Logical; if \code{TRUE} (default), also register btw
@@ -956,6 +956,8 @@ sw_assistant <- function(provider = "openai",
 #' @param model Character; model name (optional).
 #' @param include_btw Logical; if \code{TRUE} (default), register btw tools
 #'   for R environment introspection.
+#' @param sensitivity Privacy level: \code{"standard"} (redact PII) or
+#'   \code{"strict"} (tools return column names only, no row values).
 #' @param ... Additional arguments passed to the ellmer chat constructor.
 #'
 #' @return An ellmer \code{Chat} object with SpectraWeaveR tools registered.
@@ -1521,7 +1523,7 @@ sw_pipeline_generate_code <- function(config,
 #' Generate a Pipeline via One-Shot LLM Request
 #'
 #' Provides a natural language description of your experiment and data, and
-#' receives generated SpectraWeaveR pipeline code in return — without an
+#' receives generated SpectraWeaveR pipeline code in return - without an
 #' interactive conversation.
 #'
 #' @param description Character string describing the experiment, data
@@ -1785,8 +1787,8 @@ sw_pipeline_config_type <- function() {
 #' (MCP) server that exposes SpectraWeaveR's file-inspection tools and,
 #' optionally, \pkg{btw} R-environment introspection tools.
 #'
-#' External AI applications — such as Claude Code, VS Code Copilot Chat,
-#' or Cursor — can connect to this server to inspect FCS files, validate
+#' External AI applications - such as Claude Code, VS Code Copilot Chat,
+#' or Cursor - can connect to this server to inspect FCS files, validate
 #' sample metadata, detect channels, and check batch balance directly from
 #' the user's R session.
 #'

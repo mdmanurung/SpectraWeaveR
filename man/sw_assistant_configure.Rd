@@ -20,6 +20,9 @@ sw_assistant_configure(
 \item{include_btw}{Logical; if \code{TRUE} (default), register btw tools
 for R environment introspection.}
 
+\item{sensitivity}{Privacy level: \code{"standard"} (redact PII) or
+\code{"strict"} (tools return column names only, no row values).}
+
 \item{...}{Additional arguments passed to the ellmer chat constructor.}
 }
 \value{
