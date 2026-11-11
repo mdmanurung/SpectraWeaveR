@@ -7,7 +7,7 @@
 #          only in two plot builders, which are not called).
 # Run:     sbatch experiments/slurm/run_integration.sbatch \
 #            experiments/integration/clean_run_bmv.R <pkg_dir> <repo_root> \
-#            <repo_root>/experiments/runs/2026-11-11_clean-run-smoke
+#            <repo_root>/experiments/runs/2026-11-11_clean-run-smoke2
 #            pkg_dir    package checkout to load (holds R/clean_gate.R)
 #            repo_root  checkout that holds experiments/bmv_test (the data) and experiments/runs
 #            out_dir    new run folder; must not exist
@@ -41,6 +41,7 @@ suppressPackageStartupMessages({
 
 # Parameters -------------------------------------------------------------------
 # TEST VALUES, user-approved for this smoke test only; not recommendations.
+MARGIN_RANGE <- c(-21761, 1e7) # TEST VALUE; the margin range benchmark 05 passed (12_cleanup.R:28)
 DEBRIS_WINDOW <- c(2e5, 1.5e6) # TEST VALUE; inherited from 19a_gate_arm.R:32 (raw FSC-A)
 SINGLET_WIDER_GATE <- TRUE # TEST VALUE
 POOL_SAMPLES <- TRUE # TEST VALUE; exercises the pooled fit over the five donors
@@ -132,6 +133,7 @@ ffs <- manifest$file |>
 # sw_gate_run() attaches flowCore, so filter() below is called as dplyr::filter().
 res <- sw_clean_run(
   ffs,
+  margin_range = MARGIN_RANGE,
   debris_window = DEBRIS_WINDOW,
   singlet_wider_gate = SINGLET_WIDER_GATE,
   pool_samples = POOL_SAMPLES,

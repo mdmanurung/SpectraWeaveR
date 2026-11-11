@@ -4,7 +4,7 @@
 # Run:     sbatch experiments/slurm/run_integration.sbatch <script.R> <pkg_dir> <repo_root> <out_dir>
 #          e.g. sbatch experiments/slurm/run_integration.sbatch experiments/integration/clean_run_bmv.R \
 #                 "$PWD" /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR \
-#                 /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR/experiments/runs/2026-11-11_clean-run-smoke
+#                 /exports/para-lipg-hpc/mdmanurung/SpectraWeaveR/experiments/runs/2026-11-11_clean-run-smoke2
 # Inputs:  the R script, a package checkout, the checkout that holds experiments/bmv_test, and a new out_dir
 # Outputs: <out_dir>/ (written by the script) and experiments/slurm/logs/integration-<jobid>.out in the main checkout
 #SBATCH --job-name=sw_integration
