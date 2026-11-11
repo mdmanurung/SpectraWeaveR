@@ -54,6 +54,14 @@ factor (SIF) with the run's cutoffs, spectra per fluorophore, a clickable
 similarity matrix, unmixed distributions, a biplot, AutoSpectral's own
 outputs, and a comparison of two or more runs.
 
+\strong{Spike-in and marker screen.} A \code{Spike & screen} tab appears when a run's
+\verb{report/} folder holds \code{spike_summary.csv}, \code{baseline_check.csv} or
+\code{marker_screen.csv} (written by \code{\link[=sw_unmix_report]{sw_unmix_report()}} from diagnostics made
+with \code{spike} or \code{screen}). It shows those tables and the F7 and F8 PNGs
+found in any \verb{figures*/panels} folder (file names starting with
+\code{spike-summary} or \code{spike-ecdf}), embedded in the page. Runs without these
+files show no such tab.
+
 \strong{AutoSpectral outputs.} The \code{AutoSpectral} tab reads the folder
 \verb{<run>/unmix} that AutoSpectral wrote. Its CSV tables become interactive
 views: the hotspot, similarity and spillover-spread matrices, the

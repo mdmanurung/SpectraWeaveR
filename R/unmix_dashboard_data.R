@@ -336,8 +336,49 @@
     similarity = similarity,
     distributions = distributions,
     biplot = biplot,
-    compare_spectracle = compare
+    compare_spectracle = compare,
+    spike = .sw_dash_read_spike(run_dir)
   )
+}
+
+# Spike-in and marker-screen tables that sw_unmix_report() writes, and the F7
+# and F8 PNGs that sw_unmix_save_figures() writes (file names starting with
+# "spike-summary" or "spike-ecdf" in any `figures*/panels` folder). PNGs are
+# embedded as data URIs so the page stays one file. NULL when none of the
+# three CSVs exists.
+.sw_dash_spike_files <- c(
+  summary = "spike_summary.csv",
+  baseline = "baseline_check.csv",
+  screen = "marker_screen.csv"
+)
+.sw_dash_read_spike <- function(run_dir) {
+  paths <- file.path(run_dir, "report", .sw_dash_spike_files)
+  names(paths) <- names(.sw_dash_spike_files)
+  if (!any(file.exists(paths))) {
+    return(NULL)
+  }
+  tables <- lapply(paths, \(p) {
+    if (file.exists(p)) utils::read.csv(p, stringsAsFactors = FALSE) else NULL
+  })
+  fig_dirs <- list.dirs(run_dir, recursive = FALSE, full.names = TRUE)
+  fig_dirs <- file.path(
+    fig_dirs[grepl("^figures", basename(fig_dirs))],
+    "panels"
+  )
+  pngs <- sort(unlist(lapply(fig_dirs[dir.exists(fig_dirs)], \(d) {
+    list.files(d, pattern = "^spike-(summary|ecdf).*\\.png$", full.names = TRUE)
+  })))
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    pngs <- character()
+  }
+  figures <- lapply(pngs, \(p) {
+    bytes <- readBin(p, "raw", file.size(p))
+    list(
+      name = basename(p),
+      src = paste0("data:image/png;base64,", jsonlite::base64_enc(bytes))
+    )
+  })
+  c(tables, list(figures = figures))
 }
 
 # Spectra matrix (fluorophores x detectors) from the long table of a run.

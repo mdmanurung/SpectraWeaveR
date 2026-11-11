@@ -123,6 +123,8 @@ function hideTip() { tip.style.display = "none"; }
 const color = (m) => (D.palette && D.palette[m]) || "#888888";
 const TABS = [["overview", "Overview"], ["checks", "Checks"], ["sif", "SIF"], ["spectra", "Spectra"],
   ["similarity", "Similarity"], ["distributions", "Distributions"], ["biplot", "Biplot"], ["autospectral", "AutoSpectral"], ["compare", "Compare"]];
+// The spike-in tab exists only when some run has spike or screen tables.
+if (D.runs.some((r) => r.spike)) TABS.splice(TABS.length - 1, 0, ["spike", "Spike & screen"]);
 
 // Shared canvas setup for the similarity matrix and the biplot: a backing store
 // `scale` times the logical size, CSS variables read once per draw, and a
@@ -675,7 +677,56 @@ function autospectral(main, run) {
   ({ matrix: asMatrix, af: asAF, versions: asVersions, gallery: asGallery })[st.asub](body, a);
 }
 
-const VIEWS = { overview, checks, sif, spectra, similarity, distributions, biplot, autospectral, compare };
+// ---- spike-in and marker screen -------------------------------------------------
+// A columns object (as R writes a data frame) as a table with a text filter.
+function colTable(cols, keys, label) {
+  const n = keys.length ? A(cols[keys[0]]).length : 0;
+  const wrap = h("div"), q = h("input", { type: "search", placeholder: "Filter " + label }), count = h("p", { class: "note" }), host = h("div", { class: "scroll" });
+  wrap.append(q, count, host);
+  const rows = Array.from({ length: n }, (_, i) => keys.map((k) => A(cols[k])[i]));
+  function draw() {
+    const term = q.value.toLowerCase();
+    const keep = rows.filter((r) => !term || r.some((c) => c !== null && String(c).toLowerCase().includes(term)));
+    const shown = keep.slice(0, 300);
+    count.textContent = shown.length + " of " + keep.length + " rows" + (keep.length > shown.length ? " (filter to see the rest)" : "");
+    host.replaceChildren(h("table", {}, [h("thead", {}, h("tr", {}, keys.map((k) => h("th", { text: k })))),
+      h("tbody", {}, shown.map((r) => h("tr", {}, r.map((c) => typeof c === "number" ? h("td", { class: "num", text: fmt(c) }) : h("td", { text: c === null ? "" : String(c) })))))]));
+  }
+  q.addEventListener("input", draw);
+  draw();
+  return wrap;
+}
+function spike(main, run) {
+  const sp = run.spike;
+  if (!sp) { main.append(h("p", { text: "This run has no spike_summary.csv, baseline_check.csv or marker_screen.csv in report/." })); return; }
+  main.append(h("p", { class: "note", text: "Tables from sw_unmix_report(); statuses for these checks are in the Checks tab (check_id spike_recovery and marker_screen) and follow only the limits the run supplied." }));
+  const figs = A(sp.figures);
+  if (figs.length) {
+    main.append(h("h2", { text: "Figures F7 and F8" }), h("div", { class: "gallery" }, figs.map((f) =>
+      h("figure", {}, [h("img", { src: f.src, alt: f.name, loading: "lazy" }), h("figcaption", { text: f.name })]))));
+  }
+  if (sp.summary) {
+    const keys = Object.keys(sp.summary);
+    main.append(h("h2", { text: "Spike-in recovery per donor" }), colTable(sp.summary, keys, "summary"));
+  }
+  if (sp.baseline) {
+    // Worst channel per file and group: the coupling the score checks.
+    const b = sp.baseline, worst = {};
+    A(b.setup).forEach((x, i) => {
+      const key = [x, A(b.sample)[i], A(b.set)[i], A(b.group)[i]].join("\u0001"), v = A(b.share_moved)[i];
+      if (!(key in worst) || (v !== null && v > worst[key].v)) worst[key] = { v: v, ch: A(b.channel)[i] };
+    });
+    const ks = Object.keys(worst), parts = ks.map((k) => k.split("\u0001"));
+    const cols = { setup: parts.map((p) => p[0]), sample: parts.map((p) => p[1]), set: parts.map((p) => p[2]), group: parts.map((p) => p[3]),
+      worst_channel: ks.map((k) => worst[k].ch), share_moved: ks.map((k) => worst[k].v) };
+    main.append(h("h2", { text: "Independence check (worst channel per file)" }), colTable(cols, Object.keys(cols), "independence"));
+  }
+  if (sp.screen) {
+    main.append(h("h2", { text: "Marker screen" }), colTable(sp.screen, Object.keys(sp.screen), "screen"));
+  }
+}
+
+const VIEWS = { overview, checks, sif, spectra, similarity, distributions, biplot, autospectral, spike, compare };
 render();
 })();
 </script>

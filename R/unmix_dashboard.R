@@ -10,6 +10,14 @@
 #' similarity matrix, unmixed distributions, a biplot, AutoSpectral's own
 #' outputs, and a comparison of two or more runs.
 #'
+#' **Spike-in and marker screen.** A `Spike & screen` tab appears when a run's
+#' `report/` folder holds `spike_summary.csv`, `baseline_check.csv` or
+#' `marker_screen.csv` (written by [sw_unmix_report()] from diagnostics made
+#' with `spike` or `screen`). It shows those tables and the F7 and F8 PNGs
+#' found in any `figures*/panels` folder (file names starting with
+#' `spike-summary` or `spike-ecdf`), embedded in the page. Runs without these
+#' files show no such tab.
+#'
 #' **AutoSpectral outputs.** The `AutoSpectral` tab reads the folder
 #' `<run>/unmix` that AutoSpectral wrote. Its CSV tables become interactive
 #' views: the hotspot, similarity and spillover-spread matrices, the
@@ -267,7 +275,21 @@ sw_unmix_dashboard <- function(
     } else {
       as.list(run$compare_spectracle)
     },
-    autospectral = .sw_dash_read_autospectral(run$run_dir, out_dir)
+    autospectral = .sw_dash_read_autospectral(run$run_dir, out_dir),
+    spike = .sw_dash_spike_payload(run$spike)
+  )
+}
+
+.sw_dash_spike_payload <- function(spike) {
+  if (is.null(spike)) {
+    return(NULL)
+  }
+  tbl <- \(x) if (is.null(x)) NULL else as.list(x)
+  list(
+    summary = tbl(spike$summary),
+    baseline = tbl(spike$baseline),
+    screen = tbl(spike$screen),
+    figures = spike$figures
   )
 }
 

@@ -728,3 +728,54 @@ test_that("a run without an unmix folder has no AutoSpectral section", {
     "folder of `path`"
   )
 })
+
+test_that("spike and screen CSVs and F7/F8 PNGs give a spike tab; without them none", {
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("scales")
+  dir <- make_run(file.path(tempdir(), "r15"))
+  rep <- file.path(dir, "report")
+  utils::write.csv(
+    data.frame(
+      setup = "a",
+      sample = "d1",
+      marker = "TNF",
+      pop = "T",
+      share_lost = 0.25
+    ),
+    file.path(rep, "spike_summary.csv"),
+    row.names = FALSE
+  )
+  utils::write.csv(
+    data.frame(setup = "a", flag = TRUE, channel = "TNF"),
+    file.path(rep, "marker_screen.csv"),
+    row.names = FALSE
+  )
+  panels <- file.path(dir, "figures", "panels")
+  png_bytes <- as.raw(c(0x89, 0x50, 0x4e, 0x47))
+  writeBin(png_bytes, file.path(panels, "spike-summary_TNF_T.png"))
+  writeBin(png_bytes, file.path(panels, "other.png"))
+
+  run <- .sw_dash_read_run(dir, sigma = 1000, bins = 20, bin_events = FALSE)
+  expect_null(run$spike$baseline)
+  expect_identical(run$spike$summary$share_lost, 0.25)
+  expect_length(run$spike$figures, 1L)
+  expect_identical(run$spike$figures[[1L]]$name, "spike-summary_TNF_T.png")
+  expect_match(run$spike$figures[[1L]]$src, "^data:image/png;base64,iVBORw")
+
+  out <- tempfile(fileext = ".html")
+  sw_unmix_dashboard(dir, out, pseudo_log_sigma = 1000, bins = 20)
+  p <- payload_of(out)$runs[[1L]]
+  expect_identical(p$spike$screen$channel[[1L]], "TNF")
+  html <- paste(readLines(out, warn = FALSE), collapse = "\n")
+  expect_match(html, "Spike & screen", fixed = TRUE)
+
+  # A run without the CSVs carries no spike data, so the page shows no tab.
+  out2 <- tempfile(fileext = ".html")
+  sw_unmix_dashboard(
+    make_run(file.path(tempdir(), "r16")),
+    out2,
+    pseudo_log_sigma = 1000,
+    bins = 20
+  )
+  expect_null(payload_of(out2)$runs[[1L]]$spike)
+})
