@@ -70,7 +70,8 @@ NULL
 .cosine_sim <- function(a, b) {
   denom <- sqrt(sum(a^2)) * sqrt(sum(b^2))
   if (denom < .Machine$double.eps) return(0)
-  sum(a * b) / denom
+  # Clamp rounding error: cosine similarity is mathematically <= 1
+  min(sum(a * b) / denom, 1)
 }
 
 #' Score one cluster vector against all reference populations
@@ -612,9 +613,14 @@ sw_plot_annotation <- function(annotation,
   rownames(mat)  <- row_labels
 
   if (requireNamespace("pheatmap", quietly = TRUE)) {
+    # Column z-score here, not in pheatmap: a constant marker column gives
+    # NaN there and hclust fails. Constant columns are set to 0, as in the
+    # ggplot2 fallback below.
+    mat_z <- scale(mat)
+    mat_z[, colSums(is.na(mat_z)) > 0] <- 0
     p <- pheatmap::pheatmap(
-      mat,
-      scale        = "column",
+      mat_z,
+      scale        = "none",
       cluster_rows = TRUE,
       cluster_cols = TRUE,
       fontsize_row = 8L,
