@@ -51,7 +51,8 @@
 #'   `agg_size`, `reference` (when needed), `reference_group`, `ntrees`,
 #'   `sample_size`, `ndim`.
 #' @param batch `NULL` or a list with `batch`, `markers`, `n_events`, `seed`,
-#'   `order`, `reference_group`.
+#'   `order`, `reference_group`. A `population` entry is an error: this module
+#'   stacks all-event rows only, so call [sw_batch_scores()] for population rows.
 #' @param cluster `NULL` or a list with `markers`, `k`, `n_events`, `seed`,
 #'   `nstart`, `min_cluster_events`, `reference`, `reference_group`.
 #' @param relativise `NULL` or a list with `model` (from
@@ -250,7 +251,18 @@ sw_diagnose <- function(
   }
 
   if (!is.null(batch)) {
-    b <- do.call(sw_batch_scores, c(list(data = data), batch))
+    # Population rows are not stacked here: this module runs the all-event scores.
+    if (!is.null(batch[["population"]])) {
+      stop(
+        "`batch$population` is not supported: sw_diagnose() stacks all-event ",
+        "batch rows only. Call sw_batch_scores() directly for population rows.",
+        call. = FALSE
+      )
+    }
+    b <- do.call(
+      sw_batch_scores,
+      c(list(data = data), batch, list(population = NULL))
+    )
     parts$batch <- tibble::tibble(
       module = "batch",
       subject = ifelse(is.na(b$batch), "all batches", b$batch),

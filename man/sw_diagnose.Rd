@@ -33,7 +33,8 @@ analysis scale), or \code{NULL} when only \code{header} is used.}
 \code{sample_size}, \code{ndim}.}
 
 \item{batch}{\code{NULL} or a list with \code{batch}, \code{markers}, \code{n_events}, \code{seed},
-\code{order}, \code{reference_group}.}
+\code{order}, \code{reference_group}. A \code{population} entry is an error: this module
+stacks all-event rows only, so call \code{\link[=sw_batch_scores]{sw_batch_scores()}} for population rows.}
 
 \item{cluster}{\code{NULL} or a list with \code{markers}, \code{k}, \code{n_events}, \code{seed},
 \code{nstart}, \code{min_cluster_events}, \code{reference}, \code{reference_group}.}

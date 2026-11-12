@@ -4,7 +4,18 @@
 \alias{sw_batch_scores}
 \title{Score batch effects per marker}
 \usage{
-sw_batch_scores(data, batch, markers, n_events, seed, order, reference_group)
+sw_batch_scores(
+  data,
+  batch,
+  markers,
+  n_events,
+  seed,
+  order,
+  reference_group,
+  population,
+  min_events,
+  group_summary
+)
 }
 \arguments{
 \item{data}{A named list. Each element is a numeric matrix or data frame
@@ -30,12 +41,36 @@ removes donor differences from the batch scores. A group with files from
 fewer than two batches is skipped. \code{n_files} is the sum over groups.
 \code{NULL} scores all files together. A data frame (two-way form) is an
 error here, because removing the batch effect would remove what is measured.}
+
+\item{population}{\code{NULL} (skip), or a list with two elements. \code{labels} is a
+named list with one vector per file in \code{data}: the population label of
+every event, in the row order of that file (gate or cluster label; \code{NA}
+events are left out). \code{label_source} is \code{"gate"} or \code{"cluster"}. With
+\code{population}, the same scores are also computed inside each population,
+and two more checks are added (see Population rows). \code{NULL} returns the
+scores exactly as before.}
+
+\item{min_events}{\code{NULL} when \code{population} is \code{NULL}; otherwise a whole
+number, the fewest events a file needs in a population to be scored there
+(uncalibrated: there is no data-derived value). A thinner file x population
+cell gives a row with \code{status = "not_assessed"} and \code{NA} value. It cannot
+exceed \code{n_events}.}
+
+\item{group_summary}{\code{NULL} when \code{population} is \code{NULL}; otherwise \code{"median"}
+or \code{"mean"} (uncalibrated: the choice moves the numbers). It sets how
+per-group population rows are combined across the groups of
+\code{reference_group}. Rows without \code{population} always use the median. It is
+recorded but unused when \code{reference_group} is \code{NULL}.}
 }
 \value{
 A tibble of class \code{sw_batch_scores} with columns \code{check}, \code{marker},
 \code{batch} (the batch, or \code{"b1 ~ b2"} for a pair, or \code{NA} for the all-batch
 scores \code{median_range} and \code{eta2}), \code{value}, and \code{n_files} (files behind
-the value; for a pair, the smaller of the two batches).
+the value; for a pair, the smaller of the two batches). With \code{population}
+it also has \code{population} (\code{NA} for the all-event rows), \code{file} (set only
+on thin-cell rows), \code{n_events} (events drawn behind a population row),
+\code{status} (\code{"assessed"} or \code{"not_assessed"}), \code{label_source} and
+\code{eligibility_cap}.
 }
 \description{
 Give every marker four plain views of a batch effect, from files that carry
@@ -80,6 +115,28 @@ never transforms.
 must be passed. Events are drawn per file without replacement with \code{seed};
 a file with fewer events is an error. The caller's RNG state is restored.
 }
+\section{Population rows}{
+
+With \code{population}, up to \code{n_events} events are drawn per file and population
+(all of them when the file has fewer, but at least \code{min_events}). Every check
+above is computed inside each population from the files that pass
+\code{min_events}; a population with fewer than two batches among them gets one
+row with \code{status = "not_assessed"}. Two checks are added:
+\itemize{
+\item \code{pop_share} and \code{share_rest_z}: per batch, the median over its files of the
+share of the file's labelled events in the population, and its robust z over
+batches (needs 3 batches, else \code{NA}). Files, not cells, are the replicates.
+\item \code{batch_order_rho}: only when \code{order} is given. Spearman correlation across
+batches between the batch median of the marker and the batch order (the
+median \code{order} of its files). It needs 3 batches, else \code{NA}. It is also
+computed on all events (population \code{NA}).
+}
+
+Cluster labels depend on the batch they were fitted in, so with
+\code{label_source = "cluster"} every population row of the result is capped at
+\code{eligible_for_review} (column \code{eligibility_cap}).
+}
+
 \examples{
 set.seed(1)
 files <- lapply(1:6, function(i) {
@@ -93,7 +150,8 @@ sw_batch_scores(
   n_events = 100, # illustrative
   seed = 1,
   order = NULL,
-  reference_group = NULL
+  reference_group = NULL,
+  population = NULL
 )
 
 }

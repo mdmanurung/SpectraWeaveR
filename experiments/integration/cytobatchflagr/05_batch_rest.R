@@ -91,7 +91,8 @@ long <- lapply(SEEDS, function(seed) {
         BATCH_EVENTS,
         seed,
         order = NULL,
-        reference_group = NULL
+        reference_group = NULL,
+        population = NULL
       )
       per_marker <- list(
         pair_emd = sc[sc$check == "pair_emd", ] |>

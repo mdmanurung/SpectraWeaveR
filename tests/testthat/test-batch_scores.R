@@ -24,7 +24,8 @@ scores <- function(x, ...) {
     n_events = 200,
     seed = 1,
     order = NULL,
-    reference_group = NULL
+    reference_group = NULL,
+    population = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_batch_scores, args)
@@ -204,7 +205,8 @@ test_that("batch reference_group is required, covers every file and needs 2 batc
       c("A", "B"),
       n_events = 100,
       seed = 1,
-      order = NULL
+      order = NULL,
+      population = NULL
     ),
     "no default"
   )
@@ -272,4 +274,325 @@ test_that("rest_emd_z works with reference_group and is NA below 3 batches", {
   keep <- two$batch %in% c("b1", "b2")
   small <- scores(list(data = two$data[keep], batch = two$batch[keep]))
   expect_true(all(is.na(small$value[small$check == "rest_emd_z"])))
+})
+
+# Population rows -----------------------------------------------------------------
+
+# Two populations per file: p1 (first 60% of events) and p2. Marker A is shifted
+# in batch b2 only inside p2; p2 is also rarer in b3. Order rises with file index.
+make_pop <- function(n = 400, seed = 2) {
+  set.seed(seed)
+  ids <- paste0("f", 1:15)
+  b <- stats::setNames(rep(c("b1", "b2", "b3"), each = 5), ids)
+  labs <- list()
+  d <- lapply(ids, function(i) {
+    p2_share <- c(b1 = 0.4, b2 = 0.44, b3 = 0.15)[[b[[i]]]] +
+      0.01 * (match(i, ids) %% 5 - 2)
+    lab <- rep(c("p1", "p2"), c(round(n * (1 - p2_share)), round(n * p2_share)))
+    shift <- if (b[[i]] == "b2") 2 else 0
+    a <- stats::rnorm(n) + ifelse(lab == "p2", shift, 0)
+    labs[[i]] <<- lab
+    cbind(A = a, B = stats::rnorm(n))
+  })
+  names(d) <- ids
+  list(
+    data = d,
+    batch = b,
+    labels = labs,
+    order = stats::setNames(seq_along(ids), ids)
+  )
+}
+
+pop_scores <- function(x, ...) {
+  args <- list(
+    data = x$data,
+    batch = x$batch,
+    markers = c("A", "B"),
+    n_events = 200,
+    seed = 1,
+    order = NULL,
+    reference_group = NULL,
+    population = list(labels = x$labels, label_source = "gate"),
+    min_events = 50,
+    group_summary = "median"
+  )
+  args[names(list(...))] <- list(...)
+  do.call(sw_batch_scores, args)
+}
+
+test_that("population = NULL leaves the output identical to the all-event rows", {
+  x <- make_pop()
+  base <- scores(x, order = x$order)
+  expect_false(any(c("population", "status") %in% names(base)))
+  expect_false("batch_order_rho" %in% base$check)
+  withpop <- pop_scores(x, order = x$order)
+  same <- withpop[
+    is.na(withpop$population) & withpop$check != "batch_order_rho",
+  ]
+  expect_equal(
+    as.data.frame(same[, names(base)]),
+    as.data.frame(base),
+    ignore_attr = TRUE
+  )
+})
+
+test_that("population = NULL output matches values taken from main", {
+  # Fixed values from the pre-population sw_batch_scores() on main.
+  x <- make_batches()
+  res <- scores(x)
+  keep <- res$check %in% c("rest_emd", "median_range", "eta2")
+  expect_equal(
+    round(res$value[keep], 6),
+    c(
+      0.488298,
+      1.001171,
+      0.513379,
+      0.050133,
+      0.036921,
+      0.042708,
+      0.951835,
+      0.966398,
+      0.070282,
+      0.065502
+    )
+  )
+  expect_equal(
+    res$marker[keep],
+    c("A", "A", "A", "B", "B", "B", "A", "A", "B", "B")
+  )
+})
+
+test_that("a file with only NA labels is left out of the share rows", {
+  x <- make_pop()
+  x$labels[["f2"]] <- rep(NA_character_, 400)
+  res <- pop_scores(x)
+  sh <- res[
+    res$check %in% c("pop_share", "share_rest_z") & res$population %in% "p1",
+  ]
+  expect_false(anyNA(sh$value))
+  expect_equal(sh$n_files[sh$check == "pop_share" & sh$batch == "b1"], 4L)
+  expect_true(all(sh$status == "assessed"))
+  gap <- res[res$check == "cell_events" & res$file %in% "f2", ]
+  expect_equal(sort(gap$population), c("p1", "p2"))
+  expect_true(all(gap$status == "not_assessed" & gap$n_events == 0L))
+  # A batch whose files are all unlabelled drops out; two batches remain.
+  y <- make_pop()
+  for (f in names(y$labels)[y$batch == "b3"]) {
+    y$labels[[f]] <- rep(NA_character_, 400)
+  }
+  r2 <- pop_scores(y)
+  s2 <- r2[r2$check == "pop_share" & r2$population %in% "p1", ]
+  expect_setequal(s2$batch, c("b1", "b2"))
+  expect_false(anyNA(s2$value))
+})
+
+test_that("population combines with order and reference_group", {
+  x <- make_pop()
+  donor <- stats::setNames(
+    rep(c("d1", "d2", "d3", "d4", "d5"), 3),
+    names(x$data)
+  )
+  res <- pop_scores(x, order = x$order, reference_group = donor)
+  expect_true(all(c("batch_order_rho", "rest_emd") %in% res$check))
+  expect_true(any(!is.na(res$population)))
+  expect_false(anyNA(res$status))
+})
+
+test_that("population arguments are required when population is set", {
+  x <- make_pop()
+  expect_error(
+    scores(x, population = list(labels = x$labels, label_source = "gate")),
+    "min_events"
+  )
+  args <- list(
+    x$data,
+    x$batch,
+    c("A", "B"),
+    n_events = 100,
+    seed = 1,
+    order = NULL,
+    reference_group = NULL,
+    population = list(labels = x$labels, label_source = "gate"),
+    min_events = 50
+  )
+  expect_error(do.call(sw_batch_scores, args), "group_summary")
+  expect_error(pop_scores(x, group_summary = "max"), "group_summary")
+  expect_error(pop_scores(x, min_events = 500), "cannot exceed")
+  expect_error(
+    pop_scores(x, population = list(labels = x$labels)),
+    "label_source"
+  )
+  expect_error(
+    pop_scores(
+      x,
+      population = list(
+        labels = lapply(x$labels, \(l) l[-1]),
+        label_source = "gate"
+      )
+    ),
+    "one label per event"
+  )
+})
+
+test_that("a population-specific shift ranks first inside the population only", {
+  x <- make_pop()
+  res <- pop_scores(x)
+  re <- res[res$check == "rest_emd" & res$marker == "A" & res$batch == "b2", ]
+  p1 <- re$value[re$population %in% "p1"]
+  p2 <- re$value[re$population %in% "p2"]
+  expect_gt(p2, 1.2)
+  expect_lt(p1, 0.4)
+  # The shift is diluted in the all-event row.
+  allv <- re$value[is.na(re$population)]
+  expect_lt(allv, p2)
+  # Marker B has no shift in either population.
+  rb <- res[
+    res$check == "rest_emd" &
+      res$marker == "B" &
+      res$batch == "b2" &
+      !is.na(res$population),
+  ]
+  expect_true(all(rb$value < 0.4))
+})
+
+test_that("thin file x population cells give not_assessed rows with NA value", {
+  x <- make_pop()
+  # Make f1 almost free of p2.
+  x$labels[["f1"]] <- c(rep("p1", 395), rep("p2", 5))
+  res <- pop_scores(x, min_events = 50)
+  thin <- res[res$check == "cell_events", ]
+  expect_equal(thin$file, "f1")
+  expect_equal(thin$population, "p2")
+  expect_equal(thin$n_events, 5L)
+  expect_true(is.na(thin$value))
+  expect_equal(thin$status, "not_assessed")
+  # A population with fewer than two batches left is not assessed as a whole.
+  y <- make_pop()
+  for (f in names(y$labels)[y$batch != "b1"]) {
+    y$labels[[f]] <- rep("p1", 400)
+  }
+  r2 <- pop_scores(y)
+  expect_equal(
+    r2$status[r2$check == "population_scores" & r2$population == "p2"],
+    "not_assessed"
+  )
+  expect_false("rest_emd" %in% r2$check[r2$population %in% "p2"])
+})
+
+test_that("share_rest_z finds the batch with the rare population", {
+  x <- make_pop()
+  res <- pop_scores(x)
+  z <- res[res$check == "share_rest_z" & res$population == "p2", ]
+  expect_equal(z$batch[which.max(abs(z$value))], "b3")
+  sh <- res[res$check == "pop_share" & res$population == "p2", ]
+  expect_equal(
+    sh$value[sh$batch == "b3"],
+    0.15,
+    tolerance = 1e-8,
+    ignore_attr = TRUE
+  )
+  expect_equal(
+    sh$value[sh$batch == "b1"],
+    0.4,
+    tolerance = 1e-8,
+    ignore_attr = TRUE
+  )
+})
+
+test_that("batch_order_rho follows a planted drift across batches", {
+  x <- make_pop()
+  # Put a rising offset on marker B by batch (batch order = file index order).
+  off <- c(b1 = 0, b2 = 0.5, b3 = 1)
+  x$data <- Map(
+    function(m, f) {
+      m[, "B"] <- m[, "B"] + off[[x$batch[[f]]]]
+      m
+    },
+    x$data,
+    names(x$data)
+  )
+  res <- pop_scores(x, order = x$order)
+  r <- res[res$check == "batch_order_rho" & is.na(res$population), ]
+  expect_equal(r$value[r$marker == "B"], 1, ignore_attr = TRUE)
+  expect_true(all(is.na(r$batch)))
+  # No order: no batch_order_rho rows at all.
+  expect_false("batch_order_rho" %in% pop_scores(x)$check)
+  # Fewer than 3 batches gives NA.
+  keep <- names(x$batch)[x$batch != "b3"]
+  y <- list(data = x$data[keep], batch = x$batch[keep], labels = x$labels[keep])
+  r2 <- pop_scores(y, order = x$order[keep])
+  expect_true(all(is.na(r2$value[r2$check == "batch_order_rho"])))
+})
+
+test_that("cluster labels cap eligibility and the label source is recorded", {
+  x <- make_pop()
+  g <- pop_scores(x)
+  cl <- pop_scores(
+    x,
+    population = list(labels = x$labels, label_source = "cluster")
+  )
+  expect_true(all(is.na(g$eligibility_cap)))
+  expect_equal(
+    unique(cl$eligibility_cap[!is.na(cl$population)]),
+    "eligible_for_review"
+  )
+  expect_true(all(is.na(cl$eligibility_cap[is.na(cl$population)])))
+  expect_equal(unique(cl$label_source[!is.na(cl$population)]), "cluster")
+  expect_equal(attr(cl, "label_source"), "cluster")
+})
+
+test_that("population draws reproduce with a seed and restore the RNG state", {
+  x <- make_pop()
+  set.seed(99)
+  before <- .Random.seed
+  a <- pop_scores(x, seed = 5)
+  expect_identical(.Random.seed, before)
+  expect_equal(pop_scores(x, seed = 5), a)
+  expect_false(isTRUE(all.equal(pop_scores(x, seed = 6)$value, a$value)))
+})
+
+test_that("reference groups combine population rows with group_summary", {
+  x <- make_pop()
+  # Group = pairs of files: each group has files from one batch only except these.
+  grp <- stats::setNames(rep(paste0("d", 1:5), 3), names(x$data))
+  m <- pop_scores(x, reference_group = grp, group_summary = "median")
+  a <- pop_scores(x, reference_group = grp, group_summary = "mean")
+  expect_equal(attr(a, "group_summary"), "mean")
+  k <- m$check == "rest_emd" & m$population %in% "p2" & m$marker == "A"
+  expect_gt(max(m$value[k]), 1)
+  expect_false(isTRUE(all.equal(m$value, a$value)))
+})
+
+test_that("sw_batch_interaction separates a population-specific shift from a common one", {
+  x <- make_pop()
+  res <- pop_scores(x)
+  it <- sw_batch_interaction(res, which_check = "rest_emd", min_populations = 2)
+  expect_named(
+    it,
+    c(
+      "marker",
+      "batch",
+      "check",
+      "shift_pooled",
+      "shift_sd_across_populations",
+      "ratio",
+      "n_populations",
+      "status"
+    )
+  )
+  ra <- it$ratio[it$marker == "A" & it$batch == "b2"]
+  rb <- it$ratio[it$marker == "B" & it$batch == "b2"]
+  expect_gt(ra, 0.5)
+  expect_gt(ra, rb)
+  # Too few populations: not_assessed with NA.
+  few <- sw_batch_interaction(
+    res,
+    which_check = "rest_emd",
+    min_populations = 3
+  )
+  expect_true(all(few$status == "not_assessed"))
+  expect_true(all(is.na(few$ratio)))
+  expect_error(sw_batch_interaction(res), "no default")
+  expect_error(sw_batch_interaction(scores(x), "rest_emd", 2), "population")
+  expect_error(sw_batch_interaction(res, "rest_emd", 1), "at least 2")
 })
