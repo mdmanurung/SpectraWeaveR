@@ -22,6 +22,8 @@ those, because a different choice flags different files.
 | File unlike the other files | `sw_anomaly_features()` + `sw_anomaly_flag_outlier()` | forest score per file |
 | File unlike a reference set | `sw_anomaly_features()` + `sw_anomaly_flag_novelty()` | log-density per file |
 | Batch effect per marker | `sw_batch_scores()` | pairwise EMD, batch-vs-rest EMD and its z, median range, eta2, spread ratio, order drift |
+| Batch distance, joint | `sw_batch_otd()` | debiased Sinkhorn divergence between batches, pairwise or batch vs rest; uncalibrated |
+| Batch mixing | `sw_batch_mixing()` | LISI and kBET rejection rate in a k-nearest-neighbour graph, overall, per batch and per population; uncalibrated |
 | Signal stability over time | `sw_qc_run()`, `sw_qc_plot()`, `sw_qc_heatmap()` | PeacoQC result, plot, heatmap |
 | All of the above in one table | `sw_diagnose()`, `sw_diagnosis_top()` | stacked table; top values per check |
 | Browse the result | `sw_qc_app()` | Shiny explorer |
