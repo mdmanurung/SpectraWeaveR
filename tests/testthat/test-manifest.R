@@ -101,3 +101,28 @@ test_that("print method runs", {
   m <- sw_sample_manifest(df, "id", "b", study = "cohort")
   expect_output(print(m), "sw_manifest")
 })
+
+test_that("synthetic_reference needs a source_batch and is accepted with one", {
+  d <- data.frame(
+    id = c("s1", "s2", "syn1"),
+    b = c("b1", "b2", "b1"),
+    role = c("technical_replicate", "technical_replicate", "synthetic_reference"),
+    rid = c("R1", "R1", "S1"),
+    src = c(NA, NA, "b2")
+  )
+  m <- sw_sample_manifest(
+    d, "id", "b", reference_role = "role", reference_id = "rid", source_batch = "src"
+  )
+  expect_equal(m$source_batch[3], "b2")
+  expect_error(
+    sw_sample_manifest(d, "id", "b", reference_role = "role", reference_id = "rid"),
+    "source_batch"
+  )
+  d$src[3] <- NA
+  expect_error(
+    sw_sample_manifest(
+      d, "id", "b", reference_role = "role", reference_id = "rid", source_batch = "src"
+    ),
+    "source_batch"
+  )
+})

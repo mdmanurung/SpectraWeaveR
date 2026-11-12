@@ -15,7 +15,8 @@ sw_sample_manifest(
   aliquot = NULL,
   condition = NULL,
   reference_role = NULL,
-  reference_id = NULL
+  reference_id = NULL,
+  source_batch = NULL
 )
 }
 \arguments{
@@ -25,7 +26,7 @@ sw_sample_manifest(
 sample id and the batch. Required, no default, because the source
 column names differ between projects.}
 
-\item{study, run, instrument, donor, aliquot, condition, reference_role, reference_id}{Optional names of columns in \code{df}. \code{NULL} means the column is
+\item{study, run, instrument, donor, aliquot, condition, reference_role, reference_id, source_batch}{Optional names of columns in \code{df}. \code{NULL} means the column is
 not available.}
 }
 \value{
@@ -41,7 +42,8 @@ the correctors (\code{sw_corrector_*}) and study intake. It replaces the
 \details{
 Standard columns in the result: \code{sample_id}, \code{batch}, and any of
 \code{study}, \code{run}, \code{instrument}, \code{donor}, \code{aliquot},
-\code{condition}, \code{reference_role}, \code{reference_id} that you map.
+\code{condition}, \code{reference_role}, \code{reference_id},
+\code{source_batch} that you map.
 Extra columns of \code{df} are kept after them.
 
 Checks, all of which stop with a message:
@@ -52,8 +54,13 @@ Checks, all of which stop with a message:
 studies), and each \code{run} belongs to one batch.
 \item \code{reference_role} and \code{reference_id} come together, and
 the role is one of \code{none}, \code{technical_replicate},
-\code{anchor}, \code{biological_pseudo_control}.
+\code{anchor}, \code{biological_pseudo_control},
+\code{synthetic_reference}.
 \item A sample with a measured reference role has a \code{reference_id}.
+\item A sample with role \code{synthetic_reference} has a
+\code{source_batch}: the batch its cells were drawn from. Like
+\code{biological_pseudo_control}, it is never a measured reference and
+never bridges batches in \code{\link{sw_design_audit}}.
 }
 }
 \examples{

@@ -20,8 +20,10 @@
 #'     contrast. A shared reference and a covariate adjustment do not change
 #'     this.}
 #' }
-#' A reference with role \code{"biological_pseudo_control"} never counts as a
-#' measured technical reference.
+#' A reference with role \code{"biological_pseudo_control"} or
+#' \code{"synthetic_reference"} never counts as a measured technical reference
+#' and never bridges batches. A \code{synthetic_reference} row needs a
+#' \code{source_batch} column value (the batch its cells came from).
 #'
 #' @param samples A data frame with one row per sample. It needs a
 #'   \code{sample_id} column, the \code{batch_col} column, and one column for
@@ -85,6 +87,11 @@
 #'       reference observation group: \code{batch}, \code{reference_id},
 #'       \code{donor}, \code{aliquot}, \code{n_samples}. \code{donor} and
 #'       \code{aliquot} are \code{NA} when their column is not declared.}
+#'     \item{\code{synthetic_references}}{Tibble of rows with role
+#'       \code{synthetic_reference}, kept apart from measured references:
+#'       \code{sample_id}, \code{batch}, \code{reference_id},
+#'       \code{source_batch}. Zero rows when there are none. These rows
+#'       appear in no coverage, component, graph or bridge table.}
 #'     \item{\code{anchor}}{The declared anchor batch, or \code{NULL}.}
 #'     \item{\code{anchor_bridge}}{Tibble with one row per non-anchor batch:
 #'       \code{batch}, \code{n_shared_with_anchor}, \code{shared_ids}
@@ -259,13 +266,28 @@ sw_design_audit <- function(
   }
   bad_role <- setdiff(
     unique(stats::na.omit(as.character(samples$reference_role))),
-    c("none", "technical_replicate", "anchor", "biological_pseudo_control")
+    c(
+      "none", "technical_replicate", "anchor", "biological_pseudo_control",
+      "synthetic_reference"
+    )
   )
   if (length(bad_role) > 0) {
     stop(
       "Unknown reference_role value(s): ",
       paste(bad_role, collapse = ", "),
-      ". Use none, technical_replicate, anchor or biological_pseudo_control.",
+      ". Use none, technical_replicate, anchor, biological_pseudo_control or ",
+      "synthetic_reference.",
+      call. = FALSE
+    )
+  }
+  is_synthetic <- samples$reference_role %in% "synthetic_reference"
+  if (
+    any(is_synthetic) &&
+      (!"source_batch" %in% names(samples) ||
+        anyNA(samples$source_batch[is_synthetic]))
+  ) {
+    stop(
+      "Samples with role 'synthetic_reference' need a 'source_batch'.",
       call. = FALSE
     )
   }
@@ -559,6 +581,7 @@ sw_design_audit <- function(
       reference_coverage = refs$coverage,
       reference_components = refs$components,
       reference_graph = graph,
+      synthetic_references = .sw_synthetic_references(samples),
       anchor = anchor,
       anchor_bridge = bridge,
       n_studies = n_studies,
@@ -692,6 +715,17 @@ print.sw_design_audit <- function(x, ...) {
     logical(1)
   ))
   one_each && length(unique(vapply(levels_by_batch, `[`, character(1), 1))) > 1
+}
+
+# Rows with role synthetic_reference, listed apart from measured references.
+.sw_synthetic_references <- function(samples) {
+  syn <- samples$reference_role %in% "synthetic_reference"
+  tibble::tibble(
+    sample_id = as.character(samples$sample_id[syn]),
+    batch = as.character(samples$.batch[syn]),
+    reference_id = as.character(samples$reference_id[syn]),
+    source_batch = as.character(samples[["source_batch"]][syn])
+  )
 }
 
 # Measured-reference coverage per batch and connected components of batches.
