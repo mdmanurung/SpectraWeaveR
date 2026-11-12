@@ -51,7 +51,9 @@ An object of class \code{sw_batch_decision}: a list with
 \code{assessments} (tibble: \code{candidate_id}, \code{state},
 \code{reason}, \code{guardrails_failed} list, the evidence columns,
 \code{protected_contrast_change} (worst absolute change, \code{NA} when
-not assessed) and \code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
+not assessed), \code{protected_contrast_n_not_assessed} (marker and
+population rows the gate could not judge), \code{protected_contrast_note}
+and \code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
 unless exactly one candidate is recommended),
 \code{recommendation_withheld_reason}, \code{pareto_front},
 \code{pareto_comparable}, \code{warnings}, \code{policy_settings}
@@ -128,6 +130,7 @@ policy <- sw_batch_policy(
   max_mad_compression_fraction = 0.25, max_joint_structure_change = 0.1,
   no_effect_emd = 0.05, require_reference_supported = TRUE,
   max_contrast_change = NULL, min_donors_per_condition = NULL,
+  min_contrast_spread_ratio = NULL,
   threshold_origins = c(
     min_coverage = origin, min_emd_reduction = origin,
     max_mad_compression_fraction = origin,

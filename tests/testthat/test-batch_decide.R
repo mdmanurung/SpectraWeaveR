@@ -13,7 +13,8 @@ make_policy <- function(
   calibrated = FALSE,
   require_ref = TRUE,
   contrast = NULL,
-  min_donors = NULL
+  min_donors = NULL,
+  spread_ratio = if (is.null(contrast)) NULL else 2
 ) {
   origin <- if (calibrated) {
     "calibrated on spike-in study"
@@ -35,6 +36,7 @@ make_policy <- function(
     require_reference_supported = require_ref,
     max_contrast_change = contrast,
     min_donors_per_condition = min_donors,
+    min_contrast_spread_ratio = spread_ratio,
     threshold_origins = stats::setNames(
       rep(origin, length(all_thresholds)),
       all_thresholds
@@ -126,6 +128,7 @@ test_that("every policy argument has no default", {
       require_reference_supported = TRUE,
       max_contrast_change = NULL,
       min_donors_per_condition = NULL,
+      min_contrast_spread_ratio = NULL,
       calibration_artifacts = character(0)
     ),
     "threshold_origins"
@@ -143,6 +146,7 @@ test_that("threshold_origins must name all five thresholds", {
       require_reference_supported = TRUE,
       max_contrast_change = NULL,
       min_donors_per_condition = NULL,
+      min_contrast_spread_ratio = NULL,
       threshold_origins = c(min_coverage = "x"),
       calibration_artifacts = character(0)
     ),
@@ -164,6 +168,7 @@ test_that("calibration needs a non-uncalibrated origin and an artifact for every
     require_reference_supported = TRUE,
     max_contrast_change = NULL,
     min_donors_per_condition = NULL,
+    min_contrast_spread_ratio = NULL,
     threshold_origins = stats::setNames(rep("from study X", 5), thresholds),
     calibration_artifacts = stats::setNames(rep("a.json", 4), thresholds[1:4])
   )
@@ -490,21 +495,42 @@ test_that("contrast gate arguments are required and validated", {
   expect_error(
     do.call(
       sw_batch_policy,
-      c(base, list(max_contrast_change = 0.2, min_donors_per_condition = NULL))
+      c(
+        base,
+        list(
+          max_contrast_change = 0.2,
+          min_donors_per_condition = NULL,
+          min_contrast_spread_ratio = 2
+        )
+      )
     ),
     "min_donors_per_condition"
   )
   expect_error(
     do.call(
       sw_batch_policy,
-      c(base, list(max_contrast_change = 0.2, min_donors_per_condition = 4))
+      c(
+        base,
+        list(
+          max_contrast_change = 0.2,
+          min_donors_per_condition = 4,
+          min_contrast_spread_ratio = 2
+        )
+      )
     ),
     "one non-empty origin"
   )
   expect_error(
     do.call(
       sw_batch_policy,
-      c(base, list(max_contrast_change = NULL, min_donors_per_condition = 4))
+      c(
+        base,
+        list(
+          max_contrast_change = NULL,
+          min_donors_per_condition = 4,
+          min_contrast_spread_ratio = NULL
+        )
+      )
     ),
     "must be NULL"
   )
@@ -519,7 +545,8 @@ test_that("the metric finds a planted erased contrast and a kept one", {
   res <- sw_protected_contrast_change(
     make_contrast_records(),
     identity_id = "none",
-    min_donors_per_condition = 4
+    min_donors_per_condition = 4,
+    min_contrast_spread_ratio = 2
   )
   worst <- stats::setNames(
     res$summary$worst_abs_change,
@@ -541,7 +568,8 @@ test_that("medians are taken per donor first, not per cell", {
   res <- sw_protected_contrast_change(
     dplyr::bind_rows(rec, extra),
     identity_id = "none",
-    min_donors_per_condition = 4
+    min_donors_per_condition = 4,
+    min_contrast_spread_ratio = 2
   )
   expect_lt(
     res$summary$worst_abs_change[res$summary$candidate_id == "keep"],
@@ -553,7 +581,8 @@ test_that("thin conditions are not assessed and the note says why", {
   res <- sw_protected_contrast_change(
     make_contrast_records(n_donors = 3),
     identity_id = "none",
-    min_donors_per_condition = 4
+    min_donors_per_condition = 4,
+    min_contrast_spread_ratio = 2
   )
   expect_true(all(is.na(res$summary$worst_abs_change)))
   expect_true(all(grepl("not_assessed", res$detail$status)))
@@ -566,12 +595,13 @@ test_that("metric errors without required arguments and is deterministic", {
     sw_protected_contrast_change(
       make_contrast_records(),
       identity_id = "none",
-      min_donors_per_condition = 1
+      min_donors_per_condition = 1,
+      min_contrast_spread_ratio = 2
     ),
     ">= 2"
   )
-  a <- sw_protected_contrast_change(make_contrast_records(), "none", 4)
-  b <- sw_protected_contrast_change(make_contrast_records(), "none", 4)
+  a <- sw_protected_contrast_change(make_contrast_records(), "none", 4, 2)
+  b <- sw_protected_contrast_change(make_contrast_records(), "none", 4, 2)
   expect_identical(a, b)
 })
 
@@ -611,4 +641,124 @@ test_that("the identity candidate is kept and a gate-off policy ignores records"
   )
   expect_equal(state_of(off, "erase"), "recommended_under_policy")
   expect_null(off$contrast_detail)
+})
+
+# Two markers: M1 has a real contrast and is kept; M2 has none (noise only).
+make_two_marker_records <- function(drop_m2_candidate = FALSE) {
+  set.seed(2)
+  grid <- expand.grid(
+    donor = paste0("d", 1:6),
+    condition = c("ctrl", "case"),
+    event = 1:10,
+    stringsAsFactors = FALSE
+  )
+  grid$donor <- paste(grid$donor, grid$condition, sep = "_")
+  one <- function(id, marker, value) {
+    tibble::tibble(
+      candidate_id = id,
+      donor = grid$donor,
+      condition = grid$condition,
+      marker = marker,
+      population = "T",
+      value = value
+    )
+  }
+  m1 <- ifelse(grid$condition == "case", 3, 2) +
+    stats::rnorm(nrow(grid), sd = 0.05)
+  donor_shift <- stats::rnorm(length(unique(grid$donor)), sd = 0.05)
+  m2 <- 1 + donor_shift[match(grid$donor, unique(grid$donor))]
+  out <- dplyr::bind_rows(
+    one("none", "M1", m1),
+    one("none", "M2", m2),
+    one("shift", "M1", m1),
+    one("shift", "M2", m2 + 0.5 * (grid$condition == "case"))
+  )
+  if (drop_m2_candidate) {
+    out <- out[!(out$candidate_id == "shift" & out$marker == "M2"), ]
+  }
+  out
+}
+
+test_that("a marker with no baseline contrast cannot set the worst change", {
+  res <- sw_protected_contrast_change(
+    make_two_marker_records(),
+    identity_id = "none",
+    min_donors_per_condition = 4,
+    min_contrast_spread_ratio = 3
+  )
+  det <- res$detail
+  expect_match(det$status[det$marker == "M2"], "below donor spread")
+  expect_equal(det$status[det$marker == "M1"], "assessed")
+  expect_lt(
+    res$summary$worst_abs_change[res$summary$candidate_id == "shift"],
+    0.05
+  )
+  expect_equal(
+    res$summary$n_not_assessed[res$summary$candidate_id == "shift"],
+    1L
+  )
+  expect_match(res$summary$note[2], "1 not assessed")
+  # With the ratio at zero the noise marker is judged and drives the worst value.
+  open_gate <- sw_protected_contrast_change(
+    make_two_marker_records(),
+    identity_id = "none",
+    min_donors_per_condition = 4,
+    min_contrast_spread_ratio = 0
+  )
+  expect_gt(open_gate$summary$worst_abs_change[2], 1)
+})
+
+test_that("the decision records rows the gate could not judge", {
+  pol <- make_policy(calibrated = TRUE, contrast = 0.2, min_donors = 4)
+  cand <- contrast_candidates()[0, ]
+  cand <- tibble::tibble(
+    candidate_id = c("shift", "none"),
+    status = "ok",
+    emd_median = c(0.3, 0.8),
+    emd_worst_marker_median = c(0.4, 1.2),
+    emd_relative_reduction = c(0.6, 0),
+    coverage = 1,
+    mad_compression_fraction = c(0.05, 0),
+    joint_structure_distance_median = c(0.02, 0),
+    evidence_comparison_ids = list("c1", "c1")
+  )
+  res <- decide(
+    cand,
+    policy = pol,
+    contrast_records = make_two_marker_records()
+  )
+  row <- row_of(res, "shift")
+  expect_equal(row$protected_contrast_n_not_assessed, 1L)
+  expect_match(row$protected_contrast_note, "1 not assessed")
+  expect_match(row$reason, "1 protected-contrast row\\(s\\) were not assessed")
+})
+
+test_that("a candidate absent from identity-only records gets the missing-record reason", {
+  pol <- make_policy(calibrated = TRUE, contrast = 0.2, min_donors = 4)
+  only_identity <- make_contrast_records()
+  only_identity <- only_identity[only_identity$candidate_id == "none", ]
+  res <- decide(
+    contrast_candidates(),
+    policy = pol,
+    contrast_records = only_identity
+  )
+  expect_match(row_of(res, "keep")$reason, "no donor and condition records")
+  expect_false(grepl("is the baseline", row_of(res, "keep")$reason))
+  null_res <- decide(
+    contrast_candidates(),
+    policy = pol,
+    contrast_records = NULL
+  )
+  expect_match(row_of(null_res, "keep")$reason, "no donor or condition data")
+})
+
+test_that("the spread ratio is required and checked", {
+  expect_error(
+    sw_protected_contrast_change(make_contrast_records(), "none", 4),
+    "min_contrast_spread_ratio"
+  )
+  expect_error(
+    sw_protected_contrast_change(make_contrast_records(), "none", 4, -1),
+    ">= 0"
+  )
 })

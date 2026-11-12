@@ -4,7 +4,12 @@
 \alias{sw_protected_contrast_change}
 \title{Protected-contrast change per candidate}
 \usage{
-sw_protected_contrast_change(records, identity_id, min_donors_per_condition)
+sw_protected_contrast_change(
+  records,
+  identity_id,
+  min_donors_per_condition,
+  min_contrast_spread_ratio
+)
 }
 \arguments{
 \item{records}{\code{NULL} or a data frame with columns
@@ -18,13 +23,19 @@ sw_protected_contrast_change(records, identity_id, min_donors_per_condition)
 \item{min_donors_per_condition}{Integer, at least 2. Fewest donors per
 condition for a marker and population to be assessed. Uncalibrated, no
 default.}
+
+\item{min_contrast_spread_ratio}{Numeric, at least 0. Smallest ratio of
+\code{abs(before)} to the pooled donor-level standard deviation for a
+marker and population to be assessed. Uncalibrated, no default.}
 }
 \value{
 A list with \code{summary} (tibble: \code{candidate_id},
-\code{worst_abs_change}, \code{n_assessed}, \code{note}) and
-\code{detail} (tibble: \code{candidate_id}, \code{marker},
-\code{population}, \code{contrast}, \code{before}, \code{after},
-\code{change}, \code{min_donors}, \code{status}).
+\code{worst_abs_change}, \code{n_assessed}, \code{n_not_assessed},
+\code{note}), \code{detail} (tibble: \code{candidate_id},
+\code{marker}, \code{population}, \code{contrast}, \code{before},
+\code{after}, \code{change}, \code{min_donors}, \code{status}) and
+\code{abstained} (\code{TRUE} when the records allowed no judgement at
+all, so the summary holds one note for every candidate).
 }
 \description{
 Measures how far a correction candidate moves the biological contrast that
@@ -39,9 +50,15 @@ and ranks nothing across markers.
 \details{
 A marker and population is not assessed when a condition has fewer than
 \code{min_donors_per_condition} donors in the identity or the candidate
-data, or when the \code{before} contrast is within 1e-9 of zero. When no row
-is assessed, the summary gives \code{NA} with a stated \code{note}. Rows with
-a missing donor, condition or value are dropped and counted in the note.
+data, when the \code{before} contrast is within 1e-9 of zero, or when
+\code{abs(before)} is below \code{min_contrast_spread_ratio} times the
+pooled donor-level standard deviation of the identity data (donor medians
+around their condition median). The last rule keeps markers with no
+condition contrast out of the relative change. Rows that are not assessed
+stay out of \code{worst_abs_change}, are counted in \code{n_not_assessed}
+and are named in the note. When no row is assessed, the summary gives
+\code{NA} with a stated \code{note}. Rows with a missing donor, condition or
+value are dropped and counted in the note.
 }
 \examples{
 records <- expand.grid(
@@ -53,7 +70,8 @@ records$value <- ifelse(records$condition == "case", 2, 1) +
   0.01 * as.integer(factor(records$donor))
 records$value[records$candidate_id == "flat"] <- 1.5
 sw_protected_contrast_change(
-  records, identity_id = "uncorrected", min_donors_per_condition = 3
+  records, identity_id = "uncorrected", min_donors_per_condition = 3,
+  min_contrast_spread_ratio = 2
 )$summary
 
 }
