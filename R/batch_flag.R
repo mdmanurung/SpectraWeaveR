@@ -16,19 +16,28 @@
 #'
 #' For each control, marker and metric, the per-batch values form one panel.
 #' Quartiles are taken across batches. A batch is flagged when its value lies
-#' below `Q1 - k * IQR` or above `Q3 + k * IQR`, with `k = iqr_multiplier`.
+#' below `Q1 - k * IQR` or above `Q3 + k * IQR`, with `k = iqr_multiplier`,
+#' and the value lies at least `min_effect` beyond that fence.
 #'
 #' @details
 #' **Scale.** `cells` must already be on the analysis scale (for example
 #' arcsinh-transformed). The scale is the caller's choice. `thresholds` must be
 #' on that same scale.
 #'
-#' **No defaults for the method knobs.** `iqr_multiplier`, `min_cells_per_side`
-#' and `quantile_type` have no default because each one changes which batches
+#' **No defaults for the method knobs.** `iqr_multiplier`, `min_cells_per_side`,
+#' `quantile_type` and `min_effect` have no default because each one changes which batches
 #' are flagged. The source methods use `iqr_multiplier = 1.5` and
 #' `min_cells_per_side = 100`. Those are conventions, not validated cutoffs.
 #' `quantile_type` matters most with 4 to 6 batches, where R's quantile types
 #' give visibly different fences.
+#'
+#' **Minimum effect.** The Tukey fence alone flags noise when batches agree,
+#' because a tight spread gives a tight fence. `effect` is the distance of a
+#' value beyond the nearer fence, in the unit of the metric (zero inside the
+#' fence). A value outside the fence with `effect < min_effect[[metric]]` is
+#' not flagged: `flag` is `FALSE` and `status` is `"below_min_effect"`. The row
+#' was assessed, so it counts as assessed in [sw_flag_iqr_summary()]. With
+#' `min_effect = 0` for every metric the result equals the plain fence.
 #'
 #' **No automatic thresholds.** Positivity thresholds are analyst-supplied.
 #' Different analysts pick different thresholds for the same marker, and the
@@ -67,14 +76,21 @@
 #'   marker, on the same scale as `cells`. Required; there is no automatic
 #'   thresholding.
 #' @param iqr_multiplier Positive number `k` for the fence `Q1 - k * IQR`,
-#'   `Q3 + k * IQR`. Required. The source methods use 1.5.
+#'   `Q3 + k * IQR`. Required, uncalibrated. The source methods use 1.5.
 #' @param min_cells_per_side Non-negative whole number. A batch needs at least
-#'   this many events on the side a metric uses. Required. The source methods
+#'   this many events on the side a metric uses. Required, uncalibrated. The
+#'   source methods
 #'   use 100.
+#' @param min_effect Named numeric vector with exactly the names `neg_median`,
+#'   `pos_median` and `pct_positive`; each value is finite and at least 0.
+#'   Required, uncalibrated: no value is validated, and the choice changes
+#'   which batches are flagged. Units: `neg_median` and `pos_median` are in
+#'   the units of the analysis scale of `cells` (for example arcsinh units);
+#'   `pct_positive` is in percentage points.
 #' @param batch_col Name of the batch column.
 #' @param control_col Name of the control-sample id column.
 #' @param quantile_type Integer 1 to 9, passed as `type` to
-#'   [stats::quantile()]. Required.
+#'   [stats::quantile()]. Required, uncalibrated.
 #' @param sample_col Optional name of a column holding one id per acquired
 #'   sample. When given, a control acquired more than once in one batch is an
 #'   error.
@@ -82,8 +98,10 @@
 #' @return A tibble of class `sw_flag_iqr`, one row per control, marker,
 #'   metric and batch, with columns `control`, `marker`, `metric`, `batch`,
 #'   `value`, `n_cells` (events on the side the metric uses), `q1`, `q3`,
-#'   `lower`, `upper`, `flag`, `status` and `reason`. `control` and `batch`
-#'   are character. Attribute `params` echoes every argument plus the batches
+#'   `lower`, `upper`, `effect`, `flag`, `status` and `reason`. `effect` is the
+#'   distance beyond the fence in metric units (`NA` when not assessed).
+#'   `status` is `"ok"`, `"below_min_effect"` or one of the ineligible or
+#'   undefined statuses. `control` and `batch` are character. Attribute `params` echoes every argument plus the batches
 #'   found. Use [sw_flag_iqr_summary()] to count flags per batch or marker.
 #'
 #' @examples
@@ -104,7 +122,8 @@
 #'   thresholds = c(CD3 = 1.5),
 #'   iqr_multiplier = 1.5,
 #'   min_cells_per_side = 50,
-#'   quantile_type = 7
+#'   quantile_type = 7,
+#'   min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)
 #' )
 #' res[res$flag %in% TRUE, c("batch", "marker", "metric", "value")]
 #' sw_flag_iqr_summary(res, by = "batch")
@@ -119,6 +138,7 @@ sw_flag_iqr <- function(
   batch_col = "batch",
   control_col = "control",
   quantile_type,
+  min_effect,
   sample_col = NULL
 ) {
   # Required arguments: each one changes the result, so none has a default.
@@ -140,6 +160,7 @@ sw_flag_iqr <- function(
   if (missing(quantile_type)) {
     stop("`quantile_type` is required and has no default.", call. = FALSE)
   }
+  .sw_stop_missing(c(min_effect = missing(min_effect)))
 
   .sw_flag_check_args(
     cells,
@@ -150,6 +171,7 @@ sw_flag_iqr <- function(
     batch_col,
     control_col,
     quantile_type,
+    min_effect,
     sample_col
   )
 
@@ -206,7 +228,8 @@ sw_flag_iqr <- function(
       n_batches = length(batches),
       iqr_multiplier = iqr_multiplier,
       min_cells_per_side = min_cells_per_side,
-      quantile_type = quantile_type
+      quantile_type = quantile_type,
+      min_effect = min_effect
     )
   }) |>
     dplyr::bind_rows()
@@ -221,6 +244,7 @@ sw_flag_iqr <- function(
     "q3",
     "lower",
     "upper",
+    "effect",
     "flag",
     "status",
     "reason"
@@ -234,6 +258,7 @@ sw_flag_iqr <- function(
     batch_col = batch_col,
     control_col = control_col,
     quantile_type = quantile_type,
+    min_effect = min_effect[c("neg_median", "pos_median", "pct_positive")],
     sample_col = sample_col,
     batches = batches,
     controls = controls
@@ -245,8 +270,8 @@ sw_flag_iqr <- function(
 #' Count IQR flags per batch or per marker
 #'
 #' Count flagged, assessed and not-assessed rows of an [sw_flag_iqr()] result.
-#' A row is assessed when its status is `"ok"`. Not-assessed rows are counted
-#' apart, so a batch with no flags and no assessed rows is visible as such.
+#' A row is assessed when its status is `"ok"` or `"below_min_effect"`.
+#' Not-assessed rows are counted apart, so a batch with no flags and no assessed rows is visible as such.
 #'
 #' @param x An `sw_flag_iqr` result.
 #' @param by `"batch"` or `"marker"`.
@@ -262,7 +287,8 @@ sw_flag_iqr <- function(
 #' )
 #' res <- sw_flag_iqr(
 #'   cells, "CD4", c(CD4 = 1),
-#'   iqr_multiplier = 1.5, min_cells_per_side = 1, quantile_type = 7
+#'   iqr_multiplier = 1.5, min_cells_per_side = 1, quantile_type = 7,
+#'   min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)
 #' )
 #' sw_flag_iqr_summary(res, by = "marker")
 #'
@@ -276,7 +302,7 @@ sw_flag_iqr_summary <- function(x, by) {
   }
   # One factor over the keys, so every count comes back in the same order.
   by_key <- factor(x[[by]], levels = sort(unique(x[[by]])))
-  assessed <- x[["status"]] == "ok"
+  assessed <- x[["status"]] %in% c("ok", "below_min_effect")
   flagged <- x[["flag"]] %in% TRUE
   res <- tibble::tibble(
     key = levels(by_key),
@@ -318,6 +344,7 @@ summary.sw_flag_iqr <- function(object, ...) {
   batch_col,
   control_col,
   quantile_type,
+  min_effect,
   sample_col
 ) {
   if (!is.data.frame(cells)) {
@@ -380,6 +407,20 @@ summary.sw_flag_iqr <- function(object, ...) {
   }
   if (length(quantile_type) != 1L || !quantile_type %in% 1:9) {
     stop("`quantile_type` must be one integer from 1 to 9.", call. = FALSE)
+  }
+  metric_names <- c("neg_median", "pos_median", "pct_positive")
+  if (
+    !is.numeric(min_effect) ||
+      !setequal(names(min_effect), metric_names) ||
+      length(min_effect) != 3L ||
+      !all(is.finite(min_effect)) ||
+      any(min_effect < 0)
+  ) {
+    stop(
+      "`min_effect` must be a named numeric vector with names neg_median, ",
+      "pos_median and pct_positive; each value finite and >= 0.",
+      call. = FALSE
+    )
   }
   if (anyNA(cells[[batch_col]]) || anyNA(cells[[control_col]])) {
     stop("Batch and control columns must not contain NA.", call. = FALSE)
@@ -482,7 +523,8 @@ summary.sw_flag_iqr <- function(object, ...) {
   n_batches,
   iqr_multiplier,
   min_cells_per_side,
-  quantile_type
+  quantile_type,
+  min_effect
 ) {
   absent <- panel$batch[!panel$present]
   short <- panel$batch[panel$present & panel$n_cells < min_cells_per_side]
@@ -525,6 +567,7 @@ summary.sw_flag_iqr <- function(object, ...) {
   panel$q3 <- NA_real_
   panel$lower <- NA_real_
   panel$upper <- NA_real_
+  panel$effect <- NA_real_
   panel$flag <- NA
 
   if (status == "ok") {
@@ -539,7 +582,23 @@ summary.sw_flag_iqr <- function(object, ...) {
     panel$q3 <- q[2]
     panel$lower <- q[1] - iqr_multiplier * iqr
     panel$upper <- q[2] + iqr_multiplier * iqr
-    panel$flag <- panel$value < panel$lower | panel$value > panel$upper
+    # Distance beyond the nearer fence, in metric units; 0 inside the fence.
+    panel$effect <- pmax(
+      panel$lower - panel$value,
+      panel$value - panel$upper,
+      0
+    )
+    min_here <- min_effect[[panel$metric[1]]]
+    outside <- panel$effect > 0
+    panel$flag <- outside & panel$effect >= min_here
+    small <- outside & !panel$flag
+    panel$status[small] <- "below_min_effect"
+    panel$reason[small] <- sprintf(
+      "Outside the fence by %s, below min_effect %s for %s.",
+      format(panel$effect[small], digits = 4),
+      format(min_here),
+      panel$metric[1]
+    )
   }
   panel
 }

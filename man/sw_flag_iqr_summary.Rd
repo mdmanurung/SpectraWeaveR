@@ -27,8 +27,8 @@ A tibble with the \code{by} column, \code{n_flagged}, \code{n_assessed} and
 }
 \description{
 Count flagged, assessed and not-assessed rows of an \code{\link[=sw_flag_iqr]{sw_flag_iqr()}} result.
-A row is assessed when its status is \code{"ok"}. Not-assessed rows are counted
-apart, so a batch with no flags and no assessed rows is visible as such.
+A row is assessed when its status is \code{"ok"} or \code{"below_min_effect"}.
+Not-assessed rows are counted apart, so a batch with no flags and no assessed rows is visible as such.
 }
 \examples{
 cells <- data.frame(
@@ -38,7 +38,8 @@ cells <- data.frame(
 )
 res <- sw_flag_iqr(
   cells, "CD4", c(CD4 = 1),
-  iqr_multiplier = 1.5, min_cells_per_side = 1, quantile_type = 7
+  iqr_multiplier = 1.5, min_cells_per_side = 1, quantile_type = 7,
+  min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)
 )
 sw_flag_iqr_summary(res, by = "marker")
 
