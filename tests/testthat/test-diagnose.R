@@ -683,6 +683,12 @@ test_that("the batch_pop module ranks per marker and population and keeps thin c
   # With shares that differ by batch, share_rest_z of p2 is a real number.
   sz <- dx[dx$check == "share_rest_z" & dx$item == "p2", ]
   expect_false(anyNA(sz$value))
+  # Seed reproducible, and the caller's RNG state is restored.
+  set.seed(3)
+  before <- .Random.seed
+  a <- dx_call(x$data, batch_pop = pop_set(x))
+  expect_identical(.Random.seed, before)
+  expect_equal(a, dx)
 })
 
 test_that("batch_pop needs a population and a min_events, and rows match the direct call", {
@@ -867,6 +873,12 @@ test_that("the batch_mixing module ranks the separated batch first on low LISI",
     lisi$value[lisi$subject == "all batches"],
     direct$value[direct$check == "lisi_batch" & is.na(direct$batch)]
   )
+  # Seed reproducible, and the caller's RNG state is restored.
+  set.seed(9)
+  before <- .Random.seed
+  a <- dx_call(x$data, batch_mixing = mix_set(x))
+  expect_identical(.Random.seed, before)
+  expect_equal(a, dx)
   s <- mix_set(x)
   s$perplexity <- NULL
   expect_error(dx_call(x$data, batch_mixing = s), "perplexity")
