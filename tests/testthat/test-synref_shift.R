@@ -137,3 +137,39 @@ test_that("bad input stops instead of dropping a shift", {
     "cofactor"
   )
 })
+
+test_that("gain_linear matches an independently written formula", {
+  x <- make_cells()
+  idx <- x[["batch"]] == "b2" & x[["population"]] == "CD4T"
+  for (cof in c(6000, 500)) {
+    out <- sw_synref_shift(
+      x,
+      one_target(1.8),
+      family = "gain_linear",
+      cofactor = cof,
+      seed = 7
+    )
+    expect_equal(
+      out[["data"]][["CD3"]][idx],
+      asinh(sinh(x[["CD3"]][idx]) * 1.8)
+    )
+    expect_identical(out[["data"]][["CD3"]][!idx], x[["CD3"]][!idx])
+  }
+})
+
+test_that("NA in a targeted marker or in batch or population stops", {
+  x <- make_cells()
+  y <- x
+  y[["CD3"]][250] <- NA
+  expect_error(shift(y, one_target(0.5), "stretch_median"), "NA or non-finite")
+  y <- x
+  y[["batch"]][3] <- NA
+  expect_error(shift(y, one_target(0.5), "offset_asinh"), "NA in `batch`")
+  y <- x
+  y[["population"]][3] <- NA
+  expect_error(shift(y, one_target(0.5), "offset_asinh"), "NA in `batch`")
+  # NA in an untargeted marker is allowed
+  y <- x
+  y[["CD4"]][1] <- NA
+  expect_no_error(shift(y, one_target(0.5), "offset_asinh"))
+})

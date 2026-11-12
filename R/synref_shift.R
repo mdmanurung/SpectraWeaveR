@@ -162,6 +162,26 @@ sw_synref_shift <- function(x, targets, family, cofactor, seed) {
     )
   }
 
+  if (anyNA(x[["batch"]]) || anyNA(x[["population"]])) {
+    stop(
+      "`x` has NA in `batch` or `population`; those cells cannot be matched.",
+      call. = FALSE
+    )
+  }
+  bad_value <- vapply(
+    unique(as.character(targets[["marker"]])),
+    \(m) any(!is.finite(x[[m]])),
+    logical(1)
+  )
+  if (any(bad_value)) {
+    stop(
+      "Marker column(s) with NA or non-finite values: ",
+      paste(names(bad_value)[bad_value], collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
   out <- x
   rows <- vector("list", nrow(targets))
   signs <- vector("list", nrow(targets))
