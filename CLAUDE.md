@@ -100,7 +100,7 @@ SpectraWeaveR/
 | 5. Clustering | `sw_cluster_run()`, `sw_plot_clusters()`, `sw_cluster_predict()` | kohonen / FastPG | tibble/matrix → sw_cluster_result |
 | End-to-end | `sw_pipeline_run_all()` | all of the above | FCS files → annotated clusters |
 | Design audit | `sw_design_audit()` | batchdx-cyto (ported) | sample table → pair support classes, method eligibility |
-| Batch decision | `sw_batch_policy()`, `sw_batch_decide()`, `sw_batch_candidates_from_metrics()` | batchdx-cyto (ported) | candidate metrics → state per candidate, identity always kept |
+| Batch decision | `sw_batch_policy()`, `sw_batch_decide()`, `sw_batch_candidates_from_metrics()`, `sw_protected_contrast_change()` | batchdx-cyto (ported); contrast gate own code | candidate metrics → state per candidate, identity always kept. Policy needs `max_contrast_change` (NULL = gate off) and `min_donors_per_condition`; `sw_batch_decide(contrast_records=)` takes long donor/condition values, fails a candidate whose worst abs change of the donor-level condition contrast exceeds the limit, and abstains with a reason when donor or condition is missing |
 | Control flags | `sw_flag_iqr()`, `sw_flag_iqr_summary()` | CytoBatchFlagR method (clean rewrite) | control events → Tukey-fence flags per batch |
 | Unmix checks | `sw_unmix_check_controls()`, `sw_unmix_condition_number()` | AutoSpectral (wrapped) | spectra / FCS → diagnostics tibbles. The other seven wrappers in `R/unmix_assess.R` are internal since 2026-11-09. |
 | Alt. I/O and spectra | `sw_io_*_flowstate()`, `sw_unmix_spectracle()`, `sw_io_spectracle_to_spectra()` | flowstate, spectracle (wrapped) | flowstate / controls → tibble, flowFrame, spectra matrix |

@@ -4,7 +4,14 @@
 \alias{sw_batch_decide}
 \title{Decide between batch-correction candidates under a declared policy}
 \usage{
-sw_batch_decide(design, candidates, policy, identity_id, label_source)
+sw_batch_decide(
+  design,
+  candidates,
+  policy,
+  identity_id,
+  label_source,
+  contrast_records
+)
 }
 \arguments{
 \item{design}{An \code{sw_design_audit} object from
@@ -31,17 +38,26 @@ candidate. \strong{No default.}}
 \item{label_source}{Where the evaluation population labels came from: one
 of \code{"reference"}, \code{"manual_gating"} or \code{"clustering"}.
 \strong{No default.}}
+
+\item{contrast_records}{\code{NULL} or a long data frame for
+\code{\link{sw_protected_contrast_change}} (columns \code{candidate_id},
+\code{donor}, \code{condition}, \code{marker}, \code{value}, optional
+\code{population}). \strong{No default}; \code{NULL} says no donor and
+condition data exist. With the gate on, \code{NULL} makes every
+non-identity candidate abstain. Ignored when the gate is off.}
 }
 \value{
 An object of class \code{sw_batch_decision}: a list with
 \code{assessments} (tibble: \code{candidate_id}, \code{state},
-\code{reason}, \code{guardrails_failed} list, the evidence columns and
-\code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
+\code{reason}, \code{guardrails_failed} list, the evidence columns,
+\code{protected_contrast_change} (worst absolute change, \code{NA} when
+not assessed) and \code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
 unless exactly one candidate is recommended),
 \code{recommendation_withheld_reason}, \code{pareto_front},
 \code{pareto_comparable}, \code{warnings}, \code{policy_settings}
 (thresholds with origins), \code{require_reference_supported},
-\code{identity_id} and \code{label_source}.
+\code{identity_id}, \code{label_source} and \code{contrast_detail} (the
+per marker and population table, or \code{NULL}).
 }
 \description{
 Assigns one state to each correction candidate and names a recommendation
@@ -63,8 +79,12 @@ order, and the first that applies sets the state:
 \code{no_effect_emd}: \code{not_needed}; otherwise the identity
 candidate is \code{eligible_for_review}.
 \item a protected factor is confounded with batch: \code{non_identifiable}.
-\item MAD compression or joint structure change above its limit:
-\code{rejected_distortion}.
+\item MAD compression, joint structure change or (when
+\code{max_contrast_change} is set) protected-contrast change above its
+limit: \code{rejected_distortion}.
+\item the contrast gate is on but its metric cannot be computed (no
+donor or condition, too few donors): \code{insufficient_evidence}, with
+the reason stated.
 \item no relative reduction, coverage missing or below
 \code{min_coverage}, or a guardrail metric missing:
 \code{insufficient_evidence}.
@@ -107,6 +127,7 @@ policy <- sw_batch_policy(
   min_coverage = 0.6, min_emd_reduction = 0.2,
   max_mad_compression_fraction = 0.25, max_joint_structure_change = 0.1,
   no_effect_emd = 0.05, require_reference_supported = TRUE,
+  max_contrast_change = NULL, min_donors_per_condition = NULL,
   threshold_origins = c(
     min_coverage = origin, min_emd_reduction = origin,
     max_mad_compression_fraction = origin,
@@ -116,7 +137,8 @@ policy <- sw_batch_policy(
 )
 decision <- sw_batch_decide(
   design, candidates, policy,
-  identity_id = "uncorrected", label_source = "manual_gating"
+  identity_id = "uncorrected", label_source = "manual_gating",
+  contrast_records = NULL
 )
 decision$assessments[, c("candidate_id", "state")]
 

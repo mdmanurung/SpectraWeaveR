@@ -9,14 +9,20 @@ thresholds <- c(
   "no_effect_emd"
 )
 
-make_policy <- function(calibrated = FALSE, require_ref = TRUE) {
+make_policy <- function(
+  calibrated = FALSE,
+  require_ref = TRUE,
+  contrast = NULL,
+  min_donors = NULL
+) {
   origin <- if (calibrated) {
     "calibrated on spike-in study"
   } else {
     "uncalibrated engineering default"
   }
+  all_thresholds <- c(thresholds, if (!is.null(contrast)) "max_contrast_change")
   artifacts <- if (calibrated) {
-    stats::setNames(paste0("calib/", thresholds, ".json"), thresholds)
+    stats::setNames(paste0("calib/", all_thresholds, ".json"), all_thresholds)
   } else {
     character(0)
   }
@@ -27,7 +33,12 @@ make_policy <- function(calibrated = FALSE, require_ref = TRUE) {
     max_joint_structure_change = 0.1,
     no_effect_emd = 0.05,
     require_reference_supported = require_ref,
-    threshold_origins = stats::setNames(rep(origin, 5), thresholds),
+    max_contrast_change = contrast,
+    min_donors_per_condition = min_donors,
+    threshold_origins = stats::setNames(
+      rep(origin, length(all_thresholds)),
+      all_thresholds
+    ),
     calibration_artifacts = artifacts
   )
 }
@@ -82,14 +93,16 @@ decide <- function(
   candidates = make_candidates(),
   design = make_design(),
   policy = make_policy(calibrated = TRUE),
-  label_source = "manual_gating"
+  label_source = "manual_gating",
+  contrast_records = NULL
 ) {
   sw_batch_decide(
     design,
     candidates,
     policy,
     identity_id = "none",
-    label_source = label_source
+    label_source = label_source,
+    contrast_records = contrast_records
   )
 }
 
@@ -111,6 +124,8 @@ test_that("every policy argument has no default", {
       max_joint_structure_change = 0.1,
       no_effect_emd = 0.05,
       require_reference_supported = TRUE,
+      max_contrast_change = NULL,
+      min_donors_per_condition = NULL,
       calibration_artifacts = character(0)
     ),
     "threshold_origins"
@@ -126,6 +141,8 @@ test_that("threshold_origins must name all five thresholds", {
       max_joint_structure_change = 0.1,
       no_effect_emd = 0.05,
       require_reference_supported = TRUE,
+      max_contrast_change = NULL,
+      min_donors_per_condition = NULL,
       threshold_origins = c(min_coverage = "x"),
       calibration_artifacts = character(0)
     ),
@@ -145,6 +162,8 @@ test_that("calibration needs a non-uncalibrated origin and an artifact for every
     max_joint_structure_change = 0.1,
     no_effect_emd = 0.05,
     require_reference_supported = TRUE,
+    max_contrast_change = NULL,
+    min_donors_per_condition = NULL,
     threshold_origins = stats::setNames(rep("from study X", 5), thresholds),
     calibration_artifacts = stats::setNames(rep("a.json", 4), thresholds[1:4])
   )
@@ -407,4 +426,189 @@ test_that("candidates_from_metrics marks status and rejects duplicate keys", {
     candidate_status = c(none = "failed")
   )
   expect_equal(out$status, "failed")
+})
+
+# Protected contrast ---------------------------------------------------------
+
+# Planted case - control gap of 1 on CD3 in the identity data, 6 donors per
+# condition, 20 events per donor. "keep" shifts every value by 0.3 (the gap is
+# kept); "erase" sets every value to one level (the gap is gone).
+make_contrast_records <- function(n_donors = 6, with_condition = TRUE) {
+  set.seed(1)
+  grid <- expand.grid(
+    donor = paste0("d", seq_len(n_donors)),
+    condition = c("ctrl", "case"),
+    event = 1:20,
+    stringsAsFactors = FALSE
+  )
+  grid$donor <- paste(grid$donor, grid$condition, sep = "_")
+  level <- ifelse(grid$condition == "case", 3, 2)
+  base <- level + stats::rnorm(nrow(grid), sd = 0.05)
+  one <- function(id, value) {
+    tibble::tibble(
+      candidate_id = id,
+      donor = grid$donor,
+      condition = if (with_condition) grid$condition else NA_character_,
+      marker = "CD3",
+      population = "T",
+      value = value
+    )
+  }
+  dplyr::bind_rows(
+    one("none", base),
+    one("keep", base + 0.3),
+    one("erase", 2.5 + stats::rnorm(nrow(grid), sd = 0.05))
+  )
+}
+
+contrast_candidates <- function() {
+  tibble::tibble(
+    candidate_id = c("erase", "keep", "none"),
+    status = "ok",
+    emd_median = c(0.3, 0.3, 0.8),
+    emd_worst_marker_median = c(0.4, 0.4, 1.2),
+    emd_relative_reduction = c(0.6, 0.6, 0),
+    coverage = 1,
+    mad_compression_fraction = c(0.05, 0.05, 0),
+    joint_structure_distance_median = c(0.02, 0.02, 0),
+    evidence_comparison_ids = list("c1", "c1", "c1")
+  )
+}
+
+test_that("contrast gate arguments are required and validated", {
+  base <- list(
+    min_coverage = 0.6,
+    min_emd_reduction = 0.2,
+    max_mad_compression_fraction = 0.25,
+    max_joint_structure_change = 0.1,
+    no_effect_emd = 0.05,
+    require_reference_supported = TRUE,
+    threshold_origins = stats::setNames(rep("uncalibrated", 5), thresholds),
+    calibration_artifacts = character(0)
+  )
+  expect_error(do.call(sw_batch_policy, base), "max_contrast_change")
+  expect_error(
+    do.call(
+      sw_batch_policy,
+      c(base, list(max_contrast_change = 0.2, min_donors_per_condition = NULL))
+    ),
+    "min_donors_per_condition"
+  )
+  expect_error(
+    do.call(
+      sw_batch_policy,
+      c(base, list(max_contrast_change = 0.2, min_donors_per_condition = 4))
+    ),
+    "one non-empty origin"
+  )
+  expect_error(
+    do.call(
+      sw_batch_policy,
+      c(base, list(max_contrast_change = NULL, min_donors_per_condition = 4))
+    ),
+    "must be NULL"
+  )
+  expect_null(make_policy()$max_contrast_change)
+  expect_equal(
+    make_policy(contrast = 0.2, min_donors = 4)$max_contrast_change,
+    0.2
+  )
+})
+
+test_that("the metric finds a planted erased contrast and a kept one", {
+  res <- sw_protected_contrast_change(
+    make_contrast_records(),
+    identity_id = "none",
+    min_donors_per_condition = 4
+  )
+  worst <- stats::setNames(
+    res$summary$worst_abs_change,
+    res$summary$candidate_id
+  )
+  # keep: the gap stays 1, so the change is about 0; erase: the gap is near 0.
+  expect_lt(worst[["keep"]], 0.05)
+  expect_gt(worst[["erase"]], 0.9)
+  expect_equal(res$detail$min_donors[1], 6L)
+})
+
+test_that("medians are taken per donor first, not per cell", {
+  rec <- make_contrast_records()
+  # 2000 extra cells in one ctrl donor of the candidate; pooled cells would
+  # move the condition median, a per-donor median barely moves.
+  extra <- rec[rec$candidate_id == "keep" & rec$donor == "d1_ctrl", ][1, ]
+  extra <- extra[rep(1, 2000), ]
+  extra$value <- 10
+  res <- sw_protected_contrast_change(
+    dplyr::bind_rows(rec, extra),
+    identity_id = "none",
+    min_donors_per_condition = 4
+  )
+  expect_lt(
+    res$summary$worst_abs_change[res$summary$candidate_id == "keep"],
+    0.5
+  )
+})
+
+test_that("thin conditions are not assessed and the note says why", {
+  res <- sw_protected_contrast_change(
+    make_contrast_records(n_donors = 3),
+    identity_id = "none",
+    min_donors_per_condition = 4
+  )
+  expect_true(all(is.na(res$summary$worst_abs_change)))
+  expect_true(all(grepl("not_assessed", res$detail$status)))
+  expect_match(res$summary$note[2], "at least 4 donors")
+})
+
+test_that("metric errors without required arguments and is deterministic", {
+  expect_error(sw_protected_contrast_change(), "no default")
+  expect_error(
+    sw_protected_contrast_change(
+      make_contrast_records(),
+      identity_id = "none",
+      min_donors_per_condition = 1
+    ),
+    ">= 2"
+  )
+  a <- sw_protected_contrast_change(make_contrast_records(), "none", 4)
+  b <- sw_protected_contrast_change(make_contrast_records(), "none", 4)
+  expect_identical(a, b)
+})
+
+test_that("the gate rejects an erased contrast and passes a kept one", {
+  res <- decide(
+    contrast_candidates(),
+    policy = make_policy(calibrated = TRUE, contrast = 0.2, min_donors = 4),
+    contrast_records = make_contrast_records()
+  )
+  expect_equal(state_of(res, "erase"), "rejected_distortion")
+  expect_match(row_of(res, "erase")$reason, "protected_contrast_change")
+  expect_equal(state_of(res, "keep"), "recommended_under_policy")
+  expect_gt(row_of(res, "erase")$protected_contrast_change, 0.9)
+  expect_s3_class(res$contrast_detail, "tbl_df")
+})
+
+test_that("the gate abstains with a reason when donor or condition is missing", {
+  pol <- make_policy(calibrated = TRUE, contrast = 0.2, min_donors = 4)
+  for (rec in list(
+    NULL,
+    make_contrast_records(with_condition = FALSE),
+    dplyr::select(make_contrast_records(), -"donor")
+  )) {
+    res <- decide(contrast_candidates(), policy = pol, contrast_records = rec)
+    expect_equal(state_of(res, "keep"), "insufficient_evidence")
+    expect_match(row_of(res, "keep")$reason, "protected-contrast gate abstains")
+  }
+})
+
+test_that("the identity candidate is kept and a gate-off policy ignores records", {
+  pol <- make_policy(calibrated = TRUE, contrast = 0.2, min_donors = 4)
+  res <- decide(contrast_candidates(), policy = pol, contrast_records = NULL)
+  expect_equal(state_of(res, "none"), "eligible_for_review")
+  off <- decide(
+    contrast_candidates(),
+    contrast_records = make_contrast_records()
+  )
+  expect_equal(state_of(off, "erase"), "recommended_under_policy")
+  expect_null(off$contrast_detail)
 })
