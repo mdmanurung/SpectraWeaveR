@@ -9,7 +9,7 @@
 ```
 SpectraWeaveR/
 ├── DESCRIPTION          # Package metadata, dependencies, and version
-├── NAMESPACE            # 136 exported functions and imported namespaces
+├── NAMESPACE            # 139 exported functions and imported namespaces
 ├── LICENSE              # MIT license
 ├── README.md            # Project overview, installation, usage examples
 ├── CLAUDE.md            # This file — repo summary for AI assistants
@@ -30,6 +30,9 @@ SpectraWeaveR/
 │   ├── fcs_header_audit.R        # FCS header audit against a reference file
 │   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation)
 │   ├── qc_app.R                  # sw_qc_app(): Shiny explorer (layout adapted from iidx, Apache-2.0)
+│   ├── ref_vs_study.R            # Reference vs donor spread (EMD)
+│   ├── ref_composition.R         # Reference population shares and floor
+│   ├── ref_coverage.R            # Study events outside reference quantiles
 │   ├── relativise.R              # CD3 (reference-population) relativisation, Glehr et al. 2026
 │   ├── otd.R                     # Debiased Sinkhorn divergence and per-file OTD
 │   ├── negative_audit.R          # Negative-population checks (GMM negative per channel)
@@ -118,6 +121,7 @@ SpectraWeaveR/
 | Reference checks | `sw_ref_inventory()`, `sw_ref_consistency()`, `sw_ref_noise_floor()` | own code on `.sw_batch_scores_groups()` (per-group rows of the batch scores) and `sw_synref_split()` | reference samples (manifest `reference_role`, `reference_id`) → counts per batch (`under_min`); per reference id, marker and batch: `pair_emd`, `rest_emd`, `rest_emd_z`, `median_shift_z`, `order_rho`, `count_ratio` with status `not_assessed` for thin rows; chance floor from cell halves (`floor_type = "sampling only"`) and, with 2 or more aliquots in a batch, aliquot pairs. No per-reference verdict (Q14). `min_events`, `roles`, `n_events`, `seed`, `order`, `min_batches_per_reference`, `transform` and `cofactor` (recorded, never applied), `n_splits`, `n_quantiles` required |
 | Anomaly features and flags | `sw_anomaly_features()`, `sw_emd_1d()`, `sw_anomaly_flag_outlier()`, `sw_anomaly_flag_novelty()` | CytoScan method (clean rewrite); isotree, mclust (Suggests) | transformed per-file data → quantile + exact-EMD features → isolation-forest score or GMM log-density. Every cutoff is a required argument. |
 | Batch-effect scores | `sw_batch_scores()` | own code | per-file data + batch labels → pairwise EMD, batch-vs-rest EMD (`rest_emd`, `rest_emd_z`), median range, eta2, order drift per marker |
+| Reference vs study spread | `sw_ref_vs_study()`, `sw_ref_composition()`, `sw_ref_coverage()` | own code (`sw_emd_1d`; multinomial floor) | caller-transformed per-file data + manifest → reference EMD between batches next to the median of same-batch donor pairwise EMD (`min_donors_per_batch` required, optional noise floor, `ratio`); reference population shares per batch with an analytic multinomial floor; share of study cells below and above the reference quantiles (`probs` required) per batch, marker and population. Every impactful value is required; no roll-up; thin rows are `not_assessed` |
 | Cluster scores | `sw_cluster_scores()` | own code (stats::kmeans) | per-file cluster shares and per-cluster marker medians as robust z against other files; `k`, `nstart`, events, seed, min events and `reference` (files to fit k-means on, or NULL for all) are required, no scaling; `sw_diagnose` ranks each marker and cluster as its own item |
 | Negative-population audit | `sw_negative_audit()` | own code; symptoms from the Colibri blog; mclust (Suggests) | per file and channel, a 2-component 1D GMM (model "V") gives the negative: its median, robust SD, share, separation, hyper-negative share, and joint-negative correlation per channel pair, each with a robust z across files. `n_events`, `seed`, `hyper_k`, `pairs`, `min_separation` required; channels whose median separation is below `min_separation` get `NA` negative checks and `split_ok = 0` |
 | Cluster stability | `sw_cluster_stability()` | own code (stats::kmeans) | ARI and moved-event share across seeds and subsample sizes; `k`, seeds, sizes, events, draw seed, nstart required |
