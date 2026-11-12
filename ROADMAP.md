@@ -55,8 +55,8 @@ Where an extension is already outside AutoSpectral's scope (batch detection, bat
 | A2c | Bridge: turn `sw_correct_*` results into the long metric tibble `sw_batch_candidates_from_metrics()` reads. cyCombine's `evaluate_*` lists lack per-comparison EMD, joint-structure distance and compression fraction, so this needs new metric code. | `sw_correct_metrics()` | **next** Frozen: no new work until a real multi-batch dataset exists. |
 | A3 | Gate `sw_correct_run()` and `sw_pipeline_run_all()` on the audit | argument `design_audit =` | **next**, after C0 (needs the shared manifest as join key) Frozen: no new work until a real multi-batch dataset exists. |
 | A4 | Control IQR flags (clean rewrite). Thresholds, multiplier, minimum cells and quantile type are required arguments. | `sw_flag_iqr()` in `R/batch_flag.R` | **done**, 54 expectations pass. Open: the fence has no minimum effect size, so it flags noise when batches agree (one seeded run: 5 of 32 flagged). Add a required `min_effect` argument before use. Frozen: no new work until a real multi-batch dataset exists. |
-| A5 | EMD and cluster-based flags | reuse `sw_correct_emd()` and `sw_cluster_run()` | **planned**, no new metric code Frozen: no new work until a real multi-batch dataset exists. |
-| A6 | Drift and composition detectors from batchdx | `sw_flag_drift()`, `sw_flag_composition()` | **planned** Frozen: no new work until a real multi-batch dataset exists. |
+| A5 | EMD and cluster-based flags | reuse `sw_correct_emd()` and `sw_cluster_run()` | **partly done** (2026-11-12, P3b): per-population EMD rows through `sw_batch_scores(population =)` and `sw_batch_interaction()`, ranked rows, no flags. Gate or cluster labels; cluster labels cap at `eligible_for_review`. Tests: `tests/testthat/test-batch_scores.R`. Unfrozen by the user 2026-11-12. |
+| A6 | Drift and composition detectors from batchdx | `sw_flag_drift()`, `sw_flag_composition()` | **partly done** (2026-11-12, P3b) as score rows, not flags: `batch_order_rho` (Spearman of batch median against batch order) and per-batch population share rows `pop_share`, `share_rest_z` in `sw_batch_scores(population =)`. No `sw_flag_*` functions. Unfrozen by the user 2026-11-12. |
 
 ## Track B: unmixing and study calibration (AutoSpectral bundle)
 
@@ -187,6 +187,7 @@ Each item below changes a result, so none has a package default.
 | Reference-shift options: anchor batch, minimum cells per reference summary | `sw_corrector_fit()` | cyTether scaffold: `min_cells = 3` |
 | Seeds and replicate counts for benchmarks | C5, C6 | Bundle: at least 100 seeds for publication-scale claims |
 | Origin of the batch-count floor | `sw_design_audit()` | Required string; stored in the result |
+| Population labels (`population`), `min_events` per file x population, `group_summary` (`median` or `mean`) | `sw_batch_scores()` (P3b), `sw_batch_interaction()` (`which_check`, `min_populations`) | None yet; the benchmark label source (gate or k-means k) is open until the user answers |
 | Minimum effect size for a control flag | `sw_flag_iqr()` (A4 follow-up) | None yet; the Tukey fence alone flags noise |
 | Limit on donor-level protected-contrast change | `sw_batch_decide()` (A2b) | None yet |
 | Anchor batch; hierarchy (study, run, instrument); population model | `sw_corrector_fit()` | The bundle defaults to the first sorted batch, which this package will not copy |

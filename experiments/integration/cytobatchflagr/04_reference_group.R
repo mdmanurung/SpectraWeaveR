@@ -154,7 +154,7 @@ long <- lapply(SEEDS, function(seed) {
     lapply(arms, function(arm) {
       grp <- ARMS[[arm]]
       if (fault == "batch_split") {
-        sc <- sw_batch_scores(files, batch, markers, BATCH_EVENTS, seed, order = NULL, reference_group = grp)
+        sc <- sw_batch_scores(files, batch, markers, BATCH_EVENTS, seed, order = NULL, reference_group = grp, population = NULL)
         per_marker <- list(
           pair_emd = sc[sc$check == "pair_emd", ] |>
             summarise(v = max(value), .by = marker),

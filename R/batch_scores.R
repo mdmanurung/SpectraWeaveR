@@ -63,10 +63,51 @@
 #'   `NULL` scores all files together. A data frame (two-way form) is an
 #'   error here, because removing the batch effect would remove what is measured.
 #'
+#' @param population `NULL` (skip), or a list with two elements. `labels` is a
+#'   named list with one vector per file in `data`: the population label of
+#'   every event, in the row order of that file (gate or cluster label; `NA`
+#'   events are left out). `label_source` is `"gate"` or `"cluster"`. With
+#'   `population`, the same scores are also computed inside each population,
+#'   and two more checks are added (see Population rows). `NULL` returns the
+#'   scores exactly as before.
+#' @param min_events `NULL` when `population` is `NULL`; otherwise a whole
+#'   number, the fewest events a file needs in a population to be scored there
+#'   (uncalibrated: there is no data-derived value). A thinner file x population
+#'   cell gives a row with `status = "not_assessed"` and `NA` value. It cannot
+#'   exceed `n_events`.
+#' @param group_summary `NULL` when `population` is `NULL`; otherwise `"median"`
+#'   or `"mean"` (uncalibrated: the choice moves the numbers). It sets how
+#'   per-group population rows are combined across the groups of
+#'   `reference_group`. Rows without `population` always use the median. It is
+#'   recorded but unused when `reference_group` is `NULL`.
+#'
+#' @section Population rows:
+#' With `population`, up to `n_events` events are drawn per file and population
+#' (all of them when the file has fewer, but at least `min_events`). Every check
+#' above is computed inside each population from the files that pass
+#' `min_events`; a population with fewer than two batches among them gets one
+#' row with `status = "not_assessed"`. Two checks are added:
+#'
+#' * `pop_share` and `share_rest_z`: per batch, the median over its files of the
+#'   share of the file's labelled events in the population, and its robust z over
+#'   batches (needs 3 batches, else `NA`). Files, not cells, are the replicates.
+#' * `batch_order_rho`: only when `order` is given. Spearman correlation across
+#'   batches between the batch median of the marker and the batch order (the
+#'   median `order` of its files). It needs 3 batches, else `NA`. It is also
+#'   computed on all events (population `NA`).
+#'
+#' Cluster labels depend on the batch they were fitted in, so with
+#' `label_source = "cluster"` every population row of the result is capped at
+#' `eligible_for_review` (column `eligibility_cap`).
+#'
 #' @return A tibble of class `sw_batch_scores` with columns `check`, `marker`,
 #'   `batch` (the batch, or `"b1 ~ b2"` for a pair, or `NA` for the all-batch
 #'   scores `median_range` and `eta2`), `value`, and `n_files` (files behind
-#'   the value; for a pair, the smaller of the two batches).
+#'   the value; for a pair, the smaller of the two batches). With `population`
+#'   it also has `population` (`NA` for the all-event rows), `file` (set only
+#'   on thin-cell rows), `n_events` (events drawn behind a population row),
+#'   `status` (`"assessed"` or `"not_assessed"`), `label_source` and
+#'   `eligibility_cap`.
 #'
 #' @seealso [sw_design_audit()], [sw_anomaly_features()]
 #'
@@ -83,7 +124,8 @@
 #'   n_events = 100, # illustrative
 #'   seed = 1,
 #'   order = NULL,
-#'   reference_group = NULL
+#'   reference_group = NULL,
+#'   population = NULL
 #' )
 #'
 #' @export
@@ -94,7 +136,10 @@ sw_batch_scores <- function(
   n_events,
   seed,
   order,
-  reference_group
+  reference_group,
+  population,
+  min_events,
+  group_summary
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -103,8 +148,27 @@ sw_batch_scores <- function(
     n_events = missing(n_events),
     seed = missing(seed),
     order = missing(order),
-    reference_group = missing(reference_group)
+    reference_group = missing(reference_group),
+    population = missing(population)
   ))
+  if (!is.null(population)) {
+    .sw_stop_missing(c(
+      min_events = missing(min_events),
+      group_summary = missing(group_summary)
+    ))
+    .sw_check_count(min_events, "min_events")
+    if (min_events > n_events) {
+      stop("`min_events` cannot exceed `n_events`.", call. = FALSE)
+    }
+    if (
+      !is.character(group_summary) ||
+        length(group_summary) != 1 ||
+        !group_summary %in% c("median", "mean")
+    ) {
+      stop("`group_summary` must be \"median\" or \"mean\".", call. = FALSE)
+    }
+    .sw_check_population(population, names(data), data)
+  }
   if (!is.list(data) || is.null(names(data)) || anyDuplicated(names(data))) {
     stop("`data` must be a named list of files.", call. = FALSE)
   }
@@ -187,10 +251,11 @@ sw_batch_scores <- function(
     stop("Events must not contain NA in the chosen markers.", call. = FALSE)
   }
 
+  extra <- !is.null(population) && !is.null(order)
   # One set of scores over all files, or one per reference group (only that
   # group's files, across batches) combined by the median over groups.
   if (is.null(grp)) {
-    out <- .sw_batch_scores_core(drawn, files, batch, markers, order)
+    out <- .sw_batch_scores_core(drawn, files, batch, markers, order, extra)
   } else {
     per_group <- lapply(unique(grp), function(g) {
       keep <- files[grp == g]
@@ -202,7 +267,8 @@ sw_batch_scores <- function(
         keep,
         batch[files %in% keep],
         markers,
-        order
+        order,
+        extra
       )
     })
     per_group <- dplyr::bind_rows(per_group)
@@ -227,13 +293,36 @@ sw_batch_scores <- function(
     ]
     out <- tibble::as_tibble(out)
   }
+  if (!is.null(population)) {
+    out <- .sw_batch_scores_population(
+      out,
+      population,
+      mats,
+      files,
+      batch,
+      markers,
+      order,
+      grp,
+      n_events,
+      min_events,
+      group_summary,
+      seed
+    )
+  }
   class(out) <- c("sw_batch_scores", class(out))
   out
 }
 
 # Scores for one set of files. `drawn` is a named list of event matrices in the
 # order of `files`; `batch` has one label per file, in that order.
-.sw_batch_scores_core <- function(drawn, files, batch, markers, order) {
+.sw_batch_scores_core <- function(
+  drawn,
+  files,
+  batch,
+  markers,
+  order,
+  extra = FALSE
+) {
   batches <- sort(unique(batch))
   # File medians per marker (rows = files).
   fmed <- t(vapply(
@@ -349,6 +438,20 @@ sw_batch_scores <- function(
           ))
           add("order_rho", mk, b, rho, sum(idx))
         }
+      }
+      if (extra) {
+        # Batch median of the marker against batch order, across batches.
+        b_order <- tapply(order[files], batch, stats::median)[batches]
+        rho_b <- if (length(batches) >= 3) {
+          suppressWarnings(stats::cor(
+            as.numeric(bmed[batches]),
+            as.numeric(b_order),
+            method = "spearman"
+          ))
+        } else {
+          NA_real_
+        }
+        add("batch_order_rho", mk, NA_character_, rho_b, length(files))
       }
     }
   }

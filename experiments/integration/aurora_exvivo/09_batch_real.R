@@ -80,7 +80,8 @@ score_arm <- function(files, mk, seed) {
     N_EVENTS,
     seed,
     order = order_in_batch,
-    reference_group = NULL
+    reference_group = NULL,
+    population = NULL
   )
   per_marker <- list(
     pair_emd = sc[sc$check == "pair_emd", ] |>

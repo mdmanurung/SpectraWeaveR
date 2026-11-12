@@ -299,7 +299,8 @@ batch_level <- function(seed) {
       NEV,
       seed,
       order = ord,
-      reference_group = NULL
+      reference_group = NULL,
+      population = NULL
     )
     pe <- sc[sc$check == "pair_emd", ] |>
       summarise(v = max(value), .by = marker)

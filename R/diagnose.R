@@ -250,7 +250,12 @@ sw_diagnose <- function(
   }
 
   if (!is.null(batch)) {
-    b <- do.call(sw_batch_scores, c(list(data = data), batch))
+    # Population rows are not stacked here: this module runs the all-event scores.
+    batch[["population"]] <- NULL
+    b <- do.call(
+      sw_batch_scores,
+      c(list(data = data), batch, list(population = NULL))
+    )
     parts$batch <- tibble::tibble(
       module = "batch",
       subject = ifelse(is.na(b$batch), "all batches", b$batch),
