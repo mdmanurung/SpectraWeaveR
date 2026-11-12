@@ -203,7 +203,13 @@ sw_correct_metrics <- function(
           pop_label,
           cid
         )
+        # No sample reaches `min_cells`: a weight of 0 would pull the weighted
+        # median to the smallest value, so the record is not assessed.
         emd$weight <- length(sample_rows)
+        if (length(sample_rows) == 0) {
+          emd$value <- NA_real_
+          emd$status <- "too_few_cells"
+        }
         records[[length(records) + 1]] <- emd
         records[[length(records) + 1]] <- .sw_compare_mad(
           mats[[cand]],

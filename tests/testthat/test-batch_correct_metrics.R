@@ -170,3 +170,15 @@ test_that("missing required arguments and bad inputs stop", {
     "XX"
   )
 })
+
+test_that("thin samples with a large pool give no ok EMD record of weight 0", {
+  d <- make_cm(n = 40)
+  out <- suppressWarnings(do.call(
+    sw_correct_metrics,
+    cm_args(d, n_events = 40)
+  ))
+  emd <- out[out$metric == "emd_within_population", ]
+  expect_false(any(emd$status == "ok" & emd$weight == 0))
+  expect_true(all(emd$status == "too_few_cells"))
+  expect_true(all(is.na(emd$value)))
+})
