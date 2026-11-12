@@ -309,3 +309,14 @@ test_that("fidelity errors on missing or invalid arguments", {
     "labels"
   )
 })
+
+test_that("fidelity stops on missing population labels", {
+  x <- make_spread_data()
+  ref <- draw_n(x, 100, n_draws = 1)
+  bad <- x$labels
+  bad$a[1] <- NA
+  expect_error(
+    sw_synref_fidelity(ref, x$data, labels = bad, n_events = NULL, seed = 1),
+    "missing values"
+  )
+})

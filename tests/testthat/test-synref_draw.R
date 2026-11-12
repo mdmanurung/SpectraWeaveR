@@ -456,3 +456,28 @@ test_that("goal errors on missing or invalid arguments", {
   one_batch$batch <- "b1"
   expect_error(goal_call(x, manifest = one_batch), "two batches")
 })
+
+test_that("cap warns for an absent population and stops when all are absent", {
+  x <- make_mix()
+  expect_warning(
+    ref <- do.call(
+      sw_synref_mix,
+      mix_args(
+        x,
+        proportions = c(T = 0.5, B = 0.3, Z = 0.2),
+        short_stratum = "cap",
+        n_draws = 1
+      )
+    ),
+    "Z"
+  )
+  z <- ref$realised[ref$realised$stratum == "Z", ]
+  expect_equal(z$realised, 0)
+  expect_error(
+    suppressWarnings(do.call(
+      sw_synref_mix,
+      mix_args(x, proportions = c(Z = 1), short_stratum = "cap")
+    )),
+    "none of the requested populations"
+  )
+})

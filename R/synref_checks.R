@@ -295,6 +295,14 @@ sw_synref_fidelity <- function(synref, data, labels, n_events, seed) {
         call. = FALSE
       )
     }
+    if (
+      anyNA(unlist(labels[unique(prov[["source_sample"]])], use.names = FALSE))
+    ) {
+      stop(
+        "'labels' has missing values for a source file. Label every event or drop it first.",
+        call. = FALSE
+      )
+    }
   }
   markers <- colnames(synref[["events"]][[1]])
   if (!identical(markers, colnames(data[[1]]))) {

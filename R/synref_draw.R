@@ -744,6 +744,22 @@ sw_synref_mix <- function(
           call. = FALSE
         )
       }
+      if (length(unknown) > 0) {
+        warning(
+          sprintf(
+            "Population(s) %s of 'proportions' have no events in group '%s'; 'cap' draws none.",
+            paste(unknown, collapse = ", "),
+            g
+          ),
+          call. = FALSE
+        )
+      }
+      if (length(unknown) == length(counts)) {
+        stop(
+          sprintf("Group '%s' has none of the requested populations.", g),
+          call. = FALSE
+        )
+      }
       for (k in seq_len(n_draws)) {
         key <- sprintf("%s_d%02d", g, k)
         picks <- lapply(names(counts), function(s) {
