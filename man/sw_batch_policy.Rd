@@ -11,6 +11,9 @@ sw_batch_policy(
   max_joint_structure_change,
   no_effect_emd,
   require_reference_supported,
+  max_contrast_change,
+  min_donors_per_condition,
+  min_contrast_spread_ratio,
   threshold_origins,
   calibration_artifacts
 )
@@ -35,9 +38,28 @@ median EMD is below this value, correction is \code{not_needed}.}
 recommended only when every comparison its evidence rests on is
 \code{reference_supported} in the design audit.}
 
-\item{threshold_origins}{Named character vector with exactly the five
-numeric threshold names. Each value states where the threshold came from,
-for example \code{"uncalibrated engineering default"}.}
+\item{max_contrast_change}{Numeric or \code{NULL}. Largest acceptable worst
+absolute relative change of the protected condition contrast, uncalibrated
+(see \code{\link{sw_protected_contrast_change}}). \code{NULL} switches
+the gate off, explicitly. No value is suggested.}
+
+\item{min_donors_per_condition}{Integer or \code{NULL}. Fewest donors a
+condition needs for a marker and population to be assessed in the
+contrast gate, uncalibrated. Required when \code{max_contrast_change} is
+a number; \code{NULL} only with the gate off.}
+
+\item{min_contrast_spread_ratio}{Numeric (at least 0) or \code{NULL}. A
+marker and population is judged only when the absolute baseline contrast
+is at least this multiple of the pooled donor-level standard deviation
+within conditions, uncalibrated. It keeps markers with no condition
+contrast out of the relative change. Required when
+\code{max_contrast_change} is a number; \code{NULL} only with the gate
+off. No value is suggested.}
+
+\item{threshold_origins}{Named character vector with one origin for each
+numeric threshold: the five above, plus \code{max_contrast_change} when
+that gate is on. Each value states where the threshold came from, for
+example \code{"uncalibrated engineering default"}.}
 
 \item{calibration_artifacts}{Named character vector mapping threshold names
 to a calibration artifact (path, URI or hash). Pass
@@ -45,8 +67,9 @@ to a calibration artifact (path, URI or hash). Pass
 re-verified here.}
 }
 \value{
-An object of class \code{sw_batch_policy}: a list with the six
-settings, \code{threshold_origins}, \code{calibration_artifacts},
+An object of class \code{sw_batch_policy}: a list with the
+settings (\code{max_contrast_change}, \code{min_donors_per_condition}
+and \code{min_contrast_spread_ratio} may be \code{NULL}), \code{threshold_origins}, \code{calibration_artifacts},
 \code{any_threshold_uncalibrated} and \code{settings} (a tibble with one
 row per threshold).
 }
@@ -78,6 +101,9 @@ policy <- sw_batch_policy(
   max_joint_structure_change = 0.1,
   no_effect_emd = 0.05,
   require_reference_supported = TRUE,
+  max_contrast_change = NULL,
+  min_donors_per_condition = NULL,
+  min_contrast_spread_ratio = NULL,
   threshold_origins = c(
     min_coverage = origin, min_emd_reduction = origin,
     max_mad_compression_fraction = origin,

@@ -30,16 +30,33 @@
 #' @param require_reference_supported Logical. If \code{TRUE}, a candidate is
 #'   recommended only when every comparison its evidence rests on is
 #'   \code{reference_supported} in the design audit.
-#' @param threshold_origins Named character vector with exactly the five
-#'   numeric threshold names. Each value states where the threshold came from,
-#'   for example \code{"uncalibrated engineering default"}.
+#' @param max_contrast_change Numeric or \code{NULL}. Largest acceptable worst
+#'   absolute relative change of the protected condition contrast, uncalibrated
+#'   (see \code{\link{sw_protected_contrast_change}}). \code{NULL} switches
+#'   the gate off, explicitly. No value is suggested.
+#' @param min_donors_per_condition Integer or \code{NULL}. Fewest donors a
+#'   condition needs for a marker and population to be assessed in the
+#'   contrast gate, uncalibrated. Required when \code{max_contrast_change} is
+#'   a number; \code{NULL} only with the gate off.
+#' @param min_contrast_spread_ratio Numeric (at least 0) or \code{NULL}. A
+#'   marker and population is judged only when the absolute baseline contrast
+#'   is at least this multiple of the pooled donor-level standard deviation
+#'   within conditions, uncalibrated. It keeps markers with no condition
+#'   contrast out of the relative change. Required when
+#'   \code{max_contrast_change} is a number; \code{NULL} only with the gate
+#'   off. No value is suggested.
+#' @param threshold_origins Named character vector with one origin for each
+#'   numeric threshold: the five above, plus \code{max_contrast_change} when
+#'   that gate is on. Each value states where the threshold came from, for
+#'   example \code{"uncalibrated engineering default"}.
 #' @param calibration_artifacts Named character vector mapping threshold names
 #'   to a calibration artifact (path, URI or hash). Pass
 #'   \code{character(0)} when no threshold is calibrated. The artifact is not
 #'   re-verified here.
 #'
-#' @return An object of class \code{sw_batch_policy}: a list with the six
-#'   settings, \code{threshold_origins}, \code{calibration_artifacts},
+#' @return An object of class \code{sw_batch_policy}: a list with the
+#'   settings (\code{max_contrast_change}, \code{min_donors_per_condition}
+#'   and \code{min_contrast_spread_ratio} may be \code{NULL}), \code{threshold_origins}, \code{calibration_artifacts},
 #'   \code{any_threshold_uncalibrated} and \code{settings} (a tibble with one
 #'   row per threshold).
 #'
@@ -54,6 +71,9 @@
 #'   max_joint_structure_change = 0.1,
 #'   no_effect_emd = 0.05,
 #'   require_reference_supported = TRUE,
+#'   max_contrast_change = NULL,
+#'   min_donors_per_condition = NULL,
+#'   min_contrast_spread_ratio = NULL,
 #'   threshold_origins = c(
 #'     min_coverage = origin, min_emd_reduction = origin,
 #'     max_mad_compression_fraction = origin,
@@ -71,6 +91,9 @@ sw_batch_policy <- function(
   max_joint_structure_change,
   no_effect_emd,
   require_reference_supported,
+  max_contrast_change,
+  min_donors_per_condition,
+  min_contrast_spread_ratio,
   threshold_origins,
   calibration_artifacts
 ) {
@@ -81,6 +104,9 @@ sw_batch_policy <- function(
     "max_joint_structure_change",
     "no_effect_emd",
     "require_reference_supported",
+    "max_contrast_change",
+    "min_donors_per_condition",
+    "min_contrast_spread_ratio",
     "threshold_origins",
     "calibration_artifacts"
   )
@@ -101,8 +127,7 @@ sw_batch_policy <- function(
     max_joint_structure_change = max_joint_structure_change,
     no_effect_emd = no_effect_emd
   )
-  thresholds <- names(values)
-  for (nm in thresholds) {
+  for (nm in names(values)) {
     v <- values[[nm]]
     if (!is.numeric(v) || length(v) != 1 || !is.finite(v)) {
       stop("'", nm, "' must be a single finite number.", call. = FALSE)
@@ -111,6 +136,55 @@ sw_batch_policy <- function(
   if (min_coverage < 0 || min_coverage > 1) {
     stop("'min_coverage' must lie in [0, 1].", call. = FALSE)
   }
+  # NULL is the explicit "gate off"; a number turns the contrast gate on.
+  contrast_on <- !is.null(max_contrast_change)
+  if (contrast_on) {
+    if (
+      !is.numeric(max_contrast_change) ||
+        length(max_contrast_change) != 1 ||
+        !is.finite(max_contrast_change) ||
+        max_contrast_change < 0
+    ) {
+      stop(
+        "'max_contrast_change' must be NULL (gate off) or a single number >= 0.",
+        call. = FALSE
+      )
+    }
+    if (
+      !is.numeric(min_donors_per_condition) ||
+        length(min_donors_per_condition) != 1 ||
+        !is.finite(min_donors_per_condition) ||
+        min_donors_per_condition < 2
+    ) {
+      stop(
+        "'min_donors_per_condition' must be a single number >= 2 when ",
+        "'max_contrast_change' is set; donors are the replicates.",
+        call. = FALSE
+      )
+    }
+    if (
+      !is.numeric(min_contrast_spread_ratio) ||
+        length(min_contrast_spread_ratio) != 1 ||
+        !is.finite(min_contrast_spread_ratio) ||
+        min_contrast_spread_ratio < 0
+    ) {
+      stop(
+        "'min_contrast_spread_ratio' must be a single number >= 0 when ",
+        "'max_contrast_change' is set.",
+        call. = FALSE
+      )
+    }
+    values$max_contrast_change <- max_contrast_change
+  } else if (
+    !is.null(min_donors_per_condition) || !is.null(min_contrast_spread_ratio)
+  ) {
+    stop(
+      "'min_donors_per_condition' and 'min_contrast_spread_ratio' must be NULL ",
+      "when 'max_contrast_change' is NULL.",
+      call. = FALSE
+    )
+  }
+  thresholds <- names(values)
   if (
     !is.logical(require_reference_supported) ||
       length(require_reference_supported) != 1 ||
@@ -161,6 +235,8 @@ sw_batch_policy <- function(
       values,
       list(
         require_reference_supported = require_reference_supported,
+        min_donors_per_condition = min_donors_per_condition,
+        min_contrast_spread_ratio = min_contrast_spread_ratio,
         threshold_origins = threshold_origins[thresholds],
         calibration_artifacts = calibration_artifacts,
         any_threshold_uncalibrated = !all(calibrated),
@@ -185,6 +261,17 @@ print.sw_batch_policy <- function(x, ...) {
     "\n"
   )
   print(x$settings)
+  if (is.null(x$max_contrast_change)) {
+    cat("Protected-contrast gate: off.\n")
+  } else {
+    cat(
+      "Protected-contrast gate: on; min donors per condition",
+      x$min_donors_per_condition,
+      "; min contrast to spread ratio",
+      x$min_contrast_spread_ratio,
+      "\n"
+    )
+  }
   if (x$any_threshold_uncalibrated) {
     cat(
       "At least one threshold is uncalibrated; no candidate can be recommended.\n"
@@ -213,8 +300,12 @@ print.sw_batch_policy <- function(x, ...) {
 #'     \code{no_effect_emd}: \code{not_needed}; otherwise the identity
 #'     candidate is \code{eligible_for_review}.
 #'   \item a protected factor is confounded with batch: \code{non_identifiable}.
-#'   \item MAD compression or joint structure change above its limit:
-#'     \code{rejected_distortion}.
+#'   \item MAD compression, joint structure change or (when
+#'     \code{max_contrast_change} is set) protected-contrast change above its
+#'     limit: \code{rejected_distortion}.
+#'   \item the contrast gate is on but its metric cannot be computed (no
+#'     donor or condition, too few donors): \code{insufficient_evidence}, with
+#'     the reason stated.
 #'   \item no relative reduction, coverage missing or below
 #'     \code{min_coverage}, or a guardrail metric missing:
 #'     \code{insufficient_evidence}.
@@ -247,16 +338,26 @@ print.sw_batch_policy <- function(x, ...) {
 #' @param label_source Where the evaluation population labels came from: one
 #'   of \code{"reference"}, \code{"manual_gating"} or \code{"clustering"}.
 #'   **No default.**
+#' @param contrast_records \code{NULL} or a long data frame for
+#'   \code{\link{sw_protected_contrast_change}} (columns \code{candidate_id},
+#'   \code{donor}, \code{condition}, \code{marker}, \code{value}, optional
+#'   \code{population}). **No default**; \code{NULL} says no donor and
+#'   condition data exist. With the gate on, \code{NULL} makes every
+#'   non-identity candidate abstain. Ignored when the gate is off.
 #'
 #' @return An object of class \code{sw_batch_decision}: a list with
 #'   \code{assessments} (tibble: \code{candidate_id}, \code{state},
-#'   \code{reason}, \code{guardrails_failed} list, the evidence columns and
-#'   \code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
+#'   \code{reason}, \code{guardrails_failed} list, the evidence columns,
+#'   \code{protected_contrast_change} (worst absolute change, \code{NA} when
+#'   not assessed), \code{protected_contrast_n_not_assessed} (marker and
+#'   population rows the gate could not judge), \code{protected_contrast_note}
+#'   and \code{reference_supported}), \code{recommended_candidate_id} (\code{NA}
 #'   unless exactly one candidate is recommended),
 #'   \code{recommendation_withheld_reason}, \code{pareto_front},
 #'   \code{pareto_comparable}, \code{warnings}, \code{policy_settings}
 #'   (thresholds with origins), \code{require_reference_supported},
-#'   \code{identity_id} and \code{label_source}.
+#'   \code{identity_id}, \code{label_source} and \code{contrast_detail} (the
+#'   per marker and population table, or \code{NULL}).
 #'
 #' @seealso \code{\link{sw_batch_policy}}, \code{\link{sw_design_audit}},
 #'   \code{\link{sw_batch_candidates_from_metrics}}
@@ -291,6 +392,8 @@ print.sw_batch_policy <- function(x, ...) {
 #'   min_coverage = 0.6, min_emd_reduction = 0.2,
 #'   max_mad_compression_fraction = 0.25, max_joint_structure_change = 0.1,
 #'   no_effect_emd = 0.05, require_reference_supported = TRUE,
+#'   max_contrast_change = NULL, min_donors_per_condition = NULL,
+#'   min_contrast_spread_ratio = NULL,
 #'   threshold_origins = c(
 #'     min_coverage = origin, min_emd_reduction = origin,
 #'     max_mad_compression_fraction = origin,
@@ -300,7 +403,8 @@ print.sw_batch_policy <- function(x, ...) {
 #' )
 #' decision <- sw_batch_decide(
 #'   design, candidates, policy,
-#'   identity_id = "uncorrected", label_source = "manual_gating"
+#'   identity_id = "uncorrected", label_source = "manual_gating",
+#'   contrast_records = NULL
 #' )
 #' decision$assessments[, c("candidate_id", "state")]
 #'
@@ -310,9 +414,17 @@ sw_batch_decide <- function(
   candidates,
   policy,
   identity_id,
-  label_source
+  label_source,
+  contrast_records
 ) {
-  args <- c("design", "candidates", "policy", "identity_id", "label_source")
+  args <- c(
+    "design",
+    "candidates",
+    "policy",
+    "identity_id",
+    "label_source",
+    "contrast_records"
+  )
   absent <- setdiff(args, names(match.call())[-1])
   if (length(absent) > 0) {
     stop(
@@ -385,6 +497,36 @@ sw_batch_decide <- function(
     candidates$status_reason <- NA_character_
   }
   candidates <- candidates[order(candidates$candidate_id), ]
+
+  # Protected-contrast metric, only when the gate is on.
+  contrast <- NULL
+  candidates$protected_contrast_change <- NA_real_
+  candidates$protected_contrast_note <- NA_character_
+  candidates$protected_contrast_n_not_assessed <- NA_integer_
+  if (!is.null(policy$max_contrast_change)) {
+    contrast <- sw_protected_contrast_change(
+      contrast_records,
+      identity_id = identity_id,
+      min_donors_per_condition = policy$min_donors_per_condition,
+      min_contrast_spread_ratio = policy$min_contrast_spread_ratio
+    )
+    hit <- match(candidates$candidate_id, contrast$summary$candidate_id)
+    candidates$protected_contrast_change <- contrast$summary$worst_abs_change[
+      hit
+    ]
+    candidates$protected_contrast_n_not_assessed <- contrast$summary$n_not_assessed[
+      hit
+    ]
+    candidates$protected_contrast_note <- ifelse(
+      is.na(hit),
+      if (contrast$abstained && nrow(contrast$summary) == 1) {
+        contrast$summary$note
+      } else {
+        "the candidate has no donor and condition records"
+      },
+      contrast$summary$note[hit]
+    )
+  }
 
   # Support class of each population-free batch contrast.
   comps <- design$comparisons[is.na(design$comparisons$population), ]
@@ -490,7 +632,8 @@ sw_batch_decide <- function(
       policy_settings = policy$settings,
       require_reference_supported = policy$require_reference_supported,
       identity_id = identity_id,
-      label_source = label_source
+      label_source = label_source,
+      contrast_detail = if (is.null(contrast)) NULL else contrast$detail
     ),
     class = "sw_batch_decision"
   )
@@ -690,6 +833,349 @@ sw_batch_candidates_from_metrics <- function(
   dplyr::bind_rows(rows)
 }
 
+#' Protected-contrast change per candidate
+#'
+#' Measures how far a correction candidate moves the biological contrast that
+#' must be kept. For each marker and population it takes the median of the
+#' values within each donor and condition first, because cells are not
+#' replicates and donors are. It then takes the median of those donor medians
+#' per condition and subtracts condition medians (every pair of conditions).
+#' The change is \code{(after - before) / before}, with the identity candidate
+#' as \code{before}. The summary reports the worst absolute change per candidate
+#' and ranks nothing across markers.
+#'
+#' A marker and population is not assessed when a condition has fewer than
+#' \code{min_donors_per_condition} donors in the identity or the candidate
+#' data, when the \code{before} contrast is within 1e-9 of zero, or when
+#' \code{abs(before)} is below \code{min_contrast_spread_ratio} times the
+#' pooled donor-level standard deviation of the identity data (donor medians
+#' around their condition median). The last rule keeps markers with no
+#' condition contrast out of the relative change. Rows that are not assessed
+#' stay out of \code{worst_abs_change}, are counted in \code{n_not_assessed}
+#' and are named in the note. When no row is assessed, the summary gives
+#' \code{NA} with a stated \code{note}. Rows with a missing donor, condition or
+#' value are dropped and counted in the note.
+#'
+#' @param records \code{NULL} or a data frame with columns
+#'   \code{candidate_id}, \code{donor}, \code{condition}, \code{marker},
+#'   \code{value} (one row per event or per sample), and optional
+#'   \code{population}. It must include the identity candidate.
+#' @param identity_id The \code{candidate_id} of the uncorrected candidate.
+#'   **No default.**
+#' @param min_donors_per_condition Integer, at least 2. Fewest donors per
+#'   condition for a marker and population to be assessed. Uncalibrated, no
+#'   default.
+#' @param min_contrast_spread_ratio Numeric, at least 0. Smallest ratio of
+#'   \code{abs(before)} to the pooled donor-level standard deviation for a
+#'   marker and population to be assessed. Uncalibrated, no default.
+#'
+#' @return A list with \code{summary} (tibble: \code{candidate_id},
+#'   \code{worst_abs_change}, \code{n_assessed}, \code{n_not_assessed},
+#'   \code{note}), \code{detail} (tibble: \code{candidate_id},
+#'   \code{marker}, \code{population}, \code{contrast}, \code{before},
+#'   \code{after}, \code{change}, \code{min_donors}, \code{status}) and
+#'   \code{abstained} (\code{TRUE} when the records allowed no judgement at
+#'   all, so the summary holds one note for every candidate).
+#'
+#' @seealso \code{\link{sw_batch_policy}}, \code{\link{sw_batch_decide}}
+#'
+#' @examples
+#' records <- expand.grid(
+#'   candidate_id = c("uncorrected", "flat"),
+#'   donor = paste0("d", 1:4), condition = c("ctrl", "case"),
+#'   marker = "CD3", stringsAsFactors = FALSE
+#' )
+#' records$value <- ifelse(records$condition == "case", 2, 1) +
+#'   0.01 * as.integer(factor(records$donor))
+#' records$value[records$candidate_id == "flat"] <- 1.5
+#' sw_protected_contrast_change(
+#'   records, identity_id = "uncorrected", min_donors_per_condition = 3,
+#'   min_contrast_spread_ratio = 2
+#' )$summary
+#'
+#' @export
+sw_protected_contrast_change <- function(
+  records,
+  identity_id,
+  min_donors_per_condition,
+  min_contrast_spread_ratio
+) {
+  if (
+    missing(records) ||
+      missing(identity_id) ||
+      missing(min_donors_per_condition) ||
+      missing(min_contrast_spread_ratio)
+  ) {
+    stop(
+      "'records', 'identity_id', 'min_donors_per_condition' and 'min_contrast_spread_ratio' are required and have no default.",
+      call. = FALSE
+    )
+  }
+  if (
+    !is.numeric(min_contrast_spread_ratio) ||
+      length(min_contrast_spread_ratio) != 1 ||
+      !is.finite(min_contrast_spread_ratio) ||
+      min_contrast_spread_ratio < 0
+  ) {
+    stop(
+      "'min_contrast_spread_ratio' must be a single number >= 0.",
+      call. = FALSE
+    )
+  }
+  if (
+    !is.numeric(min_donors_per_condition) ||
+      length(min_donors_per_condition) != 1 ||
+      !is.finite(min_donors_per_condition) ||
+      min_donors_per_condition < 2
+  ) {
+    stop(
+      "'min_donors_per_condition' must be a single number >= 2.",
+      call. = FALSE
+    )
+  }
+  abstain_summary <- function(ids, note) {
+    tibble::tibble(
+      candidate_id = ids,
+      worst_abs_change = NA_real_,
+      n_assessed = 0L,
+      n_not_assessed = 0L,
+      note = note
+    )
+  }
+  empty_detail <- tibble::tibble(
+    candidate_id = character(0),
+    marker = character(0),
+    population = character(0),
+    contrast = character(0),
+    before = double(0),
+    after = double(0),
+    change = double(0),
+    min_donors = integer(0),
+    status = character(0)
+  )
+  if (is.null(records)) {
+    return(list(
+      summary = abstain_summary(
+        identity_id,
+        "no donor or condition data were supplied"
+      ),
+      detail = empty_detail,
+      abstained = TRUE
+    ))
+  }
+  records <- tibble::as_tibble(records)
+  needed <- c("candidate_id", "donor", "condition", "marker", "value")
+  absent <- setdiff(needed, names(records))
+  all_ids <- unique(as.character(records$candidate_id))
+  if (length(absent) > 0) {
+    return(list(
+      summary = abstain_summary(
+        union(identity_id, all_ids),
+        paste0(
+          "the records have no ",
+          paste(absent, collapse = ", "),
+          " column"
+        )
+      ),
+      detail = empty_detail,
+      abstained = TRUE
+    ))
+  }
+  if (!"population" %in% names(records)) {
+    records$population <- NA_character_
+  }
+  if (!identity_id %in% all_ids) {
+    stop(
+      "The identity candidate '",
+      identity_id,
+      "' is not in 'records'.",
+      call. = FALSE
+    )
+  }
+  n_all <- nrow(records)
+  records <- records[
+    !is.na(records$donor) & !is.na(records$condition) & !is.na(records$value),
+  ]
+  n_dropped <- n_all - nrow(records)
+  drop_note <- if (n_dropped > 0) {
+    sprintf(
+      " (%d row(s) without donor, condition or value were dropped)",
+      n_dropped
+    )
+  } else {
+    ""
+  }
+  if (nrow(records) == 0 || length(unique(records$condition)) < 2) {
+    return(list(
+      summary = abstain_summary(
+        union(identity_id, all_ids),
+        paste0("fewer than two conditions with a donor", drop_note)
+      ),
+      detail = empty_detail,
+      abstained = TRUE
+    ))
+  }
+
+  # Donor medians first: cells are not replicates.
+  donor_med <- records |>
+    dplyr::summarise(
+      donor_median = stats::median(.data$value),
+      .by = c("candidate_id", "marker", "population", "condition", "donor")
+    )
+  # Then the median over donors per condition, keeping the donor count.
+  cond_med <- donor_med |>
+    dplyr::summarise(
+      cond_median = stats::median(.data$donor_median),
+      n_donors = dplyr::n(),
+      .by = c("candidate_id", "marker", "population", "condition")
+    )
+  # Pooled donor-level SD of the identity data: the scale of "no contrast".
+  spread <- donor_med[donor_med$candidate_id == identity_id, ] |>
+    dplyr::mutate(
+      sq = (.data$donor_median - mean(.data$donor_median))^2,
+      .by = c("marker", "population", "condition")
+    ) |>
+    dplyr::summarise(
+      spread = sqrt(
+        sum(.data$sq) / (dplyr::n() - dplyr::n_distinct(.data$condition))
+      ),
+      .by = c("marker", "population")
+    )
+  conds <- sort(unique(as.character(cond_med$condition)))
+  pairs <- utils::combn(conds, 2, simplify = FALSE)
+  contrasts <- lapply(pairs, function(pr) {
+    first <- cond_med[cond_med$condition == pr[1], ]
+    second <- cond_med[cond_med$condition == pr[2], ]
+    joined <- dplyr::inner_join(
+      first,
+      second,
+      by = c("candidate_id", "marker", "population"),
+      suffix = c("_a", "_b"),
+      relationship = "one-to-one"
+    )
+    tibble::tibble(
+      candidate_id = joined$candidate_id,
+      marker = as.character(joined$marker),
+      population = as.character(joined$population),
+      contrast = paste(pr, collapse = " - "),
+      value = joined$cond_median_a - joined$cond_median_b,
+      min_donors = pmin(joined$n_donors_a, joined$n_donors_b)
+    )
+  }) |>
+    dplyr::bind_rows()
+
+  before <- contrasts[contrasts$candidate_id == identity_id, ] |>
+    dplyr::select(
+      "marker",
+      "population",
+      "contrast",
+      before = "value",
+      before_donors = "min_donors"
+    ) |>
+    dplyr::mutate(marker = as.character(.data$marker)) |>
+    dplyr::left_join(
+      dplyr::mutate(
+        spread,
+        marker = as.character(.data$marker),
+        population = as.character(.data$population)
+      ),
+      by = c("marker", "population"),
+      relationship = "many-to-one"
+    )
+  detail <- contrasts[contrasts$candidate_id != identity_id, ] |>
+    dplyr::rename(after = "value") |>
+    dplyr::left_join(
+      before,
+      by = c("marker", "population", "contrast"),
+      relationship = "many-to-one"
+    )
+  detail$min_donors <- as.integer(pmin(detail$min_donors, detail$before_donors))
+  detail$status <- dplyr::case_when(
+    is.na(detail$before) ~ "not_assessed: no identity record",
+    detail$min_donors <
+      min_donors_per_condition ~ "not_assessed: too few donors",
+    abs(detail$before) < 1e-9 ~ "not_assessed: before contrast near zero",
+    is.na(detail$spread) ~ "not_assessed: no donor spread in the identity data",
+    abs(detail$before) <
+      min_contrast_spread_ratio *
+        detail$spread ~ "not_assessed: before contrast below donor spread",
+    .default = "assessed"
+  )
+  detail$change <- dplyr::if_else(
+    detail$status == "assessed",
+    (detail$after - detail$before) / detail$before,
+    NA_real_
+  )
+  detail <- detail[, names(empty_detail)]
+
+  others <- setdiff(all_ids, identity_id)
+  n_all_rows <- vapply(
+    others,
+    function(id) sum(detail$candidate_id == id),
+    integer(1)
+  )
+  n_ok <- vapply(
+    others,
+    function(id) sum(detail$status[detail$candidate_id == id] == "assessed"),
+    integer(1)
+  )
+  worst_change <- vapply(
+    others,
+    function(id) {
+      change <- detail$change[detail$candidate_id == id]
+      if (all(is.na(change))) NA_real_ else max(abs(change), na.rm = TRUE)
+    },
+    numeric(1)
+  )
+  summary <- tibble::tibble(
+    candidate_id = c(identity_id, others),
+    worst_abs_change = c(NA_real_, unname(worst_change)),
+    n_assessed = c(0L, unname(n_ok)),
+    n_not_assessed = c(0L, unname(n_all_rows - n_ok)),
+    note = c(
+      "identity candidate is the baseline",
+      .sw_contrast_note(
+        unname(n_ok),
+        unname(n_all_rows - n_ok),
+        min_donors_per_condition,
+        min_contrast_spread_ratio,
+        drop_note
+      )
+    )
+  )
+  list(summary = summary, detail = detail, abstained = FALSE)
+}
+
+# Note per candidate: how many rows were judged, or why none could be.
+.sw_contrast_note <- function(
+  n_assessed,
+  n_not,
+  min_donors,
+  min_ratio,
+  drop_note
+) {
+  ifelse(
+    n_assessed > 0,
+    paste0(
+      "assessed ",
+      n_assessed,
+      " of ",
+      n_assessed + n_not,
+      " marker and population rows",
+      ifelse(n_not > 0, paste0("; ", n_not, " not assessed"), ""),
+      drop_note
+    ),
+    paste0(
+      "no marker and population has at least ",
+      min_donors,
+      " donors per condition and a baseline contrast of at least ",
+      min_ratio,
+      " times the donor spread",
+      drop_note
+    )
+  )
+}
+
 .sw_candidate_metric_cols <- c(
   "emd_median",
   "emd_worst_marker_median",
@@ -783,6 +1269,21 @@ sw_batch_candidates_from_metrics <- function(
         )
       )
     }
+    contrast_on <- !is.null(policy$max_contrast_change)
+    if (
+      contrast_on &&
+        !is.na(cand$protected_contrast_change) &&
+        cand$protected_contrast_change > policy$max_contrast_change
+    ) {
+      guardrails <- c(
+        guardrails,
+        sprintf(
+          "protected_contrast_change %.3g exceeds %.3g",
+          cand$protected_contrast_change,
+          policy$max_contrast_change
+        )
+      )
+    }
     if (length(design$confounded_factors) > 0) {
       state <- "non_identifiable"
       reason <- sprintf(
@@ -809,6 +1310,13 @@ sw_batch_candidates_from_metrics <- function(
         "comparison coverage %.2f is below the declared minimum %.2f",
         coverage,
         policy$min_coverage
+      )
+    } else if (contrast_on && is.na(cand$protected_contrast_change)) {
+      # The gate is on but cannot be judged: abstain and say why.
+      state <- "insufficient_evidence"
+      reason <- paste0(
+        "protected-contrast gate abstains: ",
+        cand$protected_contrast_note
       )
     } else if (is.na(compression) || is.na(joint)) {
       # An unguarded candidate is insufficient evidence, not a silent pass.
@@ -858,6 +1366,15 @@ sw_batch_candidates_from_metrics <- function(
         coverage,
         reduction
       )
+      if (contrast_on && cand$protected_contrast_n_not_assessed > 0) {
+        reason <- paste0(
+          reason,
+          sprintf(
+            "; %d protected-contrast row(s) were not assessed",
+            cand$protected_contrast_n_not_assessed
+          )
+        )
+      }
     }
   }
 
@@ -872,6 +1389,9 @@ sw_batch_candidates_from_metrics <- function(
     coverage = coverage,
     mad_compression_fraction = compression,
     joint_structure_distance_median = joint,
+    protected_contrast_change = cand$protected_contrast_change,
+    protected_contrast_n_not_assessed = cand$protected_contrast_n_not_assessed,
+    protected_contrast_note = cand$protected_contrast_note,
     reference_supported = reference_supported
   )
 }
