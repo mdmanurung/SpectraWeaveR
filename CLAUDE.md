@@ -101,7 +101,7 @@ SpectraWeaveR/
 | End-to-end | `sw_pipeline_run_all()` | all of the above | FCS files → annotated clusters |
 | Design audit | `sw_design_audit()` | batchdx-cyto (ported) | sample table → pair support classes, method eligibility |
 | Batch decision | `sw_batch_policy()`, `sw_batch_decide()`, `sw_batch_candidates_from_metrics()` | batchdx-cyto (ported) | candidate metrics → state per candidate, identity always kept |
-| Control flags | `sw_flag_iqr()`, `sw_flag_iqr_summary()` | CytoBatchFlagR method (clean rewrite) | control events → Tukey-fence flags per batch |
+| Control flags | `sw_flag_iqr()`, `sw_flag_iqr_summary()` | CytoBatchFlagR method (clean rewrite) | control events → Tukey-fence flags per batch; `min_effect` (required, one value per metric, uncalibrated) sets the smallest distance beyond the fence that counts: `effect` column, status `below_min_effect` (flag FALSE) |
 | Unmix checks | `sw_unmix_check_controls()`, `sw_unmix_condition_number()` | AutoSpectral (wrapped) | spectra / FCS → diagnostics tibbles. The other seven wrappers in `R/unmix_assess.R` are internal since 2026-11-09. |
 | Alt. I/O and spectra | `sw_io_*_flowstate()`, `sw_unmix_spectracle()`, `sw_io_spectracle_to_spectra()` | flowstate, spectracle (wrapped) | flowstate / controls → tibble, flowFrame, spectra matrix |
 | Unmix report | `sw_unmix_result()`, `sw_unmix_diagnose()`, `sw_unmix_report()`, `sw_unmix_limits_autospectral()` | AutoSpectral 1.8.8 (reference) | unmix results → tables (incl. `max_sif`, check `spectra_sif`), provenance, HTML/CSV/JSON report; the limits helper gives `max_sif` warn 4, fail 6 |

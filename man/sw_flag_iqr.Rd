@@ -13,6 +13,7 @@ sw_flag_iqr(
   batch_col = "batch",
   control_col = "control",
   quantile_type,
+  min_effect,
   sample_col = NULL
 )
 }
@@ -28,10 +29,11 @@ marker, on the same scale as \code{cells}. Required; there is no automatic
 thresholding.}
 
 \item{iqr_multiplier}{Positive number \code{k} for the fence \code{Q1 - k * IQR},
-\code{Q3 + k * IQR}. Required. The source methods use 1.5.}
+\code{Q3 + k * IQR}. Required, uncalibrated. The source methods use 1.5.}
 
 \item{min_cells_per_side}{Non-negative whole number. A batch needs at least
-this many events on the side a metric uses. Required. The source methods
+this many events on the side a metric uses. Required, uncalibrated. The
+source methods
 use 100.}
 
 \item{batch_col}{Name of the batch column.}
@@ -39,7 +41,14 @@ use 100.}
 \item{control_col}{Name of the control-sample id column.}
 
 \item{quantile_type}{Integer 1 to 9, passed as \code{type} to
-\code{\link[stats:quantile]{stats::quantile()}}. Required.}
+\code{\link[stats:quantile]{stats::quantile()}}. Required, uncalibrated.}
+
+\item{min_effect}{Named numeric vector with exactly the names \code{neg_median},
+\code{pos_median} and \code{pct_positive}; each value is finite and at least 0.
+Required, uncalibrated: no value is validated, and the choice changes
+which batches are flagged. Units: \code{neg_median} and \code{pos_median} are in
+the units of the analysis scale of \code{cells} (for example arcsinh units);
+\code{pct_positive} is in percentage points.}
 
 \item{sample_col}{Optional name of a column holding one id per acquired
 sample. When given, a control acquired more than once in one batch is an
@@ -49,8 +58,10 @@ error.}
 A tibble of class \code{sw_flag_iqr}, one row per control, marker,
 metric and batch, with columns \code{control}, \code{marker}, \code{metric}, \code{batch},
 \code{value}, \code{n_cells} (events on the side the metric uses), \code{q1}, \code{q3},
-\code{lower}, \code{upper}, \code{flag}, \code{status} and \code{reason}. \code{control} and \code{batch}
-are character. Attribute \code{params} echoes every argument plus the batches
+\code{lower}, \code{upper}, \code{effect}, \code{flag}, \code{status} and \code{reason}. \code{effect} is the
+distance beyond the fence in metric units (\code{NA} when not assessed).
+\code{status} is \code{"ok"}, \code{"below_min_effect"} or one of the ineligible or
+undefined statuses. \code{control} and \code{batch} are character. Attribute \code{params} echoes every argument plus the batches
 found. Use \code{\link[=sw_flag_iqr_summary]{sw_flag_iqr_summary()}} to count flags per batch or marker.
 }
 \description{
@@ -66,19 +77,28 @@ For each control, marker and batch, three values are computed:
 
 For each control, marker and metric, the per-batch values form one panel.
 Quartiles are taken across batches. A batch is flagged when its value lies
-below \code{Q1 - k * IQR} or above \code{Q3 + k * IQR}, with \code{k = iqr_multiplier}.
+below \code{Q1 - k * IQR} or above \code{Q3 + k * IQR}, with \code{k = iqr_multiplier},
+and the value lies at least \code{min_effect} beyond that fence.
 }
 \details{
 \strong{Scale.} \code{cells} must already be on the analysis scale (for example
 arcsinh-transformed). The scale is the caller's choice. \code{thresholds} must be
 on that same scale.
 
-\strong{No defaults for the method knobs.} \code{iqr_multiplier}, \code{min_cells_per_side}
-and \code{quantile_type} have no default because each one changes which batches
+\strong{No defaults for the method knobs.} \code{iqr_multiplier}, \code{min_cells_per_side},
+\code{quantile_type} and \code{min_effect} have no default because each one changes which batches
 are flagged. The source methods use \code{iqr_multiplier = 1.5} and
 \code{min_cells_per_side = 100}. Those are conventions, not validated cutoffs.
 \code{quantile_type} matters most with 4 to 6 batches, where R's quantile types
 give visibly different fences.
+
+\strong{Minimum effect.} The Tukey fence alone flags noise when batches agree,
+because a tight spread gives a tight fence. \code{effect} is the distance of a
+value beyond the nearer fence, in the unit of the metric (zero inside the
+fence). A value outside the fence with \code{effect < min_effect[[metric]]} is
+not flagged: \code{flag} is \code{FALSE} and \code{status} is \code{"below_min_effect"}. The row
+was assessed, so it counts as assessed in \code{\link[=sw_flag_iqr_summary]{sw_flag_iqr_summary()}}. With
+\code{min_effect = 0} for every metric the result equals the plain fence.
 
 \strong{No automatic thresholds.} Positivity thresholds are analyst-supplied.
 Different analysts pick different thresholds for the same marker, and the
@@ -128,7 +148,8 @@ res <- sw_flag_iqr(
   thresholds = c(CD3 = 1.5),
   iqr_multiplier = 1.5,
   min_cells_per_side = 50,
-  quantile_type = 7
+  quantile_type = 7,
+  min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)
 )
 res[res$flag \%in\% TRUE, c("batch", "marker", "metric", "value")]
 sw_flag_iqr_summary(res, by = "batch")

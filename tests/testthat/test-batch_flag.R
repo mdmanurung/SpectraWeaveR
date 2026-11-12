@@ -22,7 +22,16 @@ make_fixed <- function(
   }))
 }
 
-flag_fixed <- function(cells, quantile_type = 7, min_cells = 1, ...) {
+# Explicit test values; they are not recommendations.
+ME0 <- c(neg_median = 0, pos_median = 0, pct_positive = 0)
+
+flag_fixed <- function(
+  cells,
+  quantile_type = 7,
+  min_cells = 1,
+  min_effect = ME0,
+  ...
+) {
   sw_flag_iqr(
     cells,
     markers = "M1",
@@ -30,6 +39,7 @@ flag_fixed <- function(cells, quantile_type = 7, min_cells = 1, ...) {
     iqr_multiplier = 1.5,
     min_cells_per_side = min_cells,
     quantile_type = quantile_type,
+    min_effect = min_effect,
     ...
   )
 }
@@ -66,14 +76,15 @@ simulate_cells <- function(n_batches, n_per_batch = 2000) {
   }))
 }
 
-flag_sim <- function(cells, min_cells = 100) {
+flag_sim <- function(cells, min_cells = 100, min_effect = ME0) {
   sw_flag_iqr(
     cells,
     markers = c("CD3", "CD19"),
     thresholds = c(CD3 = 1.5, CD19 = 2),
     iqr_multiplier = 1.5,
     min_cells_per_side = min_cells,
-    quantile_type = 7
+    quantile_type = 7,
+    min_effect = min_effect
   )
 }
 
@@ -87,7 +98,8 @@ test_that("each required argument without a default errors by name", {
       thresholds = thr,
       iqr_multiplier = 1.5,
       min_cells_per_side = 1,
-      quantile_type = 7
+      quantile_type = 7,
+      min_effect = ME0
     ),
     "`markers`"
   )
@@ -97,21 +109,54 @@ test_that("each required argument without a default errors by name", {
       "M1",
       iqr_multiplier = 1.5,
       min_cells_per_side = 1,
-      quantile_type = 7
+      quantile_type = 7,
+      min_effect = ME0
     ),
     "`thresholds`"
   )
   expect_error(
-    sw_flag_iqr(cells, "M1", thr, min_cells_per_side = 1, quantile_type = 7),
+    sw_flag_iqr(
+      cells,
+      "M1",
+      thr,
+      min_cells_per_side = 1,
+      quantile_type = 7,
+      min_effect = ME0
+    ),
     "`iqr_multiplier`"
   )
   expect_error(
-    sw_flag_iqr(cells, "M1", thr, iqr_multiplier = 1.5, quantile_type = 7),
+    sw_flag_iqr(
+      cells,
+      "M1",
+      thr,
+      iqr_multiplier = 1.5,
+      quantile_type = 7,
+      min_effect = ME0
+    ),
     "`min_cells_per_side`"
   )
   expect_error(
-    sw_flag_iqr(cells, "M1", thr, iqr_multiplier = 1.5, min_cells_per_side = 1),
+    sw_flag_iqr(
+      cells,
+      "M1",
+      thr,
+      iqr_multiplier = 1.5,
+      min_cells_per_side = 1,
+      min_effect = ME0
+    ),
     "`quantile_type`"
+  )
+  expect_error(
+    sw_flag_iqr(
+      cells,
+      "M1",
+      thr,
+      iqr_multiplier = 1.5,
+      min_cells_per_side = 1,
+      quantile_type = 7
+    ),
+    "min_effect"
   )
 })
 
@@ -124,7 +169,8 @@ test_that("bad inputs fail loudly", {
       c(M2 = 1),
       iqr_multiplier = 1.5,
       min_cells_per_side = 1,
-      quantile_type = 7
+      quantile_type = 7,
+      min_effect = ME0
     ),
     "No threshold"
   )
@@ -135,7 +181,8 @@ test_that("bad inputs fail loudly", {
       c(M9 = 1),
       iqr_multiplier = 1.5,
       min_cells_per_side = 1,
-      quantile_type = 7
+      quantile_type = 7,
+      min_effect = ME0
     ),
     "missing"
   )
@@ -293,4 +340,116 @@ test_that("summaries count flags per batch and per marker", {
   s <- summary(res)
   expect_named(s, c("by_batch", "by_marker", "status"))
   expect_equal(s$status$n, 48L)
+})
+
+# Eight batches, one marker, fixed values: b1..b7 sit near 0, b8 is moved by `jump`.
+make_effect <- function(jump) {
+  neg <- c(-0.01, 0.01, 0, 0.02, -0.02, 0.005, -0.005, jump)
+  make_fixed(sprintf("b%d", 1:8), neg, rep(3, 8), n_neg = 5, n_pos = 5)
+}
+
+test_that("min_effect must be a complete, finite, non-negative named vector", {
+  cells <- make_effect(0.5)
+  expect_error(flag_fixed(cells, min_effect = c(neg_median = 0)), "min_effect")
+  expect_error(flag_fixed(cells, min_effect = c(1, 1, 1)), "min_effect")
+  expect_error(
+    flag_fixed(
+      cells,
+      min_effect = c(neg_median = -1, pos_median = 0, pct_positive = 0)
+    ),
+    "min_effect"
+  )
+  expect_error(
+    flag_fixed(
+      cells,
+      min_effect = c(neg_median = NA, pos_median = 0, pct_positive = 0)
+    ),
+    "min_effect"
+  )
+})
+
+test_that("effect is the distance beyond the fence, zero inside", {
+  res <- flag_fixed(make_effect(0.5))
+  neg <- res[res$metric == "neg_median", ]
+  inside <- neg[neg$batch != "b8", ]
+  expect_true(all(inside$effect == 0))
+  b8 <- neg[neg$batch == "b8", ]
+  expect_equal(b8$effect, b8$value - b8$upper)
+  expect_gt(b8$effect, 0)
+  expect_true(b8$flag)
+})
+
+test_that("a small excursion is below_min_effect, a large one is flagged", {
+  cells <- make_effect(0.5)
+  eff <- flag_fixed(cells)
+  e8 <- eff$effect[eff$metric == "neg_median" & eff$batch == "b8"]
+  # Planted effect: min_effect just above the effect suppresses the flag.
+  hi <- flag_fixed(
+    cells,
+    min_effect = c(neg_median = e8 * 2, pos_median = 0, pct_positive = 0)
+  )
+  r <- hi[hi$metric == "neg_median" & hi$batch == "b8", ]
+  expect_identical(r$status, "below_min_effect")
+  expect_false(r$flag)
+  expect_equal(r$effect, e8)
+  expect_match(r$reason, "below min_effect")
+  # The other batches of that panel stay ok; other metrics are untouched.
+  expect_true(all(
+    hi$status[hi$metric == "neg_median" & hi$batch != "b8"] == "ok"
+  ))
+  expect_true(all(hi$status[hi$metric != "neg_median"] == "ok"))
+  # min_effect just below the effect keeps the flag.
+  lo <- flag_fixed(
+    cells,
+    min_effect = c(neg_median = e8 / 2, pos_median = 0, pct_positive = 0)
+  )
+  expect_true(lo$flag[lo$metric == "neg_median" & lo$batch == "b8"])
+  expect_identical(
+    lo$status[lo$metric == "neg_median" & lo$batch == "b8"],
+    "ok"
+  )
+})
+
+test_that("min_effect = 0 reproduces the plain fence and never hides a flag", {
+  cells <- make_effect(0.5)
+  res <- flag_fixed(cells)
+  expect_equal(res$flag, res$value < res$lower | res$value > res$upper)
+  strict <- flag_fixed(
+    cells,
+    min_effect = c(neg_median = 100, pos_median = 100, pct_positive = 100)
+  )
+  expect_false(any(strict$flag))
+})
+
+test_that("ineligible panels keep NA effect and NA flag", {
+  res <- flag_fixed(make_fixed(paste0("b", 1:3), rep(0, 3), rep(2, 3)))
+  expect_true(all(is.na(res$effect)))
+  expect_true(all(is.na(res$flag)))
+})
+
+test_that("summary counts below_min_effect rows as assessed, not flagged", {
+  cells <- make_effect(0.5)
+  eff <- flag_fixed(cells)
+  e8 <- eff$effect[eff$metric == "neg_median" & eff$batch == "b8"]
+  res <- flag_fixed(
+    cells,
+    min_effect = c(neg_median = e8 * 2, pos_median = 0, pct_positive = 0)
+  )
+  by_batch <- sw_flag_iqr_summary(res, by = "batch")
+  b8 <- by_batch[by_batch$batch == "b8", ]
+  expect_equal(b8$n_assessed, 3L)
+  expect_equal(b8$n_not_assessed, 0L)
+  expect_equal(b8$n_flagged, sum(res$flag[res$batch == "b8"]))
+  expect_true("below_min_effect" %in% summary(res)$status$status)
+})
+
+test_that("params echo min_effect in metric order", {
+  res <- flag_fixed(
+    make_effect(0.5),
+    min_effect = c(pct_positive = 3, neg_median = 1, pos_median = 2)
+  )
+  expect_equal(
+    attr(res, "params")$min_effect,
+    c(neg_median = 1, pos_median = 2, pct_positive = 3)
+  )
 })
