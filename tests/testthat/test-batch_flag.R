@@ -453,3 +453,46 @@ test_that("params echo min_effect in metric order", {
     c(neg_median = 1, pos_median = 2, pct_positive = 3)
   )
 })
+
+# Eight batches: b8 is outside the fence on all three metrics at once.
+# Neg median 0.5 (others near 0), pos median 6 (others 3), 75% positive (others 50%).
+make_effect_all <- function() {
+  neg <- c(-0.01, 0.01, 0, 0.02, -0.02, 0.005, -0.005, 0.5)
+  pos <- c(rep(3, 7), 6)
+  make_fixed(
+    sprintf("b%d", 1:8),
+    neg,
+    pos,
+    n_neg = c(rep(5, 7), 5),
+    n_pos = c(rep(5, 7), 15)
+  )
+}
+
+test_that("each min_effect entry gates only its own metric", {
+  cells <- make_effect_all()
+  base <- flag_fixed(cells)
+  b8 <- base[base$batch == "b8", ]
+  expect_true(all(b8$flag))
+  effect_of <- stats::setNames(b8$effect, b8$metric)
+  expect_true(all(effect_of > 0))
+  # Three different effect sizes, so a swapped entry cannot pass by luck.
+  expect_gt(length(unique(round(effect_of, 6))), 1L)
+  for (m in names(effect_of)) {
+    me <- ME0
+    me[[m]] <- effect_of[[m]] * 2
+    res <- flag_fixed(cells, min_effect = me)
+    r8 <- res[res$batch == "b8", ]
+    for (k in r8$metric) {
+      row <- r8[r8$metric == k, ]
+      if (k == m) {
+        expect_identical(row$status, "below_min_effect")
+        expect_false(row$flag)
+      } else {
+        expect_identical(row$status, "ok")
+        expect_true(row$flag)
+      }
+    }
+    # Batches b1..b7 are untouched for every metric.
+    expect_true(all(res$status[res$batch != "b8"] == "ok"))
+  }
+})
