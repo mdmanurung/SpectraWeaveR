@@ -189,6 +189,9 @@ Each item below changes a result, so none has a package default.
 | Origin of the batch-count floor | `sw_design_audit()` | Required string; stored in the result |
 | Minimum effect size for a control flag | `sw_flag_iqr()` (A4 follow-up) | None yet; the Tukey fence alone flags noise |
 | Limit on donor-level protected-contrast change | `sw_batch_decide()` (A2b) | None yet |
+| `n_events`, `seed`, reference roles, minimum donors per batch, optional noise floor | `sw_ref_vs_study()` (P3a, plan DR17, DR18) | Plan proposes 20,000 events (reported, not verified) and 4 donors (dataset rule D5, source not opened); both stay uncalibrated, the user sets them |
+| Minimum events per population, label source | `sw_ref_composition()` (P3a, DR19) | None; floor is the analytic multinomial standard error |
+| Quantile probabilities, minimum events per population | `sw_ref_coverage()` (P3a, DR20) | Plan proposes 0.01 and 0.99 (weak source: CytoBatchNorm percentile range, as reported by a survey) |
 | Anchor batch; hierarchy (study, run, instrument); population model | `sw_corrector_fit()` | The bundle defaults to the first sorted batch, which this package will not copy |
 | Number of audit blocks | `sw_study_audit()` | Binomial bound, about 17 at a 0.20 limit with zero failures |
 | Cofactor, seed, SOM grid, metaclusters, IT limit, MAD limit in `sw_pipeline_run_all()` | existing pipeline | Pre-existing defaults (6000, 42, 8×8, 20, 0.55, 6). Confirmed by the user 2026-11-09: cofactor 6000, seed 42, n_metaclusters 20, gate_node 'lymphocytes', unmix_method 'AutoSpectral'. SOM grid, IT limit and MAD limit still need a confirm. |
