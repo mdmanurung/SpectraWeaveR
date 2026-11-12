@@ -240,12 +240,14 @@ sw_ref_consistency <- function(
   # Per-batch checks with no row (a batch with no usable file, or a reference with
   # fewer than 2 usable batches) become explicit not_assessed rows.
   have <- scores |>
-    dplyr::filter(check %in% c("rest_emd", "rest_emd_z", "median_shift_z")) |>
+    dplyr::filter(
+      check %in% c("rest_emd", "rest_emd_z", "median_shift_z", "order_rho")
+    ) |>
     dplyr::select(reference_id, check, marker, batch)
-  batch_has_file <- used[c("reference_id", "batch")] |>
-    dplyr::distinct() |>
+  batch_has_file <- used |>
+    dplyr::summarise(n_used_files = dplyr::n(), .by = c(reference_id, batch)) |>
     dplyr::mutate(has_file = TRUE)
-  absent_rows <- .sw_ref_grid(sel, markers) |>
+  absent_rows <- .sw_ref_grid(sel, markers, with_order = !is.null(order)) |>
     dplyr::anti_join(
       have,
       by = c("reference_id", "check", "marker", "batch")
@@ -258,13 +260,15 @@ sw_ref_consistency <- function(
     dplyr::mutate(
       value = NA_real_,
       n_files = 0L,
-      reason = dplyr::if_else(
-        is.na(has_file),
-        "no file of this reference in this batch has min_events events",
-        "reference has fewer than 2 batches with min_events events"
+      reason = dplyr::case_when(
+        is.na(has_file) ~
+          "no file of this reference in this batch has min_events events",
+        check == "order_rho" & n_used_files < 4 ~
+          "fewer than 4 files of this reference in this batch",
+        .default = "reference has fewer than 2 batches with min_events events"
       )
     ) |>
-    dplyr::select(-has_file)
+    dplyr::select(-has_file, -n_used_files)
 
   out <- dplyr::bind_rows(scores, absent_rows, .sw_ref_count_ratio(sel)) |>
     dplyr::mutate(
@@ -300,9 +304,12 @@ sw_ref_consistency <- function(
 
 # Full grid of per-batch checks: every reference x batch (from the manifest) x
 # marker x check, so a batch that could not be scored shows up as a row.
-.sw_ref_grid <- function(sel, markers) {
+.sw_ref_grid <- function(sel, markers, with_order = FALSE) {
   rb <- unique(sel[c("reference_id", "batch")])
   chk <- c("rest_emd", "rest_emd_z", "median_shift_z")
+  if (with_order) {
+    chk <- c(chk, "order_rho")
+  }
   rb |>
     dplyr::cross_join(tibble::tibble(marker = markers)) |>
     dplyr::cross_join(tibble::tibble(check = chk))
@@ -319,6 +326,7 @@ sw_ref_consistency <- function(
   if (length(markers) == 1) {
     fmed <- matrix(fmed, ncol = 1)
   }
+  rownames(fmed) <- names(drawn)
   colnames(fmed) <- markers
   rows <- lapply(unique(used[["reference_id"]]), \(r) {
     u <- used[used[["reference_id"]] == r, ]

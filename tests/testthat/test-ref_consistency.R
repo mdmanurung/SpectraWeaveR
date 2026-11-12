@@ -160,3 +160,19 @@ test_that("order_rho appears with order and settings are recorded", {
   expect_equal(st$cofactor, 6000)
   expect_equal(st$min_batches_per_reference, 3)
 })
+
+test_that("one marker works and order_rho gaps are not_assessed", {
+  x <- make_ref()
+  one <- cons(x, markers = "A")
+  expect_equal(
+    pick(one, "ref1", "median_shift_z", "A", "b2")$status,
+    "assessed"
+  )
+  # No batch has 4 files, so every requested order_rho row is not_assessed.
+  ord <- stats::setNames(seq_along(x$d), names(x$d))
+  res <- cons(x, order = ord)
+  rho <- pick(res, "ref1", "order_rho")
+  expect_equal(nrow(rho), 6)
+  expect_true(all(rho$status == "not_assessed"))
+  expect_match(rho$reason[1], "fewer than 4 files")
+})
