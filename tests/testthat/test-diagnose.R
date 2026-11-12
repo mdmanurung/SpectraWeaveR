@@ -285,6 +285,14 @@ test_that("ranking keys: signed, low-first and ratio checks, without spurious wa
   expect_no_warning(.sw_diag_key(c("offset", "gain_batch_ratio"), c(-5, 2)))
 })
 
+test_that("spread_ratio ranks by abs(log(value)): 0.5 and 2 are equal (DR39)", {
+  key <- .sw_diag_key(rep("spread_ratio", 3), c(0.5, 2, 1))
+  expect_equal(key[[1]], key[[2]])
+  expect_equal(key[[3]], 0)
+  expect_gt(key[[1]], key[[3]])
+  expect_no_warning(.sw_diag_key(c("offset", "spread_ratio"), c(-5, 2)))
+})
+
 test_that("bimodality_z ranks by size; spread_z and rest_emd_z stay one-sided (G38)", {
   # A split blurs two populations, so the coefficient drops: a large negative z is the fault.
   key <- .sw_diag_key(

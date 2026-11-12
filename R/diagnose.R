@@ -380,9 +380,10 @@ sw_diagnose <- function(
   key[signed] <- abs(value[signed])
   low <- check %in% .sw_low_first_checks
   key[low] <- -value[low]
-  # A gain ratio departs from 1 either way, so its log size ranks. Only these
-  # rows are logged, so negative values elsewhere raise no warning.
-  ratio <- check == "gain_batch_ratio"
+  # A ratio departs from 1 either way, so its log size ranks: a narrowed batch
+  # (0.5) ranks as high as a widened one (2). Only these rows are logged, so
+  # negative values elsewhere raise no warning.
+  ratio <- check %in% c("gain_batch_ratio", "spread_ratio")
   key[ratio] <- abs(log(value[ratio]))
   key
 }
@@ -393,9 +394,10 @@ sw_diagnose <- function(
 #' markers) with the largest value. No cutoff is applied. Signed checks
 #' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`, `gain_z`,
 #' `gain_order_rho`, `neg_median_z`, `neg_sd_z`, `neg_corr`, `neg_corr_z`,
-#' `spill_corr`, `spill_corr_z`) are
-#' ranked by the size of the value, ignoring its sign. `gain_batch_ratio` is
-#' ranked by `abs(log(value))`. For `novelty_log_density` and `separation` the
+#' `corr_pair_z`, `global_sd_z`, `spill_corr`, `spill_corr_z`, `kept_share_z`,
+#' `kept_share_log_ratio`, `centroid_shift`, `bimodality_z`) are
+#' ranked by the size of the value, ignoring its sign. `gain_batch_ratio` and
+#' `spread_ratio` are ranked by `abs(log(value))`, so 0.5 and 2 rank equal. For `novelty_log_density` and `separation` the
 #' smallest values are the unusual ones, so those checks rank from the lowest
 #' value. Level values (`offset`, `gain`, `neg_median`, `neg_sd`, `neg_share`)
 #' rank by raw value; read their `_z` rows to rank deviations.
