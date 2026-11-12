@@ -336,6 +336,68 @@ test_that("population = NULL leaves the output identical to the all-event rows",
   )
 })
 
+test_that("population = NULL output matches values taken from main", {
+  # Fixed values from the pre-population sw_batch_scores() on main.
+  x <- make_batches()
+  res <- scores(x)
+  keep <- res$check %in% c("rest_emd", "median_range", "eta2")
+  expect_equal(
+    round(res$value[keep], 6),
+    c(
+      0.488298,
+      1.001171,
+      0.513379,
+      0.050133,
+      0.036921,
+      0.042708,
+      0.951835,
+      0.966398,
+      0.070282,
+      0.065502
+    )
+  )
+  expect_equal(
+    res$marker[keep],
+    c("A", "A", "A", "B", "B", "B", "A", "A", "B", "B")
+  )
+})
+
+test_that("a file with only NA labels is left out of the share rows", {
+  x <- make_pop()
+  x$labels[["f2"]] <- rep(NA_character_, 400)
+  res <- pop_scores(x)
+  sh <- res[
+    res$check %in% c("pop_share", "share_rest_z") & res$population %in% "p1",
+  ]
+  expect_false(anyNA(sh$value))
+  expect_equal(sh$n_files[sh$check == "pop_share" & sh$batch == "b1"], 4L)
+  expect_true(all(sh$status == "assessed"))
+  gap <- res[res$check == "cell_events" & res$file %in% "f2", ]
+  expect_equal(sort(gap$population), c("p1", "p2"))
+  expect_true(all(gap$status == "not_assessed" & gap$n_events == 0L))
+  # A batch whose files are all unlabelled drops out; two batches remain.
+  y <- make_pop()
+  for (f in names(y$labels)[y$batch == "b3"]) {
+    y$labels[[f]] <- rep(NA_character_, 400)
+  }
+  r2 <- pop_scores(y)
+  s2 <- r2[r2$check == "pop_share" & r2$population %in% "p1", ]
+  expect_setequal(s2$batch, c("b1", "b2"))
+  expect_false(anyNA(s2$value))
+})
+
+test_that("population combines with order and reference_group", {
+  x <- make_pop()
+  donor <- stats::setNames(
+    rep(c("d1", "d2", "d3", "d4", "d5"), 3),
+    names(x$data)
+  )
+  res <- pop_scores(x, order = x$order, reference_group = donor)
+  expect_true(all(c("batch_order_rho", "rest_emd") %in% res$check))
+  expect_true(any(!is.na(res$population)))
+  expect_false(anyNA(res$status))
+})
+
 test_that("population arguments are required when population is set", {
   x <- make_pop()
   expect_error(

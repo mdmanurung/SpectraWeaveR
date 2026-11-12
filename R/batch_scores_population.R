@@ -131,14 +131,17 @@
           extra = !is.null(order)
         )
       }
-      bs <- sort(unique(batch[all_keep]))
+      # Files without any labelled event have no share: they are left out here
+      # (their cell_events rows say so) so one gap does not blank a batch.
+      labelled <- all_keep[!is.na(share[all_keep])]
+      bs <- sort(unique(batch[labelled]))
       if (length(bs) >= 2) {
         bshare <- vapply(
           bs,
-          function(b) stats::median(share[all_keep][batch[all_keep] == b]),
+          function(b) stats::median(share[labelled][batch[labelled] == b]),
           numeric(1)
         )
-        nf <- vapply(bs, function(b) sum(batch[all_keep] == b), numeric(1))
+        nf <- vapply(bs, function(b) sum(batch[labelled] == b), numeric(1))
         parts$share <- tibble::tibble(
           check = rep(c("pop_share", "share_rest_z"), each = length(bs)),
           marker = NA_character_,

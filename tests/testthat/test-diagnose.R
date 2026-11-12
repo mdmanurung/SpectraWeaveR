@@ -69,6 +69,33 @@ test_that("every argument must be given", {
   )
 })
 
+test_that("batch$population is an error, not silently dropped", {
+  x <- make_dx()
+  expect_error(
+    sw_diagnose(
+      x$data,
+      header = NULL,
+      signal = NULL,
+      anomaly = NULL,
+      batch = list(
+        batch = x$batch,
+        markers = c("A", "B", "C"),
+        n_events = 200,
+        seed = 1,
+        order = NULL,
+        reference_group = NULL,
+        population = list(labels = list(), label_source = "gate")
+      ),
+      cluster = NULL,
+      relativise = NULL,
+      otd = NULL,
+      negative = NULL,
+      gate = NULL
+    ),
+    "population"
+  )
+})
+
 test_that("signal and batch modules stack into one table", {
   x <- make_dx()
   dx <- sw_diagnose(
