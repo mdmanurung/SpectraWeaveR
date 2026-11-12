@@ -28,9 +28,11 @@ transformed here.}
 All files of a group must share one batch.}
 
 \item{strata}{One of \code{"none"}, \code{"file"}, \code{"donor"} or \code{"population"}
-(uncalibrated). \code{"none"} is one stratum per group. The other values give
-one stratum per file, donor or population label, with \code{n_events} drawn
-from each.}
+(uncalibrated). \code{"none"} is one pooled stratum per group: \code{n_events} are
+drawn from all its files together, so the share per file is random and
+unequal. Only \code{"file"} gives equal events per file. \code{"donor"} and
+\code{"population"} give one stratum per donor or population label, with
+\code{n_events} drawn from each.}
 
 \item{labels}{Named list of population labels, one vector per file, same
 length as its rows. Required when \code{strata = "population"}. \code{NULL} is an

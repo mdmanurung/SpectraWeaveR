@@ -172,9 +172,11 @@ print.sw_synref <- function(x, ...) {
 #'   `sample_id`s that feed one reference. The name becomes the reference id.
 #'   All files of a group must share one batch.
 #' @param strata One of `"none"`, `"file"`, `"donor"` or `"population"`
-#'   (uncalibrated). `"none"` is one stratum per group. The other values give
-#'   one stratum per file, donor or population label, with `n_events` drawn
-#'   from each.
+#'   (uncalibrated). `"none"` is one pooled stratum per group: `n_events` are
+#'   drawn from all its files together, so the share per file is random and
+#'   unequal. Only `"file"` gives equal events per file. `"donor"` and
+#'   `"population"` give one stratum per donor or population label, with
+#'   `n_events` drawn from each.
 #' @param labels Named list of population labels, one vector per file, same
 #'   length as its rows. Required when `strata = "population"`. `NULL` is an
 #'   explicit "no labels".
@@ -260,6 +262,15 @@ sw_synref_downsample <- function(
   ) {
     stop(
       "'groups' must be a uniquely named list of sample_id vectors.",
+      call. = FALSE
+    )
+  }
+  repeated <- names(groups)[vapply(groups, anyDuplicated, integer(1)) > 0]
+  if (length(repeated) > 0) {
+    stop(
+      "Group(s) list a sample_id more than once: ",
+      paste(repeated, collapse = ", "),
+      ". A repeated file would let one event enter a reference twice.",
       call. = FALSE
     )
   }

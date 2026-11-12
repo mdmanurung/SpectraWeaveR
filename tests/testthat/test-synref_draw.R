@@ -115,6 +115,27 @@ test_that("strata none pools the group into one stratum", {
   expect_equal(nrow(ref$events[[1]]), 120)
 })
 
+test_that("strata none draws a pooled, unequal share per file", {
+  d <- make_files()
+  ref <- down(d, strata = "none", n_events = 120, n_draws = 1)
+  per_file <- table(ref$provenance$source_sample)
+  expect_equal(sum(per_file), 120)
+  expect_gt(length(per_file), 1)
+})
+
+test_that("a repeated sample_id in a group stops, so no source event repeats", {
+  d <- make_files()
+  expect_error(
+    down(d, groups = list(r1 = c("f1", "f1"))),
+    "more than once: r1"
+  )
+  for (st in c("none", "file", "donor")) {
+    ref <- down(d, strata = st, n_events = 40, n_draws = 1)
+    key <- paste(ref$provenance$source_sample, ref$provenance$source_row)
+    expect_false(anyDuplicated(key) > 0)
+  }
+})
+
 test_that("missing required arguments stop and name them", {
   d <- make_files()
   expect_error(

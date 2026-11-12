@@ -73,6 +73,30 @@ test_that("a sibling file of the same donor stops on the donor unit", {
   expect_equal(out$status[out$unit == "donor"], "not_assessed")
 })
 
+test_that("an unlisted against file stops instead of passing the donor guard", {
+  x <- make_ref()
+  expect_error(
+    sw_synref_check_overlap(
+      x$ref,
+      against = "zz",
+      manifest = x$man,
+      max_overlap_share = 0
+    ),
+    "missing from 'manifest' or without a donor: zz"
+  )
+  man_na <- x$man
+  man_na$donor[man_na$sample_id == "f2"] <- NA
+  expect_error(
+    sw_synref_check_overlap(
+      x$ref,
+      against = "f2",
+      manifest = man_na,
+      max_overlap_share = 0
+    ),
+    "without a donor: f2"
+  )
+})
+
 test_that("event overlap is found per row and respects max_overlap_share", {
   x <- make_ref()
   p <- x$ref$provenance

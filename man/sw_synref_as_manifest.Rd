@@ -19,9 +19,10 @@ A tibble with \code{sample_id} (the synref id), \code{batch}, \code{reference_ro
 \description{
 Returns one row per synthetic reference with \code{reference_role = "synthetic_reference"} and a \code{source_batch} note. A synthetic reference is
 never a measured reference and never bridges batches in the design audit.
-The rows are a plain tibble. Bind them to the manifest table before calling
-\code{\link[=sw_sample_manifest]{sw_sample_manifest()}}, which accepts the role once the
-\code{synthetic_reference} role is in the manifest code.
+The rows are a plain tibble. Bind them to the study manifest table, then
+call \code{\link[=sw_sample_manifest]{sw_sample_manifest()}} with \code{reference_role}, \code{reference_id} and
+\code{source_batch} mapped. \code{\link[=sw_design_audit]{sw_design_audit()}} lists them under
+\code{synthetic_references} and does not let them bridge batches.
 }
 \examples{
 set.seed(1)

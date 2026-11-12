@@ -15,7 +15,8 @@
 #'   vector of `sample_id`s. Without `row`, the event unit is `not_assessed`;
 #'   the file unit covers it.
 #' @param manifest Data frame with `sample_id` and `donor`, or `NULL` for an
-#'   explicit "donor not assessed".
+#'   explicit "donor not assessed". Every `against` sample needs a row with a
+#'   donor; otherwise the function stops.
 #' @param max_overlap_share Largest allowed share of shared units, from 0 to 1
 #'   (uncalibrated). Any share above it stops the run.
 #'
@@ -70,9 +71,16 @@ sw_synref_check_overlap <- function(
     }
     if ("donor" %in% names(manifest)) {
       pos <- match(against_ids, as.character(manifest[["sample_id"]]))
-      against_donors <- unique(stats::na.omit(as.character(manifest[["donor"]])[
-        pos
-      ]))
+      donor_of <- as.character(manifest[["donor"]])[pos]
+      if (anyNA(donor_of)) {
+        stop(
+          "'against' sample(s) missing from 'manifest' or without a donor: ",
+          paste(unique(against_ids[is.na(donor_of)]), collapse = ", "),
+          ". The donor is the dependence unit; add them, or use manifest = NULL.",
+          call. = FALSE
+        )
+      }
+      against_donors <- unique(donor_of)
     }
   }
   against_keys <- if ("row" %in% names(against)) {

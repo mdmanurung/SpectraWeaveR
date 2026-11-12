@@ -49,9 +49,10 @@
 #' Returns one row per synthetic reference with `reference_role =
 #' "synthetic_reference"` and a `source_batch` note. A synthetic reference is
 #' never a measured reference and never bridges batches in the design audit.
-#' The rows are a plain tibble. Bind them to the manifest table before calling
-#' [sw_sample_manifest()], which accepts the role once the
-#' `synthetic_reference` role is in the manifest code.
+#' The rows are a plain tibble. Bind them to the study manifest table, then
+#' call [sw_sample_manifest()] with `reference_role`, `reference_id` and
+#' `source_batch` mapped. [sw_design_audit()] lists them under
+#' `synthetic_references` and does not let them bridge batches.
 #'
 #' @param synref An `sw_synref`.
 #' @param manifest Data frame with `sample_id` and `batch`. Its `study` and

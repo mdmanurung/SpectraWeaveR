@@ -15,7 +15,8 @@ vector of \code{sample_id}s. Without \code{row}, the event unit is \code{not_ass
 the file unit covers it.}
 
 \item{manifest}{Data frame with \code{sample_id} and \code{donor}, or \code{NULL} for an
-explicit "donor not assessed".}
+explicit "donor not assessed". Every \code{against} sample needs a row with a
+donor; otherwise the function stops.}
 
 \item{max_overlap_share}{Largest allowed share of shared units, from 0 to 1
 (uncalibrated). Any share above it stops the run.}

@@ -69,6 +69,55 @@ test_that("manifest rows carry the role, the source batch and the study", {
   expect_false(any(rows$sample_id %in% x$man$sample_id))
 })
 
+test_that("manifest rows pass sw_sample_manifest and the design audit", {
+  x <- make_ref()
+  rows <- sw_synref_as_manifest(x$ref, x$man)
+  study <- data.frame(
+    sample_id = x$man$sample_id,
+    batch = x$man$batch,
+    study = "s1",
+    donor = x$man$donor,
+    reference_role = NA_character_,
+    reference_id = NA_character_,
+    source_batch = NA_character_
+  )
+  both <- dplyr::bind_rows(study, as.data.frame(rows))
+  both$donor[is.na(both$donor)] <- "synthetic"
+  m <- sw_sample_manifest(
+    both,
+    sample_id = "sample_id",
+    batch = "batch",
+    study = "study",
+    donor = "donor",
+    reference_role = "reference_role",
+    reference_id = "reference_id",
+    source_batch = "source_batch"
+  )
+  expect_s3_class(m, "data.frame")
+  audit <- sw_design_audit(
+    m,
+    minimum_batches = 2,
+    minimum_batches_origin = "test",
+    require_shared_reference = FALSE
+  )
+  expect_equal(sort(audit$synthetic_references$sample_id), sort(rows$sample_id))
+  nobatch <- both
+  nobatch$source_batch <- NA_character_
+  expect_error(
+    sw_sample_manifest(
+      nobatch,
+      sample_id = "sample_id",
+      batch = "batch",
+      study = "study",
+      donor = "donor",
+      reference_role = "reference_role",
+      reference_id = "reference_id",
+      source_batch = "source_batch"
+    ),
+    "source_batch"
+  )
+})
+
 test_that("missing arguments stop", {
   x <- make_ref()
   expect_error(sw_synref_as_manifest(x$ref), "'manifest'")
