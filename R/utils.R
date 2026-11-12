@@ -31,8 +31,13 @@ NULL
 .validate_markers_in_df <- function(df, markers, arg_name = "df") {
   missing_markers <- setdiff(markers, names(df))
   if (length(missing_markers) > 0) {
-    stop("Marker(s) not found in '", arg_name, "': ",
-         paste(missing_markers, collapse = ", "), call. = FALSE)
+    stop(
+      "Marker(s) not found in '",
+      arg_name,
+      "': ",
+      paste(missing_markers, collapse = ", "),
+      call. = FALSE
+    )
   }
 }
 
@@ -54,20 +59,27 @@ NULL
 #' @export
 sw_io_read_fcs <- function(files, ...) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
-    stop("Package 'flowCore' is required. Install it from Bioconductor.",
-         call. = FALSE)
+    stop(
+      "Package 'flowCore' is required. Install it from Bioconductor.",
+      call. = FALSE
+    )
   }
 
   if (!is.character(files) || length(files) == 0) {
-    stop("'files' must be a non-empty character vector of FCS file paths.",
-         call. = FALSE)
+    stop(
+      "'files' must be a non-empty character vector of FCS file paths.",
+      call. = FALSE
+    )
   }
 
   # Verify files exist
   missing <- files[!file.exists(files)]
   if (length(missing) > 0) {
-    stop("FCS file(s) not found: ", paste(missing, collapse = ", "),
-         call. = FALSE)
+    stop(
+      "FCS file(s) not found: ",
+      paste(missing, collapse = ", "),
+      call. = FALSE
+    )
   }
 
   if (length(files) == 1) {
@@ -102,8 +114,12 @@ sw_io_read_fcs <- function(files, ...) {
 #' }
 #'
 #' @export
-sw_io_ff_to_tibble <- function(ff, sample = NULL, batch = NULL,
-                                   condition = NULL) {
+sw_io_ff_to_tibble <- function(
+  ff,
+  sample = NULL,
+  batch = NULL,
+  condition = NULL
+) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -115,9 +131,15 @@ sw_io_ff_to_tibble <- function(ff, sample = NULL, batch = NULL,
   mat <- flowCore::exprs(ff)
   df <- tibble::as_tibble(as.data.frame(mat))
 
-  if (!is.null(sample)) df$sample <- sample
-  if (!is.null(batch)) df$batch <- batch
-  if (!is.null(condition)) df$condition <- condition
+  if (!is.null(sample)) {
+    df$sample <- sample
+  }
+  if (!is.null(batch)) {
+    df$batch <- batch
+  }
+  if (!is.null(condition)) {
+    df$condition <- condition
+  }
 
   df
 }
@@ -183,8 +205,13 @@ sw_io_tibble_to_ff <- function(df, markers = NULL) {
 #' sw_io_exprs_to_tibble(mat, sample = "S1", batch = "B1")
 #'
 #' @export
-sw_io_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
-                               batch = NULL, condition = NULL) {
+sw_io_exprs_to_tibble <- function(
+  mat,
+  colnames = NULL,
+  sample = NULL,
+  batch = NULL,
+  condition = NULL
+) {
   if (!is.matrix(mat) && !is.data.frame(mat)) {
     stop("'mat' must be a matrix or data.frame.", call. = FALSE)
   }
@@ -198,9 +225,15 @@ sw_io_exprs_to_tibble <- function(mat, colnames = NULL, sample = NULL,
 
   df <- tibble::as_tibble(as.data.frame(mat))
 
-  if (!is.null(sample)) df$sample <- sample
-  if (!is.null(batch)) df$batch <- batch
-  if (!is.null(condition)) df$condition <- condition
+  if (!is.null(sample)) {
+    df$sample <- sample
+  }
+  if (!is.null(batch)) {
+    df$batch <- batch
+  }
+  if (!is.null(condition)) {
+    df$condition <- condition
+  }
 
   df
 }
@@ -232,8 +265,9 @@ sw_channel_get_fluor <- function(ff_or_fs) {
 
   # Exclude scatter and time channels (case-insensitive)
   exclude_pattern <- "^(FSC|SSC|Time)(-[A-Za-z])?$"
-  fluor <- all_channels[!grepl(exclude_pattern, all_channels,
-                               ignore.case = TRUE)]
+  fluor <- all_channels[
+    !grepl(exclude_pattern, all_channels, ignore.case = TRUE)
+  ]
 
   fluor
 }
@@ -271,8 +305,12 @@ sw_channel_set_markers <- function(ff, marker_map) {
     if (length(idx) == 1) {
       pdata$desc[idx] <- marker_map[[ch]]
     } else {
-      warning("Channel '", ch, "' not found in flowFrame; skipping.",
-              call. = FALSE)
+      warning(
+        "Channel '",
+        ch,
+        "' not found in flowFrame; skipping.",
+        call. = FALSE
+      )
     }
   }
 
@@ -310,11 +348,16 @@ sw_channel_set_markers <- function(ff, marker_map) {
 #' }
 #'
 #' @export
-sw_channel_is_signal <- function(x,
-                               exclude_patterns = c(
-                                 "Time", "Original_ID",
-                                 "File", "SampleID", "AF Index"
-                               )) {
+sw_channel_is_signal <- function(
+  x,
+  exclude_patterns = c(
+    "Time",
+    "Original_ID",
+    "File",
+    "SampleID",
+    "AF Index"
+  )
+) {
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
@@ -323,7 +366,8 @@ sw_channel_is_signal <- function(x,
     stop("'x' must be a flowFrame or flowSet object.", call. = FALSE)
   }
 
-  vapply(flowCore::colnames(x),
+  vapply(
+    flowCore::colnames(x),
     FUN.VALUE = logical(1),
     FUN = function(ch, patterns) {
       res <- TRUE
@@ -353,12 +397,18 @@ sw_channel_is_signal <- function(x,
 #' @return A named logical vector with length equal to \code{ncol(x)}.
 #'
 #' @export
-sw_channel_is_fluor <- function(x,
-                              exclude_patterns = c(
-                                "FSC", "SSC",
-                                "Time", "Original_ID",
-                                "File", "SampleID", "AF Index"
-                              )) {
+sw_channel_is_fluor <- function(
+  x,
+  exclude_patterns = c(
+    "FSC",
+    "SSC",
+    "Time",
+    "Original_ID",
+    "File",
+    "SampleID",
+    "AF Index"
+  )
+) {
   sw_channel_is_signal(x, exclude_patterns = exclude_patterns)
 }
 
@@ -380,12 +430,17 @@ sw_channel_is_fluor <- function(x,
 #'
 #' @param fs A \code{flowCore::flowSet} or \code{flowCore::flowFrame}
 #'   (auto-wrapped).
-#' @param n_total_events Integer; target total number of events.
-#' @param setup Character; strategy for distributing events.
-#'   \code{"forceNEvent"} (default) tries to reach exactly
-#'   \code{n_total_events}; \code{"forceBalance"} uses the minimum per-file
-#'   count, yielding balanced but potentially fewer events.
-#' @param seed Integer; seed for reproducibility. Default: \code{NULL}.
+#' @param n_total_events Integer; required target total number of events
+#'   (uncalibrated).
+#' @param setup Character; required, no default (uncalibrated; the choice
+#'   changes which events and how many are kept). \code{"forceNEvent"} tries
+#'   to reach exactly \code{n_total_events}; \code{"forceBalance"} uses the
+#'   minimum per-file count, yielding balanced but potentially fewer events.
+#' @param seed Integer seed, required, no default (uncalibrated; the choice
+#'   changes which events are drawn). \code{NULL} is an explicit "do not
+#'   seed" and leaves the caller's RNG stream in use. A numeric seed is
+#'   applied for the call and the caller's \code{.Random.seed} is restored
+#'   on exit.
 #' @param channels Character vector of channels to keep. Default: \code{NULL}
 #'   (all channels from the first file).
 #' @param keep_order Logical; if \code{TRUE}, preserves chronological order
@@ -394,18 +449,27 @@ sw_channel_is_fluor <- function(x,
 #' @return A single \code{flowCore::flowFrame} with aggregated events.
 #'
 #' @export
-sw_io_subsample <- function(fs,
-                                    n_total_events,
-                                    setup = c("forceNEvent", "forceBalance"),
-                                    seed = NULL,
-                                    channels = NULL,
-                                    keep_order = FALSE) {
+sw_io_subsample <- function(
+  fs,
+  n_total_events,
+  setup,
+  seed,
+  channels = NULL,
+  keep_order = FALSE
+) {
+  .sw_stop_missing(c(
+    setup = missing(setup),
+    seed = missing(seed)
+  ))
   if (!requireNamespace("flowCore", quietly = TRUE)) {
     stop("Package 'flowCore' is required.", call. = FALSE)
   }
 
-  if (!is.numeric(n_total_events) || length(n_total_events) != 1 ||
-      n_total_events < 1) {
+  if (
+    !is.numeric(n_total_events) ||
+      length(n_total_events) != 1 ||
+      n_total_events < 1
+  ) {
     stop("'n_total_events' must be a positive integer.", call. = FALSE)
   }
 
@@ -416,13 +480,23 @@ sw_io_subsample <- function(fs,
     stop("'fs' must be a flowSet or flowFrame object.", call. = FALSE)
   }
 
-  setup <- match.arg(setup)
+  if (
+    !is.character(setup) ||
+      length(setup) != 1 ||
+      !setup %in% c("forceNEvent", "forceBalance")
+  ) {
+    stop("'setup' must be \"forceNEvent\" or \"forceBalance\".", call. = FALSE)
+  }
+  if (
+    !is.null(seed) && (!is.numeric(seed) || length(seed) != 1 || is.na(seed))
+  ) {
+    stop("'seed' must be a single number or NULL.", call. = FALSE)
+  }
 
   if (!is.null(seed)) {
     if (exists(".Random.seed", envir = .GlobalEnv)) {
       old_seed <- get(".Random.seed", envir = .GlobalEnv)
-      on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv),
-              add = TRUE)
+      on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv), add = TRUE)
     } else {
       on.exit(rm(".Random.seed", envir = .GlobalEnv), add = TRUE)
     }
@@ -430,9 +504,13 @@ sw_io_subsample <- function(fs,
   }
 
   n_frames <- length(fs)
-  ff_nrows <- vapply(seq_len(n_frames), function(i) {
-    flowCore::nrow(fs[[i]])
-  }, integer(1))
+  ff_nrows <- vapply(
+    seq_len(n_frames),
+    function(i) {
+      flowCore::nrow(fs[[i]])
+    },
+    integer(1)
+  )
 
   min_nrow <- min(ff_nrows)
   sum_nrow <- sum(ff_nrows)
@@ -468,9 +546,14 @@ sw_io_subsample <- function(fs,
   # Handle excess
   n_excess <- sum(n_rows_select) - n_total_events
   if (n_excess < 0) {
-    warning("Could not reach ", n_total_events,
-            " events; sampled ", sum(n_rows_select), " events.",
-            call. = FALSE)
+    warning(
+      "Could not reach ",
+      n_total_events,
+      " events; sampled ",
+      sum(n_rows_select),
+      " events.",
+      call. = FALSE
+    )
   }
   while (n_excess > 0) {
     n_withdraw <- min(n_excess, n_frames)
@@ -490,7 +573,9 @@ sw_io_subsample <- function(fs,
   for (i in seq_len(n_frames)) {
     current_ff <- fs[[i]]
     ids <- sample(seq_len(nrow(current_ff)), n_rows_select[i])
-    if (keep_order) ids <- sort(ids)
+    if (keep_order) {
+      ids <- sort(ids)
+    }
 
     # Add tracking columns
     file_ids <- rep(i, n_rows_select[i])
@@ -603,27 +688,34 @@ sw_io_event_audit <- function(intermediates) {
     }
     if (is.list(obj)) {
       # List of flowFrames or similar
-      counts <- vapply(obj, function(o) {
-        if (requireNamespace("flowCore", quietly = TRUE) &&
-            methods::is(o, "flowFrame")) {
-          flowCore::nrow(o)
-        } else if (is.data.frame(o)) {
-          nrow(o)
-        } else {
-          NA_integer_
-        }
-      }, integer(1))
+      counts <- vapply(
+        obj,
+        function(o) {
+          if (
+            requireNamespace("flowCore", quietly = TRUE) &&
+              methods::is(o, "flowFrame")
+          ) {
+            flowCore::nrow(o)
+          } else if (is.data.frame(o)) {
+            nrow(o)
+          } else {
+            NA_integer_
+          }
+        },
+        integer(1)
+      )
 
       if (all(is.na(counts))) {
-        warning("Could not count events for step with list elements.",
-                call. = FALSE)
+        warning(
+          "Could not count events for step with list elements.",
+          call. = FALSE
+        )
         return(NA_integer_)
       }
       return(sum(counts, na.rm = TRUE))
     }
 
-    warning("Unsupported type for event counting; returning NA.",
-            call. = FALSE)
+    warning("Unsupported type for event counting; returning NA.", call. = FALSE)
     NA_integer_
   }
 
@@ -632,9 +724,13 @@ sw_io_event_audit <- function(intermediates) {
   initial <- n_events[1]
   pct_of_initial <- round(100 * n_events / initial, 2)
 
-  pct_of_previous <- c(100, round(
-    100 * n_events[-1] / n_events[-length(n_events)], 2
-  ))
+  pct_of_previous <- c(
+    100,
+    round(
+      100 * n_events[-1] / n_events[-length(n_events)],
+      2
+    )
+  )
 
   tibble::tibble(
     step = step_names,

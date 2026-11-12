@@ -155,7 +155,7 @@ Ported from CytoPipeline / CytoPipelineUtils (UCLouvain-CBIO):
 ### Utilities (`R/utils.R`)
 - Format bridges: `sw_io_ff_to_tibble()`, `sw_io_tibble_to_ff()`, `sw_io_exprs_to_tibble()`
 - Channel classification: `sw_channel_is_signal()`, `sw_channel_is_fluor()`
-- Aggregation: `sw_io_subsample()` — pool and subsample events
+- Aggregation: `sw_io_subsample()` — pool and subsample events; `n_total_events`, `setup` and `seed` are required (`seed = NULL` means do not seed)
 - Audit trail: `sw_io_event_audit()` — event count tracking
 
 ## Key Design Constraints

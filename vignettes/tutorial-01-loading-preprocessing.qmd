@@ -375,7 +375,7 @@ overview before analysis.
 
 ```{r}
 #| label: aggregate
-ff_agg <- sw_io_subsample(fs, n_total_events = 500, seed = 42)
+ff_agg <- sw_io_subsample(fs, n_total_events = 500, setup = "forceNEvent", seed = 42)
 stopifnot(is(ff_agg, "flowFrame"))
 stopifnot(nrow(ff_agg) <= 500)
 stopifnot("File" %in% colnames(ff_agg))
