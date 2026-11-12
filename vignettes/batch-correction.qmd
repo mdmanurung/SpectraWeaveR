@@ -192,7 +192,8 @@ corrected <- sw_correct_run(
   xdim = 8,                # SOM grid dimensions
   ydim = 8,
   rlen = 10,               # SOM training iterations
-  seed = 42
+  seed = 42,
+  design_audit = NULL      # explicit skip; pass sw_design_audit() output to gate
 )
 
 saveRDS(corrected, "corrected.rds")

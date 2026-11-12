@@ -1400,7 +1400,8 @@ sw_pipeline_generate_code <- function(config,
     paste0("  cofactor        = ", config$cofactor),
     paste0("  n_metaclusters  = ", config$n_metaclusters),
     paste0('  output_dir      = "', config$output_dir, '"'),
-    paste0("  seed            = ", config$seed)
+    paste0("  seed            = ", config$seed, ","),
+    "  design_audit    = NULL # explicit skip; pass an sw_design_audit() to gate"
   )
 
   if (!is.null(config$gating_template)) {
@@ -1562,7 +1563,8 @@ sw_pipeline_generate_code <- function(config,
     "corrected <- sw_correct_run(",
     "  uncorrected,",
     "  markers     = markers,",
-    paste0("  seed        = ", config$seed),
+    paste0("  seed        = ", config$seed, ","),
+    "  design_audit = NULL # explicit skip; pass an sw_design_audit() to gate",
     ")",
     "",
     "# Step 7: Clustering",

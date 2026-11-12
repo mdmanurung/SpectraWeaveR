@@ -21,6 +21,7 @@ sw_pipeline_run_all(
   control_file = NULL,
   cytometer = "aurora",
   unmix_method = "AutoSpectral",
+  design_audit,
   ...
 )
 }
@@ -74,11 +75,21 @@ Used when \code{unmix_from_raw = TRUE}.}
 \item{unmix_method}{Character; unmixing method (default:
 \code{"AutoSpectral"}). Used when \code{unmix_from_raw = TRUE}.}
 
+\item{design_audit}{Required, no default: an \code{sw_design_audit} object
+from \code{\link{sw_design_audit}}, or \code{NULL} to skip the check
+explicitly. The audit gate is uncalibrated against your data. The
+\code{cycombine} row of \code{audit$eligibility} must be eligible, else
+the run stops before any step and names that row. \code{NULL} runs no
+check and the skip is recorded in \code{design_audit_check}.}
+
 \item{...}{Additional arguments.}
 }
 \value{
 A named list with components:
 \describe{
+\item{\code{design_audit_check}}{Gate record: \code{status}
+(\code{"checked"} or \code{"skipped"}), \code{row} and
+\code{method}}
 \item{\code{unmix_result}}{Unmixing results (if
 \code{unmix_from_raw = TRUE})}
 \item{\code{flowset}}{The loaded \code{flowSet}}
@@ -116,7 +127,8 @@ result <- sw_pipeline_run_all(
   sample_meta = meta,
   markers = c("CD3", "CD4", "CD8"),
   lineage_markers = c("CD3", "CD4", "CD8"),
-  cofactor = 6000
+  cofactor = 6000,
+  design_audit = NULL # explicit skip; pass an sw_design_audit() to gate
 )
 names(result)
 }

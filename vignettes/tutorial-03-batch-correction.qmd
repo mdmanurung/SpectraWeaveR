@@ -200,7 +200,8 @@ corrected <- sw_correct_run(
   markers = markers,
   covar = "condition",
   xdim = 4, ydim = 4, rlen = 10,
-  seed = 42
+  seed = 42,
+  design_audit = NULL # no audit for this toy data; explicit skip
 )
 
 stopifnot(is.data.frame(corrected))

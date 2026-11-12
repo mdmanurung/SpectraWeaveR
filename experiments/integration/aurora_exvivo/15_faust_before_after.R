@@ -92,7 +92,8 @@ t_correct <- system.time(
     uncorrected,
     markers = faust_markers, # user decision G13: correct on the same 37 markers FAUST uses
     seed = CORRECT_SEED,
-    norm_method = CORRECT_NORM_METHOD
+    norm_method = CORRECT_NORM_METHOD,
+    design_audit = NULL # no design audit for this smoke run; explicit skip
   )
 )
 stopifnot(

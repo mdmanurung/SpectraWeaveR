@@ -14,6 +14,7 @@ sw_correct_run(
   rlen = 10,
   norm_method = "scale",
   seed = 42,
+  design_audit,
   ...
 )
 }
@@ -42,10 +43,21 @@ is skipped.}
 
 \item{seed}{Integer; random seed for reproducibility (default: 42).}
 
+\item{design_audit}{Required, no default: an \code{sw_design_audit} object
+from \code{\link{sw_design_audit}} for the same samples, or \code{NULL}
+to skip the check explicitly. The audit decides whether correction is
+allowed, so it is uncalibrated against any data of yours. When given, the
+\code{cycombine} row of \code{audit$eligibility} must be eligible;
+otherwise the call stops and names that row. \code{NULL} runs no check
+and the skip is recorded in the result.}
+
 \item{...}{Additional arguments passed to \code{cyCombine::batch_correct()}.}
 }
 \value{
-A \code{tibble} with batch-corrected marker values.
+A \code{tibble} with batch-corrected marker values. The attribute
+\code{"design_audit_check"} holds the gate record: a list with
+\code{status} (\code{"checked"} or \code{"skipped"}), \code{row} (the
+audit row, or \code{NULL} when skipped) and \code{method}.
 }
 \description{
 All-in-one wrapper for \code{cyCombine::batch_correct()} that normalises,
@@ -62,7 +74,11 @@ uncorrected <- tibble::tibble(
   batch = rep(c("B1", "B2"), each = 100),
   sample = rep(c("S1", "S2"), each = 100)
 )
-corrected <- sw_correct_run(uncorrected, markers = c("CD3", "CD4"))
+corrected <- sw_correct_run(
+  uncorrected,
+  markers = c("CD3", "CD4"),
+  design_audit = NULL # explicit skip; pass an sw_design_audit() to gate
+)
 }
 
 }

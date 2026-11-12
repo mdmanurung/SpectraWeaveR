@@ -54,10 +54,19 @@ NULL
 #'   Used when \code{unmix_from_raw = TRUE}.
 #' @param unmix_method Character; unmixing method (default:
 #'   \code{"AutoSpectral"}). Used when \code{unmix_from_raw = TRUE}.
+#' @param design_audit Required, no default: an \code{sw_design_audit} object
+#'   from \code{\link{sw_design_audit}}, or \code{NULL} to skip the check
+#'   explicitly. The audit gate is uncalibrated against your data. The
+#'   \code{cycombine} row of \code{audit$eligibility} must be eligible, else
+#'   the run stops before any step and names that row. \code{NULL} runs no
+#'   check and the skip is recorded in \code{design_audit_check}.
 #' @param ... Additional arguments.
 #'
 #' @return A named list with components:
 #'   \describe{
+#'     \item{\code{design_audit_check}}{Gate record: \code{status}
+#'       (\code{"checked"} or \code{"skipped"}), \code{row} and
+#'       \code{method}}
 #'     \item{\code{unmix_result}}{Unmixing results (if
 #'       \code{unmix_from_raw = TRUE})}
 #'     \item{\code{flowset}}{The loaded \code{flowSet}}
@@ -83,7 +92,8 @@ NULL
 #'   sample_meta = meta,
 #'   markers = c("CD3", "CD4", "CD8"),
 #'   lineage_markers = c("CD3", "CD4", "CD8"),
-#'   cofactor = 6000
+#'   cofactor = 6000,
+#'   design_audit = NULL # explicit skip; pass an sw_design_audit() to gate
 #' )
 #' names(result)
 #' }
@@ -105,6 +115,7 @@ sw_pipeline_run_all <- function(fcs_dir,
                          control_file = NULL,
                          cytometer = "aurora",
                          unmix_method = "AutoSpectral",
+                         design_audit,
                          ...) {
   # --- Input validation ---
   if (missing(cofactor)) {
@@ -150,12 +161,16 @@ sw_pipeline_run_all <- function(fcs_dir,
          paste(non_lineage, collapse = ", "), call. = FALSE)
   }
 
+  # Required choice, checked before any expensive step runs.
+  .sw_stop_missing(c(design_audit = missing(design_audit)))
+  gate_record <- .sw_gate_design_audit(design_audit, method = "cycombine")
+
   # Create output directory
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }
 
-  results <- list()
+  results <- list(design_audit_check = gate_record)
 
   # --- Step 0 (optional): Unmix from raw spectral data ---
   if (unmix_from_raw) {
@@ -268,7 +283,8 @@ sw_pipeline_run_all <- function(fcs_dir,
     uncorrected,
     markers = markers,
     covar = covar,
-    seed = seed
+    seed = seed,
+    design_audit = design_audit
   )
   results$corrected <- corrected
 

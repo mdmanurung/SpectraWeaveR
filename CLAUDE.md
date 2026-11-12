@@ -97,12 +97,12 @@ SpectraWeaveR/
 | 1d. Variants | `sw_unmix_extract_variants()` | AutoSpectral | controls → spectral variants |
 | 2. Gating | `sw_gate_run()`, `sw_gate_template()` | openCyto / flowWorkspace | flowSet → GatingSet |
 | 3. Signal QC | `sw_qc_run()`, `sw_qc_batch()` | PeacoQC | flowFrame (gated) → flowFrame (cleaned) |
-| 4. Batch correction | `sw_correct_run()` | cyCombine | flowSet → tibble (corrected) |
+| 4. Batch correction | `sw_correct_run()` | cyCombine | flowSet → tibble (corrected). `design_audit` is required (NULL = explicit skip, recorded in attribute `design_audit_check`); an ineligible `cycombine` audit row stops the call and is named |
 | 4a. Modular | `sw_correct_normalize()` → `sw_correct_som()` → `sw_correct_apply()` | cyCombine | step-by-step control |
 | 4b. Diagnostics | `sw_correct_detect_batch()`, `sw_correct_emd()`, `sw_correct_evaluate_emd()`, `sw_correct_evaluate_mad()` | cyCombine | batch effect assessment |
 | 4c. Visualization | `sw_plot_batch_densities()`, `sw_plot_batch_dimred()` | cyCombine / ggplot2 | density/UMAP/PCA plots |
 | 5. Clustering | `sw_cluster_run()`, `sw_plot_clusters()`, `sw_cluster_predict()` | kohonen / FastPG | tibble/matrix → sw_cluster_result |
-| End-to-end | `sw_pipeline_run_all()` | all of the above | FCS files → annotated clusters |
+| End-to-end | `sw_pipeline_run_all()` | all of the above | FCS files → annotated clusters. `design_audit` is required (NULL = explicit skip, recorded in `design_audit_check`); an ineligible `cycombine` row stops the run before any step |
 | Design audit | `sw_design_audit()` | batchdx-cyto (ported) | sample table → pair support classes, method eligibility |
 | Batch decision | `sw_batch_policy()`, `sw_batch_decide()`, `sw_batch_candidates_from_metrics()` | batchdx-cyto (ported) | candidate metrics → state per candidate, identity always kept |
 | Cleaning stage | `sw_clean_run()` | PeacoQC / openCyto / flowCore (wrapped) | FCS files, flowFrames or flowSet → margins (raw, `margin_range` on fluorescence channels), arcsinh, PeacoQC, nonDebris, singlets, live gates → live singlet flowFrames + per-sample audit, gate and QC tables. All 10 impactful values are required (`margin_range`, `debris_window`, `singlet_wider_gate`, `pool_samples`, `viability_channel`, `viability_method`, `viability_cut`, `IT_limit`, `MAD`, `cofactor`); a call with missing ones stops once and lists them with how to choose each. `pool_samples = TRUE` writes `groupBy` = number of samples, because openCyto pools only when `groupBy` is not empty. `sw_gate_run()` sets `groupBy` to the number of samples for any template row with `collapseDataForGating` TRUE and an empty `groupBy`; an explicit `groupBy` stays. A `margin_range` lower limit above 0 is read by PeacoQC as 0; the run warns and continues. A sample emptied by the margin step, or a PeacoQC error, stops the run naming the sample. |

@@ -121,7 +121,7 @@ test_that("sw_pipeline_run_all function signature has expected parameters", {
   params <- names(formals(sw_pipeline_run_all))
   expect_true(all(c("fcs_dir", "sample_meta", "markers", "lineage_markers",
                      "gating_template", "gate_node", "output_dir", "cofactor",
-                     "n_metaclusters", "seed") %in% params))
+                     "n_metaclusters", "seed", "design_audit") %in% params))
 })
 
 # =========================================================================
@@ -181,8 +181,11 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
     markers = c("CD3", "CD4", "CD8"),
     lineage_markers = c("CD3", "CD4", "CD8"),
     gating_template = NULL,
-    output_dir = out_dir
+    output_dir = out_dir,
+    design_audit = NULL
   )
+
+  expect_identical(result$design_audit_check$status, "skipped")
 
   expect_true(is.list(result))
   expect_true("flowset" %in% names(result))
@@ -200,4 +203,52 @@ test_that("sw_pipeline_run_all executes end-to-end with synthetic FCS", {
   if (!is.null(result$cluster_result)) {
     expect_s3_class(result$cluster_result, "sw_cluster_result")
   }
+})
+
+# =========================================================================
+# Design-audit gate (A3)
+# =========================================================================
+
+test_that("sw_pipeline_run_all requires design_audit", {
+  expect_error(
+    sw_pipeline_run_all(
+      fcs_dir = tempdir(),
+      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
+      markers = "CD3",
+      lineage_markers = "CD3",
+      cofactor = 6000
+    ),
+    "Required argument\\(s\\) with no default: 'design_audit'"
+  )
+})
+
+test_that("sw_pipeline_run_all stops on an ineligible audit before any step", {
+  samples <- data.frame(
+    sample_id = c("s1", "s2"),
+    batch = c("b1", "b1"),
+    condition = c("ctrl", "case"),
+    reference_role = "none",
+    reference_id = NA_character_
+  )
+  audit <- sw_design_audit(
+    samples,
+    minimum_batches = 1,
+    minimum_batches_origin = "test fixture",
+    require_shared_reference = FALSE,
+    protected = "condition"
+  )
+  out_dir <- file.path(tempdir(), "gate_should_not_exist")
+  expect_error(
+    sw_pipeline_run_all(
+      fcs_dir = tempdir(),
+      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
+      markers = "CD3",
+      lineage_markers = "CD3",
+      cofactor = 6000,
+      output_dir = out_dir,
+      design_audit = audit
+    ),
+    "Design audit row 'cycombine'"
+  )
+  expect_false(dir.exists(out_dir))
 })

@@ -11,7 +11,9 @@ sw_pipeline_step_correct(
 )
 }
 \arguments{
-\item{...}{Additional arguments passed to \code{sw_correct_run}.}
+\item{...}{Additional arguments passed to \code{sw_correct_run}. Include
+\code{design_audit} (required there; \code{NULL} is an explicit skip),
+or the step stops when it runs.}
 
 \item{input_type}{Character vector overriding the default input port type.}
 
