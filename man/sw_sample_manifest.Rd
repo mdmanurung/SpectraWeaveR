@@ -58,7 +58,9 @@ the role is one of \code{none}, \code{technical_replicate},
 \code{synthetic_reference}.
 \item A sample with a measured reference role has a \code{reference_id}.
 \item A sample with role \code{synthetic_reference} has a
-\code{source_batch}: the batch its cells were drawn from. Like
+\code{source_batch}: the batch its cells were drawn from. It must be
+one of the batches in \code{batch}; it may equal the sample's own
+batch. Like
 \code{biological_pseudo_control}, it is never a measured reference and
 never bridges batches in \code{\link{sw_design_audit}}.
 }

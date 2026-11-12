@@ -452,3 +452,11 @@ test_that("synthetic_reference needs a source_batch", {
   s$source_batch <- NA_character_
   expect_error(audit(s), "source_batch")
 })
+
+test_that("synthetic_reference source_batch must be a batch in the table", {
+  s <- make_samples(c("a", "b", "c"), c("x", "y", "x"),
+                    role = c("synthetic_reference", "none", "none"),
+                    ref = c("S1", NA, NA))
+  s$source_batch <- c("zz", NA, NA)
+  expect_error(audit(s), "not found in the batch column")
+})

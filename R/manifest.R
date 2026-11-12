@@ -24,7 +24,9 @@
 #'     \code{synthetic_reference}.
 #'   \item A sample with a measured reference role has a \code{reference_id}.
 #'   \item A sample with role \code{synthetic_reference} has a
-#'     \code{source_batch}: the batch its cells were drawn from. Like
+#'     \code{source_batch}: the batch its cells were drawn from. It must be
+#'     one of the batches in \code{batch}; it may equal the sample's own
+#'     batch. Like
 #'     \code{biological_pseudo_control}, it is never a measured reference and
 #'     never bridges batches in \code{\link{sw_design_audit}}.
 #' }
@@ -146,6 +148,14 @@ sw_sample_manifest <- function(df,
                            any(is.na(out$source_batch[synthetic])))) {
       stop("Samples with role 'synthetic_reference' need a 'source_batch'.",
            call. = FALSE)
+    }
+    unknown_src <- setdiff(
+      unique(as.character(out$source_batch[synthetic])),
+      unique(as.character(out$batch))
+    )
+    if (length(unknown_src) > 0) {
+      stop("'source_batch' value(s) not found in 'batch': ",
+           paste(unknown_src, collapse = ", "), ".", call. = FALSE)
     }
   }
 

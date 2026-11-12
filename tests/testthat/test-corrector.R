@@ -419,3 +419,46 @@ test_that("compare marks pairs without a shared reference", {
   expect_true(all(emd$status == "no_shared_reference"))
   expect_true(all(is.na(emd$value)))
 })
+
+test_that("synthetic_reference rows are never reference evidence", {
+  meta <- data.frame(
+    sample_id = c("a1", "a2", "b1", "b2", "c1", "c2"),
+    batch = c("b1", "b1", "b2", "b2", "b3", "b3"),
+    reference_role = c(
+      "technical_replicate", "none", "technical_replicate", "none",
+      "synthetic_reference", "synthetic_reference"
+    ),
+    reference_id = c("R1", NA, "R1", NA, "S1", "S1"),
+    source_batch = c(NA, NA, NA, NA, "b1", "b2")
+  )
+  manifest <- sw_sample_manifest(
+    meta, "sample_id", "batch",
+    reference_role = "reference_role", reference_id = "reference_id",
+    source_batch = "source_batch"
+  )
+  ids <- rep(meta$sample_id, each = 20)
+  set.seed(3)
+  x <- tibble::tibble(
+    sample_id = ids,
+    CD3 = stats::rnorm(length(ids)),
+    CD4 = stats::rnorm(length(ids))
+  )
+  batch <- meta$batch[match(ids, meta$sample_id)]
+  args <- list(
+    x = x, manifest = manifest, design_audit = toy_audit(unique(batch)),
+    population = rep("T", length(ids)), markers = c("CD3", "CD4"),
+    transform = tf, anchor = "b1", engine = "toy_shift", min_cells = 5, seed = 1
+  )
+  built <- SpectraWeaveR:::.sw_corrector_cells(
+    x, manifest, args$population, args$markers, ids
+  )
+  is_syn <- built$cells$batch == "b3"
+  expect_false(any(built$cells$is_reference[is_syn]))
+  expect_true(all(is.na(built$cells$reference_id[is_syn])))
+  expect_true(any(built$cells$is_reference[!is_syn]))
+  model <- do.call(sw_corrector_fit, args)
+  # The toy engine takes effects from is_reference rows; b3 has only
+  # synthetic rows, so it gets none.
+  expect_setequal(unique(model$effects$batch), c("b1", "b2"))
+  expect_false("b3" %in% model$effects$batch)
+})

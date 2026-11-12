@@ -23,7 +23,9 @@
 #' A reference with role \code{"biological_pseudo_control"} or
 #' \code{"synthetic_reference"} never counts as a measured technical reference
 #' and never bridges batches. A \code{synthetic_reference} row needs a
-#' \code{source_batch} column value (the batch its cells came from).
+#' \code{source_batch} column value (the batch its cells came from). That
+#' value must be one of the batches in \code{batch_col}; it may equal the
+#' row's own batch.
 #'
 #' @param samples A data frame with one row per sample. It needs a
 #'   \code{sample_id} column, the \code{batch_col} column, and one column for
@@ -290,6 +292,20 @@ sw_design_audit <- function(
       "Samples with role 'synthetic_reference' need a 'source_batch'.",
       call. = FALSE
     )
+  }
+  if (any(is_synthetic)) {
+    unknown_src <- setdiff(
+      unique(as.character(samples$source_batch[is_synthetic])),
+      unique(stats::na.omit(as.character(samples[[batch_col]])))
+    )
+    if (length(unknown_src) > 0) {
+      stop(
+        "'source_batch' value(s) not found in the batch column: ",
+        paste(unknown_src, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
   }
 
   samples$.batch <- as.character(samples[[batch_col]])

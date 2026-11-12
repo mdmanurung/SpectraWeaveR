@@ -155,7 +155,9 @@ this.}
 A reference with role \code{"biological_pseudo_control"} or
 \code{"synthetic_reference"} never counts as a measured technical reference
 and never bridges batches. A \code{synthetic_reference} row needs a
-\code{source_batch} column value (the batch its cells came from).
+\code{source_batch} column value (the batch its cells came from). That
+value must be one of the batches in \code{batch_col}; it may equal the
+row's own batch.
 }
 \examples{
 samples <- data.frame(
