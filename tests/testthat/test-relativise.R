@@ -185,7 +185,12 @@ test_that("sw_diagnose runs the relativise module without data", {
     relativise = list(model = model, batch = NULL, order = stats::setNames(1:5, units)),
     otd = NULL,
     negative = NULL,
-    gate = NULL
+    gate = NULL,
+    reference = NULL,
+    batch_pop = NULL,
+    flag_iqr = NULL,
+    batch_otd = NULL,
+    batch_mixing = NULL
   )
   expect_equal(attr(dx, "modules"), "relativise")
   expect_setequal(unique(dx$check), c("offset", "gain", "separation", "gain_z", "gain_order_rho"))

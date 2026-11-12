@@ -94,7 +94,12 @@ test_that("sw_diagnose runs the otd module", {
       tol = 1e-6
     ),
     negative = NULL,
-    gate = NULL
+    gate = NULL,
+    reference = NULL,
+    batch_pop = NULL,
+    flag_iqr = NULL,
+    batch_otd = NULL,
+    batch_mixing = NULL
   )
   expect_equal(attr(dx, "modules"), "otd")
   expect_equal(nrow(dx), 4)

@@ -851,3 +851,103 @@ test_that("sw_pipeline_show renders declared port types in its output", {
   out <- capture.output(sw_pipeline_show(pip))
   expect_true(any(grepl("numeric -> numeric", out)))
 })
+
+# ---- batch design, decision and flag steps ----
+
+test_that("sw_pipeline_step_design_audit, _batch_decide and _flag_iqr create typed steps", {
+  skip_if_not_installed("S7")
+  a <- sw_pipeline_step_design_audit(
+    minimum_batches = 2,
+    minimum_batches_origin = "test",
+    require_shared_reference = TRUE
+  )
+  expect_equal(a@name, "design_audit")
+  expect_equal(a@output_type, "sw_design_audit")
+  expect_equal(a@ARGS$minimum_batches, 2)
+  d <- sw_pipeline_step_batch_decide(identity_id = "none")
+  expect_equal(d@name, "batch_decide")
+  expect_equal(d@input_type, "sw_design_audit")
+  expect_equal(d@output_type, "sw_batch_decision")
+  f <- sw_pipeline_step_flag_iqr(iqr_multiplier = 1.5)
+  expect_equal(f@name, "flag_iqr")
+  expect_equal(f@output_type, "sw_flag_iqr")
+  expect_equal(f@ARGS$iqr_multiplier, 1.5)
+})
+
+test_that("the audit step feeds the decide step in a pipeline type check", {
+  skip_if_not_installed("S7")
+  pip <- sw_pipeline("batch_gate")
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step_design_audit(
+      minimum_batches = 2,
+      minimum_batches_origin = "test",
+      require_shared_reference = TRUE
+    )
+  )
+  pip <- sw_pipeline_add(pip, sw_pipeline_step_batch_decide(identity_id = "none"))
+  expect_equal(sw_pipeline_step_names(pip), c("design_audit", "batch_decide"))
+  # The decide step refuses an input that is not an audit.
+  expect_error(
+    sw_pipeline_step_run(
+      sw_pipeline_step_batch_decide(identity_id = "none"),
+      data.frame(x = 1)
+    ),
+    "type check failed"
+  )
+})
+
+test_that("sw_pipeline_step_design_audit runs the audit and stops without its thresholds", {
+  skip_if_not_installed("S7")
+  samples <- tibble::tibble(
+    sample_id = paste0("s", 1:6),
+    batch = rep(c("b1", "b2"), each = 3),
+    condition = rep(c("ctrl", "case", "ctrl"), 2),
+    reference_role = rep(c("anchor", "none", "none"), 2),
+    reference_id = rep(c("r1", NA, NA), 2)
+  )
+  ok <- sw_pipeline_step_design_audit(
+    minimum_batches = 2,
+    minimum_batches_origin = "test",
+    require_shared_reference = TRUE
+  )
+  expect_s3_class(sw_pipeline_step_run(ok, samples), "sw_design_audit")
+  expect_error(
+    sw_pipeline_step_run(sw_pipeline_step_design_audit(), samples),
+    "no default"
+  )
+})
+
+test_that("sw_pipeline_step_flag_iqr runs on event-level cells and stops without min_effect", {
+  skip_if_not_installed("S7")
+  set.seed(5)
+  cells <- data.frame(
+    batch = rep(paste0("b", 1:5), each = 400),
+    control = "ctrl1",
+    CD3 = c(stats::rnorm(1000, 0, 0.3), stats::rnorm(1000, 3, 0.3))[
+      sample(2000)
+    ]
+  )
+  shift <- cells$batch == "b5" & cells$CD3 > 1.5
+  cells$CD3[shift] <- cells$CD3[shift] + 2
+  args <- list(
+    markers = "CD3",
+    thresholds = c(CD3 = 1.5),
+    iqr_multiplier = 1.5,
+    min_cells_per_side = 50,
+    quantile_type = 7
+  )
+  step <- do.call(
+    sw_pipeline_step_flag_iqr,
+    c(args, list(min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)))
+  )
+  res <- sw_pipeline_step_run(step, cells)
+  expect_s3_class(res, "sw_flag_iqr")
+  hit <- res[res$flag %in% TRUE, ]
+  expect_true(all(hit$batch == "b5"))
+  expect_gt(nrow(hit), 0)
+  expect_error(
+    sw_pipeline_step_run(do.call(sw_pipeline_step_flag_iqr, args), cells),
+    "min_effect"
+  )
+})

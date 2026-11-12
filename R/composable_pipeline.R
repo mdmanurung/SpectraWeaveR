@@ -1036,7 +1036,13 @@ sw_pipeline_show <- function(pipeline) {
   correct_data   = list(input = c("tbl_df", "data.frame"),
                         output = c("tbl_df", "data.frame")),
   cluster        = list(input = c("tbl_df", "data.frame", "matrix"),
-                        output = character(0))
+                        output = character(0)),
+  design_audit   = list(input = c("tbl_df", "data.frame"),
+                        output = "sw_design_audit"),
+  batch_decide   = list(input = "sw_design_audit",
+                        output = "sw_batch_decision"),
+  flag_iqr       = list(input = c("tbl_df", "data.frame"),
+                        output = "sw_flag_iqr")
 )
 
 #' Create a Step for Reading FCS Files
@@ -1199,6 +1205,76 @@ sw_pipeline_step_cluster <- function(...,
                             input_type  = .SW_STEP_DEFAULT_TYPES$cluster$input,
                             output_type = .SW_STEP_DEFAULT_TYPES$cluster$output) {
   sw_pipeline_step("cluster", sw_cluster_run, list(...),
+          input_type = input_type, output_type = output_type)
+}
+
+#' Create a Step for the Batch Design Audit
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_design_audit}}. Input is the sample table (the
+#' \code{samples} argument); output is an \code{sw_design_audit} object.
+#'
+#' @param ... Additional arguments passed to \code{sw_design_audit}. Include
+#'   \code{minimum_batches}, \code{minimum_batches_origin} and
+#'   \code{require_shared_reference} (no defaults there; uncalibrated), or the
+#'   step stops when it runs.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_pipeline_step_design_audit <- function(...,
+                              input_type  = .SW_STEP_DEFAULT_TYPES$design_audit$input,
+                              output_type = .SW_STEP_DEFAULT_TYPES$design_audit$output) {
+  sw_pipeline_step("design_audit", sw_design_audit, list(...),
+          input_type = input_type, output_type = output_type)
+}
+
+#' Create a Step for the Batch Decision
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_batch_decide}}. Input is an \code{sw_design_audit} object
+#' (the \code{design} argument); output is an \code{sw_batch_decision}.
+#'
+#' @param ... Additional arguments passed to \code{sw_batch_decide}. Include
+#'   \code{candidates}, \code{policy}, \code{identity_id},
+#'   \code{label_source} and \code{contrast_records} (no defaults there;
+#'   \code{contrast_records = NULL} is an explicit skip), or the step stops
+#'   when it runs.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_pipeline_step_batch_decide <- function(...,
+                              input_type  = .SW_STEP_DEFAULT_TYPES$batch_decide$input,
+                              output_type = .SW_STEP_DEFAULT_TYPES$batch_decide$output) {
+  sw_pipeline_step("batch_decide", sw_batch_decide, list(...),
+          input_type = input_type, output_type = output_type)
+}
+
+#' Create a Step for Control IQR Flags
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_flag_iqr}}. Input is the event-level data frame (the
+#' \code{cells} argument); output is an \code{sw_flag_iqr} tibble.
+#'
+#' @param ... Additional arguments passed to \code{sw_flag_iqr}. Include
+#'   \code{markers}, \code{thresholds}, \code{iqr_multiplier},
+#'   \code{min_cells_per_side}, \code{quantile_type} and \code{min_effect}
+#'   (no defaults there; uncalibrated), or the step stops when it runs.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_pipeline_step_flag_iqr <- function(...,
+                              input_type  = .SW_STEP_DEFAULT_TYPES$flag_iqr$input,
+                              output_type = .SW_STEP_DEFAULT_TYPES$flag_iqr$output) {
+  sw_pipeline_step("flag_iqr", sw_flag_iqr, list(...),
           input_type = input_type, output_type = output_type)
 }
 

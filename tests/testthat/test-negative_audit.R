@@ -244,7 +244,12 @@ test_that("sw_diagnose runs the negative module", {
       spread_quantile = 0.9,
       min_separation = 3
     ),
-    gate = NULL
+    gate = NULL,
+    reference = NULL,
+    batch_pop = NULL,
+    flag_iqr = NULL,
+    batch_otd = NULL,
+    batch_mixing = NULL
   )
   expect_equal(attr(dx, "modules"), "negative")
   expect_true(all(

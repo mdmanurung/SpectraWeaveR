@@ -350,6 +350,9 @@ conversation:
 | `detect_channels` | Classify FCS channels into scatter/time/fluorochrome. |
 | `check_batch_balance` | Summarise sample distribution across batches. |
 | `validate_markers` | Check that markers exist in FCS data. |
+| `design_audit` | Audit a sample table for pair support and method eligibility. Every threshold comes from the user. |
+| `flag_iqr` | Rank control-sample batch effects with the Tukey IQR fence. Every threshold comes from the user. |
+| `batch_decide` | Decide a state per correction candidate from a policy and metric records. Every threshold comes from the user. |
 
 ### Renamed tools
 

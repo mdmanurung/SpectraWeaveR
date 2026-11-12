@@ -612,6 +612,273 @@ NULL
   })
 }
 
+#' Run the batch design audit on a sample table
+#'
+#' Every threshold is passed by the caller (no defaults): the model must get
+#' each value from the user and never choose one itself.
+#' @param meta_path Path to a CSV sample table.
+#' @param batch_col Name of the batch column.
+#' @param minimum_batches Number of batches the design needs (uncalibrated).
+#' @param minimum_batches_origin One string saying where `minimum_batches` comes from.
+#' @param require_shared_reference TRUE or FALSE (uncalibrated).
+#' @param protected Character vector of protected columns (for example
+#'   condition); empty when the user names none.
+#' @return Character summary of the audit, or an error message.
+#' @noRd
+.tool_design_audit <- function(meta_path, batch_col, minimum_batches,
+                               minimum_batches_origin,
+                               require_shared_reference,
+                               protected = character(0)) {
+  if (!file.exists(meta_path)) {
+    return(paste0("Error: File does not exist: ", meta_path))
+  }
+  tryCatch({
+    meta <- utils::read.csv(meta_path, stringsAsFactors = FALSE)
+    audit <- sw_design_audit(
+      meta,
+      minimum_batches = minimum_batches,
+      minimum_batches_origin = minimum_batches_origin,
+      require_shared_reference = require_shared_reference,
+      batch_col = batch_col,
+      protected = as.character(unlist(protected))
+    )
+    paste(utils::capture.output(print(audit)), collapse = "\n")
+  }, error = function(e) {
+    paste0("Error running design audit: ", conditionMessage(e))
+  })
+}
+
+#' Rank control-sample batch effects with the IQR fence
+#'
+#' Reads event-level cells from a CSV. Thresholds arrive as marker and value
+#' pairs, so a value is matched to its marker by name and never by position.
+#' @param cells_path Path to a CSV with one row per event.
+#' @param markers Character vector of marker columns.
+#' @param thresholds Pairs of marker and positivity threshold.
+#' @return Character summary of the flagged rows, or an error message.
+#' @noRd
+.tool_flag_iqr <- function(cells_path, markers, thresholds, iqr_multiplier,
+                           min_cells_per_side, quantile_type,
+                           min_effect_neg_median, min_effect_pos_median,
+                           min_effect_pct_positive, batch_col = "batch",
+                           control_col = "control") {
+  if (!file.exists(cells_path)) {
+    return(paste0("Error: File does not exist: ", cells_path))
+  }
+  tryCatch({
+    cells <- utils::read.csv(cells_path, stringsAsFactors = FALSE)
+    # Thresholds come as a data frame or a list of lists, by tool framework.
+    if (is.data.frame(thresholds)) {
+      thr <- stats::setNames(thresholds[["threshold"]], thresholds[["marker"]])
+    } else {
+      thr <- stats::setNames(
+        vapply(thresholds, \(x) as.numeric(x[["threshold"]]), numeric(1)),
+        vapply(thresholds, \(x) as.character(x[["marker"]]), character(1))
+      )
+    }
+    res <- sw_flag_iqr(
+      cells,
+      markers = unlist(markers),
+      thresholds = thr,
+      iqr_multiplier = iqr_multiplier,
+      min_cells_per_side = min_cells_per_side,
+      batch_col = batch_col,
+      control_col = control_col,
+      quantile_type = quantile_type,
+      min_effect = c(
+        neg_median = min_effect_neg_median,
+        pos_median = min_effect_pos_median,
+        pct_positive = min_effect_pct_positive
+      )
+    )
+    hit <- res[res[["flag"]] %in% TRUE, ]
+    status <- table(res[["status"]])
+    paste0(
+      "IQR fence on ", nrow(res), " control x marker x metric x batch rows.\n",
+      "Status counts: ",
+      paste0(names(status), "=", as.integer(status), collapse = ", "), "\n",
+      if (nrow(hit) == 0) {
+        "No row outside the fence by at least min_effect."
+      } else {
+        paste0(
+          "Outside the fence (control, marker, metric, batch, value, effect):\n",
+          paste(
+            utils::capture.output(print(as.data.frame(
+              hit[, c("control", "marker", "metric", "batch", "value", "effect")]
+            ), row.names = FALSE)),
+            collapse = "\n"
+          )
+        )
+      },
+      "\nThese are ranked numbers, not a verdict on a batch."
+    )
+  }, error = function(e) {
+    paste0("Error running IQR flags: ", conditionMessage(e))
+  })
+}
+
+#' Decide between batch-correction candidates under a saved policy
+#'
+#' The design audit and the policy are objects the user built and saved with
+#' saveRDS(); the policy holds the user's thresholds, so the model never sets
+#' them.
+#' @param design_rds Path to an RDS file holding an sw_design_audit object.
+#' @param policy_rds Path to an RDS file holding an sw_batch_policy object.
+#' @param records_csv Path to a CSV of long metric records.
+#' @param identity_id Candidate id of the uncorrected data.
+#' @param label_source Where the population labels came from.
+#' @param contrast_records_csv Path to a CSV of protected-contrast records, or
+#'   the exact string "none" for an explicit skip.
+#' @return Character printout of the decision, or an error message.
+#' @noRd
+.tool_batch_decide <- function(design_rds, policy_rds, records_csv,
+                               identity_id, label_source,
+                               contrast_records_csv) {
+  skip_contrast <- identical(contrast_records_csv, "none")
+  for (path in c(design_rds, policy_rds, records_csv,
+                 if (!skip_contrast) contrast_records_csv)) {
+    if (!file.exists(path)) {
+      return(paste0("Error: File does not exist: ", path))
+    }
+  }
+  tryCatch({
+    design <- readRDS(design_rds)
+    policy <- readRDS(policy_rds)
+    records <- utils::read.csv(records_csv, stringsAsFactors = FALSE)
+    candidates <- sw_batch_candidates_from_metrics(
+      records,
+      identity_id = identity_id
+    )
+    decision <- sw_batch_decide(
+      design = design,
+      candidates = candidates,
+      policy = policy,
+      identity_id = identity_id,
+      label_source = label_source,
+      contrast_records = if (skip_contrast) {
+        NULL
+      } else {
+        utils::read.csv(contrast_records_csv, stringsAsFactors = FALSE)
+      }
+    )
+    paste(utils::capture.output(print(decision)), collapse = "\n")
+  }, error = function(e) {
+    paste0("Error deciding on batch correction: ", conditionMessage(e))
+  })
+}
+
+# The three batch tools share one definition for both registration paths.
+# Every impactful argument is required: the descriptions tell the model to ask
+# the user for it and never to pick a value.
+.sw_batch_tools <- function() {
+  list(
+    ellmer::tool(
+      .tool_design_audit,
+      name = "design_audit",
+      description = paste(
+        "Audit a batch design from a CSV sample table: pair support,",
+        "confounding and method eligibility. Every threshold is the user's",
+        "choice; ask for it, never guess."
+      ),
+      arguments = list(
+        meta_path = ellmer::type_string("Absolute path to a CSV sample table."),
+        batch_col = ellmer::type_string("Name of the batch column."),
+        minimum_batches = ellmer::type_number(
+          "Batches the design needs (uncalibrated; from the user)."
+        ),
+        minimum_batches_origin = ellmer::type_string(
+          "Where minimum_batches comes from, in one sentence."
+        ),
+        require_shared_reference = ellmer::type_boolean(
+          "Whether a shared reference is required (uncalibrated; from the user)."
+        ),
+        protected = ellmer::type_array(
+          items = ellmer::type_string("A protected column name."),
+          description = "Columns to protect, for example condition (from the user).",
+          required = FALSE
+        )
+      )
+    ),
+    ellmer::tool(
+      .tool_flag_iqr,
+      name = "flag_iqr",
+      description = paste(
+        "Compare a control sample across batches with a Tukey fence on",
+        "event-level cells from a CSV. Returns ranked effect sizes, not a",
+        "verdict. Every setting is the user's choice; ask, never guess."
+      ),
+      arguments = list(
+        cells_path = ellmer::type_string(
+          "Absolute path to a CSV with one row per event, already on the analysis scale."
+        ),
+        markers = ellmer::type_array(
+          items = ellmer::type_string("A marker column name."),
+          description = "Marker columns to assess."
+        ),
+        thresholds = ellmer::type_array(
+          items = ellmer::type_object(
+            marker = ellmer::type_string("Marker column name."),
+            threshold = ellmer::type_number("Positivity threshold on the same scale.")
+          ),
+          description = "One positivity threshold per marker (uncalibrated; from the user)."
+        ),
+        iqr_multiplier = ellmer::type_number(
+          "Fence multiplier k (uncalibrated; from the user)."
+        ),
+        min_cells_per_side = ellmer::type_integer(
+          "Events a batch needs on the side a metric uses (uncalibrated; from the user)."
+        ),
+        quantile_type = ellmer::type_integer(
+          "Quantile type 1 to 9 (uncalibrated; from the user)."
+        ),
+        min_effect_neg_median = ellmer::type_number(
+          "Smallest effect for neg_median, in scale units (uncalibrated; from the user)."
+        ),
+        min_effect_pos_median = ellmer::type_number(
+          "Smallest effect for pos_median, in scale units (uncalibrated; from the user)."
+        ),
+        min_effect_pct_positive = ellmer::type_number(
+          "Smallest effect for pct_positive, in percentage points (uncalibrated; from the user)."
+        ),
+        batch_col = ellmer::type_string("Name of the batch column.", required = FALSE),
+        control_col = ellmer::type_string(
+          "Name of the control id column.",
+          required = FALSE
+        )
+      )
+    ),
+    ellmer::tool(
+      .tool_batch_decide,
+      name = "batch_decide",
+      description = paste(
+        "Assign each batch-correction candidate a state under a saved policy.",
+        "The design audit and the policy are RDS files the user saved; the",
+        "policy holds the user's thresholds, so none is set here."
+      ),
+      arguments = list(
+        design_rds = ellmer::type_string(
+          "Absolute path to an RDS file with an sw_design_audit object."
+        ),
+        policy_rds = ellmer::type_string(
+          "Absolute path to an RDS file with an sw_batch_policy object."
+        ),
+        records_csv = ellmer::type_string(
+          "Absolute path to a CSV of long metric records (candidate_id, metric, marker, comparison_id, value, status, weight)."
+        ),
+        identity_id = ellmer::type_string(
+          "Candidate id of the uncorrected data."
+        ),
+        label_source = ellmer::type_string(
+          "Where the population labels came from: reference, manual_gating or clustering."
+        ),
+        contrast_records_csv = ellmer::type_string(
+          "Absolute path to a CSV of protected-contrast records, or the exact string none to skip the contrast gate on purpose."
+        )
+      )
+    )
+  )
+}
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -785,6 +1052,10 @@ NULL
       fcs_file = ellmer::type_string("Absolute path to an FCS file.")
     )
   ))
+
+  for (batch_tool in .sw_batch_tools()) {
+    chat$register_tool(batch_tool)
+  }
 
   invisible(chat)
 }
@@ -1870,7 +2141,8 @@ sw_pipeline_config_type <- function() {
         fcs_file = ellmer::type_string("Absolute path to an FCS file.")
       )
     )
-  )
+  ) |>
+    c(.sw_batch_tools())
 }
 
 #' Start an MCP Server Exposing SpectraWeaveR Tools
