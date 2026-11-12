@@ -122,10 +122,11 @@ sw_ref_composition <- function(
   }
 
   # One count per reference id, batch and population (files of a batch pooled).
+  # A file with no events adds no rows here; its batch still comes from `man`.
   counts <- dplyr::bind_rows(lapply(man[["sample_id"]], \(id) {
     tab <- table(as.character(labels[[id]]))
     tibble::tibble(
-      sample_id = id,
+      sample_id = rep(id, length(tab)),
       population = names(tab),
       n_population_events = as.integer(tab)
     )
@@ -143,7 +144,7 @@ sw_ref_composition <- function(
   # Full grid: every population seen for a reference, in every batch of it.
   grid <- dplyr::inner_join(
     unique(counts[c("reference_id", "population")]),
-    unique(counts[c("reference_id", "batch")]),
+    unique(man[c("reference_id", "batch")]),
     by = "reference_id",
     relationship = "many-to-many"
   )
@@ -161,22 +162,26 @@ sw_ref_composition <- function(
       .by = c(reference_id, batch)
     ) |>
     dplyr::mutate(
-      share = n_population_events / n_events,
+      share = dplyr::if_else(
+        n_events > 0,
+        n_population_events / n_events,
+        NA_real_
+      ),
       floor = sqrt(share * (1 - share) / n_events)
     ) |>
     dplyr::mutate(
       total_pop = sum(n_population_events),
-      n_batches = dplyr::n(),
+      n_batches = sum(!is.na(share)),
       cv_across_batches = dplyr::if_else(
-        n_batches >= 2 & mean(share) > 0,
-        stats::sd(share) / mean(share),
+        n_batches >= 2 & mean(share, na.rm = TRUE) > 0,
+        stats::sd(share, na.rm = TRUE) / mean(share, na.rm = TRUE),
         NA_real_
       ),
       .by = c(reference_id, population)
     ) |>
     dplyr::mutate(
       status = dplyr::if_else(
-        total_pop < min_population_events,
+        total_pop < min_population_events | n_events == 0,
         "not_assessed",
         "ok"
       ),
@@ -186,6 +191,7 @@ sw_ref_composition <- function(
         NA_real_
       ),
       reason = dplyr::case_when(
+        n_events == 0 ~ "no events in this batch",
         status ==
           "not_assessed" ~ "fewer than min_population_events events over batches",
         n_batches < 2 ~ "reference measured in one batch",

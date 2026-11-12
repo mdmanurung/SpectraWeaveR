@@ -234,7 +234,28 @@ sw_ref_vs_study <- function(
   } else {
     tibble::as_tibble(noise_floor[c("reference_id", "marker", "floor_emd")])
   }
-  out <- dplyr::bind_rows(rows) |>
+  res <- dplyr::bind_rows(rows)
+  if (!is.null(noise_floor)) {
+    miss <- dplyr::anti_join(
+      unique(res[c("reference_id", "marker")]),
+      floor_tbl,
+      by = dplyr::join_by(reference_id, marker)
+    )
+    if (nrow(miss) > 0) {
+      stop(
+        "`noise_floor` has no row for: ",
+        paste(
+          miss[["reference_id"]],
+          miss[["marker"]],
+          sep = "/",
+          collapse = ", "
+        ),
+        ".",
+        call. = FALSE
+      )
+    }
+  }
+  out <- res |>
     dplyr::left_join(
       floor_tbl,
       by = dplyr::join_by(reference_id, marker),

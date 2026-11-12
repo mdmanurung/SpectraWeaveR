@@ -163,7 +163,7 @@ sw_ref_coverage <- function(
   rows <- list()
   for (b in sort(unique(bat))) {
     fs <- names(stud)[bat == b]
-    sm <- do.call(rbind, stud[fs])[, markers, drop = FALSE]
+    sm <- do.call(rbind, lapply(stud[fs], \(m) m[, markers, drop = FALSE]))
     sp <- unlist(stud_pop[fs], use.names = FALSE)
     for (pop in sort(unique(c(ref_pop, sp)))) {
       rsel <- ref_pop == pop

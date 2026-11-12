@@ -74,3 +74,13 @@ test_that("required arguments and bad inputs stop", {
   expect_error(cov_run(x, markers = "Z"), "all `markers`")
   expect_error(cov_run(x, batch = c(s1 = "b1")), "covering")
 })
+
+test_that("study files with reordered marker columns are bound by name", {
+  x <- make_cov()
+  x$study$s3 <- x$study$s2[, c("B", "A")]
+  x$batch <- c(x$batch, s3 = "b2")
+  res <- cov_run(x)
+  g <- \(m) res$share_above[res$batch == "b2" & res$marker == m]
+  expect_gt(g("A"), 0.25)
+  expect_lt(g("B"), 0.03)
+})

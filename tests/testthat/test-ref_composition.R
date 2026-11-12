@@ -78,3 +78,16 @@ test_that("required arguments and bad inputs stop", {
   x$labels$r2[1] <- NA
   expect_error(rcomp(x), "must not contain NA")
 })
+
+test_that("a batch with a zero-event file stays in the grid as not_assessed", {
+  x <- make_rc()
+  x$labels[["r3"]] <- character()
+  res <- rcomp(x)
+  empty <- res[res$batch == "b3", ]
+  expect_true(nrow(empty) > 0)
+  expect_true(all(empty$n_events == 0))
+  expect_true(all(is.na(empty$share)))
+  expect_true(all(empty$status == "not_assessed"))
+  b <- res[res$population == "B" & res$batch != "b3", ]
+  expect_equal(b$cv_across_batches[[1]], stats::sd(b$share) / mean(b$share))
+})

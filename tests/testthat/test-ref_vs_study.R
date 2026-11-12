@@ -125,3 +125,14 @@ test_that("required arguments and bad inputs stop", {
     "two or more batches"
   )
 })
+
+test_that("a noise floor that misses a result key stops and names it", {
+  fl <- data.frame(reference_id = "R", marker = "A", floor_emd = 0.05)
+  expect_error(rvs(make_rvs(), noise_floor = fl), "R/B")
+  typo <- data.frame(
+    reference_id = "Rx",
+    marker = c("A", "B"),
+    floor_emd = c(0.05, 0.06)
+  )
+  expect_error(rvs(make_rvs(), noise_floor = typo), "no row for")
+})
