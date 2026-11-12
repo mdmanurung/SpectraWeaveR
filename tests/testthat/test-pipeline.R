@@ -241,7 +241,7 @@ test_that("sw_pipeline_run_all stops on an ineligible audit before any step", {
   expect_error(
     sw_pipeline_run_all(
       fcs_dir = tempdir(),
-      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "B1"),
+      sample_meta = tibble::tibble(file = "f.fcs", sample = "S1", batch = "b1"),
       markers = "CD3",
       lineage_markers = "CD3",
       cofactor = 6000,

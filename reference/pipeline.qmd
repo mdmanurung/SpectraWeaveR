@@ -29,6 +29,7 @@ sw_pipeline_run_all(
   control_file = NULL,
   cytometer = "aurora",
   unmix_method = "AutoSpectral",
+  design_audit,
   ...
 )
 ```
@@ -53,6 +54,7 @@ sw_pipeline_run_all(
 | `control_file` | Path to control CSV file. |
 | `cytometer` | Cytometer model string (default: `"aurora"`). |
 | `unmix_method` | Unmixing method (default: `"AutoSpectral"`). |
+| `design_audit` | Required, no default: an `sw_design_audit` object for `sample_meta`, or `NULL` for an explicit skip. The audit must list the batches in `sample_meta`, its `protected` factors must include `condition` when present, and its `cycombine` row must be eligible. The gate record is returned as `design_audit_check`. |
 | `...` | Additional arguments passed to individual pipeline steps. |
 
 ### Details
@@ -76,6 +78,7 @@ A named list with components:
 
 | Component | Description |
 |-----------|-------------|
+| `design_audit_check` | Gate record: `status` (`"checked"` or `"skipped"`), `row`, `method` |
 | `unmix_result` | Unmixing results (if `unmix_from_raw = TRUE`) |
 | `flowset` | Loaded `flowSet` |
 | `gating_set` | `GatingSet` (if gating was applied) |

@@ -163,7 +163,12 @@ sw_pipeline_run_all <- function(fcs_dir,
 
   # Required choice, checked before any expensive step runs.
   .sw_stop_missing(c(design_audit = missing(design_audit)))
-  gate_record <- .sw_gate_design_audit(design_audit, method = "cycombine")
+  gate_record <- .sw_gate_design_audit(
+    design_audit,
+    method = "cycombine",
+    batches = sample_meta[["batch"]],
+    covar = if ("condition" %in% names(sample_meta)) "condition" else NULL
+  )
 
   # Create output directory
   if (!dir.exists(output_dir)) {

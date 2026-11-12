@@ -344,7 +344,7 @@ Creates a step wrapping `sw_qc_run()`.
 sw_pipeline_step_correct(...)
 ```
 
-Creates a step wrapping `sw_correct_run()`.
+Creates a step wrapping `sw_correct_run()`. Pass `design_audit` (an `sw_design_audit` or `NULL` for an explicit skip); the step stops when it runs without it.
 
 ---
 

@@ -240,7 +240,12 @@ sw_correct_run <- function(uncorrected, markers, covar = NULL,
   .check_cycombine()
   .validate_batch_df(uncorrected, markers, arg_name = "uncorrected")
   .sw_stop_missing(c(design_audit = missing(design_audit)))
-  gate_record <- .sw_gate_design_audit(design_audit, method = "cycombine")
+  gate_record <- .sw_gate_design_audit(
+    design_audit,
+    method = "cycombine",
+    batches = uncorrected[["batch"]],
+    covar = covar
+  )
 
   set.seed(seed)
 
@@ -270,14 +275,39 @@ sw_correct_run <- function(uncorrected, markers, covar = NULL,
 
 # Design-audit gate shared by sw_correct_run() and sw_pipeline_run_all().
 # NULL is an explicit skip and is recorded. An audit must hold an eligible row
-# for `method`; an ineligible row stops the run and the message names it.
-.sw_gate_design_audit <- function(design_audit, method) {
+# for `method`; an ineligible row stops the run and the message names it. The
+# audit must also describe the data: its batches must equal `batches` and
+# `covar` must lie within its protected factors.
+.sw_gate_design_audit <- function(design_audit, method, batches, covar = NULL) {
   if (is.null(design_audit)) {
     return(list(status = "skipped", row = NULL, method = method))
   }
   if (!inherits(design_audit, "sw_design_audit")) {
     stop(
       "'design_audit' must be an sw_design_audit object or NULL (explicit skip).",
+      call. = FALSE
+    )
+  }
+  audit_batches <- as.character(design_audit[["batches"]])
+  data_batches <- unique(as.character(batches))
+  if (!setequal(audit_batches, data_batches)) {
+    stop(
+      sprintf(
+        "The design audit describes other batches than the data. Audit: %s. Data: %s.",
+        paste(sort(audit_batches), collapse = ", "),
+        paste(sort(data_batches), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  extra_covar <- setdiff(covar, design_audit[["protected"]])
+  if (length(extra_covar) > 0) {
+    stop(
+      sprintf(
+        "'covar' %s is not among the audit's protected factors (%s).",
+        paste(extra_covar, collapse = ", "),
+        paste(design_audit[["protected"]], collapse = ", ")
+      ),
       call. = FALSE
     )
   }
