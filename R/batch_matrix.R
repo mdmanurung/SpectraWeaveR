@@ -37,8 +37,12 @@
 #' @details
 #' **Input.** `scores` is a data frame with columns `check`, `batch`, `marker`
 #' and `value`, for example the result of [sw_batch_scores()] (also by
-#' population, with a `population` column), a reference-consistency table, or
-#' the result of [sw_flag_iqr()]. A table with `metric` and no `check` column
+#' population, with a `population` column), [sw_ref_consistency()] (with
+#' `reference_id`), [sw_batch_mixing()] or the result of [sw_flag_iqr()]. A table with no `marker` column (the [sw_batch_mixing()] form) gets
+#' `marker = "all"`. A table with `status` has its `"not_assessed"` rows left
+#' out of the ranks and listed in attribute `not_assessed`. A table with
+#' `reference_id` is ranked inside each reference. An `NA` `population` (the
+#' all-event rows of [sw_batch_scores()]) is a group of its own. A table with `metric` and no `check` column
 #' (the [sw_flag_iqr()] form) has `metric` used as `check`. Rows with no batch
 #' (`median_range`, `eta2`) cannot sit in a batch column; they are left out and
 #' listed in attribute `dropped`. A pair label such as `"b1 ~ b2"` stays as a
@@ -65,12 +69,15 @@
 #'   (uncalibrated: it decides which end of a check ranks first). Required.
 #'
 #' @return A tibble of class `sw_batch_matrix` with columns `check`, `batch`,
-#'   `marker`, `population` (only when `scores` has it), `value` and `rank`.
+#'   `marker`, `reference_id` and `population` (only when `scores` has them),
+#'   `value` and `rank`.
 #'   Attribute `wide` is the same values with one column per batch. Attribute
-#'   `dropped` holds the rows left out for lack of a batch. Attribute `params`
+#'   `dropped` holds the rows left out for lack of a batch, and
+#'   `not_assessed` the rows the source marked `"not_assessed"`. Attribute `params`
 #'   echoes `check` and `direction`.
 #'
-#' @seealso [sw_batch_scores()], [sw_flag_iqr()], [sw_plot_batch_matrix()]
+#' @seealso [sw_batch_scores()], [sw_ref_consistency()], [sw_batch_mixing()],
+#'   [sw_flag_iqr()], [sw_plot_batch_matrix()]
 #'
 #' @examples
 #' set.seed(1)
@@ -106,6 +113,11 @@ sw_batch_matrix <- function(scores, check, direction) {
   scores <- tibble::as_tibble(scores)
   if (!"check" %in% names(scores) && "metric" %in% names(scores)) {
     scores[["check"]] <- scores[["metric"]]
+  }
+  # sw_batch_mixing() has no marker column: its units are all events or a
+  # population, so the row label is "all".
+  if (!"marker" %in% names(scores)) {
+    scores[["marker"]] <- "all"
   }
   need <- c("check", "batch", "marker", "value")
   if (!all(need %in% names(scores))) {
@@ -144,11 +156,19 @@ sw_batch_matrix <- function(scores, check, direction) {
   }
 
   key_cols <- intersect(
-    c("check", "marker", "population", "batch"),
+    c("reference_id", "check", "marker", "population", "batch"),
     names(scores)
   )
   group_cols <- setdiff(key_cols, "batch")
   kept <- scores[scores[["check"]] %in% check, , drop = FALSE]
+  # Rows the source function did not assess (thin cells, one batch) are not
+  # ranked; they may repeat per file, so they are listed, not keyed.
+  not_assessed <- kept[0, , drop = FALSE]
+  if ("status" %in% names(kept)) {
+    skip <- !is.na(kept[["status"]]) & kept[["status"]] == "not_assessed"
+    not_assessed <- kept[skip, , drop = FALSE]
+    kept <- kept[!skip, , drop = FALSE]
+  }
   dropped <- kept[is.na(kept[["batch"]]), , drop = FALSE]
   kept <- kept[!is.na(kept[["batch"]]), , drop = FALSE]
   kept[["batch"]] <- as.character(kept[["batch"]])
@@ -166,13 +186,25 @@ sw_batch_matrix <- function(scores, check, direction) {
   }
 
   key <- .sw_matrix_key(kept[["check"]], kept[["value"]], direction)
-  kept[["rank"]] <- stats::ave(
-    key,
-    kept[group_cols],
-    FUN = .sw_matrix_rank
-  )
-  kept[["rank"]] <- as.integer(kept[["rank"]])
+  # An NA population (all-event rows) is a group of its own: ranks are made
+  # per group id, never with ave(), which drops rows with an NA group.
+  as_id <- \(d) {
+    do.call(
+      paste,
+      c(
+        lapply(d[group_cols], \(x) dplyr::coalesce(as.character(x), "\001NA")),
+        sep = "\r"
+      )
+    )
+  }
+  kept[["rank"]] <- NA_integer_
+  group_id <- as_id(kept)
+  for (g in unique(group_id)) {
+    hit <- group_id == g
+    kept[["rank"]][hit] <- .sw_matrix_rank(key[hit])
+  }
   out <- kept[c(
+    intersect("reference_id", names(kept)),
     "check",
     "batch",
     "marker",
@@ -189,18 +221,16 @@ sw_batch_matrix <- function(scores, check, direction) {
   ]
 
   # Wide view: one row per check x marker (x population), one column per batch.
-  row_id <- do.call(paste, c(out[group_cols], sep = "\r"))
+  row_id <- as_id(out)
   batches <- sort(unique(out[["batch"]]))
   wide <- out[!duplicated(row_id), group_cols]
   for (b in batches) {
     hit <- out[["batch"]] == b
-    wide[[b]] <- out[["value"]][hit][match(
-      do.call(paste, c(wide[group_cols], sep = "\r")),
-      row_id[hit]
-    )]
+    wide[[b]] <- out[["value"]][hit][match(as_id(wide), row_id[hit])]
   }
   attr(out, "wide") <- tibble::as_tibble(wide)
   attr(out, "dropped") <- dropped
+  attr(out, "not_assessed") <- not_assessed
   attr(out, "params") <- list(check = check, direction = direction)
   class(out) <- c("sw_batch_matrix", class(out))
   out

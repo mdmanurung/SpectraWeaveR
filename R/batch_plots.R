@@ -21,7 +21,8 @@
 #'   first `n_markers` in the order above (uncalibrated: it decides which
 #'   markers appear). Required.
 #' @param population `NULL` when `matrix` has no `population` column, else
-#'   the one population to draw. Required.
+#'   the one population to draw (`NA` draws the all-event rows of
+#'   [sw_batch_scores()] or [sw_batch_mixing()]). Required.
 #'
 #' @return A list with `plot` (a ggplot) and `source_data` (the plotted
 #'   frame, one row per marker and batch).
@@ -82,7 +83,12 @@ sw_plot_batch_matrix <- function(matrix, check, n_markers, population) {
   frame <- tibble::as_tibble(as.data.frame(matrix))
   frame <- frame[frame[["check"]] == check, , drop = FALSE]
   if (has_pop) {
-    frame <- frame[frame[["population"]] == population, , drop = FALSE]
+    in_pop <- if (is.na(population)) {
+      is.na(frame[["population"]])
+    } else {
+      !is.na(frame[["population"]]) & frame[["population"]] == population
+    }
+    frame <- frame[in_pop, , drop = FALSE]
   }
   frame[["key"]] <- .sw_matrix_key(
     frame[["check"]],
@@ -91,7 +97,7 @@ sw_plot_batch_matrix <- function(matrix, check, n_markers, population) {
   )
   frame[["rank_size"]] <- stats::ave(
     frame[["rank"]],
-    frame[["marker"]],
+    paste(frame[["marker"]], frame[["reference_id"]]),
     FUN = function(r) {
       if (all(is.na(r))) rep(1, length(r)) else max(r, na.rm = TRUE) + 1 - r
     }
@@ -123,6 +129,10 @@ sw_plot_batch_matrix <- function(matrix, check, n_markers, population) {
     ggplot2::scale_colour_viridis_c(name = "Value") +
     ggplot2::labs(x = "Batch", y = "Marker", title = title, caption = caption) +
     .sw_theme_nature()
+
+  if ("reference_id" %in% names(frame)) {
+    plot <- plot + ggplot2::facet_wrap(ggplot2::vars(reference_id))
+  }
 
   list(plot = plot, source_data = frame)
 }

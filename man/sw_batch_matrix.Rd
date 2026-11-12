@@ -17,9 +17,11 @@ which columns of the matrix exist). Required.}
 }
 \value{
 A tibble of class \code{sw_batch_matrix} with columns \code{check}, \code{batch},
-\code{marker}, \code{population} (only when \code{scores} has it), \code{value} and \code{rank}.
+\code{marker}, \code{reference_id} and \code{population} (only when \code{scores} has them),
+\code{value} and \code{rank}.
 Attribute \code{wide} is the same values with one column per batch. Attribute
-\code{dropped} holds the rows left out for lack of a batch. Attribute \code{params}
+\code{dropped} holds the rows left out for lack of a batch, and
+\code{not_assessed} the rows the source marked \code{"not_assessed"}. Attribute \code{params}
 echoes \code{check} and \code{direction}.
 }
 \description{
@@ -31,8 +33,12 @@ unusual value of that marker for that check.
 \details{
 \strong{Input.} \code{scores} is a data frame with columns \code{check}, \code{batch}, \code{marker}
 and \code{value}, for example the result of \code{\link[=sw_batch_scores]{sw_batch_scores()}} (also by
-population, with a \code{population} column), a reference-consistency table, or
-the result of \code{\link[=sw_flag_iqr]{sw_flag_iqr()}}. A table with \code{metric} and no \code{check} column
+population, with a \code{population} column), \code{\link[=sw_ref_consistency]{sw_ref_consistency()}} (with
+\code{reference_id}), \code{\link[=sw_batch_mixing]{sw_batch_mixing()}} or the result of \code{\link[=sw_flag_iqr]{sw_flag_iqr()}}. A table with no \code{marker} column (the \code{\link[=sw_batch_mixing]{sw_batch_mixing()}} form) gets
+\code{marker = "all"}. A table with \code{status} has its \code{"not_assessed"} rows left
+out of the ranks and listed in attribute \code{not_assessed}. A table with
+\code{reference_id} is ranked inside each reference. An \code{NA} \code{population} (the
+all-event rows of \code{\link[=sw_batch_scores]{sw_batch_scores()}}) is a group of its own. A table with \code{metric} and no \code{check} column
 (the \code{\link[=sw_flag_iqr]{sw_flag_iqr()}} form) has \code{metric} used as \code{check}. Rows with no batch
 (\code{median_range}, \code{eta2}) cannot sit in a batch column; they are left out and
 listed in attribute \code{dropped}. A pair label such as \code{"b1 ~ b2"} stays as a
@@ -77,5 +83,6 @@ sw_batch_matrix(
 
 }
 \seealso{
-\code{\link[=sw_batch_scores]{sw_batch_scores()}}, \code{\link[=sw_flag_iqr]{sw_flag_iqr()}}, \code{\link[=sw_plot_batch_matrix]{sw_plot_batch_matrix()}}
+\code{\link[=sw_batch_scores]{sw_batch_scores()}}, \code{\link[=sw_ref_consistency]{sw_ref_consistency()}}, \code{\link[=sw_batch_mixing]{sw_batch_mixing()}},
+\code{\link[=sw_flag_iqr]{sw_flag_iqr()}}, \code{\link[=sw_plot_batch_matrix]{sw_plot_batch_matrix()}}
 }

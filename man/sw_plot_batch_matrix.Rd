@@ -16,7 +16,8 @@ first \code{n_markers} in the order above (uncalibrated: it decides which
 markers appear). Required.}
 
 \item{population}{\code{NULL} when \code{matrix} has no \code{population} column, else
-the one population to draw. Required.}
+the one population to draw (\code{NA} draws the all-event rows of
+\code{\link[=sw_batch_scores]{sw_batch_scores()}} or \code{\link[=sw_batch_mixing]{sw_batch_mixing()}}). Required.}
 }
 \value{
 A list with \code{plot} (a ggplot) and \code{source_data} (the plotted

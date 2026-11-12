@@ -81,3 +81,23 @@ test_that("errors on missing arguments and wrong inputs", {
     "sw_batch_matrix"
   )
 })
+
+test_that("the plot draws the all-event rows (NA population) and rank 1 is the biggest dot", {
+  s <- tibble::tibble(
+    check = "rest_emd",
+    marker = rep(c("A", "B"), each = 3),
+    population = NA_character_,
+    batch = rep(c("b1", "b2", "b3"), 2),
+    value = c(0.1, 0.9, 0.2, 0.3, 0.31, 0.29)
+  )
+  m <- sw_batch_matrix(s, "rest_emd", c(rest_emd = "high"))
+  fig <- sw_plot_batch_matrix(m, "rest_emd", n_markers = NULL, population = NA)
+  sd <- fig$source_data
+  expect_equal(nrow(sd), 6)
+  expect_equal(
+    sd$batch[
+      sd$marker == "A" & sd$rank_size == max(sd$rank_size[sd$marker == "A"])
+    ],
+    "b2"
+  )
+})
