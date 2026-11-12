@@ -100,6 +100,11 @@ An object of class \code{sw_design_audit}: a list with
 reference observation group: \code{batch}, \code{reference_id},
 \code{donor}, \code{aliquot}, \code{n_samples}. \code{donor} and
 \code{aliquot} are \code{NA} when their column is not declared.}
+\item{\code{synthetic_references}}{Tibble of rows with role
+\code{synthetic_reference}, kept apart from measured references:
+\code{sample_id}, \code{batch}, \code{reference_id},
+\code{source_batch}. Zero rows when there are none. These rows
+appear in no coverage, component, graph or bridge table.}
 \item{\code{anchor}}{The declared anchor batch, or \code{NULL}.}
 \item{\code{anchor_bridge}}{Tibble with one row per non-anchor batch:
 \code{batch}, \code{n_shared_with_anchor}, \code{shared_ids}
@@ -147,8 +152,12 @@ the two batches, so the batch and biological contrasts are the same
 contrast. A shared reference and a covariate adjustment do not change
 this.}
 }
-A reference with role \code{"biological_pseudo_control"} never counts as a
-measured technical reference.
+A reference with role \code{"biological_pseudo_control"} or
+\code{"synthetic_reference"} never counts as a measured technical reference
+and never bridges batches. A \code{synthetic_reference} row needs a
+\code{source_batch} column value (the batch its cells came from). That
+value must be one of the batches in \code{batch_col}; it may equal the
+row's own batch.
 }
 \examples{
 samples <- data.frame(

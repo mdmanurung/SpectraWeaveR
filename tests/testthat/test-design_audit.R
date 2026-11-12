@@ -417,3 +417,46 @@ test_that("a manifest is accepted and fills its standard columns", {
   expect_equal(res$reference_graph$aliquot, c("a1", "a2"))
   expect_true(res$eligibility$eligible[res$eligibility$name == "paired_shift"])
 })
+
+test_that("synthetic_reference never bridges and eligibility is unchanged", {
+  base <- make_samples(
+    c("a", "a", "b", "b", "c", "c"),
+    rep(c("x", "y"), 3),
+    role = c("technical_replicate", "none", "technical_replicate", "none", "none", "none"),
+    ref = c("R1", NA, "R1", NA, NA, NA)
+  )
+  base$source_batch <- NA_character_
+  with_syn <- base
+  with_syn$reference_role[c(2, 6)] <- "synthetic_reference"
+  with_syn$reference_id[c(2, 6)] <- "S1"
+  with_syn$source_batch[c(2, 6)] <- "a"
+
+  a0 <- audit(base, anchor = "a")
+  a1 <- audit(with_syn, anchor = "a")
+  # Synthetic S1 is shared by batches a and c but must not connect them.
+  expect_false(a1$anchor_bridge$bridged[a1$anchor_bridge$batch == "c"])
+  expect_equal(a1$reference_components, a0$reference_components)
+  expect_equal(a1$reference_coverage, a0$reference_coverage)
+  expect_equal(a1$reference_graph, a0$reference_graph)
+  expect_equal(a1$eligibility, a0$eligibility)
+  expect_equal(nrow(a0$synthetic_references), 0)
+  expect_equal(a1$synthetic_references$sample_id, c("s2", "s6"))
+  expect_equal(a1$synthetic_references$source_batch, c("a", "a"))
+})
+
+test_that("synthetic_reference needs a source_batch", {
+  s <- make_samples(c("a", "b", "c"), c("x", "y", "x"),
+                    role = c("synthetic_reference", "none", "none"),
+                    ref = c("S1", NA, NA))
+  expect_error(audit(s), "source_batch")
+  s$source_batch <- NA_character_
+  expect_error(audit(s), "source_batch")
+})
+
+test_that("synthetic_reference source_batch must be a batch in the table", {
+  s <- make_samples(c("a", "b", "c"), c("x", "y", "x"),
+                    role = c("synthetic_reference", "none", "none"),
+                    ref = c("S1", NA, NA))
+  s$source_batch <- c("zz", NA, NA)
+  expect_error(audit(s), "not found in the batch column")
+})
