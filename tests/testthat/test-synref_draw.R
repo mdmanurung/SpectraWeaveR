@@ -214,3 +214,270 @@ test_that("pseudo-aliquots of one sample sit near the sampling floor", {
     0.15
   )
 })
+
+# sw_synref_mix() and sw_synref_goal() ----------------------------------------------
+
+# Two files in one batch; T is 70% and B 30% of events, B is shifted in M1.
+make_mix <- function(n = 400, seed = 3) {
+  set.seed(seed)
+  lab <- rep(c("T", "B"), c(0.7 * n, 0.3 * n))
+  one <- function(shift) {
+    cbind(
+      M1 = stats::rnorm(n, mean = ifelse(lab == "B", 5, 0)) + shift,
+      M2 = stats::rnorm(n)
+    )
+  }
+  list(
+    data = list(a = one(0), b = one(0.1), c = one(2)),
+    labels = list(a = lab, b = lab, c = lab),
+    man = data.frame(
+      sample_id = c("a", "b", "c"),
+      batch = c("b1", "b1", "b2"),
+      donor = c("d1", "d2", "d3")
+    )
+  )
+}
+
+mix_args <- function(x, ...) {
+  args <- list(
+    data = x$data,
+    manifest = x$man,
+    groups = list(r = c("a", "b")),
+    labels = x$labels,
+    proportions = c(T = 0.5, B = 0.5),
+    n_events = 100,
+    n_draws = 3,
+    seed = 11,
+    short_stratum = "stop"
+  )
+  args[names(list(...))] <- list(...)
+  args
+}
+
+test_that("mix realises the requested counts and proportions", {
+  x <- make_mix()
+  ref <- do.call(sw_synref_mix, mix_args(x))
+  expect_s3_class(ref, "sw_synref")
+  expect_equal(ref$certainty, "diagnostic_only")
+  expect_equal(ref$scope, "within_batch")
+  expect_equal(nrow(ref$realised), 3 * 2)
+  expect_equal(ref$realised$realised, ref$realised$requested)
+  expect_equal(unique(ref$realised$stratum), c("T", "B"))
+  expect_equal(ref$realised$realised_prop, ref$realised$requested_prop)
+  # Planted B shift: a 50:50 mix has a higher M1 mean than the 30% source.
+  src <- mean(unlist(lapply(x$data[c("a", "b")], \(m) m[, "M1"])))
+  expect_gt(mean(ref$events[[1]][, "M1"]), src + 0.5)
+  # Every drawn row equals its source row and carries its label.
+  p <- ref$provenance[ref$provenance$synref_id == "r_d01", ]
+  rebuilt <- t(mapply(\(s, r) x$data[[s]][r, ], p$source_sample, p$source_row))
+  expect_equal(unname(rebuilt), unname(ref$events[["r_d01"]]))
+  lab_of <- mapply(\(s, r) x$labels[[s]][r], p$source_sample, p$source_row)
+  expect_equal(unname(lab_of), p$population)
+})
+
+test_that("mix uses largest-remainder counts that sum to n_events", {
+  x <- make_mix()
+  ref <- do.call(
+    sw_synref_mix,
+    mix_args(x, proportions = c(T = 0.333, B = 0.667), n_events = 101)
+  )
+  expect_true(all(
+    tapply(ref$realised$realised, ref$realised$synref_id, sum) == 101
+  ))
+})
+
+test_that("mix is seed reproducible and restores the RNG state", {
+  x <- make_mix()
+  set.seed(5)
+  before <- .Random.seed
+  a <- do.call(sw_synref_mix, mix_args(x))
+  expect_identical(.Random.seed, before)
+  b <- do.call(sw_synref_mix, mix_args(x))
+  d <- do.call(sw_synref_mix, mix_args(x, seed = 12))
+  expect_identical(a$digest, b$digest)
+  expect_false(identical(a$digest, d$digest))
+})
+
+test_that("a short population stops or is capped and reported", {
+  x <- make_mix()
+  # 100% B asks for 200 B events; the group holds 240.
+  expect_error(
+    do.call(
+      sw_synref_mix,
+      mix_args(x, proportions = c(T = 0.1, B = 0.9), n_events = 400)
+    ),
+    "Population 'B'"
+  )
+  ref <- do.call(
+    sw_synref_mix,
+    mix_args(
+      x,
+      proportions = c(T = 0.1, B = 0.9),
+      n_events = 400,
+      short_stratum = "cap",
+      n_draws = 1
+    )
+  )
+  b <- ref$realised[ref$realised$stratum == "B", ]
+  expect_equal(b$requested, 360)
+  expect_equal(b$realised, 240)
+  expect_lt(b$realised_prop, b$requested_prop)
+  expect_equal(nrow(ref$events[[1]]), 40 + 240)
+})
+
+test_that("mix errors on missing and invalid arguments", {
+  x <- make_mix()
+  args <- mix_args(x)
+  for (nm in names(args)) {
+    expect_error(
+      do.call(sw_synref_mix, args[setdiff(names(args), nm)]),
+      "Required argument"
+    )
+  }
+  expect_error(
+    do.call(sw_synref_mix, mix_args(x, short_stratum = "drop")),
+    "short_stratum"
+  )
+  expect_error(do.call(sw_synref_mix, mix_args(x, labels = NULL)), "labels")
+  expect_error(
+    do.call(sw_synref_mix, mix_args(x, proportions = c(T = 0.5, B = 0.4))),
+    "sum to 1"
+  )
+  expect_error(
+    do.call(sw_synref_mix, mix_args(x, groups = list(r = c("a", "c")))),
+    "within-batch"
+  )
+  expect_error(
+    do.call(
+      sw_synref_mix,
+      mix_args(x, proportions = c(T = 0.5, Z = 0.5))
+    ),
+    "not in the labels"
+  )
+})
+
+make_goal_data <- function() {
+  set.seed(2)
+  list(
+    data = list(
+      a = cbind(M1 = stats::rnorm(300, 0), M2 = stats::rnorm(300)),
+      b = cbind(M1 = stats::rnorm(300, 0), M2 = stats::rnorm(300)),
+      c = cbind(M1 = stats::rnorm(300, 1), M2 = stats::rnorm(300)),
+      d = cbind(M1 = stats::rnorm(300, 4), M2 = stats::rnorm(300))
+    ),
+    man = data.frame(
+      sample_id = c("a", "b", "c", "d"),
+      batch = c("b1", "b1", "b2", "b3")
+    )
+  )
+}
+
+goal_call <- function(x, ...) {
+  args <- list(
+    data = x$data,
+    manifest = x$man,
+    probs = c(0.25, 0.5, 0.75),
+    goal_statistic = "median",
+    n_events = 200,
+    seed = 4
+  )
+  args[names(list(...))] <- list(...)
+  do.call(sw_synref_goal, args)
+}
+
+test_that("goal is the mean or median of batch quantiles and has role goal", {
+  x <- make_goal_data()
+  g <- goal_call(x)
+  expect_s3_class(g, "sw_synref_goal")
+  expect_equal(g$role, "goal")
+  expect_equal(g$certainty, "diagnostic_only")
+  expect_false(inherits(g, "sw_synref"))
+  expect_equal(nrow(g$goal), 2 * 3)
+  expect_equal(nrow(g$batch_quantiles), 3 * 2 * 3)
+  bq <- g$batch_quantiles
+  one <- bq[bq$marker == "M1" & bq$prob == 0.5, ]
+  expect_equal(
+    g$goal$goal[g$goal$marker == "M1" & g$goal$prob == 0.5],
+    stats::median(one$value)
+  )
+  gm <- goal_call(x, goal_statistic = "mean")
+  expect_equal(
+    gm$goal$goal[gm$goal$marker == "M1" & gm$goal$prob == 0.5],
+    mean(gm$batch_quantiles$value[
+      gm$batch_quantiles$marker == "M1" & gm$batch_quantiles$prob == 0.5
+    ])
+  )
+  # The planted M1 batch difference shows as a larger spread than in M2.
+  sd_m1 <- g$goal$spread_sd[g$goal$marker == "M1" & g$goal$prob == 0.5]
+  sd_m2 <- g$goal$spread_sd[g$goal$marker == "M2" & g$goal$prob == 0.5]
+  expect_gt(sd_m1, 5 * sd_m2)
+  expect_equal(
+    bq$delta,
+    bq$value -
+      g$goal$goal[match(
+        paste(bq$marker, bq$prob),
+        paste(g$goal$marker, g$goal$prob)
+      )]
+  )
+  expect_output(print(g), "role: goal")
+})
+
+test_that("goal is seed reproducible and restores the RNG state", {
+  x <- make_goal_data()
+  set.seed(9)
+  before <- .Random.seed
+  a <- goal_call(x)
+  expect_identical(.Random.seed, before)
+  expect_identical(a$digest, goal_call(x)$digest)
+  expect_false(identical(a$digest, goal_call(x, seed = 5)$digest))
+})
+
+test_that("goal errors on missing or invalid arguments", {
+  x <- make_goal_data()
+  args <- list(
+    data = x$data,
+    manifest = x$man,
+    probs = 0.5,
+    goal_statistic = "mean",
+    n_events = 100,
+    seed = 1
+  )
+  for (nm in names(args)) {
+    expect_error(
+      do.call(sw_synref_goal, args[setdiff(names(args), nm)]),
+      "Required argument"
+    )
+  }
+  expect_error(goal_call(x, goal_statistic = "mode"), "goal_statistic")
+  expect_error(goal_call(x, probs = c(0, 0.5)), "probs")
+  # b1 holds 600 events, b2 and b3 hold 300.
+  expect_error(goal_call(x, n_events = 400), "Batch 'b2'")
+  one_batch <- x$man
+  one_batch$batch <- "b1"
+  expect_error(goal_call(x, manifest = one_batch), "two batches")
+})
+
+test_that("cap warns for an absent population and stops when all are absent", {
+  x <- make_mix()
+  expect_warning(
+    ref <- do.call(
+      sw_synref_mix,
+      mix_args(
+        x,
+        proportions = c(T = 0.5, B = 0.3, Z = 0.2),
+        short_stratum = "cap",
+        n_draws = 1
+      )
+    ),
+    "Z"
+  )
+  z <- ref$realised[ref$realised$stratum == "Z", ]
+  expect_equal(z$realised, 0)
+  expect_error(
+    suppressWarnings(do.call(
+      sw_synref_mix,
+      mix_args(x, proportions = c(Z = 1), short_stratum = "cap")
+    )),
+    "none of the requested populations"
+  )
+})
