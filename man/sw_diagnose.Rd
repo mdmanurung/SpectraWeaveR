@@ -14,7 +14,12 @@ sw_diagnose(
   relativise,
   otd,
   negative,
-  gate
+  gate,
+  reference,
+  batch_pop,
+  flag_iqr,
+  batch_otd,
+  batch_mixing
 )
 }
 \arguments{
@@ -52,6 +57,34 @@ batches); it does not use \code{data}.}
 \item{gate}{\code{NULL} or a list with \code{gates}, \code{reference}, \code{edge_width}. The
 \code{item} column is the gate id, with the channel after a \code{/} for
 per-channel checks.}
+
+\item{reference}{\code{NULL} or a list with \code{manifest}, \code{markers}, \code{n_events},
+\code{seed}, \code{order}, \code{min_batches_per_reference}, \code{min_events}, \code{roles},
+\code{transform}, \code{cofactor}. Subjects are batches or batch pairs; \code{item} is the
+reference id and the marker, so each reference and marker is ranked on its
+own. \code{count_ratio} rows have no marker.}
+
+\item{batch_pop}{\code{NULL} or a list with the arguments of
+\code{\link[=sw_batch_scores]{sw_batch_scores()}}, including a non-\code{NULL} \code{population} list and
+\code{min_events} and \code{group_summary}. Only rows inside a population are
+stacked (the all-event rows are the \code{batch} module's), plus the
+\code{batch_order_rho} rows. \code{item} is the marker and the population, or the
+population alone for \code{pop_share} and \code{share_rest_z}.}
+
+\item{flag_iqr}{\code{NULL} or a list with the arguments of \code{\link[=sw_flag_iqr]{sw_flag_iqr()}}
+(\code{cells}, \code{markers}, \code{thresholds}, \code{iqr_multiplier}, \code{min_cells_per_side},
+\code{quantile_type}, \code{min_effect}, and optionally \code{batch_col}, \code{control_col},
+\code{sample_col}). The stacked value is \code{effect}, the distance beyond the
+Tukey fence; the fence flag itself is not stacked. \code{item} is the control,
+metric and marker.}
+
+\item{batch_otd}{\code{NULL} or a list with \code{batch}, \code{markers}, \code{n_events},
+\code{blur}, \code{seed}, \code{max_iter}, \code{tol}, \code{mode}. The check is \code{otd_} plus the
+mode.}
+
+\item{batch_mixing}{\code{NULL} or a list with \code{batch}, \code{markers}, \code{k},
+\code{perplexity}, \code{alpha}, \code{n_events}, \code{seed}, \code{min_events}, \code{population}.
+\code{item} is the population (\code{NA} without one).}
 }
 \value{
 A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
@@ -60,7 +93,7 @@ A tibble of class \code{sw_diagnosis} with columns \code{module}, \code{subject}
 lists the modules that ran.
 }
 \description{
-Run any of nine diagnostic modules and stack what they return into one tidy
+Run any of fourteen diagnostic modules and stack what they return into one tidy
 table (\code{module}, \code{subject}, \code{check}, \code{item}, \code{value}, \code{text}). A module runs
 only when you give it a settings list; pass \code{NULL} to skip it. Nothing is
 marked pass or fail. Use \code{\link[=sw_diagnosis_top]{sw_diagnosis_top()}} to see the files or batches
@@ -75,6 +108,11 @@ with the largest value per check.\tabular{lll}{
    \code{otd} \tab \code{\link[=sw_otd_scores]{sw_otd_scores()}} \tab \code{data} \cr
    \code{negative} \tab \code{\link[=sw_negative_audit]{sw_negative_audit()}} \tab \code{data} \cr
    \code{gate} \tab \code{\link[=sw_gate_qc]{sw_gate_qc()}} \tab \code{data} and \code{sw_gate} objects \cr
+   \code{reference} \tab \code{\link[=sw_ref_consistency]{sw_ref_consistency()}} \tab \code{data} and a manifest with reference ids \cr
+   \code{batch_pop} \tab \code{\link[=sw_batch_scores]{sw_batch_scores()}} with \code{population} \tab \code{data}, batch labels and population labels \cr
+   \code{flag_iqr} \tab \code{\link[=sw_flag_iqr]{sw_flag_iqr()}} \tab event-level \code{cells} (not \code{data}) \cr
+   \code{batch_otd} \tab \code{\link[=sw_batch_otd]{sw_batch_otd()}} \tab \code{data} and batch labels \cr
+   \code{batch_mixing} \tab \code{\link[=sw_batch_mixing]{sw_batch_mixing()}} \tab \code{data} and batch labels \cr
 }
 }
 \details{
@@ -109,7 +147,12 @@ dx <- sw_diagnose(
   relativise = NULL,
   otd = NULL,
   negative = NULL,
-  gate = NULL
+  gate = NULL,
+  reference = NULL,
+  batch_pop = NULL,
+  flag_iqr = NULL,
+  batch_otd = NULL,
+  batch_mixing = NULL
 )
 sw_diagnosis_top(dx, n = 3)
 }

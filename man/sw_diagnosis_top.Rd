@@ -20,11 +20,14 @@ markers) with the largest value. No cutoff is applied. Signed checks
 (\code{median_z}, \code{sd_z}, \code{freq_z}, \code{time_trend}, \code{order_rho}, \code{gain_z},
 \code{gain_order_rho}, \code{neg_median_z}, \code{neg_sd_z}, \code{neg_corr}, \code{neg_corr_z},
 \code{corr_pair_z}, \code{global_sd_z}, \code{spill_corr}, \code{spill_corr_z}, \code{kept_share_z},
-\code{kept_share_log_ratio}, \code{centroid_shift}, \code{bimodality_z}) are
-ranked by the size of the value, ignoring its sign. \code{gain_batch_ratio} and
-\code{spread_ratio} are ranked by \code{abs(log(value))}, so 0.5 and 2 rank equal. For \code{novelty_log_density} and \code{separation} the
+\code{kept_share_log_ratio}, \code{centroid_shift}, \code{bimodality_z},
+\code{median_shift_z}, \code{share_rest_z}, \code{batch_order_rho}) are
+ranked by the size of the value, ignoring its sign. \code{gain_batch_ratio},
+\code{spread_ratio} and \code{count_ratio} are ranked by \code{abs(log(value))}, so 0.5 and
+2 rank equal. For \code{novelty_log_density}, \code{separation} and \code{lisi_batch} the
 smallest values are the unusual ones, so those checks rank from the lowest
-value. Level values (\code{offset}, \code{gain}, \code{neg_median}, \code{neg_sd}, \code{neg_share})
+value. \code{rest_emd_z}, \code{kbet_rejection}, \code{iqr_effect} and \verb{otd_*} rank by raw
+value, highest first. Level values (\code{offset}, \code{gain}, \code{neg_median}, \code{neg_sd}, \code{neg_share})
 rank by raw value; read their \verb{_z} rows to rank deviations.
 }
 \examples{

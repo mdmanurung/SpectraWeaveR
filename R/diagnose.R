@@ -6,7 +6,7 @@
 #' Run the technical diagnostics and collect their numbers in one table
 #'
 #' @description
-#' Run any of nine diagnostic modules and stack what they return into one tidy
+#' Run any of fourteen diagnostic modules and stack what they return into one tidy
 #' table (`module`, `subject`, `check`, `item`, `value`, `text`). A module runs
 #' only when you give it a settings list; pass `NULL` to skip it. Nothing is
 #' marked pass or fail. Use [sw_diagnosis_top()] to see the files or batches
@@ -23,6 +23,11 @@
 #' | `otd` | [sw_otd_scores()] | `data` |
 #' | `negative` | [sw_negative_audit()] | `data` |
 #' | `gate` | [sw_gate_qc()] | `data` and `sw_gate` objects |
+#' | `reference` | [sw_ref_consistency()] | `data` and a manifest with reference ids |
+#' | `batch_pop` | [sw_batch_scores()] with `population` | `data`, batch labels and population labels |
+#' | `flag_iqr` | [sw_flag_iqr()] | event-level `cells` (not `data`) |
+#' | `batch_otd` | [sw_batch_otd()] | `data` and batch labels |
+#' | `batch_mixing` | [sw_batch_mixing()] | `data` and batch labels |
 #'
 #' @details
 #' **No defaults anywhere.** Each settings list holds the arguments of its
@@ -65,6 +70,29 @@
 #' @param gate `NULL` or a list with `gates`, `reference`, `edge_width`. The
 #'   `item` column is the gate id, with the channel after a `/` for
 #'   per-channel checks.
+#' @param reference `NULL` or a list with `manifest`, `markers`, `n_events`,
+#'   `seed`, `order`, `min_batches_per_reference`, `min_events`, `roles`,
+#'   `transform`, `cofactor`. Subjects are batches or batch pairs; `item` is the
+#'   reference id and the marker, so each reference and marker is ranked on its
+#'   own. `count_ratio` rows have no marker.
+#' @param batch_pop `NULL` or a list with the arguments of
+#'   [sw_batch_scores()], including a non-`NULL` `population` list and
+#'   `min_events` and `group_summary`. Only rows inside a population are
+#'   stacked (the all-event rows are the `batch` module's), plus the
+#'   `batch_order_rho` rows. `item` is the marker and the population, or the
+#'   population alone for `pop_share` and `share_rest_z`.
+#' @param flag_iqr `NULL` or a list with the arguments of [sw_flag_iqr()]
+#'   (`cells`, `markers`, `thresholds`, `iqr_multiplier`, `min_cells_per_side`,
+#'   `quantile_type`, `min_effect`, and optionally `batch_col`, `control_col`,
+#'   `sample_col`). The stacked value is `effect`, the distance beyond the
+#'   Tukey fence; the fence flag itself is not stacked. `item` is the control,
+#'   metric and marker.
+#' @param batch_otd `NULL` or a list with `batch`, `markers`, `n_events`,
+#'   `blur`, `seed`, `max_iter`, `tol`, `mode`. The check is `otd_` plus the
+#'   mode.
+#' @param batch_mixing `NULL` or a list with `batch`, `markers`, `k`,
+#'   `perplexity`, `alpha`, `n_events`, `seed`, `min_events`, `population`.
+#'   `item` is the population (`NA` without one).
 #'
 #' @return A tibble of class `sw_diagnosis` with columns `module`, `subject`
 #'   (file, batch or batch pair), `check`, `item` (channel or marker, else
@@ -89,7 +117,12 @@
 #'   relativise = NULL,
 #'   otd = NULL,
 #'   negative = NULL,
-#'   gate = NULL
+#'   gate = NULL,
+#'   reference = NULL,
+#'   batch_pop = NULL,
+#'   flag_iqr = NULL,
+#'   batch_otd = NULL,
+#'   batch_mixing = NULL
 #' )
 #' sw_diagnosis_top(dx, n = 3)
 #' }
@@ -105,7 +138,12 @@ sw_diagnose <- function(
   relativise,
   otd,
   negative,
-  gate
+  gate,
+  reference,
+  batch_pop,
+  flag_iqr,
+  batch_otd,
+  batch_mixing
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -117,7 +155,12 @@ sw_diagnose <- function(
     relativise = missing(relativise),
     otd = missing(otd),
     negative = missing(negative),
-    gate = missing(gate)
+    gate = missing(gate),
+    reference = missing(reference),
+    batch_pop = missing(batch_pop),
+    flag_iqr = missing(flag_iqr),
+    batch_otd = missing(batch_otd),
+    batch_mixing = missing(batch_mixing)
   ))
   modules <- c(
     "header",
@@ -128,7 +171,12 @@ sw_diagnose <- function(
     "relativise",
     "otd",
     "negative",
-    "gate"
+    "gate",
+    "reference",
+    "batch_pop",
+    "flag_iqr",
+    "batch_otd",
+    "batch_mixing"
   )
   for (nm in modules) {
     v <- get(nm)
@@ -147,10 +195,15 @@ sw_diagnose <- function(
         !is.null(cluster) ||
         !is.null(otd) ||
         !is.null(negative) ||
-        !is.null(gate))
+        !is.null(gate) ||
+        !is.null(reference) ||
+        !is.null(batch_pop) ||
+        !is.null(batch_otd) ||
+        !is.null(batch_mixing))
   ) {
     stop(
-      "`data` is needed for the signal, anomaly, batch, cluster, otd, negative and gate modules.",
+      "`data` is needed for the signal, anomaly, batch, cluster, otd, negative, gate, ",
+      "reference, batch_pop, batch_otd and batch_mixing modules (not header or flag_iqr).",
       call. = FALSE
     )
   }
@@ -350,6 +403,116 @@ sw_diagnose <- function(
     ran <- c(ran, "gate")
   }
 
+  if (!is.null(reference)) {
+    rc <- do.call(sw_ref_consistency, c(list(data = data), reference))
+    parts$reference <- tibble::tibble(
+      module = "reference",
+      subject = ifelse(is.na(rc$batch), "all batches", rc$batch),
+      check = rc$check,
+      # One ranking per reference and marker (count_ratio has no marker).
+      item = ifelse(
+        is.na(rc$marker),
+        rc$reference_id,
+        paste0(rc$reference_id, " / ", rc$marker)
+      ),
+      value = rc$value,
+      text = ifelse(
+        rc$status == "assessed",
+        paste0("n_files=", rc$n_files),
+        paste0("not_assessed: ", rc$reason, "; n_files=", rc$n_files)
+      )
+    )
+    ran <- c(ran, "reference")
+  }
+
+  if (!is.null(batch_pop)) {
+    if (is.null(batch_pop[["population"]])) {
+      stop(
+        "`batch_pop$population` is needed; without it the scores equal the ",
+        "`batch` module.",
+        call. = FALSE
+      )
+    }
+    bp <- do.call(sw_batch_scores, c(list(data = data), batch_pop))
+    # The all-event rows belong to the `batch` module; batch_order_rho is new.
+    bp <- bp[!is.na(bp$population) | bp$check == "batch_order_rho", ]
+    parts$batch_pop <- tibble::tibble(
+      module = "batch_pop",
+      subject = ifelse(is.na(bp$batch), "all batches", bp$batch),
+      check = bp$check,
+      # One ranking per marker and population.
+      item = dplyr::case_when(
+        is.na(bp$population) ~ bp$marker,
+        is.na(bp$marker) ~ bp$population,
+        .default = paste0(bp$marker, " / ", bp$population)
+      ),
+      value = bp$value,
+      # An assessed row can still have no value (a robust z needs 3 batches and
+      # a non-zero spread); say so, so no NA is silent.
+      text = ifelse(
+        bp$status == "assessed",
+        paste0(
+          ifelse(is.na(bp$value), "no value (assessed row); ", ""),
+          "n_files=",
+          bp$n_files
+        ),
+        paste0(
+          "not_assessed: n_files=",
+          bp$n_files,
+          ifelse(is.na(bp$file), "", paste0("; file=", bp$file))
+        )
+      )
+    )
+    ran <- c(ran, "batch_pop")
+  }
+
+  if (!is.null(flag_iqr)) {
+    fl_iqr <- do.call(sw_flag_iqr, flag_iqr)
+    parts$flag_iqr <- tibble::tibble(
+      module = "flag_iqr",
+      subject = fl_iqr$batch,
+      check = "iqr_effect",
+      # One ranking per control, metric and marker; the fence flag is not kept.
+      item = paste(fl_iqr$control, fl_iqr$metric, fl_iqr$marker, sep = " / "),
+      value = fl_iqr$effect,
+      text = paste0("status=", fl_iqr$status, "; n_cells=", fl_iqr$n_cells)
+    )
+    ran <- c(ran, "flag_iqr")
+  }
+
+  if (!is.null(batch_otd)) {
+    bo <- do.call(sw_batch_otd, c(list(data = data), batch_otd))
+    parts$batch_otd <- tibble::tibble(
+      module = "batch_otd",
+      subject = bo$batch,
+      check = paste0("otd_", bo$mode),
+      item = NA_character_,
+      value = bo$otd,
+      text = paste0("converged=", bo$converged, "; n_files=", bo$n_files)
+    )
+    ran <- c(ran, "batch_otd")
+  }
+
+  if (!is.null(batch_mixing)) {
+    bm <- do.call(sw_batch_mixing, c(list(data = data), batch_mixing))
+    parts$batch_mixing <- tibble::tibble(
+      module = "batch_mixing",
+      subject = ifelse(is.na(bm$batch), "all batches", bm$batch),
+      check = bm$check,
+      item = bm$population,
+      value = bm$value,
+      text = paste0(
+        "n_events=",
+        bm$n_events,
+        "; n_batches=",
+        bm$n_batches,
+        "; status=",
+        bm$status
+      )
+    )
+    ran <- c(ran, "batch_mixing")
+  }
+
   out <- dplyr::bind_rows(parts)
   attr(out, "modules") <- ran
   class(out) <- c("sw_diagnosis", class(out))
@@ -378,14 +541,21 @@ sw_diagnose <- function(
   "kept_share_log_ratio",
   "centroid_shift",
   # A split blurs two populations, so the bimodality coefficient drops (G38).
-  "bimodality_z"
+  "bimodality_z",
+  # Batch-level checks that depart either way (DR33).
+  "median_shift_z",
+  "share_rest_z",
+  "batch_order_rho"
 )
-# Not here on purpose (G38): `spread_z` and `rest_emd_z` rank by their raw value,
+# Not here on purpose (G38): `spread_z` and `rest_emd_z` (also in the reference
+# and batch_pop modules) rank by their raw value,
 # because spillover spread only adds width and an EMD only grows with a fault; a
 # negative z means a file or batch is closer to normal than the others.
 # Novelty log-density: low is unusual. GMM separation: a small value means the
 # channel did not split into a negative and a positive, so it ranks first.
-.sw_low_first_checks <- c("novelty_log_density", "separation")
+# LISI: a low inverse Simpson index means the batches do not mix, so it ranks
+# first. `kbet_rejection` and `otd_*` grow with a fault and rank by raw value.
+.sw_low_first_checks <- c("novelty_log_density", "separation", "lisi_batch")
 .sw_diag_key <- function(check, value) {
   key <- value
   signed <- check %in% .sw_signed_checks
@@ -395,7 +565,7 @@ sw_diagnose <- function(
   # A ratio departs from 1 either way, so its log size ranks: a narrowed batch
   # (0.5) ranks as high as a widened one (2). Only these rows are logged, so
   # negative values elsewhere raise no warning.
-  ratio <- check %in% c("gain_batch_ratio", "spread_ratio")
+  ratio <- check %in% c("gain_batch_ratio", "spread_ratio", "count_ratio")
   key[ratio] <- abs(log(value[ratio]))
   key
 }
@@ -407,11 +577,14 @@ sw_diagnose <- function(
 #' (`median_z`, `sd_z`, `freq_z`, `time_trend`, `order_rho`, `gain_z`,
 #' `gain_order_rho`, `neg_median_z`, `neg_sd_z`, `neg_corr`, `neg_corr_z`,
 #' `corr_pair_z`, `global_sd_z`, `spill_corr`, `spill_corr_z`, `kept_share_z`,
-#' `kept_share_log_ratio`, `centroid_shift`, `bimodality_z`) are
-#' ranked by the size of the value, ignoring its sign. `gain_batch_ratio` and
-#' `spread_ratio` are ranked by `abs(log(value))`, so 0.5 and 2 rank equal. For `novelty_log_density` and `separation` the
+#' `kept_share_log_ratio`, `centroid_shift`, `bimodality_z`,
+#' `median_shift_z`, `share_rest_z`, `batch_order_rho`) are
+#' ranked by the size of the value, ignoring its sign. `gain_batch_ratio`,
+#' `spread_ratio` and `count_ratio` are ranked by `abs(log(value))`, so 0.5 and
+#' 2 rank equal. For `novelty_log_density`, `separation` and `lisi_batch` the
 #' smallest values are the unusual ones, so those checks rank from the lowest
-#' value. Level values (`offset`, `gain`, `neg_median`, `neg_sd`, `neg_share`)
+#' value. `rest_emd_z`, `kbet_rejection`, `iqr_effect` and `otd_*` rank by raw
+#' value, highest first. Level values (`offset`, `gain`, `neg_median`, `neg_sd`, `neg_share`)
 #' rank by raw value; read their `_z` rows to rank deviations.
 #'
 #' @param diagnosis An `sw_diagnosis` result.

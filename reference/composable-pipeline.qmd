@@ -388,6 +388,36 @@ Creates a step wrapping `sw_cluster_run()`.
 
 ---
 
+### `sw_pipeline_step_design_audit` {#sw_pipeline_step_design_audit}
+
+```r
+sw_pipeline_step_design_audit(...)
+```
+
+Creates a step wrapping `sw_design_audit()`. Input is the sample table, output an `sw_design_audit`. Pass `minimum_batches`, `minimum_batches_origin` and `require_shared_reference` in `...`.
+
+---
+
+### `sw_pipeline_step_batch_decide` {#sw_pipeline_step_batch_decide}
+
+```r
+sw_pipeline_step_batch_decide(...)
+```
+
+Creates a step wrapping `sw_batch_decide()`. Input is an `sw_design_audit`, output an `sw_batch_decision`. Pass `candidates`, `policy`, `identity_id`, `label_source` and `contrast_records` in `...`.
+
+---
+
+### `sw_pipeline_step_flag_iqr` {#sw_pipeline_step_flag_iqr}
+
+```r
+sw_pipeline_step_flag_iqr(...)
+```
+
+Creates a step wrapping `sw_flag_iqr()`. Input is the event-level data frame, output an `sw_flag_iqr` tibble. Every threshold, the multiplier and `min_effect` go in `...`.
+
+---
+
 ## Example
 
 ```{r}

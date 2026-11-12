@@ -63,7 +63,12 @@ dx <- sw_diagnose(
   ),
   negative = list(channels = chans, n_events = 2000, seed = 1, hyper_k = 4, pairs = "all",
     spread_quantile = 0.95, min_separation = 3),
-  gate = NULL
+  gate = NULL,
+  reference = NULL,
+  batch_pop = NULL,
+  flag_iqr = NULL,
+  batch_otd = NULL,
+  batch_mixing = NULL
 )
 sw_diagnosis_top(dx, n = 5)
 shiny::runApp(sw_qc_app(dx, n = 15, qc_report = NULL))

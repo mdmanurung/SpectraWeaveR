@@ -125,6 +125,9 @@ R7/S7-based composable pipeline framework for building custom workflows.
 | [`sw_pipeline_step_som()`](composable-pipeline.qmd#sw_pipeline_step_som) | Step: SOM clustering |
 | [`sw_pipeline_step_correct_apply()`](composable-pipeline.qmd#sw_pipeline_step_correct_apply) | Step: ComBat correction |
 | [`sw_pipeline_step_cluster()`](composable-pipeline.qmd#sw_pipeline_step_cluster) | Step: clustering |
+| [`sw_pipeline_step_design_audit()`](composable-pipeline.qmd#sw_pipeline_step_design_audit) | Step: batch design audit |
+| [`sw_pipeline_step_batch_decide()`](composable-pipeline.qmd#sw_pipeline_step_batch_decide) | Step: batch decision |
+| [`sw_pipeline_step_flag_iqr()`](composable-pipeline.qmd#sw_pipeline_step_flag_iqr) | Step: control IQR flags |
 
 ## Transforms
 

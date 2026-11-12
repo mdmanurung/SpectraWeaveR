@@ -549,13 +549,14 @@ test_that(".sw_tool_list returns list of tools", {
 
   tools <- SpectraWeaveR:::.sw_tool_list()
   expect_true(is.list(tools))
-  expect_true(length(tools) == 9)  # 9 SpectraWeaveR custom tools
+  expect_true(length(tools) == 12)  # 9 file tools + 3 batch tools
   # the system prompts in inst/prompts refer to these tools by name
   expect_identical(
     vapply(tools, \(tool) tool@name, character(1)),
     c("list_fcs_files", "list_directory", "read_fcs_header",
       "read_csv_columns", "read_xlsx_columns", "validate_sample_meta",
-      "detect_channels", "check_batch_balance", "validate_markers")
+      "detect_channels", "check_batch_balance", "validate_markers",
+      "design_audit", "flag_iqr", "batch_decide")
   )
   expect_identical(
     names(tools[[4]]@arguments@properties),
@@ -730,4 +731,220 @@ test_that("all system prompts contain Data Privacy section", {
     expect_match(content, "Data Privacy",
                  info = paste(name, "missing Data Privacy section"))
   }
+})
+
+# ---- batch tools: design_audit, flag_iqr, batch_decide ----
+
+# File-local fixtures for the three batch tools.
+write_samples_csv <- function(path) {
+  utils::write.csv(
+    data.frame(
+      sample_id = paste0("s", 1:6),
+      batch = rep(c("b1", "b2"), each = 3),
+      condition = rep(c("ctrl", "case", "ctrl"), 2),
+      reference_role = rep(c("anchor", "none", "none"), 2),
+      reference_id = rep(c("r1", NA, NA), 2)
+    ),
+    path,
+    row.names = FALSE
+  )
+}
+
+write_cells_csv <- function(path, seed = 5) {
+  set.seed(seed)
+  cells <- data.frame(
+    batch = rep(paste0("b", 1:5), each = 400),
+    control = "ctrl1",
+    CD3 = c(stats::rnorm(1000, 0, 0.3), stats::rnorm(1000, 3, 0.3))[
+      sample(2000)
+    ]
+  )
+  shift <- cells$batch == "b5" & cells$CD3 > 1.5
+  cells$CD3[shift] <- cells$CD3[shift] + 2
+  utils::write.csv(cells, path, row.names = FALSE)
+}
+
+test_that(".tool_design_audit audits a CSV sample table and needs every threshold", {
+  csv <- withr::local_tempfile(fileext = ".csv")
+  write_samples_csv(csv)
+  out <- SpectraWeaveR:::.tool_design_audit(
+    csv,
+    batch_col = "batch",
+    minimum_batches = 2,
+    minimum_batches_origin = "test",
+    require_shared_reference = TRUE,
+    protected = "condition"
+  )
+  expect_match(out, "sw_design_audit")
+  expect_no_match(out, "^Error")
+  expect_match(
+    SpectraWeaveR:::.tool_design_audit("/nonexistent.csv", "batch", 2, "t", TRUE),
+    "^Error: File does not exist"
+  )
+  # A missing threshold is an error that reaches the model, never a default.
+  expect_match(
+    SpectraWeaveR:::.tool_design_audit(csv, batch_col = "batch"),
+    "^Error running design audit"
+  )
+})
+
+test_that(".tool_flag_iqr ranks the planted batch and matches thresholds to markers by name", {
+  csv <- withr::local_tempfile(fileext = ".csv")
+  write_cells_csv(csv)
+  run <- function(thresholds, ...) {
+    SpectraWeaveR:::.tool_flag_iqr(
+      csv,
+      markers = list("CD3"),
+      thresholds = thresholds,
+      iqr_multiplier = 1.5,
+      min_cells_per_side = 50,
+      quantile_type = 7,
+      min_effect_neg_median = 0.2,
+      min_effect_pos_median = 0.2,
+      min_effect_pct_positive = 5,
+      ...
+    )
+  }
+  as_list <- run(list(list(marker = "CD3", threshold = 1.5)))
+  as_df <- run(data.frame(marker = "CD3", threshold = 1.5))
+  expect_match(as_list, "Outside the fence")
+  expect_match(as_list, "b5")
+  expect_identical(as_list, as_df)
+  expect_match(as_list, "not a verdict")
+  # An unlisted marker threshold stops the call; the model sees the error.
+  expect_match(
+    run(list(list(marker = "CD4", threshold = 1.5))),
+    "^Error running IQR flags"
+  )
+  expect_match(
+    SpectraWeaveR:::.tool_flag_iqr("/nonexistent.csv"),
+    "^Error: File does not exist"
+  )
+})
+
+test_that(".tool_flag_iqr reports thin panels as a status count, not as clean", {
+  csv <- withr::local_tempfile(fileext = ".csv")
+  write_cells_csv(csv)
+  out <- SpectraWeaveR:::.tool_flag_iqr(
+    csv,
+    markers = list("CD3"),
+    thresholds = list(list(marker = "CD3", threshold = 1.5)),
+    iqr_multiplier = 1.5,
+    min_cells_per_side = 1e6,
+    quantile_type = 7,
+    min_effect_neg_median = 0.2,
+    min_effect_pos_median = 0.2,
+    min_effect_pct_positive = 5
+  )
+  expect_match(out, "ineligible_min_cells")
+})
+
+test_that(".tool_batch_decide reads saved objects, needs the contrast choice, and decides", {
+  dir <- withr::local_tempdir()
+  thr <- c(
+    "min_coverage",
+    "min_emd_reduction",
+    "max_mad_compression_fraction",
+    "max_joint_structure_change",
+    "no_effect_emd"
+  )
+  policy <- sw_batch_policy(
+    min_coverage = 0.6,
+    min_emd_reduction = 0.2,
+    max_mad_compression_fraction = 0.25,
+    max_joint_structure_change = 0.1,
+    no_effect_emd = 0.05,
+    require_reference_supported = TRUE,
+    max_contrast_change = NULL,
+    min_donors_per_condition = NULL,
+    min_contrast_spread_ratio = NULL,
+    threshold_origins = stats::setNames(rep("test value, uncalibrated", 5), thr),
+    calibration_artifacts = character(0)
+  )
+  design <- structure(
+    list(
+      batch_col = "batch",
+      confounded_factors = character(0),
+      below_design_floor = FALSE,
+      design_floor_reason = NA_character_,
+      comparisons = tibble::tibble(
+        comparison_id = "c1",
+        population = NA_character_,
+        support = "reference_supported"
+      )
+    ),
+    class = "sw_design_audit"
+  )
+  records <- tibble::tibble(
+    candidate_id = rep(c("none", "cc"), each = 5),
+    metric = rep(
+      c(
+        "emd_within_population",
+        "emd_within_population",
+        "emd_within_population",
+        "mad_compression_fraction",
+        "joint_structure_distance"
+      ),
+      2
+    ),
+    marker = rep(c("CD3", "CD4", "CD8", NA, NA), 2),
+    comparison_id = "c1",
+    value = c(1, 2, 1, 0, 0, 0.5, 1, 0.5, 0.1, 0.02),
+    status = "ok",
+    weight = 1
+  )
+  saveRDS(policy, file.path(dir, "policy.rds"))
+  saveRDS(design, file.path(dir, "design.rds"))
+  utils::write.csv(records, file.path(dir, "records.csv"), row.names = FALSE)
+  decide <- function(contrast) {
+    SpectraWeaveR:::.tool_batch_decide(
+      file.path(dir, "design.rds"),
+      file.path(dir, "policy.rds"),
+      file.path(dir, "records.csv"),
+      identity_id = "none",
+      label_source = "manual_gating",
+      contrast_records_csv = contrast
+    )
+  }
+  out <- decide("none")
+  expect_match(out, "sw_batch_decision")
+  # An uncalibrated policy withholds a recommendation and says so.
+  expect_match(out, "cc +eligible_for_review")
+  expect_match(out, "No recommendation")
+  expect_match(out, "uncalibrated")
+  expect_match(decide(file.path(dir, "absent.csv")), "^Error: File does not exist")
+  # A wrong object class is reported by the package, not swallowed.
+  saveRDS(policy, file.path(dir, "design.rds"))
+  expect_match(decide("none"), "^Error deciding on batch correction")
+  expect_match(
+    SpectraWeaveR:::.tool_batch_decide(
+      "/nonexistent.rds", "p", "r", "none", "reference", "none"
+    ),
+    "^Error: File does not exist"
+  )
+})
+
+test_that("the three batch tools carry no hidden defaults for impactful settings", {
+  skip_if_not_installed("ellmer")
+  tools <- SpectraWeaveR:::.sw_tool_list()
+  by_name <- stats::setNames(tools, vapply(tools, \(t) t@name, character(1)))
+  for (nm in c("design_audit", "flag_iqr", "batch_decide")) {
+    expect_true(nm %in% names(by_name))
+  }
+  expect_true(all(
+    c(
+      "iqr_multiplier", "min_cells_per_side", "quantile_type",
+      "min_effect_neg_median", "min_effect_pos_median",
+      "min_effect_pct_positive"
+    ) %in% names(by_name$flag_iqr@arguments@properties)
+  ))
+  # None of the impactful settings is optional.
+  props <- by_name$flag_iqr@arguments@properties
+  expect_true(all(vapply(
+    props[c("iqr_multiplier", "min_cells_per_side", "quantile_type")],
+    \(p) isTRUE(p@required),
+    logical(1)
+  )))
+  expect_true("contrast_records_csv" %in% names(by_name$batch_decide@arguments@properties))
+  expect_true(isTRUE(by_name$design_audit@arguments@properties$minimum_batches@required))
 })

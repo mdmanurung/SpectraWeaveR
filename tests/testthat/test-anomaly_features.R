@@ -223,7 +223,7 @@ test_that("sw_diagnose takes emd_z within groups", {
   ez <- function(rg) {
     dx <- sw_diagnose(
       x$data, NULL, NULL, c(an, list(reference_group = rg)),
-      NULL, NULL, NULL, NULL, NULL, NULL
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
     )
     dx[dx$check == "emd_z" & dx$item == "A", ]
   }
@@ -257,7 +257,7 @@ test_that("a two-way reference_group pools all files and medpolishes the EMD val
   )
   dx <- sw_diagnose(
     x$data, NULL, NULL, c(an, list(reference_group = design)),
-    NULL, NULL, NULL, NULL, NULL, NULL
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
   )
   ez <- dx[dx$check == "emd_z" & dx$item == "A", ]
   emd <- feat(x$data, features = "emd", agg_size = 600, n_events = 200, reference_group = NULL)

@@ -114,7 +114,12 @@ dx <- sw_diagnose(
   relativise = NULL, # no reference controls in these files
   otd = NULL,
   negative = NULL,
-  gate = NULL
+  gate = NULL,
+  reference = NULL,
+  batch_pop = NULL,
+  flag_iqr = NULL,
+  batch_otd = NULL,
+  batch_mixing = NULL
 )
 write.csv(dx, file.path(run_dir, "diagnosis.csv"), row.names = FALSE)
 write.csv(
