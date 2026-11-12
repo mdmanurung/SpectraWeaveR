@@ -157,7 +157,7 @@ sw_synref_check_overlap <- function(
 #'
 #' @param synref An `sw_synref` with draws named `<group>_dNN` (from
 #'   [sw_synref_downsample()] or [sw_synref_mix()]) or `<group>_partNN`.
-#' @param probs Quantile probabilities in [0, 1] (uncalibrated).
+#' @param probs Quantile probabilities in 0 to 1 (uncalibrated).
 #'
 #' @return A tibble: `group`, `marker`, `prob`, `sd_across_draws`,
 #'   `range_across_draws`, `n_draws`, `mean_events` and `status` (`ok` or

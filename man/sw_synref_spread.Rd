@@ -10,7 +10,7 @@ sw_synref_spread(synref, probs)
 \item{synref}{An \code{sw_synref} with draws named \verb{<group>_dNN} (from
 \code{\link[=sw_synref_downsample]{sw_synref_downsample()}} or \code{\link[=sw_synref_mix]{sw_synref_mix()}}) or \verb{<group>_partNN}.}
 
-\item{probs}{Quantile probabilities in \link{0, 1} (uncalibrated).}
+\item{probs}{Quantile probabilities in 0 to 1 (uncalibrated).}
 }
 \value{
 A tibble: \code{group}, \code{marker}, \code{prob}, \code{sd_across_draws},
