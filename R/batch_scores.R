@@ -192,20 +192,14 @@ sw_batch_scores <- function(
   if (is.null(grp)) {
     out <- .sw_batch_scores_core(drawn, files, batch, markers, order)
   } else {
-    per_group <- lapply(unique(grp), function(g) {
-      keep <- files[grp == g]
-      if (length(unique(batch[files %in% keep])) < 2) {
-        return(NULL)
-      }
-      .sw_batch_scores_core(
-        drawn[keep],
-        keep,
-        batch[files %in% keep],
-        markers,
-        order
-      )
-    })
-    per_group <- dplyr::bind_rows(per_group)
+    per_group <- .sw_batch_scores_groups(
+      drawn,
+      files,
+      batch,
+      markers,
+      order,
+      grp
+    )
     if (nrow(per_group) == 0) {
       stop(
         "No reference group has files from at least two batches.",
@@ -229,6 +223,30 @@ sw_batch_scores <- function(
   }
   class(out) <- c("sw_batch_scores", class(out))
   out
+}
+
+# Scores within each reference group (only that group's files, across batches),
+# one row per group, check, marker and batch, with the group in column `group`.
+# A group with files from fewer than two batches is skipped. This is the shared
+# internal that keeps the per-group rows; sw_batch_scores() takes the median over
+# groups and the reference checks (sw_ref_consistency()) keep the rows as they are.
+.sw_batch_scores_groups <- function(drawn, files, batch, markers, order, grp) {
+  per_group <- lapply(unique(grp), function(g) {
+    keep <- files[grp == g]
+    if (length(unique(batch[files %in% keep])) < 2) {
+      return(NULL)
+    }
+    res <- .sw_batch_scores_core(
+      drawn[keep],
+      keep,
+      batch[files %in% keep],
+      markers,
+      order
+    )
+    res$group <- g
+    res
+  })
+  dplyr::bind_rows(per_group)
 }
 
 # Scores for one set of files. `drawn` is a named list of event matrices in the
