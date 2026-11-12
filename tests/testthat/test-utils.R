@@ -403,7 +403,7 @@ test_that("sw_io_subsample is seed reproducible and restores the RNG", {
   expect_false(identical(ids(a), ids(d)))
 })
 
-test_that("sw_io_subsample seed = NULL skips seeding", {
+test_that("sw_io_subsample seed = NULL uses and advances the caller's RNG stream", {
   skip_if_not_installed("flowCore")
   mat <- matrix(
     rnorm(300),
@@ -411,14 +411,38 @@ test_that("sw_io_subsample seed = NULL skips seeding", {
     dimnames = list(NULL, c("CD3", "CD4", "CD8"))
   )
   ff <- flowCore::flowFrame(mat)
+  ids <- function(x) flowCore::exprs(x)[, "Original_ID"]
   set.seed(1)
+  before <- get(".Random.seed", envir = .GlobalEnv)
   a <- sw_io_subsample(ff, 50, setup = "forceNEvent", seed = NULL)
+  after <- get(".Random.seed", envir = .GlobalEnv)
+  # same caller stream gives the same draw; a fixed seed = 1 draw is the same
+  # only if the code seeded itself, so it must differ from the stream draw
   set.seed(1)
   b <- sw_io_subsample(ff, 50, setup = "forceNEvent", seed = NULL)
-  expect_identical(
-    flowCore::exprs(a)[, "Original_ID"],
-    flowCore::exprs(b)[, "Original_ID"]
+  fixed <- sw_io_subsample(ff, 50, setup = "forceNEvent", seed = 99)
+  expect_false(identical(before, after))
+  expect_identical(ids(a), ids(b))
+  expect_false(identical(ids(a), ids(fixed)))
+  # a second call continues the stream, so it differs from the first
+  c2 <- sw_io_subsample(ff, 50, setup = "forceNEvent", seed = NULL)
+  expect_false(identical(ids(b), ids(c2)))
+})
+
+test_that("sw_io_subsample removes .Random.seed again when none existed", {
+  skip_if_not_installed("flowCore")
+  mat <- matrix(
+    rnorm(300),
+    ncol = 3,
+    dimnames = list(NULL, c("CD3", "CD4", "CD8"))
   )
+  ff <- flowCore::flowFrame(mat)
+  set.seed(5)
+  saved <- get(".Random.seed", envir = .GlobalEnv)
+  on.exit(assign(".Random.seed", saved, envir = .GlobalEnv), add = TRUE)
+  rm(".Random.seed", envir = .GlobalEnv)
+  sw_io_subsample(ff, 50, setup = "forceNEvent", seed = 3)
+  expect_false(exists(".Random.seed", envir = .GlobalEnv))
 })
 
 # =========================================================================
