@@ -57,6 +57,7 @@ Where an extension is already outside AutoSpectral's scope (batch detection, bat
 | A4 | Control IQR flags (clean rewrite). Thresholds, multiplier, minimum cells and quantile type are required arguments. | `sw_flag_iqr()` in `R/batch_flag.R` | **done**, 54 expectations pass. Open: the fence has no minimum effect size, so it flags noise when batches agree (one seeded run: 5 of 32 flagged). Add a required `min_effect` argument before use. Frozen: no new work until a real multi-batch dataset exists. |
 | A5 | EMD and cluster-based flags | reuse `sw_correct_emd()` and `sw_cluster_run()` | **planned**, no new metric code Frozen: no new work until a real multi-batch dataset exists. |
 | A6 | Drift and composition detectors from batchdx | `sw_flag_drift()`, `sw_flag_composition()` | **planned** Frozen: no new work until a real multi-batch dataset exists. |
+| A7 | Joint batch distance and neighbour mixing: debiased Sinkhorn divergence between batches (pairwise or batch against the rest), LISI and kBET rejection rate, overall, per batch and per population. Written from the definitions (Glehr 2026; Korsunsky 2019; Buttner 2019); no GPL code opened. No pass or fail. | `sw_batch_otd()` in `R/batch_otd.R`, `sw_batch_mixing()` in `R/batch_mixing.R` | **done**, 60 expectations pass with `test-otd.R` (`tests/testthat/test-batch_otd.R`, `test-batch_mixing.R`). Open: not yet stacked in `sw_diagnose()`; `alpha` and `min_events` were added as required arguments beyond the plan. |
 
 ## Track B: unmixing and study calibration (AutoSpectral bundle)
 
@@ -184,6 +185,8 @@ Each item below changes a result, so none has a package default.
 | IQR multiplier; positivity thresholds; minimum cells per control side | `sw_flag_iqr()` | CytoBatchFlagR describes 1.5; batchdx adds 100 cells; thresholds are analyst-set |
 | Candidate grid, criterion limits and scales, near-best tolerance, event minima | `sw_study_*()` | Bundle examples are synthetic and illustrative only |
 | Audit mode and risk limit; number of independent blocks | `sw_study_audit()` | Bundle demo: 24 blocks |
+| `n_events`, `blur`, `seed`, `max_iter`, `tol`, `mode` | `sw_batch_otd()` | Glehr et al. 2026 used blur 0.75 on arcsinh data; the rest is analyst-set |
+| `k`, `perplexity`, `alpha`, `n_events`, `seed`, `min_events` | `sw_batch_mixing()` | Korsunsky 2019 ties k to 3 times the perplexity; kBET level is analyst-set; all uncalibrated |
 | Reference-shift options: anchor batch, minimum cells per reference summary | `sw_corrector_fit()` | cyTether scaffold: `min_cells = 3` |
 | Seeds and replicate counts for benchmarks | C5, C6 | Bundle: at least 100 seeds for publication-scale claims |
 | Origin of the batch-count floor | `sw_design_audit()` | Required string; stored in the result |
