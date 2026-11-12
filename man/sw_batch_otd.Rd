@@ -45,8 +45,9 @@ from its files (\code{floor(n_events / n_files)} per file), so a file with many
 events does not outweigh the others. Files are the replicates, not cells.
 In \code{"rest"} mode the other batches each give `floor(n_events / (n_batches
 \itemize{
-\item 1))` events from their own draw. A file with fewer events than its share
-is an error.
+\item 1))\verb{ events, again in equal shares per file (}floor(floor(n_events / (n_batches - 1)) / n_files)` from each file's
+draw), so no file is left out of the pooled set. A file with fewer events
+than its share is an error.
 }
 
 \strong{Scale is yours.} \code{data} must already be on the analysis scale (for

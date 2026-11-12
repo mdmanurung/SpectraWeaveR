@@ -63,6 +63,8 @@
 #' @param population `NULL` (one unit with all events), or a named list with
 #'   one character vector per file, giving each event's population (length
 #'   `nrow()` of that file). Mixing is then measured inside each population.
+#'   Drawn events with an `NA` label are left out with a warning that gives
+#'   their number; all-`NA` labels are an error.
 #'
 #' @return A tibble of class `sw_batch_mixing` with columns `check`
 #'   (`lisi_batch` or `kbet_rejection`), `population` (`NA` without
@@ -180,6 +182,18 @@ sw_batch_mixing <- function(
   batch_all <- rep(batch, each = n_events)
   pop_all <- unlist(lapply(drawn, `[[`, "pop"), use.names = FALSE)
 
+  if (!is.null(population) && anyNA(pop_all)) {
+    if (all(is.na(pop_all))) {
+      stop("Every drawn event has an NA `population` label.", call. = FALSE)
+    }
+    warning(
+      sum(is.na(pop_all)),
+      " of ",
+      length(pop_all),
+      " drawn events have an NA `population` label and are left out.",
+      call. = FALSE
+    )
+  }
   units <- if (is.null(population)) {
     NA_character_
   } else {

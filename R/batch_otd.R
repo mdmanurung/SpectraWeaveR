@@ -17,8 +17,10 @@
 #' from its files (`floor(n_events / n_files)` per file), so a file with many
 #' events does not outweigh the others. Files are the replicates, not cells.
 #' In `"rest"` mode the other batches each give `floor(n_events / (n_batches
-#' - 1))` events from their own draw. A file with fewer events than its share
-#' is an error.
+#' - 1))` events, again in equal shares per file
+#' (`floor(floor(n_events / (n_batches - 1)) / n_files)` from each file's
+#' draw), so no file is left out of the pooled set. A file with fewer events
+#' than its share is an error.
 #'
 #' **Scale is yours.** `data` must already be on the analysis scale (for
 #' example arcsinh); `blur` is in those units. There is no pass or fail and no
@@ -112,15 +114,18 @@ sw_batch_otd <- function(
       call. = FALSE
     )
   }
-  if (mode == "rest" && n_events < length(batches) - 1) {
+  if (
+    mode == "rest" &&
+      floor(n_events / (length(batches) - 1)) < max(n_files)
+  ) {
     stop(
-      "`n_events` must be at least the number of batches minus one.",
+      "`n_events` / (batches - 1) must be at least the number of files in the largest batch.",
       call. = FALSE
     )
   }
 
   # Draw each batch in equal shares per file, in sorted batch order.
-  draws <- .sw_with_seed(seed, {
+  blocks <- .sw_with_seed(seed, {
     lapply(batches, \(b) {
       fs <- files[batch == b]
       per_file <- floor(n_events / length(fs))
@@ -138,10 +143,11 @@ sw_batch_otd <- function(
         }
         m[sample.int(nrow(m), per_file), , drop = FALSE]
       })
-      do.call(rbind, parts)
+      parts
     })
   })
-  names(draws) <- batches
+  names(blocks) <- batches
+  draws <- lapply(blocks, \(parts) do.call(rbind, parts))
 
   solve_pair <- \(x, y) {
     s <- sw_sinkhorn_divergence(
@@ -168,15 +174,20 @@ sw_batch_otd <- function(
     })
   } else {
     per_other <- floor(n_events / (length(batches) - 1))
-    rows <- lapply(batches, \(b) {
-      others <- setdiff(batches, b)
-      # Each draw is already a random sample, so its first rows are random too.
-      rest <- do.call(
-        rbind,
-        lapply(others, \(o) {
-          draws[[o]][seq_len(min(per_other, nrow(draws[[o]]))), , drop = FALSE]
+    # Rest set of b: an equal random share from every file block of each other
+    # batch, so no file is left out because of its position in the draw.
+    rests <- .sw_with_seed(seed, {
+      lapply(batches, \(b) {
+        shares <- lapply(blocks[setdiff(batches, b)], \(parts) {
+          share <- floor(per_other / length(parts))
+          lapply(parts, \(m) m[sample.int(nrow(m), share), , drop = FALSE])
         })
-      )
+        do.call(rbind, unlist(shares, recursive = FALSE))
+      })
+    })
+    names(rests) <- batches
+    rows <- lapply(batches, \(b) {
+      rest <- rests[[b]]
       r <- solve_pair(draws[[b]], rest)
       tibble::tibble(
         mode = mode,

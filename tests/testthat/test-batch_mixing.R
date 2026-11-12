@@ -138,3 +138,45 @@ test_that("missing required arguments and bad values stop", {
     "population"
   )
 })
+
+test_that("the perplexity kernel reaches the requested perplexity", {
+  set.seed(2)
+  d2 <- matrix(stats::rexp(200 * 40, rate = 0.3), nrow = 200)
+  p <- .sw_perplexity_weights(d2, 12)
+  expect_equal(rowSums(p), rep(1, 200), tolerance = 1e-8)
+  ent <- -rowSums(p * log(p))
+  expect_equal(exp(ent), rep(12, 200), tolerance = 0.01)
+})
+
+test_that("unequal batch sizes keep kBET rejection near alpha when mixed", {
+  d <- make_mix_files(n_batches = 2, per_batch = 1)
+  # Add two more files to b2 so it holds three times the events of b1.
+  extra <- make_mix_files(n_batches = 1, per_batch = 2, seed = 77)
+  names(extra$files) <- c("g1", "g2")
+  d$files <- c(d$files, extra$files)
+  d$batch <- c(d$batch, stats::setNames(c("b2", "b2"), c("g1", "g2")))
+  res <- do.call(sw_batch_mixing, mix_args(d))
+  expect_lt(value_of(res, "kbet_rejection"), 0.2)
+  per_batch <- res[
+    res[["check"]] == "kbet_rejection" & !is.na(res[["batch"]]),
+  ]
+  expect_true(all(per_batch[["value"]] < 0.25))
+  expect_equal(per_batch[["n_events"]], c(200, 600))
+})
+
+test_that("NA population labels warn with a count, and all-NA stops", {
+  d <- make_mix_files(n_batches = 2, per_batch = 2)
+  pop <- lapply(d$files, \(m) rep(c("p", NA), length.out = nrow(m)))
+  expect_warning(
+    do.call(
+      sw_batch_mixing,
+      mix_args(d, population = pop, k = 30, perplexity = 10)
+    ),
+    "NA `population`"
+  )
+  all_na <- lapply(d$files, \(m) rep(NA_character_, nrow(m)))
+  expect_error(
+    do.call(sw_batch_mixing, mix_args(d, population = all_na)),
+    "NA `population`"
+  )
+})

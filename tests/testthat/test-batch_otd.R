@@ -87,3 +87,35 @@ test_that("missing required arguments and bad values stop", {
   a[["batch"]] <- rep("b1", 6) |> stats::setNames(names(d$files))
   expect_error(do.call(sw_batch_otd, a), "two batches")
 })
+
+test_that("rest scores do not depend on which file of a batch is shifted", {
+  # b1 holds one shifted and one unshifted file; the order of the two must not
+  # change what the other batches see in their rest set.
+  mk <- function(shifted_first) {
+    d <- make_otd_files(shift_b3 = c(0, 0))
+    s <- c(6, 0)
+    target <- if (shifted_first) "f1" else "f2"
+    d$files[[target]] <- sweep(d$files[[target]], 2, s, "+")
+    d
+  }
+  r1 <- do.call(sw_batch_otd, otd_args(mk(TRUE), "rest"))
+  r2 <- do.call(sw_batch_otd, otd_args(mk(FALSE), "rest"))
+  other1 <- r1[["otd"]][r1[["batch"]] %in% c("b2", "b3")]
+  other2 <- r2[["otd"]][r2[["batch"]] %in% c("b2", "b3")]
+  # The shifted file enters every other batch's rest set either way.
+  expect_gt(min(other1), 1)
+  expect_gt(min(other2), 1)
+  expect_equal(other1, other2, tolerance = 0.35)
+})
+
+test_that("n_files and n_events report uneven batches", {
+  d <- make_otd_files()
+  d$batch[["f6"]] <- "b2"
+  res <- do.call(sw_batch_otd, otd_args(d, "rest"))
+  expect_equal(res[["n_files"]][res[["batch"]] == "b2"], 3L)
+  expect_equal(res[["n_files"]][res[["batch"]] == "b3"], 1L)
+  # b2: 3 files x floor(120 / 3) = 120 events; rest of b2: 60 from each of b1
+  # (2 files x 30) and b3 (1 file x 60).
+  expect_equal(res[["n_events"]][res[["batch"]] == "b2"], "120 ~ 120")
+  expect_equal(res[["n_events"]][res[["batch"]] == "b1"], "120 ~ 120")
+})

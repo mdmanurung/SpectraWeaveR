@@ -40,7 +40,9 @@ count of the LISI kernel (uncalibrated).}
 
 \item{population}{\code{NULL} (one unit with all events), or a named list with
 one character vector per file, giving each event's population (length
-\code{nrow()} of that file). Mixing is then measured inside each population.}
+\code{nrow()} of that file). Mixing is then measured inside each population.
+Drawn events with an \code{NA} label are left out with a warning that gives
+their number; all-\code{NA} labels are an error.}
 }
 \value{
 A tibble of class \code{sw_batch_mixing} with columns \code{check}
