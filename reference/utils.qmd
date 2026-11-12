@@ -256,8 +256,8 @@ Aggregate and subsample multiple flow frames.
 sw_io_subsample(
   fs,
   n_total_events,
-  setup = c("forceNEvent", "forceBalance"),
-  seed = NULL,
+  setup,
+  seed,
   channels = NULL,
   keep_order = FALSE
 )
@@ -269,8 +269,8 @@ sw_io_subsample(
 |----------|-------------|
 | `fs` | A `flowSet`. |
 | `n_total_events` | Target total number of events. |
-| `setup` | Sampling strategy: `"forceNEvent"` (forced total count) or `"forceBalance"` (equal events per file). |
-| `seed` | Optional random seed for reproducibility. |
+| `setup` | Required, no default (uncalibrated). `"forceNEvent"` (forced total count) or `"forceBalance"` (equal events per file). |
+| `seed` | Required, no default (uncalibrated). Integer seed; `NULL` means do not seed. The caller's RNG state is restored. |
 | `channels` | Optional character vector of channels to include. |
 | `keep_order` | Logical; whether to preserve event order within files. |
 

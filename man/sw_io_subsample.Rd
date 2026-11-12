@@ -7,8 +7,8 @@
 sw_io_subsample(
   fs,
   n_total_events,
-  setup = c("forceNEvent", "forceBalance"),
-  seed = NULL,
+  setup,
+  seed,
   channels = NULL,
   keep_order = FALSE
 )
@@ -17,14 +17,19 @@ sw_io_subsample(
 \item{fs}{A \code{flowCore::flowSet} or \code{flowCore::flowFrame}
 (auto-wrapped).}
 
-\item{n_total_events}{Integer; target total number of events.}
+\item{n_total_events}{Integer; required target total number of events
+(uncalibrated).}
 
-\item{setup}{Character; strategy for distributing events.
-\code{"forceNEvent"} (default) tries to reach exactly
-\code{n_total_events}; \code{"forceBalance"} uses the minimum per-file
-count, yielding balanced but potentially fewer events.}
+\item{setup}{Character; required, no default (uncalibrated; the choice
+changes which events and how many are kept). \code{"forceNEvent"} tries
+to reach exactly \code{n_total_events}; \code{"forceBalance"} uses the
+minimum per-file count, yielding balanced but potentially fewer events.}
 
-\item{seed}{Integer; seed for reproducibility. Default: \code{NULL}.}
+\item{seed}{Integer seed, required, no default (uncalibrated; the choice
+changes which events are drawn). \code{NULL} is an explicit "do not
+seed" and leaves the caller's RNG stream in use. A numeric seed is
+applied for the call and the caller's \code{.Random.seed} is restored
+on exit.}
 
 \item{channels}{Character vector of channels to keep. Default: \code{NULL}
 (all channels from the first file).}
