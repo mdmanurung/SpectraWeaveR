@@ -1108,7 +1108,9 @@ sw_pipeline_step_qc <- function(...,
 #' Convenience constructor for a \code{ProcessingStep} that wraps
 #' \code{\link{sw_correct_run}}. Defaults: tibble/data.frame in and out.
 #'
-#' @param ... Additional arguments passed to \code{sw_correct_run}.
+#' @param ... Additional arguments passed to \code{sw_correct_run}. Include
+#'   \code{design_audit} (required there; \code{NULL} is an explicit skip),
+#'   or the step stops when it runs.
 #' @param input_type Character vector overriding the default input port type.
 #' @param output_type Character vector overriding the default output port type.
 #'

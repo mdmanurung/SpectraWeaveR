@@ -459,8 +459,10 @@ test_that("sw_correct_run runs end-to-end with cyCombine", {
   )
 
   corrected <- sw_correct_run(uncorrected, markers = c("CD3", "CD4"),
-                                xdim = 4, ydim = 4, rlen = 5, seed = 42)
+                                xdim = 4, ydim = 4, rlen = 5, seed = 42,
+                                design_audit = NULL)
 
+  expect_identical(attr(corrected, "design_audit_check")$status, "skipped")
   expect_s3_class(corrected, "tbl_df")
   expect_true(all(c("CD3", "CD4") %in% names(corrected)))
   expect_equal(nrow(corrected), 2 * n)
@@ -593,4 +595,140 @@ test_that("no package function uses the magrittr pipe, which the namespace does 
     logical(1)
   )
   expect_identical(names(uses_magrittr_pipe)[uses_magrittr_pipe], character(0))
+})
+
+# ===========================================================================
+# Design-audit gate (A3)
+# ===========================================================================
+
+make_gate_audit <- function(batches) {
+  samples <- data.frame(
+    sample_id = paste0("s", seq_along(batches)),
+    batch = batches,
+    condition = rep(c("ctrl", "case"), length.out = length(batches)),
+    reference_role = "none",
+    reference_id = NA_character_
+  )
+  sw_design_audit(
+    samples,
+    minimum_batches = 1,
+    minimum_batches_origin = "test fixture",
+    require_shared_reference = FALSE,
+    protected = "condition"
+  )
+}
+
+gate_df <- tibble::tibble(
+  CD3 = c(1, 2, 3, 4),
+  batch = c("B1", "B1", "B2", "B2"),
+  sample = c("S1", "S1", "S2", "S2")
+)
+
+test_that("sw_correct_run errors when design_audit is not given", {
+  skip_if_not_installed("cyCombine")
+  expect_error(
+    sw_correct_run(gate_df, markers = "CD3"),
+    "Required argument\\(s\\) with no default: 'design_audit'"
+  )
+})
+
+test_that("sw_correct_run stops on an ineligible audit and names the row", {
+  skip_if_not_installed("cyCombine")
+  audit <- make_gate_audit(c("B1", "B1", "B1", "B1"))
+  row <- audit$eligibility[audit$eligibility$name == "cycombine", ]
+  expect_false(row$eligible)
+  one_batch_df <- transform(gate_df, batch = "B1")
+  expect_error(
+    sw_correct_run(one_batch_df, markers = "CD3", design_audit = audit),
+    "Design audit row 'cycombine' \\(sw_correct_run\\) is ineligible"
+  )
+})
+
+test_that("the gate passes an eligible audit and records the row", {
+  audit <- make_gate_audit(c("b1", "b1", "b2", "b2", "b3", "b3"))
+  rec <- .sw_gate_design_audit(audit, method = "cycombine", batches = c("b1", "b2", "b3"))
+  expect_identical(rec$status, "checked")
+  expect_identical(rec$row$name, "cycombine")
+  expect_true(rec$row$eligible)
+})
+
+test_that("the gate records NULL as an explicit skip", {
+  rec <- .sw_gate_design_audit(NULL, method = "cycombine", batches = "B1")
+  expect_identical(rec$status, "skipped")
+  expect_null(rec$row)
+})
+
+test_that("the gate rejects a non-audit object and an unknown method", {
+  expect_error(
+    .sw_gate_design_audit(list(), method = "cycombine", batches = "B1"),
+    "sw_design_audit object or NULL"
+  )
+  audit <- make_gate_audit(c("b1", "b1", "b2", "b2"))
+  expect_error(
+    .sw_gate_design_audit(audit, method = "nope", batches = c("b1", "b2")),
+    "no eligibility row named 'nope'"
+  )
+})
+
+test_that("the gate stops when the audit describes other batches than the data", {
+  audit <- make_gate_audit(c("b1", "b1", "b2", "b2", "b3", "b3"))
+  expect_error(
+    .sw_gate_design_audit(audit, method = "cycombine", batches = c("x1", "x2")),
+    "describes other batches than the data"
+  )
+})
+
+test_that("the gate stops when covar is outside the audit's protected factors", {
+  audit <- make_gate_audit(c("b1", "b1", "b2", "b2", "b3", "b3"))
+  expect_error(
+    .sw_gate_design_audit(
+      audit,
+      method = "cycombine",
+      batches = c("b1", "b2", "b3"),
+      covar = "sex"
+    ),
+    "not among the audit's protected factors"
+  )
+  rec <- .sw_gate_design_audit(
+    audit,
+    method = "cycombine",
+    batches = c("b1", "b2", "b3"),
+    covar = "condition"
+  )
+  expect_identical(rec$status, "checked")
+})
+
+test_that("sw_correct_run with an eligible audit records a checked gate", {
+  skip_if_not_installed("cyCombine")
+  audit <- make_gate_audit(c("B1", "B1", "B2", "B2", "B3", "B3"))
+  set.seed(42)
+  n <- 60
+  uncorrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3), rnorm(n, mean = 2)),
+    CD4 = c(rnorm(n, mean = 2), rnorm(n, mean = 4), rnorm(n, mean = 3)),
+    batch = rep(c("B1", "B2", "B3"), each = n),
+    sample = rep(c("S1", "S2", "S3"), each = n)
+  )
+  corrected <- sw_correct_run(
+    uncorrected,
+    markers = c("CD3", "CD4"),
+    xdim = 3,
+    ydim = 3,
+    rlen = 3,
+    seed = 42,
+    design_audit = audit
+  )
+  rec <- attr(corrected, "design_audit_check")
+  expect_identical(rec$status, "checked")
+  expect_true(rec$row$eligible)
+
+  # an audit for other batches stops the run before correction
+  expect_error(
+    sw_correct_run(
+      uncorrected,
+      markers = c("CD3", "CD4"),
+      design_audit = make_gate_audit(c("a", "a", "b", "b", "c", "c"))
+    ),
+    "describes other batches than the data"
+  )
 })

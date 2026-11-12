@@ -416,7 +416,7 @@ names(ff_list) <- flowCore::sampleNames(fs)
 
 # Continue with the rest of the pipeline...
 # sw_qc_batch(ff_list, ...)
-# sw_correct_run(...)
+# sw_correct_run(..., design_audit = NULL)
 # sw_cluster_run(...)
 ```
 
@@ -435,7 +435,8 @@ results <- sw_pipeline_run_all(
   unstained_fcs   = file.path(base_dir, "Raw", "Set1", "Unstained",
                               "D1 Spleen_Set1.fcs"),
   cytometer       = "aurora",
-  unmix_method    = "AutoSpectral"
+  unmix_method    = "AutoSpectral",
+  design_audit    = NULL # explicit skip; pass sw_design_audit() output to gate
 )
 ```
 

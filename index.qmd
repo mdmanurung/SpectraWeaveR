@@ -47,7 +47,8 @@ results <- sw_pipeline_run_all(
   lineage_markers = lineage_markers,
   cofactor        = 6000,
   n_metaclusters  = 20,
-  seed            = 42
+  seed            = 42,
+  design_audit    = NULL # explicit skip; pass an sw_design_audit() to gate
 )
 
 # Access results
@@ -78,7 +79,10 @@ ff_clean <- qc_results$cleaned
 uncorrected <- sw_correct_prepare(
   ff_clean, sample_meta, markers, cofactor = 6000
 )
-corrected <- sw_correct_run(uncorrected, markers, covar = "condition")
+corrected <- sw_correct_run(
+  uncorrected, markers, covar = "condition",
+  design_audit = NULL # explicit skip; pass an sw_design_audit() to gate
+)
 
 # 5. Clustering
 result <- sw_cluster_run(corrected, lineage_markers, n_metaclusters = 20)

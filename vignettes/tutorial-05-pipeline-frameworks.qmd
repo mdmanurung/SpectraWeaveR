@@ -79,7 +79,8 @@ result <- sw_pipeline_run_all(
   lineage_markers = c("CD3", "CD4", "CD8"),
   gating_template = NULL,
   output_dir = out_dir,
-  cofactor = 6000 # spectral flow cofactor, as in the other tutorials
+  cofactor = 6000, # spectral flow cofactor, as in the other tutorials
+  design_audit = NULL # no audit for the toy data; explicit skip
 )
 
 stopifnot(is.list(result))
@@ -329,7 +330,7 @@ step_correct <- sw_pipeline_step_correct_apply(
 stopifnot(step_correct@name == "correct_data")
 cat("sw_pipeline_step_correct_apply:", step_correct@name, "\n")
 
-step_bc <- sw_pipeline_step_correct(markers = c("CD3", "CD4"))
+step_bc <- sw_pipeline_step_correct(markers = c("CD3", "CD4"), design_audit = NULL)
 stopifnot(step_bc@name == "batch_correct")
 cat("sw_pipeline_step_correct:", step_bc@name, "\n")
 

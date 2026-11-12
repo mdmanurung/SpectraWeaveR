@@ -47,7 +47,7 @@ All-in-one batch correction.
 ```r
 sw_correct_run(uncorrected, markers, covar = NULL, label = NULL,
                  xdim = 8, ydim = 8, rlen = 10, norm_method = "scale",
-                 seed = 42, ...)
+                 seed = 42, design_audit, ...)
 ```
 
 #### Arguments
@@ -63,6 +63,7 @@ sw_correct_run(uncorrected, markers, covar = NULL, label = NULL,
 | `rlen` | SOM training length (default: 10). |
 | `norm_method` | Normalisation method (default: `"scale"`). |
 | `seed` | Random seed (default: 42). |
+| `design_audit` | Required, no default: an `sw_design_audit` object for the same samples, or `NULL` for an explicit skip. The audit must list the batches in `uncorrected`, `covar` must be among its `protected` factors, and its `cycombine` row must be eligible. |
 | `...` | Additional arguments passed to `cyCombine::batch_correct()`. |
 
 #### Details
@@ -72,7 +73,7 @@ Self-Organising Map, and applies ComBat-based batch correction.
 
 #### Value
 
-A `tibble` with batch-corrected marker values.
+A `tibble` with batch-corrected marker values. The attribute `design_audit_check` holds the gate record (`status` `"checked"` or `"skipped"`, `row`, `method`).
 
 ---
 

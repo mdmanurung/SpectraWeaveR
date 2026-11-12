@@ -458,6 +458,28 @@ test_that("sw_pipeline_step_correct creates valid step", {
   expect_equal(step@ARGS$markers, c("CD3", "CD4"))
 })
 
+test_that("sw_pipeline_step_correct passes design_audit = NULL through when run", {
+  skip_if_not_installed("S7")
+  skip_if_not_installed("cyCombine")
+  set.seed(42)
+  n <- 60
+  uncorrected <- tibble::tibble(
+    CD3 = c(rnorm(n, mean = 1), rnorm(n, mean = 3)),
+    CD4 = c(rnorm(n, mean = 2), rnorm(n, mean = 4)),
+    batch = rep(c("B1", "B2"), each = n),
+    sample = rep(c("S1", "S2"), each = n)
+  )
+  step <- sw_pipeline_step_correct(
+    markers = c("CD3", "CD4"),
+    xdim = 3,
+    ydim = 3,
+    rlen = 3,
+    design_audit = NULL
+  )
+  out <- suppressMessages(sw_pipeline_step_run(step, uncorrected))
+  expect_identical(attr(out, "design_audit_check")$status, "skipped")
+})
+
 test_that("sw_pipeline_step_cluster creates valid step", {
   skip_if_not_installed("S7")
   step <- sw_pipeline_step_cluster(n_metaclusters = 25)

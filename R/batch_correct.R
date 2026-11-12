@@ -202,9 +202,19 @@ sw_correct_prepare <- function(ff_list, sample_meta, markers,
 #'   (default: \code{"scale"}).  One of \code{"scale"}, \code{"rank"},
 #'   \code{"none"}.
 #' @param seed Integer; random seed for reproducibility (default: 42).
+#' @param design_audit Required, no default: an \code{sw_design_audit} object
+#'   from \code{\link{sw_design_audit}} for the same samples, or \code{NULL}
+#'   to skip the check explicitly. The audit decides whether correction is
+#'   allowed, so it is uncalibrated against any data of yours. When given, the
+#'   \code{cycombine} row of \code{audit$eligibility} must be eligible;
+#'   otherwise the call stops and names that row. \code{NULL} runs no check
+#'   and the skip is recorded in the result.
 #' @param ... Additional arguments passed to \code{cyCombine::batch_correct()}.
 #'
-#' @return A \code{tibble} with batch-corrected marker values.
+#' @return A \code{tibble} with batch-corrected marker values. The attribute
+#'   \code{"design_audit_check"} holds the gate record: a list with
+#'   \code{status} (\code{"checked"} or \code{"skipped"}), \code{row} (the
+#'   audit row, or \code{NULL} when skipped) and \code{method}.
 #'
 #' @examples
 #' \dontrun{
@@ -214,7 +224,11 @@ sw_correct_prepare <- function(ff_list, sample_meta, markers,
 #'   batch = rep(c("B1", "B2"), each = 100),
 #'   sample = rep(c("S1", "S2"), each = 100)
 #' )
-#' corrected <- sw_correct_run(uncorrected, markers = c("CD3", "CD4"))
+#' corrected <- sw_correct_run(
+#'   uncorrected,
+#'   markers = c("CD3", "CD4"),
+#'   design_audit = NULL # explicit skip; pass an sw_design_audit() to gate
+#' )
 #' }
 #'
 #' @export
@@ -222,9 +236,16 @@ sw_correct_run <- function(uncorrected, markers, covar = NULL,
                              label = NULL,
                              xdim = 8, ydim = 8, rlen = 10,
                              norm_method = "scale",
-                             seed = 42, ...) {
+                             seed = 42, design_audit, ...) {
   .check_cycombine()
   .validate_batch_df(uncorrected, markers, arg_name = "uncorrected")
+  .sw_stop_missing(c(design_audit = missing(design_audit)))
+  gate_record <- .sw_gate_design_audit(
+    design_audit,
+    method = "cycombine",
+    batches = uncorrected[["batch"]],
+    covar = covar
+  )
 
   set.seed(seed)
 
@@ -248,7 +269,69 @@ sw_correct_run <- function(uncorrected, markers, covar = NULL,
   )
 
   message("Batch correction complete")
+  attr(corrected, "design_audit_check") <- gate_record
   corrected
+}
+
+# Design-audit gate shared by sw_correct_run() and sw_pipeline_run_all().
+# NULL is an explicit skip and is recorded. An audit must hold an eligible row
+# for `method`; an ineligible row stops the run and the message names it. The
+# audit must also describe the data: its batches must equal `batches` and
+# `covar` must lie within its protected factors.
+.sw_gate_design_audit <- function(design_audit, method, batches, covar = NULL) {
+  if (is.null(design_audit)) {
+    return(list(status = "skipped", row = NULL, method = method))
+  }
+  if (!inherits(design_audit, "sw_design_audit")) {
+    stop(
+      "'design_audit' must be an sw_design_audit object or NULL (explicit skip).",
+      call. = FALSE
+    )
+  }
+  audit_batches <- as.character(design_audit[["batches"]])
+  data_batches <- unique(as.character(batches))
+  if (!setequal(audit_batches, data_batches)) {
+    stop(
+      sprintf(
+        "The design audit describes other batches than the data. Audit: %s. Data: %s.",
+        paste(sort(audit_batches), collapse = ", "),
+        paste(sort(data_batches), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  extra_covar <- setdiff(covar, design_audit[["protected"]])
+  if (length(extra_covar) > 0) {
+    stop(
+      sprintf(
+        "'covar' %s is not among the audit's protected factors (%s).",
+        paste(extra_covar, collapse = ", "),
+        paste(design_audit[["protected"]], collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  rows <- design_audit[["eligibility"]]
+  row <- rows[rows[["name"]] == method, , drop = FALSE]
+  if (nrow(row) != 1) {
+    stop(
+      sprintf(
+        "The design audit has no eligibility row named '%s'; it cannot gate this method.",
+        method
+      ),
+      call. = FALSE
+    )
+  }
+  if (!isTRUE(row[["eligible"]])) {
+    stop(
+      sprintf(
+        "Design audit row '%s' (%s) is ineligible [%s]: %s",
+        row[["name"]], row[["sw_function"]], row[["reason_code"]], row[["reason"]]
+      ),
+      call. = FALSE
+    )
+  }
+  list(status = "checked", row = row, method = method)
 }
 
 #' Evaluate Batch Correction Quality
