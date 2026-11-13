@@ -119,9 +119,30 @@
 #'   allowed together with a non-`NULL` `reference_group`. Every channel must
 #'   be in the reference. A scale of 0 gives `NA`.
 #'
+#' @param summary `NULL` (skip, output unchanged), or a list with three
+#'   entries, all required: `probs` (numeric vector in [0, 1], the quantiles),
+#'   `min_events` (single number of at least 1, the fewest finite values a
+#'   channel needs) and `stat` (`"median"` or `"mean"`). For each file and
+#'   channel it adds the checks `summary_n` (events in the file),
+#'   `summary_nonfinite` (count of `NA`, `NaN` or `Inf`), `summary_median` or
+#'   `summary_mean` (as `stat` says) and `summary_q<prob>` for each of
+#'   `probs`, all on finite values as given. A channel with fewer than
+#'   `min_events` finite values gets `NA` location and quantile rows with
+#'   `detail` starting `not_assessed:` and the reason; counts are still given.
+#'   No file or channel is dropped. The result then also carries the
+#'   attribute `provenance` (the shared import keys: package and flowCore
+#'   versions, R version, platform, time, `seed` `NA` because nothing is
+#'   random, session summary and `args`, then the `summary` list).
+#'   With `summary = NULL` the result has no `provenance` attribute, so the
+#'   output stays as it was before `summary` existed. `probs` must not repeat.
+#'
 #' @return A tibble of class `sw_fcs_signal_audit` with columns `file`,
-#'   `check`, `channel` (`NA` for file-level checks), `value` and `detail`
-#'   (text; the channel pair for `corr_shift`, else `NA`).
+#'   `check`, `channel` (`NA` for file-level checks), `value`, `detail` and
+#'   `reason`. `detail` is text: the channel pair for `corr_shift`, the
+#'   `not_assessed` reason for thin `summary_*` rows, else `NA`. `reason` is
+#'   that `not_assessed` text without its prefix, else `NA`. With a `summary`
+#'   list it carries the
+#'   attribute `provenance`; with `summary = NULL` it does not.
 #'
 #' @seealso [sw_anomaly_features()], [sw_fcs_header_audit()]
 #'
@@ -136,7 +157,17 @@
 #'   channels = c("A", "B"),
 #'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
 #'   area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
-#'   reference = NULL
+#'   reference = NULL, summary = NULL
+#' )
+#'
+#' # Per file and channel counts, median and quartiles
+#' sw_fcs_signal_audit(
+#'   files,
+#'   channels = c("A", "B"),
+#'   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
+#'   area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
+#'   reference = NULL,
+#'   summary = list(probs = c(0.25, 0.75), min_events = 50, stat = "median")
 #' )
 #'
 #' @export
@@ -150,7 +181,8 @@ sw_fcs_signal_audit <- function(
   area_height,
   area_height_quantile,
   reference_group,
-  reference
+  reference,
+  summary
 ) {
   .sw_stop_missing(c(
     data = missing(data),
@@ -162,8 +194,10 @@ sw_fcs_signal_audit <- function(
     area_height = missing(area_height),
     area_height_quantile = missing(area_height_quantile),
     reference_group = missing(reference_group),
-    reference = missing(reference)
+    reference = missing(reference),
+    summary = missing(summary)
   ))
+  summary <- .sw_check_audit_summary(summary)
   if (!is.null(reference)) {
     if (!is.null(reference_group)) {
       stop(
@@ -420,9 +454,13 @@ sw_fcs_signal_audit <- function(
   }
 
   # Channel-pair Spearman correlation against the cohort median per pair.
+  # A file with fewer than 2 events has no correlation: all pairs are NA.
   cors <- lapply(mats, function(m) {
+    if (nrow(m) < 2) {
+      return(matrix(NA_real_, length(channels), length(channels)))
+    }
     suppressWarnings(stats::cor(
-      m[, channels],
+      m[, channels, drop = FALSE],
       method = "spearman",
       use = "pairwise.complete.obs"
     ))
@@ -435,7 +473,13 @@ sw_fcs_signal_audit <- function(
   for (j in seq_along(files)) {
     d <- abs(pair_vals[, j] - center)
     if (all(is.na(d))) {
-      add(files[j], "corr_shift", NA_character_, NA_real_)
+      add(
+        files[j],
+        "corr_shift",
+        NA_character_,
+        NA_real_,
+        sprintf("not_assessed: %d events in %s", nrow(mats[[j]]), files[j])
+      )
     } else {
       k <- which.max(d)
       add(files[j], "corr_shift", NA_character_, d[k], pair_name[k])
@@ -456,9 +500,130 @@ sw_fcs_signal_audit <- function(
     detail = NA_character_
   )
 
-  out <- dplyr::bind_rows(c(rows, list(pair_rows)))
+  out <- dplyr::bind_rows(c(
+    rows,
+    list(pair_rows),
+    if (!is.null(summary)) list(.sw_audit_summary_rows(mats, channels, summary))
+  ))
+  # One status per row, in the import-step vocabulary: a row with no value was
+  # not assessed; thin summary rows carry their own reason in `detail`.
+  out$status <- dplyr::if_else(is.na(out$value), "not_assessed", "assessed")
+  out$reason <- dplyr::case_when(
+    out$status == "assessed" ~ NA_character_,
+    startsWith(dplyr::coalesce(out$detail, ""), "not_assessed: ") ~
+      sub("^not_assessed: ", "", out$detail),
+    .default = "no value computed (too few files or events, or zero scale)"
+  )
   class(out) <- c("sw_fcs_signal_audit", class(out))
+  if (!is.null(summary)) {
+    attr(out, "provenance") <- .sw_sigsum_provenance(
+      args = list(
+        channels = channels,
+        range_max = range_max,
+        range_min = range_min,
+        time_channel = time_channel,
+        time_bin = time_bin,
+        area_height = area_height,
+        area_height_quantile = area_height_quantile,
+        reference_group = reference_group,
+        reference_given = !is.null(reference),
+        summary = summary
+      ),
+      summary = summary
+    )
+  }
   out
+}
+
+# NULL or list(probs, min_events, stat) -> the same list, checked.
+.sw_check_audit_summary <- function(summary) {
+  if (is.null(summary)) {
+    return(NULL)
+  }
+  if (
+    !is.list(summary) ||
+      !setequal(names(summary), c("probs", "min_events", "stat"))
+  ) {
+    stop(
+      "`summary` must be NULL or a list with `probs`, `min_events` and `stat`.",
+      call. = FALSE
+    )
+  }
+  p <- summary$probs
+  if (!is.numeric(p) || length(p) < 1 || anyNA(p) || any(p < 0 | p > 1)) {
+    stop("`summary$probs` must be numbers in [0, 1].", call. = FALSE)
+  }
+  if (anyDuplicated(p) > 0) {
+    stop("`summary$probs` must not repeat a value.", call. = FALSE)
+  }
+  m <- summary$min_events
+  if (!is.numeric(m) || length(m) != 1 || is.na(m) || m < 1) {
+    stop(
+      "`summary$min_events` must be one number of at least 1.",
+      call. = FALSE
+    )
+  }
+  if (
+    !is.character(summary$stat) ||
+      length(summary$stat) != 1 ||
+      !summary$stat %in% c("median", "mean")
+  ) {
+    stop("`summary$stat` must be \"median\" or \"mean\".", call. = FALSE)
+  }
+  summary
+}
+
+# Per file x channel: n, non-finite count, location and quantiles. Channels
+# with too few finite values keep their counts and get NA values with a reason.
+.sw_audit_summary_rows <- function(mats, channels, summary) {
+  loc <- paste0("summary_", summary$stat)
+  q_names <- paste0(
+    "summary_q",
+    vapply(summary$probs, format, character(1), digits = 15)
+  )
+  out <- list()
+  for (f in names(mats)) {
+    for (ch in channels) {
+      v <- mats[[f]][, ch]
+      vf <- v[is.finite(v)]
+      thin <- length(vf) < summary$min_events
+      why <- if (thin) {
+        sprintf(
+          "not_assessed: %d finite events, min_events is %s",
+          length(vf),
+          format(summary$min_events)
+        )
+      } else {
+        NA_character_
+      }
+      stats_v <- if (thin) {
+        rep(NA_real_, 1 + length(summary$probs))
+      } else {
+        c(
+          if (summary$stat == "median") stats::median(vf) else mean(vf),
+          unname(stats::quantile(vf, summary$probs, names = FALSE))
+        )
+      }
+      out[[length(out) + 1L]] <- tibble::tibble(
+        file = f,
+        check = c("summary_n", "summary_nonfinite", loc, q_names),
+        channel = ch,
+        value = c(length(v), sum(!is.finite(v)), stats_v),
+        detail = c(NA_character_, NA_character_, rep(why, 1 + length(q_names)))
+      )
+    }
+  }
+  dplyr::bind_rows(out)
+}
+
+# Provenance block: the shared import block (R/import_util.R), with the
+# summary settings as the extra key. No random numbers, so the seed slot is NA.
+.sw_sigsum_provenance <- function(args, summary) {
+  .sw_import_provenance(
+    args = args,
+    seed = NA_integer_,
+    extra = list(summary = summary)
+  )
 }
 
 # z against a frozen centre and scale; NA when the scale is 0 or NA.

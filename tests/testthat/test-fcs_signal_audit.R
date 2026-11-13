@@ -26,7 +26,8 @@ audit <- function(d, ...) {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_fcs_signal_audit, args)
@@ -50,7 +51,8 @@ test_that("required arguments have no default", {
       area_height = NULL,
       area_height_quantile = NULL,
       reference_group = NULL,
-      reference = NULL
+      reference = NULL,
+      summary = NULL
     ),
     "range_max"
   )
@@ -136,7 +138,8 @@ test_that("rate_cv counts events per bin, so thinning a window raises it", {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   counts <- c(3, 1, 0, 2)
   expect_equal(
@@ -212,7 +215,8 @@ test_that("area_height_z finds the file with more doublets", {
     area_height = c(`FSC-A` = "FSC-H"),
     area_height_quantile = 0.95,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   z <- au[au$check == "area_height_z", ]
   expect_equal(nrow(z), 10)
@@ -230,7 +234,8 @@ test_that("area_height_z finds the file with more doublets", {
       c(`FSC-A` = "FSC-H"),
       NULL,
       reference_group = NULL,
-      reference = NULL
+      reference = NULL,
+      summary = NULL
     ),
     "area_height_quantile"
   )
@@ -255,7 +260,8 @@ test_that("global_sd_z finds a file widened a little in every channel", {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   g <- au[au$check == "global_sd_z", ]
   expect_equal(nrow(g), 12)
@@ -285,7 +291,8 @@ test_that("median_z is (x - median) / (1.4826 * MAD) exactly; corr_pair_z has on
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   z <- au$value[au$check == "median_z" & au$channel == "A"]
   # Median of the file medians is 2 and their raw MAD is 1, so z = (m - 2) / 1.4826.
@@ -526,4 +533,38 @@ test_that("reference = NULL keeps the cohort z and is required", {
     ),
     "'reference'"
   )
+})
+
+test_that("every row has status and reason; thin summary rows are not_assessed", {
+  d <- make_sig(n_files = 3, n = 400)
+  d$f3 <- d$f3[1:3, ]
+  res <- audit(
+    d,
+    summary = list(probs = 0.5, min_events = 100, stat = "median")
+  )
+  expect_true(all(c("status", "reason") %in% names(res)))
+  expect_setequal(unique(res$status), c("assessed", "not_assessed"))
+  thin <- res[res$file == "f3" & res$check == "summary_median", ]
+  expect_equal(unique(thin$status), "not_assessed")
+  expect_match(unique(thin$reason), "3 finite events, min_events is 100")
+  # status follows value: an NA value is never "assessed", a number always is
+  expect_true(all(res$status[is.na(res$value)] == "not_assessed"))
+  expect_true(all(res$status[!is.na(res$value)] == "assessed"))
+  expect_true(all(is.na(res$reason[res$status == "assessed"])))
+  expect_false(anyNA(res$reason[res$status == "not_assessed"]))
+})
+
+test_that("a 1-event file gives not_assessed rows instead of stopping", {
+  d <- make_sig(n_files = 3, n = 400)
+  d$f3 <- d$f3[1, , drop = FALSE]
+  for (s in list(NULL, list(probs = 0.5, min_events = 100, stat = "median"))) {
+    res <- audit(d, summary = s)
+    cs <- res[res$file == "f3" & res$check == "corr_shift", ]
+    expect_true(is.na(cs$value))
+    expect_equal(cs$status, "not_assessed")
+    expect_match(cs$reason, "f3")
+    expect_true(all(is.na(res$value[
+      res$file == "f3" & res$check == "corr_pair_z"
+    ])))
+  }
 })

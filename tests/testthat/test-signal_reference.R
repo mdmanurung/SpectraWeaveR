@@ -25,7 +25,8 @@ audit_ref <- function(d, ref, ...) {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = ref
+    reference = ref,
+    summary = NULL
   )
   args[names(list(...))] <- list(...)
   do.call(sw_fcs_signal_audit, args)
@@ -155,7 +156,8 @@ test_that("reference with reference_group stops; missing channel stops", {
       NULL,
       NULL,
       NULL,
-      NULL
+      NULL,
+      summary = NULL
     ),
     "'reference'"
   )

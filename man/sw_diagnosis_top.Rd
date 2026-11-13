@@ -9,10 +9,14 @@ sw_diagnosis_top(diagnosis, n)
 \arguments{
 \item{diagnosis}{An \code{sw_diagnosis} result.}
 
-\item{n}{Whole number, rows kept per check.}
+\item{n}{Whole number, rows kept per check.
+
+Rows with no value (\code{NA}, a thin file or an unjudged check, reason in \code{text})
+are not ranked and not dropped: they follow the ranked rows with \code{rank} \code{NA}.}
 }
 \value{
-A tibble with the same columns as the diagnosis plus \code{rank}.
+A tibble with the same columns as the diagnosis plus \code{rank}. Rows
+with \code{NA} value come last, with \code{rank} \code{NA}.
 }
 \description{
 For each module and check, list the \code{n} subjects (files, batches or

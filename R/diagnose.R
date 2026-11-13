@@ -45,12 +45,18 @@
 #' **Modules are independent.** A fault one module misses may show in another.
 #' Run all of them when you can.
 #'
+#' **Import tables are report-only.** The tables from the import step
+#' (integrity, signatures, compensation, batch dates, dye map, bind) have no
+#' check, batch and value layout, so this function does not stack them. Read
+#' them from the import report.
+#'
 #' @param data A named list of per-file numeric matrices (event data on the
 #'   analysis scale), or `NULL` when only `header` is used.
 #' @param header `NULL` or a list with `paths`, `keywords`, `reference`.
 #' @param signal `NULL` or a list with `channels`, `range_max`, `range_min`,
 #'   `time_channel`, `time_bin`, `area_height`, `area_height_quantile`,
-#'   `reference_group`, `reference`.
+#'   `reference_group`, `reference`, `summary` (`NULL` or a list; see
+#'   [sw_fcs_signal_audit()]).
 #' @param anomaly `NULL` or a list with `channels`, `features`,
 #'   `quantile_step`, `n_events`, `seed`, `scale`, `aggregate_from`,
 #'   `agg_size`, `reference` (when needed), `reference_group`, `ntrees`,
@@ -109,7 +115,7 @@
 #'   signal = list(channels = chans, range_max = 6, range_min = NULL,
 #'                 time_channel = NULL, time_bin = NULL,
 #'                 area_height = NULL, area_height_quantile = NULL,
-#'                 reference_group = NULL, reference = NULL),
+#'                 reference_group = NULL, reference = NULL, summary = NULL),
 #'   anomaly = NULL,
 #'   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
 #'                reference_group = NULL),
@@ -590,7 +596,11 @@ sw_diagnose <- function(
 #' @param diagnosis An `sw_diagnosis` result.
 #' @param n Whole number, rows kept per check.
 #'
-#' @return A tibble with the same columns as the diagnosis plus `rank`.
+#' Rows with no value (`NA`, a thin file or an unjudged check, reason in `text`)
+#' are not ranked and not dropped: they follow the ranked rows with `rank` `NA`.
+#'
+#' @return A tibble with the same columns as the diagnosis plus `rank`. Rows
+#'   with `NA` value come last, with `rank` `NA`.
 #'
 #' @examples
 #' \dontrun{
@@ -606,6 +616,9 @@ sw_diagnosis_top <- function(diagnosis, n) {
     stop("`diagnosis` must come from sw_diagnose().", call. = FALSE)
   }
   .sw_check_count(n, "n")
+  # Rows with no value (not assessed, reason in `text`) are listed after the
+  # ranked rows with rank NA, never dropped.
+  not_assessed <- diagnosis[is.na(diagnosis$value), ]
   d <- diagnosis[!is.na(diagnosis$value), ]
   d$.key <- .sw_diag_key(d$check, d$value)
   # Group by module, check and item (NA item = file-level check).
@@ -619,5 +632,11 @@ sw_diagnosis_top <- function(diagnosis, n) {
   d$rank <- stats::ave(seq_len(nrow(d)), d$.group, FUN = seq_along)
   d <- d[d$rank <= n, ]
   d$.group <- NULL
-  tibble::as_tibble(d[setdiff(names(d), ".key")])
+  d <- tibble::as_tibble(d[setdiff(names(d), ".key")])
+  if (nrow(not_assessed) > 0) {
+    not_assessed <- tibble::as_tibble(not_assessed)
+    not_assessed$rank <- NA_integer_
+    d <- dplyr::bind_rows(d, not_assessed)
+  }
+  d
 }

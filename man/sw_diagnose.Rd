@@ -30,7 +30,8 @@ analysis scale), or \code{NULL} when only \code{header} is used.}
 
 \item{signal}{\code{NULL} or a list with \code{channels}, \code{range_max}, \code{range_min},
 \code{time_channel}, \code{time_bin}, \code{area_height}, \code{area_height_quantile},
-\code{reference_group}, \code{reference}.}
+\code{reference_group}, \code{reference}, \code{summary} (\code{NULL} or a list; see
+\code{\link[=sw_fcs_signal_audit]{sw_fcs_signal_audit()}}).}
 
 \item{anomaly}{\code{NULL} or a list with \code{channels}, \code{features},
 \code{quantile_step}, \code{n_events}, \code{seed}, \code{scale}, \code{aggregate_from},
@@ -130,6 +131,11 @@ are both taken within each file's group.
 
 \strong{Modules are independent.} A fault one module misses may show in another.
 Run all of them when you can.
+
+\strong{Import tables are report-only.} The tables from the import step
+(integrity, signatures, compensation, batch dates, dye map, bind) have no
+check, batch and value layout, so this function does not stack them. Read
+them from the import report.
 }
 \examples{
 \dontrun{
@@ -139,7 +145,7 @@ dx <- sw_diagnose(
   signal = list(channels = chans, range_max = 6, range_min = NULL,
                 time_channel = NULL, time_bin = NULL,
                 area_height = NULL, area_height_quantile = NULL,
-                reference_group = NULL, reference = NULL),
+                reference_group = NULL, reference = NULL, summary = NULL),
   anomaly = NULL,
   batch = list(batch = batch, markers = chans, n_events = 500, seed = 1, order = NULL,
                reference_group = NULL),

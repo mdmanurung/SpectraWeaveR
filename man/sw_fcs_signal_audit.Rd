@@ -14,7 +14,8 @@ sw_fcs_signal_audit(
   area_height,
   area_height_quantile,
   reference_group,
-  reference
+  reference,
+  summary
 )
 }
 \arguments{
@@ -66,11 +67,32 @@ medians (or SDs); a fault that hits every file in \code{data} then still
 shows. Every other check, \code{bimodality_z} included, is unchanged. Not
 allowed together with a non-\code{NULL} \code{reference_group}. Every channel must
 be in the reference. A scale of 0 gives \code{NA}.}
+
+\item{summary}{\code{NULL} (skip, output unchanged), or a list with three
+entries, all required: \code{probs} (numeric vector in \link{0, 1}, the quantiles),
+\code{min_events} (single number of at least 1, the fewest finite values a
+channel needs) and \code{stat} (\code{"median"} or \code{"mean"}). For each file and
+channel it adds the checks \code{summary_n} (events in the file),
+\code{summary_nonfinite} (count of \code{NA}, \code{NaN} or \code{Inf}), \code{summary_median} or
+\code{summary_mean} (as \code{stat} says) and \verb{summary_q<prob>} for each of
+\code{probs}, all on finite values as given. A channel with fewer than
+\code{min_events} finite values gets \code{NA} location and quantile rows with
+\code{detail} starting \verb{not_assessed:} and the reason; counts are still given.
+No file or channel is dropped. The result then also carries the
+attribute \code{provenance} (the shared import keys: package and flowCore
+versions, R version, platform, time, \code{seed} \code{NA} because nothing is
+random, session summary and \code{args}, then the \code{summary} list).
+With \code{summary = NULL} the result has no \code{provenance} attribute, so the
+output stays as it was before \code{summary} existed. \code{probs} must not repeat.}
 }
 \value{
 A tibble of class \code{sw_fcs_signal_audit} with columns \code{file},
-\code{check}, \code{channel} (\code{NA} for file-level checks), \code{value} and \code{detail}
-(text; the channel pair for \code{corr_shift}, else \code{NA}).
+\code{check}, \code{channel} (\code{NA} for file-level checks), \code{value}, \code{detail} and
+\code{reason}. \code{detail} is text: the channel pair for \code{corr_shift}, the
+\code{not_assessed} reason for thin \verb{summary_*} rows, else \code{NA}. \code{reason} is
+that \code{not_assessed} text without its prefix, else \code{NA}. With a \code{summary}
+list it carries the
+attribute \code{provenance}; with \code{summary = NULL} it does not.
 }
 \description{
 Compute a set of plain per-file numbers that expose common technical faults.
@@ -157,7 +179,17 @@ sw_fcs_signal_audit(
   channels = c("A", "B"),
   range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
   area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
-  reference = NULL
+  reference = NULL, summary = NULL
+)
+
+# Per file and channel counts, median and quartiles
+sw_fcs_signal_audit(
+  files,
+  channels = c("A", "B"),
+  range_max = NULL, range_min = NULL, time_channel = NULL, time_bin = NULL,
+  area_height = NULL, area_height_quantile = NULL, reference_group = NULL,
+  reference = NULL,
+  summary = list(probs = c(0.25, 0.75), min_events = 50, stat = "median")
 )
 
 }

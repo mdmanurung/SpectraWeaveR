@@ -27,7 +27,8 @@ signal_set <- list(
   area_height = NULL,
   area_height_quantile = NULL,
   reference_group = NULL,
-  reference = NULL
+  reference = NULL,
+  summary = NULL
 )
 
 test_that("every argument must be given", {
@@ -593,9 +594,11 @@ test_that("a thin reference gives not_assessed rows with NA value, and nothing i
   expect_true(all(grepl("^not_assessed", thin$text)))
   # Every NA row says why; none is dropped without a word.
   expect_true(all(grepl("^not_assessed", dx$text[is.na(dx$value)])))
-  # NA rows never enter a ranking.
+  # NA rows never enter a ranking: they follow the ranked rows with rank NA.
   top <- sw_diagnosis_top(dx, n = 5)
-  expect_false(any(grepl("^ref2", top$item) & top$check != "count_ratio"))
+  thin_top <- top[grepl("^ref2", top$item) & top$check != "count_ratio", ]
+  expect_true(all(is.na(thin_top$value)))
+  expect_true(all(is.na(thin_top$rank)))
 })
 
 test_that("the reference module is seed reproducible and restores the RNG state", {
@@ -922,4 +925,39 @@ test_that("modules from different families stack into one table with the shared 
   )
   expect_equal(attr(dx, "modules"), c("flag_iqr", "batch_otd"))
   expect_setequal(unique(dx$module), c("flag_iqr", "batch_otd"))
+})
+
+test_that("sw_diagnosis_top keeps not-assessed rows, unranked, after the ranked ones", {
+  x <- make_dx()
+  # One file cut below summary$min_events: its summary_* values are NA.
+  x$data$f4 <- x$data$f4[1:50, ]
+  s <- signal_set
+  s$summary <- list(probs = c(0.25, 0.75), min_events = 100, stat = "median")
+  dx <- sw_diagnose(
+    x$data,
+    NULL,
+    s,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  )
+  top <- sw_diagnosis_top(dx, n = 2)
+  thin <- top[top$subject == "f4" & top$check == "summary_median", ]
+  expect_gt(nrow(thin), 0)
+  expect_true(all(is.na(thin$value)))
+  expect_true(all(is.na(thin$rank)))
+  expect_match(thin$text[[1]], "min_events|events")
+  # Ranked rows come first, unranked rows last.
+  expect_false(is.unsorted(is.na(top$rank)))
+  # Every NA-value row of the diagnosis is listed.
+  expect_equal(sum(is.na(top$value)), sum(is.na(dx$value)))
 })
