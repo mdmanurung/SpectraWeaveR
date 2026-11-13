@@ -18,6 +18,12 @@
 #' `spike-summary` or `spike-ecdf`), embedded in the page. Runs without these
 #' files show no such tab.
 #'
+#' **Event metrics.** An `Event metrics` tab appears when a run's `report/`
+#' folder holds `event_channels.csv`, `event_pairs.csv`, `heldout_scores.csv`
+#' or `heldout_repro.csv` (written by [sw_unmix_report()] from diagnostics made
+#' with `event_metrics` or `heldout`). Pairs are listed by |slope|, largest
+#' first.
+#'
 #' **AutoSpectral outputs.** The `AutoSpectral` tab reads the folder
 #' `<run>/unmix` that AutoSpectral wrote. Its CSV tables become interactive
 #' views: the hotspot, similarity and spillover-spread matrices, the
@@ -276,7 +282,8 @@ sw_unmix_dashboard <- function(
       as.list(run$compare_spectracle)
     },
     autospectral = .sw_dash_read_autospectral(run$run_dir, out_dir),
-    spike = .sw_dash_spike_payload(run$spike)
+    spike = .sw_dash_spike_payload(run$spike),
+    events = if (is.null(run$events)) NULL else lapply(run$events, \(x) if (is.null(x)) NULL else as.list(x))
   )
 }
 

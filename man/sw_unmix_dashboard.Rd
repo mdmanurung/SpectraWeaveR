@@ -62,6 +62,12 @@ found in any \verb{figures*/panels} folder (file names starting with
 \code{spike-summary} or \code{spike-ecdf}), embedded in the page. Runs without these
 files show no such tab.
 
+\strong{Event metrics.} An \verb{Event metrics} tab appears when a run's \verb{report/}
+folder holds \code{event_channels.csv}, \code{event_pairs.csv}, \code{heldout_scores.csv}
+or \code{heldout_repro.csv} (written by \code{\link[=sw_unmix_report]{sw_unmix_report()}} from diagnostics made
+with \code{event_metrics} or \code{heldout}). Pairs are listed by |slope|, largest
+first.
+
 \strong{AutoSpectral outputs.} The \code{AutoSpectral} tab reads the folder
 \verb{<run>/unmix} that AutoSpectral wrote. Its CSV tables become interactive
 views: the hotspot, similarity and spillover-spread matrices, the

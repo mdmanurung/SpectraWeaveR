@@ -779,3 +779,29 @@ test_that("spike and screen CSVs and F7/F8 PNGs give a spike tab; without them n
   )
   expect_null(payload_of(out2)$runs[[1L]]$spike)
 })
+
+test_that("event and held-out CSVs give an event tab; pairs sorted by |slope|", {
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("scales")
+  dir <- make_run(file.path(tempdir(), "r17"))
+  rep <- file.path(dir, "report")
+  utils::write.csv(
+    data.frame(file = "s", channel = "PE", pct_below_cut = 1.2),
+    file.path(rep, "event_channels.csv"),
+    row.names = FALSE
+  )
+  utils::write.csv(
+    data.frame(file = "s", channel_i = c("A", "B", "C"), channel_j = "D", n = 100L, slope = c(0.1, -0.5, NA), rho = 0),
+    file.path(rep, "event_pairs.csv"),
+    row.names = FALSE
+  )
+  run <- .sw_dash_read_run(dir, sigma = 1000, bins = 20, bin_events = FALSE)
+  expect_identical(run$events$pairs$channel_i, c("B", "A", "C"))
+  expect_null(run$events$heldout)
+  out <- tempfile(fileext = ".html")
+  sw_unmix_dashboard(dir, out, pseudo_log_sigma = 1000, bins = 20)
+  p <- payload_of(out)$runs[[1L]]
+  expect_identical(p$events$channels$channel[[1L]], "PE")
+  html <- paste(readLines(out, warn = FALSE), collapse = "\n")
+  expect_match(html, "Event metrics", fixed = TRUE)
+})

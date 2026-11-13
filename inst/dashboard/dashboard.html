@@ -125,6 +125,8 @@ const TABS = [["overview", "Overview"], ["checks", "Checks"], ["sif", "SIF"], ["
   ["similarity", "Similarity"], ["distributions", "Distributions"], ["biplot", "Biplot"], ["autospectral", "AutoSpectral"], ["compare", "Compare"]];
 // The spike-in tab exists only when some run has spike or screen tables.
 if (D.runs.some((r) => r.spike)) TABS.splice(TABS.length - 1, 0, ["spike", "Spike & screen"]);
+// The event-metrics tab exists only when some run has event or held-out tables.
+if (D.runs.some((r) => r.events)) TABS.splice(TABS.length - 1, 0, ["events", "Event metrics"]);
 
 // Shared canvas setup for the similarity matrix and the biplot: a backing store
 // `scale` times the logical size, CSS variables read once per draw, and a
@@ -726,7 +728,19 @@ function spike(main, run) {
   }
 }
 
-const VIEWS = { overview, checks, sif, spectra, similarity, distributions, biplot, autospectral, spike, compare };
+// ---- event metrics and held-out control error ---------------------------------------
+function events(main, run) {
+  const ev = run.events;
+  if (!ev) { main.append(h("p", { text: "This run has no event_channels.csv, event_pairs.csv, heldout_scores.csv or heldout_repro.csv in report/." })); return; }
+  main.append(h("p", { class: "note", text: "Tables from sw_unmix_report(); statuses are in the Checks tab (check_id event_channel, event_pair, heldout) and follow only the limits the run supplied." }));
+  const sections = [["channels", "Negatives, spread and stain index (file x channel)"], ["pairs", "Line check: i+ j- slope and rho (largest |slope| first)"],
+    ["heldout", "Held-out control error (linear)"], ["repro", "Same-seed extraction reproducibility"]];
+  sections.forEach(([k, title]) => {
+    if (ev[k]) main.append(h("h2", { text: title }), colTable(ev[k], Object.keys(ev[k]), k));
+  });
+}
+
+const VIEWS = { overview, checks, sif, spectra, similarity, distributions, biplot, autospectral, spike, events, compare };
 render();
 })();
 </script>

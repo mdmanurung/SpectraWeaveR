@@ -337,8 +337,33 @@
     distributions = distributions,
     biplot = biplot,
     compare_spectracle = compare,
-    spike = .sw_dash_read_spike(run_dir)
+    spike = .sw_dash_read_spike(run_dir),
+    events = .sw_dash_read_events(run_dir)
   )
+}
+
+# Event-metric and held-out tables that sw_unmix_report() writes. Pairs are
+# sorted by |slope| (largest first) so the page shows the worst first. NULL
+# when none of the four CSVs exists.
+.sw_dash_event_files <- c(
+  channels = "event_channels.csv",
+  pairs = "event_pairs.csv",
+  heldout = "heldout_scores.csv",
+  repro = "heldout_repro.csv"
+)
+.sw_dash_read_events <- function(run_dir) {
+  paths <- file.path(run_dir, "report", .sw_dash_event_files)
+  names(paths) <- names(.sw_dash_event_files)
+  if (!any(file.exists(paths))) {
+    return(NULL)
+  }
+  tables <- lapply(paths, \(p) {
+    if (file.exists(p)) utils::read.csv(p, stringsAsFactors = FALSE) else NULL
+  })
+  if (!is.null(tables$pairs)) {
+    tables$pairs <- tables$pairs[order(-abs(tables$pairs$slope), na.last = TRUE), ]
+  }
+  tables
 }
 
 # Spike-in and marker-screen tables that sw_unmix_report() writes, and the F7
