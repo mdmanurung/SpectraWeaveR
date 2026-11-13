@@ -117,12 +117,65 @@ test_that("a changed keyword, voltage and channel are each reported", {
   )
 })
 
-test_that("a keyword the reference lacks is an error", {
+test_that("a keyword the reference lacks gives not_assessed rows", {
   p <- make_set()
-  expect_error(
-    sw_fcs_header_audit(unname(p), "$NOPE", reference = p[["ref"]]),
-    "Reference file lacks keyword"
+  res <- sw_fcs_header_audit(
+    unname(p),
+    c("$CYT", "$NOPE"),
+    reference = p[["ref"]]
   )
+  na <- res[res$key == "$NOPE", ]
+  expect_equal(nrow(na), 5)
+  expect_true(all(na$status == "not_assessed"))
+  expect_true(all(na$reason == "reference lacks keyword"))
+  expect_true(all(res$status[res$key == "$CYT"] %in% c("match", "differs")))
+})
+
+test_that("an unreadable file gives a not_assessed row and one path works", {
+  p <- make_set()
+  d <- dirname(p[["ref"]])
+  junk <- file.path(d, "junk.fcs")
+  writeLines("not an fcs file", junk)
+  empty <- file.path(d, "empty.fcs")
+  file.create(empty)
+  expect_no_warning(
+    res <- sw_fcs_header_audit(
+      c(p[["ref"]], p[["same"]], junk, empty),
+      "$CYT",
+      reference = p[["ref"]]
+    )
+  )
+  bad <- res[res$file %in% c("junk.fcs", "empty.fcs"), ]
+  expect_equal(nrow(bad), 2)
+  expect_true(all(bad$status == "not_assessed" & bad$kind == "file"))
+  expect_false(anyNA(bad$reason))
+  s <- sw_fcs_header_summary(res)
+  expect_equal(s$not_assessed[s$file == "junk.fcs"], 1)
+  one <- sw_fcs_header_audit(p[["ref"]], "$CYT", reference = p[["ref"]])
+  expect_true(all(one$status == "match"))
+  expect_error(
+    sw_fcs_header_audit(junk, "$CYT", reference = junk),
+    "Reference file could not be read"
+  )
+  expect_error(sw_fcs_header_audit(character(0), "$CYT", "a"), "one or more")
+})
+
+test_that("duplicated and out-of-range $PnN keys are ignored and reported", {
+  h <- c(
+    "$PAR" = "2",
+    "$P1N" = "A-A",
+    "$P1S" = "CD3",
+    "$P2N" = "B-A",
+    "$P2S" = "CD4",
+    "$P3N" = "Width",
+    "$P1N" = "Z-A",
+    "$CYT" = "X"
+  )
+  it <- .sw_hdr_items(h, "$CYT")
+  expect_equal(it$key[it$kind == "channel"], c("A-A", "B-A"))
+  expect_match(attr(it, "notes")$reason, "repeated")
+  clean <- .sw_hdr_items(h[1:5], "$CYT")
+  expect_equal(nrow(attr(clean, "notes")), 0)
 })
 
 test_that("summary counts statuses and puts differing files first", {

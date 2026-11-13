@@ -7,7 +7,7 @@
 sw_fcs_header_audit(paths, keywords, reference)
 }
 \arguments{
-\item{paths}{Character vector of FCS file paths. File names (without the
+\item{paths}{Character vector of one or more FCS file paths. File names (without the
 folder) must be unique, because they label the rows.}
 
 \item{keywords}{Character vector of header keywords to compare. Plain names
@@ -19,7 +19,8 @@ such as \code{"$CYT"}, or \code{"$PnX"} patterns that expand per channel. Requir
 A tibble of class \code{sw_fcs_header_audit} with columns \code{file}, \code{kind}
 (\code{channel}, \code{keyword} or \code{parameter_keyword}), \code{key}, \code{channel} (\code{NA} for
 plain keywords and for \code{channel} rows), \code{value}, \code{reference_value} and
-\code{status} (\code{match}, \code{differs}, \code{missing_in_file}, \code{absent_in_reference}).
+\code{status} (\code{match}, \code{differs}, \code{missing_in_file}, \code{absent_in_reference},
+\code{not_assessed}) and \code{reason} (text for \code{not_assessed} rows, else \code{NA}).
 The reference file appears too, with every row \code{match}. Attribute
 \code{reference} holds the reference file label.
 }
@@ -45,7 +46,11 @@ change on one detector shows as one row.
 \strong{No defaults.} \code{keywords} and \code{reference} have no default because each one
 changes which files look different. Header keys differ between vendors, so
 the package does not guess them. A keyword you name that the reference file
-does not have is an error, since nothing could be compared with it.
+does not have gives one \code{not_assessed} row per file, since nothing could be
+compared with it. A file that cannot be read gives one \code{not_assessed} row
+(\code{kind = "file"}); an unreadable reference is an error. Repeated \verb{$PnN} keys
+and \verb{$PnN} beyond \verb{$PAR} are ignored (first copy kept, as flowCore does) and
+reported as a \code{not_assessed} row of \code{kind = "header"}.
 
 \strong{Matching.} Values are compared as text after trimming white space. Key
 names must match the header exactly as \code{flowCore::read.FCSheader()} returns

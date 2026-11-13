@@ -1,0 +1,344 @@
+---
+title: "Import and harmonise: check FCS files before any analysis"
+vignette: >
+  %\VignetteIndexEntry{Import and harmonise: check FCS files before any analysis}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+#| label: load
+suppressPackageStartupMessages({
+  library(SpectraWeaveR)
+  library(flowCore)
+})
+```
+
+## What this vignette covers
+
+The import step reads headers and, where stated, events, and it gives tables of facts: no pass or fail, and no file is edited or dropped without a row. Every value in a call below is "illustrative, choose your own"; the package has no default for any of them.
+
+## Synthetic files
+
+Six small FCS files in a temp folder carry the problems the checks look for: two batches, mixed `$DATE` spellings, one wrong `$TOT`, mixed spillover and apply-flag spellings, one marker spelled two ways, and one file that is not an FCS file.
+
+```{r}
+#| label: make-files
+set.seed(1)
+fcs_dir <- tempfile("import-demo-")
+dir.create(fcs_dir)
+
+# One file: three channels (Time plus two fluorescence), markers in $PnS,
+# and any extra header keywords.
+make_fcs <- function(name, markers, keywords) {
+  n_events <- 200
+  mat <- cbind(
+    Time = seq_len(n_events),
+    matrix(
+      rnorm(n_events * length(markers), 2000, 500),
+      ncol = length(markers),
+      dimnames = list(NULL, paste0("B", seq_along(markers), "-A"))
+    )
+  )
+  ff <- flowFrame(mat)
+  pData(parameters(ff))$desc <- c(NA, markers)
+  header <- keyword(ff)
+  header[names(keywords)] <- keywords
+  keyword(ff) <- header
+  path <- file.path(fcs_dir, name)
+  write.FCS(ff, path)
+  path
+}
+
+identity_spill <- "2,B1-A,B2-A,1,0,0,1"
+real_spill <- "2,B1-A,B2-A,1,0.12,0.03,1"
+mk_a <- c("CD3 BV421", "CD4 BB515")
+mk_b <- c("CD3 BV421", "CD4 PE")
+
+fcs_paths <- c(
+  s1 = make_fcs("s1.fcs", mk_a, list(
+    "$CYT" = "A", "$CYTSN" = "SN1", "$DATE" = "01-MAR-2026",
+    "$BTIM" = "09:00:00", "$SPILL" = identity_spill, "APPLYCOMP" = "TRUE"
+  )),
+  s2 = make_fcs("s2.fcs", mk_a, list(
+    "$CYT" = "A", "$CYTSN" = "SN1", "$DATE" = "01-MAR-2026",
+    "$BTIM" = "13:30:00", "$SPILL" = real_spill, "APPLYCOMP" = "yes"
+  )),
+  s3 = make_fcs("s3.fcs", mk_b, list(
+    "$CYT" = "B", "$CYTSN" = "SN2", "$DATE" = "05-MAR-2026",
+    "$BTIM" = "09:10:00", "$COMP" = "2,1,0.2,0,1", "APPLYCOMP" = "FALSE"
+  )),
+  s4 = make_fcs("s4.fcs", mk_b, list(
+    "$CYT" = "B", "$CYTSN" = "SN2", "$DATE" = "05-MAR-2026",
+    "$BTIM" = "09:50:00", "$SPILL" = real_spill, "APPLYCOMP" = "no"
+  )),
+  # The marker is spelled "CD8a" here and "CD8" in the next file.
+  s5 = make_fcs("s5.fcs", c("CD3 BV421", "CD8a APC"), list(
+    "$CYT" = "B", "$CYTSN" = "SN2", "$DATE" = "5 March 2026",
+    "$BTIM" = "10:20:00"
+  )),
+  s6 = make_fcs("s6.fcs", c("CD3 BV421", "CD8 APC"), list(
+    "$CYT" = "B", "$CYTSN" = "SN2", "$DATE" = "05-MAR-2026",
+    "$BTIM" = "10:40:00", "$SPILL" = identity_spill
+  ))
+)
+
+# Make $TOT of s4 wrong on disk: same width, so no offset moves. This edits
+# a file this vignette made itself, never a user file.
+s4_raw <- readBin(fcs_paths[["s4"]], "raw", file.size(fcs_paths[["s4"]]))
+# Blank the nul bytes of the data section so the text can be searched.
+s4_text <- s4_raw
+s4_text[s4_text == as.raw(0)] <- as.raw(32)
+s4_pos <- regexpr("$TOT|200", rawToChar(s4_text), fixed = TRUE, useBytes = TRUE)
+s4_raw[s4_pos + 5:7] <- charToRaw("201")
+writeBin(s4_raw, fcs_paths[["s4"]])
+
+# One file that is not an FCS file.
+junk_path <- file.path(fcs_dir, "junk.fcs")
+writeLines("not an fcs file", junk_path)
+
+all_paths <- unname(c(fcs_paths, junk_path))
+
+samples <- data.frame(
+  id = c("s1", "s2", "s3", "s4", "s5", "s6", "s7"),
+  batch = c("B1", "B1", "B2", "B2", "B2", "B2", "B2"),
+  run = c("r1", "r1", "r2", "r2", "r2", "r2", "r2")
+)
+manifest <- sw_sample_manifest(
+  samples,
+  sample_id = "id",
+  batch = "batch",
+  run = "run"
+)
+```
+
+## I1: bind the manifest to files
+
+A missing argument stops the call and names it, because each of these choices changes which files bind.
+
+```{r}
+#| label: bind-missing
+bind_msg <- tryCatch(
+  sw_manifest_bind_files(manifest, paths = all_paths),
+  error = function(e) conditionMessage(e)
+)
+cat(bind_msg)
+```
+
+With every choice given, `s7` has a manifest row and no file, and `junk.fcs` has a file and no row.
+
+```{r}
+#| label: bind
+bound <- sw_manifest_bind_files(
+  manifest,
+  paths = all_paths,
+  key = "file_stem", # illustrative, choose your own
+  case = "exact", # illustrative, choose your own
+  recursive = FALSE, # illustrative, choose your own
+  on_duplicate_file = "unbind", # illustrative, choose your own
+  on_extra_file = "list", # illustrative, choose your own
+  nextdata = "bind" # illustrative, choose your own
+)
+bound$manifest_no_file
+bound$file_no_manifest
+```
+
+## I2: file integrity
+
+Each file gets one row per item (readable, `$TOT` against rows read, time span, channel set), and the wrong `$TOT` of `s4` shows as `differs`.
+
+```{r}
+#| label: integrity
+integrity <- sw_fcs_integrity_audit(
+  all_paths,
+  tot_tolerance = 0, # illustrative, choose your own
+  time_keyword = "Time", # illustrative, choose your own
+  header_only = FALSE # illustrative, choose your own
+)
+integrity[integrity$item %in% c("readable", "tot_vs_rows"), c(
+  "file", "item", "value", "status", "reason"
+)]
+```
+
+## I3: header signatures and a panel
+
+Files that share the values of the named keywords share a signature, and the `panel` list shows which markers each file lacks or adds, so `CD8a` in `s5` appears as missing `CD8 APC` and extra `CD8a APC`.
+
+```{r}
+#| label: signatures
+signatures <- sw_fcs_header_signatures(
+  all_paths,
+  keywords = c("$CYT", "$CYTSN"), # illustrative, choose your own
+  panel = list(T_cells = c("CD3 BV421", "CD4 PE", "CD8 APC")) # illustrative
+)
+signatures$counts[, c("signature", "n_files", "files")]
+signatures$panel_match[, c("file", "status", "missing", "extra")]
+```
+
+A reference file also gives the differences of every file against it, which feeds the header-audit figure.
+
+```{r}
+#| label: header-audit
+header_audit <- sw_fcs_header_audit(
+  unname(fcs_paths),
+  keywords = c("$CYT", "$CYTSN"), # illustrative, choose your own
+  reference = fcs_paths[["s1"]]
+)
+head(header_audit, 4)
+```
+
+## I4: compensation state
+
+Matrix present, matrix is identity and the apply flag are separate columns, so a file with an identity matrix and the flag "TRUE" is visible as such.
+
+```{r}
+#| label: compensation
+compensation <- sw_fcs_compensation_state(
+  all_paths,
+  matrix_keywords = c("$SPILLOVER", "$SPILL", "$COMP"), # illustrative
+  apply_keywords = "APPLYCOMP", # illustrative, choose your own
+  apply_true = c("true", "yes"), # illustrative, choose your own
+  apply_false = c("false", "no"), # illustrative, choose your own
+  zero_tol = 1e-6, # illustrative, choose your own
+  expected_state = NULL # illustrative: no expectation
+)
+compensation[, c("file", "matrix_present", "matrix_identity", "apply_parsed")]
+```
+
+## I5: batch against date
+
+The declared batch is crossed with the date, begin time and serial number; `s5` has a date the format does not parse, so it is listed with that reason and not dropped.
+
+```{r}
+#| label: batch-date
+batch_date <- sw_fcs_batch_date_check(
+  paths = fcs_paths,
+  manifest = manifest,
+  date_keywords = "$DATE", # illustrative, choose your own
+  time_keywords = "$BTIM", # illustrative, choose your own
+  serial_keyword = "$CYTSN", # illustrative, choose your own
+  date_format = "%d-%b-%Y", # illustrative, choose your own
+  time_zone = "UTC", # illustrative, choose your own
+  run_gap_hours = 12 # illustrative, choose your own
+)
+batch_date$files[, c("sample_id", "batch", "date_raw", "date_status", "session")]
+batch_date$crosstab
+```
+
+## I6: marker and dye map
+
+Each `$PnS` label is split at the separator into marker and dye, and the two spellings of CD8 show as two markers in the marker by batch table.
+
+```{r}
+#| label: dye-map
+dye_map <- sw_fcs_marker_dye_map(
+  unname(fcs_paths),
+  batch = c(
+    s1.fcs = "B1", s2.fcs = "B1", s3.fcs = "B2",
+    s4.fcs = "B2", s5.fcs = "B2", s6.fcs = "B2"
+  ),
+  separator = " " # illustrative, choose your own
+)
+dye_map$marker_batch
+```
+
+## I9: per-channel signal summary
+
+`sw_fcs_signal_audit()` with `summary` set adds counts, a location and quantiles per file and channel, and a channel with too few events is `not_assessed` with its reason.
+
+```{r}
+#| label: signal-summary
+# Event matrices of the files that could be read, one per file.
+readable <- unname(fcs_paths[names(fcs_paths) != "s4"])
+events <- lapply(readable, function(p) exprs(sw_io_read_fcs(p)))
+names(events) <- basename(readable)
+
+channel_summary <- sw_fcs_signal_audit(
+  events,
+  channels = c("B1-A", "B2-A"),
+  range_max = NULL,
+  range_min = NULL,
+  time_channel = NULL,
+  time_bin = NULL,
+  area_height = NULL,
+  area_height_quantile = NULL,
+  reference_group = NULL,
+  reference = NULL,
+  summary = list(
+    probs = c(0.25, 0.75), # illustrative, choose your own
+    min_events = 50, # illustrative, choose your own
+    stat = "median" # illustrative, choose your own
+  )
+)
+channel_summary[
+  grepl("^summary_", channel_summary$check) & channel_summary$channel == "B1-A",
+  c("file", "check", "value")
+] |>
+  head(6)
+```
+
+The `s4` file is left out of `events` here because its `$TOT` is wrong, and I2 above already lists it.
+
+## Report
+
+`sw_report_import()` writes tables, PNG figures with their source data, `provenance.json` and `sessionInfo.txt` into a new folder, and it stops if the folder exists.
+
+```{r}
+#| label: report
+report_dir <- file.path(tempfile("import-report-"), "run")
+dir.create(dirname(report_dir))
+import_report <- sw_report_import(
+  result = list(
+    bound = bound,
+    header_audit = header_audit,
+    integrity = integrity,
+    signatures = signatures,
+    compensation = compensation,
+    batch_date = batch_date,
+    dye_map = dye_map,
+    channel_summary = channel_summary
+  ),
+  out_dir = report_dir
+)
+names(import_report$tables)
+unlist(import_report$figures)
+```
+
+Two of the figures follow; they are proposals, so inspect each one before you draw a conclusion from it.
+
+```{r}
+#| label: report-figures
+#| out-width: 100%
+fig_paths <- unlist(import_report$figures)
+fig_paths <- fig_paths[file.exists(fig_paths)]
+knitr::include_graphics(unname(fig_paths[seq_len(min(2, length(fig_paths)))]))
+```
+
+## A public data set
+
+The chunk below is not run, and the availability of FR-FCM-Z4KT on FlowRepository is unverified.
+
+```{r}
+#| label: public-set
+#| eval: false
+# Download the files of FR-FCM-Z4KT into "data/FR-FCM-Z4KT" first. The
+# FlowRepository HTTPS certificate has been expired in the past, so check the
+# download before you rely on it.
+z4kt_paths <- list.files(
+  "data/FR-FCM-Z4KT",
+  pattern = "\\.fcs$",
+  full.names = TRUE
+)
+z4kt_integrity <- sw_fcs_integrity_audit(
+  z4kt_paths,
+  tot_tolerance = 0, # illustrative, choose your own
+  time_keyword = "Time", # illustrative, choose your own
+  header_only = FALSE # illustrative, choose your own
+)
+```
