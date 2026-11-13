@@ -353,6 +353,8 @@ conversation:
 | `design_audit` | Audit a sample table for pair support and method eligibility. Every threshold comes from the user. |
 | `flag_iqr` | Rank control-sample batch effects with the Tukey IQR fence. Every threshold comes from the user. |
 | `batch_decide` | Decide a state per correction candidate from a policy and metric records. Every threshold comes from the user. |
+| `fcs_integrity` | Audit FCS files for readability, `$TOT` against rows read, run time span and channel set. Every setting comes from the user. |
+| `manifest_bind_files` | Bind a CSV sample table to FCS files by an exact key. Every matching rule comes from the user. |
 
 ### Renamed tools
 

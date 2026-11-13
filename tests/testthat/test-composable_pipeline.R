@@ -22,8 +22,10 @@ test_that("sw_pipeline_step rejects non-function FUN", {
 
 test_that("sw_pipeline_step rejects unknown function name", {
   skip_if_not_installed("S7")
-  expect_error(sw_pipeline_step("test", "nonexistent_function_xyz123"),
-               "Cannot find function")
+  expect_error(
+    sw_pipeline_step("test", "nonexistent_function_xyz123"),
+    "Cannot find function"
+  )
 })
 
 test_that("sw_pipeline_step resolves character function names", {
@@ -43,15 +45,20 @@ test_that("sw_pipeline_step creates valid ProcessingStep with function", {
 
 test_that("sw_pipeline_step stores ARGS correctly", {
   skip_if_not_installed("S7")
-  step <- sw_pipeline_step("scale", function(x, factor) x * factor,
-                   list(factor = 10))
+  step <- sw_pipeline_step(
+    "scale",
+    function(x, factor) x * factor,
+    list(factor = 10)
+  )
   expect_equal(step@ARGS, list(factor = 10))
 })
 
 test_that("sw_pipeline_step rejects non-list ARGS", {
   skip_if_not_installed("S7")
-  expect_error(sw_pipeline_step("test", identity, "not_a_list"),
-               "must be a list")
+  expect_error(
+    sw_pipeline_step("test", identity, "not_a_list"),
+    "must be a list"
+  )
 })
 
 # =========================================================================
@@ -125,8 +132,7 @@ test_that("sw_pipeline rejects duplicate step names", {
 
 test_that("sw_pipeline rejects non-list steps", {
   skip_if_not_installed("S7")
-  expect_error(sw_pipeline("test_pipe", steps = "not_a_list"),
-               "must be a list")
+  expect_error(sw_pipeline("test_pipe", steps = "not_a_list"), "must be a list")
 })
 
 # =========================================================================
@@ -143,28 +149,45 @@ test_that("sw_pipeline_add appends step to end", {
 
 test_that("sw_pipeline_add inserts at position 0", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
-  pip <- sw_pipeline_add(pip, sw_pipeline_step("s0", function(x) x - 1), after = 0)
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step("s0", function(x) x - 1),
+    after = 0
+  )
   expect_equal(sw_pipeline_step_names(pip), c("s0", "s1"))
 })
 
 test_that("sw_pipeline_add inserts at specific position", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s3", function(x) x + 3)
-  ))
-  pip <- sw_pipeline_add(pip, sw_pipeline_step("s2", function(x) x + 2), after = 1)
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s3", function(x) x + 3)
+    )
+  )
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step("s2", function(x) x + 2),
+    after = 1
+  )
   expect_equal(sw_pipeline_step_names(pip), c("s1", "s2", "s3"))
 })
 
 test_that("sw_pipeline_add rejects duplicate step names", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
   expect_error(
     sw_pipeline_add(pip, sw_pipeline_step("s1", function(x) x * 2)),
     "already exists"
@@ -173,46 +196,63 @@ test_that("sw_pipeline_add rejects duplicate step names", {
 
 test_that("sw_pipeline_add rejects invalid after position", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
-  expect_error(sw_pipeline_add(pip, sw_pipeline_step("s2", identity), after = 5),
-               "must be between")
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
+  expect_error(
+    sw_pipeline_add(pip, sw_pipeline_step("s2", identity), after = 5),
+    "must be between"
+  )
 })
 
 test_that("sw_pipeline_remove by name", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
   pip <- sw_pipeline_remove(pip, "s1")
   expect_equal(sw_pipeline_step_names(pip), "s2")
 })
 
 test_that("sw_pipeline_remove by index", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
   pip <- sw_pipeline_remove(pip, 2)
   expect_equal(sw_pipeline_step_names(pip), "s1")
 })
 
 test_that("sw_pipeline_remove rejects unknown name", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
   expect_error(sw_pipeline_remove(pip, "nonexistent"), "No step named")
 })
 
 test_that("sw_pipeline_remove rejects out-of-range index", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
   expect_error(sw_pipeline_remove(pip, 5), "must be between")
 })
 
@@ -224,31 +264,47 @@ test_that("sw_pipeline_remove rejects empty pipeline", {
 
 test_that("sw_pipeline_replace by name", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
-  pip <- sw_pipeline_replace(pip, "s1",
-                              sw_pipeline_step("s1_new", function(x) x + 10))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
+  pip <- sw_pipeline_replace(
+    pip,
+    "s1",
+    sw_pipeline_step("s1_new", function(x) x + 10)
+  )
   expect_equal(sw_pipeline_step_names(pip), c("s1_new", "s2"))
 })
 
 test_that("sw_pipeline_replace by index", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
-  pip <- sw_pipeline_replace(pip, 2, sw_pipeline_step("s2_new", function(x) x * 3))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
+  pip <- sw_pipeline_replace(
+    pip,
+    2,
+    sw_pipeline_step("s2_new", function(x) x * 3)
+  )
   expect_equal(sw_pipeline_step_names(pip), c("s1", "s2_new"))
 })
 
 test_that("sw_pipeline_replace rejects duplicate new name", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1),
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1),
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
   expect_error(
     sw_pipeline_replace(pip, 2, sw_pipeline_step("s1", function(x) x * 3)),
     "already exists"
@@ -269,11 +325,14 @@ test_that("sw_pipeline_length returns correct count", {
 
 test_that("sw_pipeline_step_names returns character vector", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("test", steps = list(
-    sw_pipeline_step("alpha", identity),
-    sw_pipeline_step("beta", identity),
-    sw_pipeline_step("gamma", identity)
-  ))
+  pip <- sw_pipeline(
+    "test",
+    steps = list(
+      sw_pipeline_step("alpha", identity),
+      sw_pipeline_step("beta", identity),
+      sw_pipeline_step("gamma", identity)
+    )
+  )
   expect_equal(sw_pipeline_step_names(pip), c("alpha", "beta", "gamma"))
 })
 
@@ -283,11 +342,14 @@ test_that("sw_pipeline_step_names returns character vector", {
 
 test_that("sw_pipeline_run executes linear pipeline", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("math", steps = list(
-    sw_pipeline_step("double", function(x) x * 2),
-    sw_pipeline_step("add_one", function(x) x + 1),
-    sw_pipeline_step("square", function(x) x^2)
-  ))
+  pip <- sw_pipeline(
+    "math",
+    steps = list(
+      sw_pipeline_step("double", function(x) x * 2),
+      sw_pipeline_step("add_one", function(x) x + 1),
+      sw_pipeline_step("square", function(x) x^2)
+    )
+  )
   result <- sw_pipeline_run(pip, input = 5, trace = FALSE)
   # 5 * 2 = 10, 10 + 1 = 11, 11^2 = 121
   expect_equal(result$result, 121)
@@ -296,10 +358,13 @@ test_that("sw_pipeline_run executes linear pipeline", {
 
 test_that("sw_pipeline_run stores intermediates", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("math", steps = list(
-    sw_pipeline_step("double", function(x) x * 2),
-    sw_pipeline_step("add_one", function(x) x + 1)
-  ))
+  pip <- sw_pipeline(
+    "math",
+    steps = list(
+      sw_pipeline_step("double", function(x) x * 2),
+      sw_pipeline_step("add_one", function(x) x + 1)
+    )
+  )
   result <- sw_pipeline_run(pip, input = 5, trace = FALSE)
   expect_equal(result$intermediates$double, 10)
   expect_equal(result$intermediates$add_one, 11)
@@ -307,10 +372,13 @@ test_that("sw_pipeline_run stores intermediates", {
 
 test_that("sw_pipeline_run reports step failure with context", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("fail_pipe", steps = list(
-    sw_pipeline_step("ok", function(x) x + 1),
-    sw_pipeline_step("bad", function(x) stop("boom"))
-  ))
+  pip <- sw_pipeline(
+    "fail_pipe",
+    steps = list(
+      sw_pipeline_step("ok", function(x) x + 1),
+      sw_pipeline_step("bad", function(x) stop("boom"))
+    )
+  )
   expect_error(
     sw_pipeline_run(pip, input = 5, trace = FALSE),
     "failed at step 2.*bad.*boom"
@@ -325,13 +393,16 @@ test_that("sw_pipeline_run rejects empty pipeline", {
 
 test_that("sw_pipeline_run works with data.frame input", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("df_pipe", steps = list(
-    sw_pipeline_step("add_col", function(df) {
-      df$y <- df$x * 2
-      df
-    }),
-    sw_pipeline_step("filter", function(df) df[df$x > 2, , drop = FALSE])
-  ))
+  pip <- sw_pipeline(
+    "df_pipe",
+    steps = list(
+      sw_pipeline_step("add_col", function(df) {
+        df$y <- df$x * 2
+        df
+      }),
+      sw_pipeline_step("filter", function(df) df[df$x > 2, , drop = FALSE])
+    )
+  )
   input_df <- data.frame(x = 1:5)
   result <- sw_pipeline_run(pip, input = input_df, trace = FALSE)
   expect_equal(nrow(result$result), 3)
@@ -340,9 +411,12 @@ test_that("sw_pipeline_run works with data.frame input", {
 
 test_that("sw_pipeline_run with trace = TRUE prints messages", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("verbose", steps = list(
-    sw_pipeline_step("step1", identity)
-  ))
+  pip <- sw_pipeline(
+    "verbose",
+    steps = list(
+      sw_pipeline_step("step1", identity)
+    )
+  )
   expect_message(
     sw_pipeline_run(pip, input = 1, trace = TRUE),
     "step1"
@@ -355,12 +429,18 @@ test_that("sw_pipeline_run with trace = TRUE prints messages", {
 
 test_that("sw_pipeline_concat merges two pipelines", {
   skip_if_not_installed("S7")
-  pip1 <- sw_pipeline("first", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
-  pip2 <- sw_pipeline("second", steps = list(
-    sw_pipeline_step("s2", function(x) x * 2)
-  ))
+  pip1 <- sw_pipeline(
+    "first",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
+  pip2 <- sw_pipeline(
+    "second",
+    steps = list(
+      sw_pipeline_step("s2", function(x) x * 2)
+    )
+  )
   combined <- sw_pipeline_concat(pip1, pip2)
   expect_equal(sw_pipeline_step_names(combined), c("s1", "s2"))
   expect_equal(sw_pipeline_length(combined), 2)
@@ -391,12 +471,18 @@ test_that("sw_pipeline_concat rejects duplicate step names", {
 
 test_that("sw_pipeline_concat result is executable", {
   skip_if_not_installed("S7")
-  pip1 <- sw_pipeline("p1", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
-  pip2 <- sw_pipeline("p2", steps = list(
-    sw_pipeline_step("s2", function(x) x * 3)
-  ))
+  pip1 <- sw_pipeline(
+    "p1",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
+  pip2 <- sw_pipeline(
+    "p2",
+    steps = list(
+      sw_pipeline_step("s2", function(x) x * 3)
+    )
+  )
   combined <- sw_pipeline_concat(pip1, pip2)
   result <- sw_pipeline_run(combined, input = 4, trace = FALSE)
   # (4 + 1) * 3 = 15
@@ -409,10 +495,13 @@ test_that("sw_pipeline_concat result is executable", {
 
 test_that("sw_pipeline_show prints pipeline info", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("demo", steps = list(
-    sw_pipeline_step("s1", identity),
-    sw_pipeline_step("s2", function(x) x * 2, list(extra = TRUE))
-  ))
+  pip <- sw_pipeline(
+    "demo",
+    steps = list(
+      sw_pipeline_step("s1", identity),
+      sw_pipeline_step("s2", function(x) x * 2, list(extra = TRUE))
+    )
+  )
   out <- capture.output(sw_pipeline_show(pip))
   expect_true(any(grepl("Pipeline: demo", out)))
   expect_true(any(grepl("Steps: 2", out)))
@@ -495,8 +584,14 @@ test_that("pipeline supports functional composition pattern", {
   skip_if_not_installed("S7")
   # Build up a pipeline incrementally
   pip <- sw_pipeline("composed")
-  pip <- sw_pipeline_add(pip, sw_pipeline_step("normalize", function(x) x / max(x)))
-  pip <- sw_pipeline_add(pip, sw_pipeline_step("shift", function(x) x - mean(x)))
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step("normalize", function(x) x / max(x))
+  )
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step("shift", function(x) x - mean(x))
+  )
   pip <- sw_pipeline_add(pip, sw_pipeline_step("abs", function(x) abs(x)))
 
   input <- c(2, 4, 6, 8, 10)
@@ -511,9 +606,12 @@ test_that("pipeline supports functional composition pattern", {
 
 test_that("pipeline modification preserves immutability", {
   skip_if_not_installed("S7")
-  pip1 <- sw_pipeline("original", steps = list(
-    sw_pipeline_step("s1", function(x) x + 1)
-  ))
+  pip1 <- sw_pipeline(
+    "original",
+    steps = list(
+      sw_pipeline_step("s1", function(x) x + 1)
+    )
+  )
   pip2 <- sw_pipeline_add(pip1, sw_pipeline_step("s2", function(x) x * 2))
 
   # Original pipeline should be unchanged
@@ -525,14 +623,17 @@ test_that("pipeline modification preserves immutability", {
 
 test_that("pipeline handles list inputs (multi-sample pattern)", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("batch", steps = list(
-    sw_pipeline_step("process_each", function(samples) {
-      lapply(samples, function(s) s * 2)
-    }),
-    sw_pipeline_step("combine", function(samples) {
-      do.call(c, samples)
-    })
-  ))
+  pip <- sw_pipeline(
+    "batch",
+    steps = list(
+      sw_pipeline_step("process_each", function(samples) {
+        lapply(samples, function(s) s * 2)
+      }),
+      sw_pipeline_step("combine", function(samples) {
+        do.call(c, samples)
+      })
+    )
+  )
   input <- list(a = 1:3, b = 4:6)
   result <- sw_pipeline_run(pip, input = input, trace = FALSE)
   # do.call(c, <named list>) keeps the list names (a1..a3, b1..b3)
@@ -545,11 +646,14 @@ test_that("pipeline handles list inputs (multi-sample pattern)", {
 
 test_that("sw_plot_pipeline text output works", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("demo", steps = list(
-    sw_pipeline_step("load", identity),
-    sw_pipeline_step("filter", function(x) x, list(threshold = 0.5)),
-    sw_pipeline_step("cluster", function(x) x)
-  ))
+  pip <- sw_pipeline(
+    "demo",
+    steps = list(
+      sw_pipeline_step("load", identity),
+      sw_pipeline_step("filter", function(x) x, list(threshold = 0.5)),
+      sw_pipeline_step("cluster", function(x) x)
+    )
+  )
   out <- capture.output(sw_plot_pipeline(pip))
   expect_true(any(grepl("Pipeline: demo", out)))
   expect_true(any(grepl("load", out)))
@@ -559,10 +663,13 @@ test_that("sw_plot_pipeline text output works", {
 
 test_that("sw_plot_pipeline data style returns data.frame", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("demo", steps = list(
-    sw_pipeline_step("s1", identity),
-    sw_pipeline_step("s2", function(x) x, list(a = 1, b = 2))
-  ))
+  pip <- sw_pipeline(
+    "demo",
+    steps = list(
+      sw_pipeline_step("s1", identity),
+      sw_pipeline_step("s2", function(x) x, list(a = 1, b = 2))
+    )
+  )
   result <- sw_plot_pipeline(pip, style = "data")
   expect_true(is.data.frame(result))
   expect_equal(nrow(result), 2)
@@ -590,7 +697,7 @@ test_that("sw_plot_pipeline rejects non-Pipeline", {
 test_that("%>>% composes two steps into a 2-step pipeline", {
   skip_if_not_installed("S7")
   s1 <- sw_pipeline_step("double", function(x) x * 2)
-  s2 <- sw_pipeline_step("plus1",  function(x) x + 1)
+  s2 <- sw_pipeline_step("plus1", function(x) x + 1)
   pip <- s1 %>>% s2
   expect_equal(sw_pipeline_step_names(pip), c("double", "plus1"))
   expect_equal(sw_pipeline_run(pip, input = 5, trace = FALSE)$result, 11)
@@ -598,9 +705,12 @@ test_that("%>>% composes two steps into a 2-step pipeline", {
 
 test_that("%>>% prepends a step to a pipeline (step %>>% pipe)", {
   skip_if_not_installed("S7")
-  tail_pip <- sw_pipeline("tail", steps = list(
-    sw_pipeline_step("plus1", function(x) x + 1)
-  ))
+  tail_pip <- sw_pipeline(
+    "tail",
+    steps = list(
+      sw_pipeline_step("plus1", function(x) x + 1)
+    )
+  )
   pip <- sw_pipeline_step("double", function(x) x * 2) %>>% tail_pip
   expect_equal(sw_pipeline_step_names(pip), c("double", "plus1"))
   expect_equal(sw_pipeline_run(pip, input = 5, trace = FALSE)$result, 11)
@@ -608,9 +718,12 @@ test_that("%>>% prepends a step to a pipeline (step %>>% pipe)", {
 
 test_that("%>>% appends a step to a pipeline (pipe %>>% step)", {
   skip_if_not_installed("S7")
-  head_pip <- sw_pipeline("head", steps = list(
-    sw_pipeline_step("double", function(x) x * 2)
-  ))
+  head_pip <- sw_pipeline(
+    "head",
+    steps = list(
+      sw_pipeline_step("double", function(x) x * 2)
+    )
+  )
   pip <- head_pip %>>% sw_pipeline_step("plus1", function(x) x + 1)
   expect_equal(sw_pipeline_step_names(pip), c("double", "plus1"))
   expect_equal(sw_pipeline_run(pip, input = 5, trace = FALSE)$result, 11)
@@ -628,8 +741,8 @@ test_that("%>>% concatenates two pipelines (pipe %>>% pipe)", {
 test_that("%>>% is left-associative: a %>>% b %>>% c chains three steps", {
   skip_if_not_installed("S7")
   pip <- sw_pipeline_step("a", function(x) x * 2) %>>%
-         sw_pipeline_step("b", function(x) x + 1) %>>%
-         sw_pipeline_step("c", function(x) x - 3)
+    sw_pipeline_step("b", function(x) x + 1) %>>%
+    sw_pipeline_step("c", function(x) x - 3)
   expect_equal(sw_pipeline_length(pip), 3L)
   expect_equal(sw_pipeline_run(pip, input = 5, trace = FALSE)$result, 8)
 })
@@ -645,7 +758,7 @@ test_that("%>>% rejects non-step/non-pipeline operands", {
   skip_if_not_installed("S7")
   s <- sw_pipeline_step("a", identity)
   expect_error("foo" %>>% s, "ProcessingStep or Pipeline")
-  expect_error(s %>>% 42,    "ProcessingStep or Pipeline")
+  expect_error(s %>>% 42, "ProcessingStep or Pipeline")
 })
 
 test_that("%>>% rewraps duplicate-name error with DSL phrasing", {
@@ -684,29 +797,40 @@ test_that("%>>% with an empty pipeline still works", {
 
 test_that("sw_pipeline_step accepts and stores input_type and output_type", {
   skip_if_not_installed("S7")
-  s <- sw_pipeline_step("double", function(x) x * 2,
-               input_type = "numeric", output_type = "numeric")
-  expect_equal(s@input_type,  "numeric")
+  s <- sw_pipeline_step(
+    "double",
+    function(x) x * 2,
+    input_type = "numeric",
+    output_type = "numeric"
+  )
+  expect_equal(s@input_type, "numeric")
   expect_equal(s@output_type, "numeric")
 })
 
 test_that("sw_pipeline_step defaults port types to character(0) (opt out)", {
   skip_if_not_installed("S7")
   s <- sw_pipeline_step("x", identity)
-  expect_identical(s@input_type,  character(0))
+  expect_identical(s@input_type, character(0))
   expect_identical(s@output_type, character(0))
 })
 
 test_that("sw_pipeline_step rejects non-character port types", {
   skip_if_not_installed("S7")
   expect_error(sw_pipeline_step("x", identity, input_type = 1), "input_type")
-  expect_error(sw_pipeline_step("x", identity, output_type = list()), "output_type")
+  expect_error(
+    sw_pipeline_step("x", identity, output_type = list()),
+    "output_type"
+  )
 })
 
 test_that("sw_pipeline_run enforces declared input_type at each step", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline_step("double", function(x) x * 2, input_type = "numeric") %>>%
-         sw_pipeline_step("plus1",  function(x) x + 1,  input_type = "numeric")
+  pip <- sw_pipeline_step(
+    "double",
+    function(x) x * 2,
+    input_type = "numeric"
+  ) %>>%
+    sw_pipeline_step("plus1", function(x) x + 1, input_type = "numeric")
   expect_equal(sw_pipeline_run(pip, input = 5, trace = FALSE)$result, 11)
   expect_error(
     sw_pipeline_run(pip, input = "five", trace = FALSE),
@@ -733,11 +857,16 @@ test_that("sw_pipeline_step_run does not check a step without input_type", {
 
 test_that("sw_pipeline_run reports the type check error without the step wrapper", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("p", list(
-    sw_pipeline_step("double", function(x) x * 2, input_type = "numeric")
-  ))
-  msg <- tryCatch(sw_pipeline_run(pip, input = "x", trace = FALSE),
-                  error = function(e) conditionMessage(e))
+  pip <- sw_pipeline(
+    "p",
+    list(
+      sw_pipeline_step("double", function(x) x * 2, input_type = "numeric")
+    )
+  )
+  msg <- tryCatch(
+    sw_pipeline_run(pip, input = "x", trace = FALSE),
+    error = function(e) conditionMessage(e)
+  )
   expect_identical(
     msg,
     "Pipeline 'p' type check failed at step 1 ('double'): expected input of type numeric, got character."
@@ -746,10 +875,13 @@ test_that("sw_pipeline_run reports the type check error without the step wrapper
 
 test_that("sw_pipeline_run skips type check when input_type is empty", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("any", list(
-    sw_pipeline_step("first",  function(x) as.character(x)),  # numeric -> character
-    sw_pipeline_step("second", function(x) paste0(x, "!"))    # no input_type declared
-  ))
+  pip <- sw_pipeline(
+    "any",
+    list(
+      sw_pipeline_step("first", function(x) as.character(x)), # numeric -> character
+      sw_pipeline_step("second", function(x) paste0(x, "!")) # no input_type declared
+    )
+  )
   res <- sw_pipeline_run(pip, input = 42, trace = FALSE)
   expect_equal(res$result, "42!")
 })
@@ -758,11 +890,13 @@ test_that("sw_pipeline_run type-check accepts inherited classes via methods::is"
   skip_if_not_installed("S7")
   # tibble inherits from data.frame
   skip_if_not_installed("tibble")
-  pip <- sw_pipeline("df", list(
-    sw_pipeline_step("noop", function(x) x, input_type = "data.frame")
-  ))
-  res <- sw_pipeline_run(pip, input = tibble::tibble(x = 1:3),
-                         trace = FALSE)
+  pip <- sw_pipeline(
+    "df",
+    list(
+      sw_pipeline_step("noop", function(x) x, input_type = "data.frame")
+    )
+  )
+  res <- sw_pipeline_run(pip, input = tibble::tibble(x = 1:3), trace = FALSE)
   expect_s3_class(res$result, "tbl_df")
 })
 
@@ -772,12 +906,23 @@ test_that("static pre-run walk warns on declared-type mismatch but still runs", 
   # function is identity — so at runtime the value is still numeric and
   # step 2's runtime `is(x, "numeric")` check passes. The declared-type
   # mismatch is caught only by the static pre-run walk.
-  pip <- sw_pipeline("lied", list(
-    sw_pipeline_step("lies",   function(x) x,
-            input_type = "numeric", output_type = "character"),
-    sw_pipeline_step("trusts", function(x) x + 1,
-            input_type = "numeric", output_type = "numeric")
-  ))
+  pip <- sw_pipeline(
+    "lied",
+    list(
+      sw_pipeline_step(
+        "lies",
+        function(x) x,
+        input_type = "numeric",
+        output_type = "character"
+      ),
+      sw_pipeline_step(
+        "trusts",
+        function(x) x + 1,
+        input_type = "numeric",
+        output_type = "numeric"
+      )
+    )
+  )
   # testthat 3e: expect_warning() returns the condition, not the value
   expect_warning(
     res <- sw_pipeline_run(pip, input = 5, trace = FALSE),
@@ -788,21 +933,21 @@ test_that("static pre-run walk warns on declared-type mismatch but still runs", 
 
 test_that("built-in convenience constructors declare sensible default port types", {
   skip_if_not_installed("S7")
-  s_read   <- sw_pipeline_step_read_fcs()
+  s_read <- sw_pipeline_step_read_fcs()
   s_margin <- sw_pipeline_step_filter_margins()
-  s_norm   <- sw_pipeline_step_normalize()
-  expect_equal(s_read@input_type,    "character")
-  expect_equal(s_read@output_type,   c("flowFrame", "flowSet"))
-  expect_equal(s_margin@input_type,  "flowFrame")
+  s_norm <- sw_pipeline_step_normalize()
+  expect_equal(s_read@input_type, "character")
+  expect_equal(s_read@output_type, c("flowFrame", "flowSet"))
+  expect_equal(s_margin@input_type, "flowFrame")
   expect_equal(s_margin@output_type, "flowFrame")
-  expect_equal(s_norm@input_type,    c("tbl_df", "data.frame"))
-  expect_equal(s_norm@output_type,   c("tbl_df", "data.frame"))
+  expect_equal(s_norm@input_type, c("tbl_df", "data.frame"))
+  expect_equal(s_norm@output_type, c("tbl_df", "data.frame"))
 })
 
 test_that("convenience constructors allow overriding default port types", {
   skip_if_not_installed("S7")
   s <- sw_pipeline_step_read_fcs(input_type = "list", output_type = "list")
-  expect_equal(s@input_type,  "list")
+  expect_equal(s@input_type, "list")
   expect_equal(s@output_type, "list")
 })
 
@@ -811,7 +956,8 @@ test_that("safe accessors tolerate objects missing the new properties", {
   s <- sw_pipeline_step("x", identity)
   # Normal happy path.
   expect_identical(
-    SpectraWeaveR:::.step_input_type(s), character(0)
+    SpectraWeaveR:::.step_input_type(s),
+    character(0)
   )
   # Simulate a legacy object whose `@input_type` throws: a plain list that
   # is not a ProcessingStep triggers the tryCatch in the accessor.
@@ -832,22 +978,36 @@ test_that("safe accessors tolerate objects missing the new properties", {
 
 test_that("print(pipeline) produces the same output as sw_pipeline_show()", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("demo", list(
-    sw_pipeline_step("a", function(x) x * 2, input_type = "numeric",
-            output_type = "numeric"),
-    sw_pipeline_step("b", function(x) x + 1)
-  ))
-  show_out  <- capture.output(sw_pipeline_show(pip))
+  pip <- sw_pipeline(
+    "demo",
+    list(
+      sw_pipeline_step(
+        "a",
+        function(x) x * 2,
+        input_type = "numeric",
+        output_type = "numeric"
+      ),
+      sw_pipeline_step("b", function(x) x + 1)
+    )
+  )
+  show_out <- capture.output(sw_pipeline_show(pip))
   print_out <- capture.output(print(pip))
   expect_equal(print_out, show_out)
 })
 
 test_that("sw_pipeline_show renders declared port types in its output", {
   skip_if_not_installed("S7")
-  pip <- sw_pipeline("typed", list(
-    sw_pipeline_step("double", function(x) x * 2,
-            input_type = "numeric", output_type = "numeric")
-  ))
+  pip <- sw_pipeline(
+    "typed",
+    list(
+      sw_pipeline_step(
+        "double",
+        function(x) x * 2,
+        input_type = "numeric",
+        output_type = "numeric"
+      )
+    )
+  )
   out <- capture.output(sw_pipeline_show(pip))
   expect_true(any(grepl("numeric -> numeric", out)))
 })
@@ -885,7 +1045,10 @@ test_that("the audit step feeds the decide step in a pipeline type check", {
       require_shared_reference = TRUE
     )
   )
-  pip <- sw_pipeline_add(pip, sw_pipeline_step_batch_decide(identity_id = "none"))
+  pip <- sw_pipeline_add(
+    pip,
+    sw_pipeline_step_batch_decide(identity_id = "none")
+  )
   expect_equal(sw_pipeline_step_names(pip), c("design_audit", "batch_decide"))
   # The decide step refuses an input that is not an audit.
   expect_error(
@@ -939,7 +1102,10 @@ test_that("sw_pipeline_step_flag_iqr runs on event-level cells and stops without
   )
   step <- do.call(
     sw_pipeline_step_flag_iqr,
-    c(args, list(min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5)))
+    c(
+      args,
+      list(min_effect = c(neg_median = 0.2, pos_median = 0.2, pct_positive = 5))
+    )
   )
   res <- sw_pipeline_step_run(step, cells)
   expect_s3_class(res, "sw_flag_iqr")
@@ -949,5 +1115,81 @@ test_that("sw_pipeline_step_flag_iqr runs on event-level cells and stops without
   expect_error(
     sw_pipeline_step_run(do.call(sw_pipeline_step_flag_iqr, args), cells),
     "min_effect"
+  )
+})
+
+# ---- import steps ----
+
+test_that("sw_pipeline_step_integrity_audit and _bind_files create typed steps", {
+  skip_if_not_installed("S7")
+  i <- sw_pipeline_step_integrity_audit(
+    tot_tolerance = 0,
+    time_keyword = "Time",
+    header_only = FALSE
+  )
+  expect_equal(i@name, "integrity_audit")
+  expect_equal(i@input_type, "character")
+  expect_equal(i@output_type, c("tbl_df", "data.frame"))
+  expect_equal(i@ARGS$tot_tolerance, 0)
+  b <- sw_pipeline_step_bind_files(key = "file_stem")
+  expect_equal(b@name, "bind_files")
+  expect_equal(b@input_type, "sw_manifest")
+  expect_equal(b@ARGS$key, "file_stem")
+})
+
+test_that("the integrity step runs on paths and stops without its settings", {
+  skip_if_not_installed("S7")
+  skip_if_not_installed("flowCore")
+  d <- withr::local_tempdir()
+  m <- cbind(Time = 1:20, "B1-A" = stats::rnorm(20))
+  p <- file.path(d, "a.fcs")
+  flowCore::write.FCS(flowCore::flowFrame(m), p)
+  ok <- sw_pipeline_step_integrity_audit(
+    tot_tolerance = 0,
+    time_keyword = "Time",
+    header_only = FALSE
+  )
+  res <- sw_pipeline_step_run(ok, p)
+  expect_s3_class(res, "data.frame")
+  expect_gt(nrow(res), 0)
+  expect_error(
+    sw_pipeline_step_run(sw_pipeline_step_integrity_audit(), p),
+    "no default"
+  )
+  expect_error(sw_pipeline_step_run(ok, data.frame(x = 1)), "type check failed")
+})
+
+test_that("the bind step takes a manifest and stops without its settings", {
+  skip_if_not_installed("S7")
+  skip_if_not_installed("flowCore")
+  d <- withr::local_tempdir()
+  m <- cbind(Time = 1:20, "B1-A" = stats::rnorm(20))
+  flowCore::write.FCS(flowCore::flowFrame(m), file.path(d, "s1.fcs"))
+  man <- sw_sample_manifest(
+    data.frame(id = "s1", b = "b1"),
+    sample_id = "id",
+    batch = "b"
+  )
+  args <- list(
+    paths = d,
+    key = "file_stem",
+    case = "exact",
+    recursive = FALSE,
+    on_duplicate_file = "stop",
+    on_extra_file = "list",
+    nextdata = "bind"
+  )
+  res <- sw_pipeline_step_run(do.call(sw_pipeline_step_bind_files, args), man)
+  expect_equal(res$bound$sample_id, "s1")
+  expect_error(
+    sw_pipeline_step_run(sw_pipeline_step_bind_files(paths = d), man),
+    "no default"
+  )
+  expect_error(
+    sw_pipeline_step_run(
+      do.call(sw_pipeline_step_bind_files, args),
+      data.frame(id = "s1")
+    ),
+    "type check failed"
   )
 })

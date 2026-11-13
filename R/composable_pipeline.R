@@ -96,12 +96,13 @@ NULL
 
   .check_s7()
 
-  cls <- S7::new_class("ProcessingStep",
+  cls <- S7::new_class(
+    "ProcessingStep",
     properties = list(
-      name        = S7::class_character,
-      FUN         = S7::class_function,
-      ARGS        = S7::class_list,
-      input_type  = S7::class_character,
+      name = S7::class_character,
+      FUN = S7::class_function,
+      ARGS = S7::class_list,
+      input_type = S7::class_character,
       output_type = S7::class_character
     ),
     validator = function(self) {
@@ -121,13 +122,18 @@ NULL
     itypes <- .step_input_type(x)
     otypes <- .step_output_type(x)
     if (length(itypes) > 0 || length(otypes) > 0) {
-      cat(sprintf("  [%s -> %s]",
-                  if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
-                  if (length(otypes) > 0) paste(otypes, collapse = "|") else "*"))
+      cat(sprintf(
+        "  [%s -> %s]",
+        if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
+        if (length(otypes) > 0) paste(otypes, collapse = "|") else "*"
+      ))
     }
     if (length(x@ARGS) > 0) {
-      cat(sprintf("  (%d arg%s)", length(x@ARGS),
-                  if (length(x@ARGS) > 1) "s" else ""))
+      cat(sprintf(
+        "  (%d arg%s)",
+        length(x@ARGS),
+        if (length(x@ARGS) > 1) "s" else ""
+      ))
     }
     cat("\n")
     invisible(x)
@@ -151,7 +157,7 @@ NULL
 # the RDS files with the new schema.
 # ---------------------------------------------------------------------------
 .step_input_type <- function(step) {
-  tryCatch(step@input_type,  error = function(e) character(0))
+  tryCatch(step@input_type, error = function(e) character(0))
 }
 
 # ---------------------------------------------------------------------------
@@ -172,10 +178,19 @@ NULL
   sprintf("Step '%s' type check failed: ", step_name)
 }
 
-.sw_type_check_message <- function(pipeline_name, step_index, step_name,
-                                   detail) {
-  sprintf("Pipeline '%s' type check failed at step %d ('%s'): %s",
-          pipeline_name, as.integer(step_index), step_name, detail)
+.sw_type_check_message <- function(
+  pipeline_name,
+  step_index,
+  step_name,
+  detail
+) {
+  sprintf(
+    "Pipeline '%s' type check failed at step %d ('%s'): %s",
+    pipeline_name,
+    as.integer(step_index),
+    step_name,
+    detail
+  )
 }
 
 .sw_check_step_input <- function(step, input) {
@@ -183,19 +198,23 @@ NULL
   if (length(declared_in) == 0) {
     return(invisible(TRUE))
   }
-  ok <- any(vapply(declared_in,
-                   function(t) methods::is(input, t),
-                   logical(1)))
+  ok <- any(vapply(declared_in, function(t) methods::is(input, t), logical(1)))
   if (isTRUE(ok)) {
     return(invisible(TRUE))
   }
-  detail <- sprintf("expected input of type %s, got %s.",
-                    paste(declared_in, collapse = "|"),
-                    paste(class(input), collapse = "/"))
+  detail <- sprintf(
+    "expected input of type %s, got %s.",
+    paste(declared_in, collapse = "|"),
+    paste(class(input), collapse = "/")
+  )
   stop(structure(
     class = c("sw_type_check_error", "error", "condition"),
-    list(message = paste0(.sw_type_check_prefix(step@name), detail),
-         call = NULL, step_name = step@name, detail = detail)
+    list(
+      message = paste0(.sw_type_check_prefix(step@name), detail),
+      call = NULL,
+      step_name = step@name,
+      detail = detail
+    )
   ))
 }
 
@@ -251,9 +270,13 @@ NULL
 #' }
 #'
 #' @export
-sw_pipeline_step <- function(name, FUN, ARGS = list(),
-                    input_type  = character(0),
-                    output_type = character(0)) {
+sw_pipeline_step <- function(
+  name,
+  FUN,
+  ARGS = list(),
+  input_type = character(0),
+  output_type = character(0)
+) {
   if (!is.character(name) || length(name) != 1 || nchar(name) == 0) {
     stop("'name' must be a single non-empty character string.", call. = FALSE)
   }
@@ -262,8 +285,10 @@ sw_pipeline_step <- function(name, FUN, ARGS = list(),
 
   if (is.character(FUN)) {
     if (length(FUN) != 1 || nchar(FUN) == 0) {
-      stop("'FUN' as character must be a single non-empty function name.",
-           call. = FALSE)
+      stop(
+        "'FUN' as character must be a single non-empty function name.",
+        call. = FALSE
+      )
     }
     resolved <- tryCatch(match.fun(FUN), error = function(e) NULL)
     if (is.null(resolved)) {
@@ -273,8 +298,10 @@ sw_pipeline_step <- function(name, FUN, ARGS = list(),
   }
 
   if (!is.function(FUN)) {
-    stop("'FUN' must be a function or a character string naming a function.",
-         call. = FALSE)
+    stop(
+      "'FUN' must be a function or a character string naming a function.",
+      call. = FALSE
+    )
   }
 
   if (!is.list(ARGS)) {
@@ -289,8 +316,13 @@ sw_pipeline_step <- function(name, FUN, ARGS = list(),
   }
 
   cls <- .get_ProcessingStep_class()
-  cls(name = name, FUN = FUN, ARGS = ARGS,
-      input_type = input_type, output_type = output_type)
+  cls(
+    name = name,
+    FUN = FUN,
+    ARGS = ARGS,
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Execute a Processing Step
@@ -350,9 +382,10 @@ sw_pipeline_step_run <- function(step, input) {
   .check_s7()
   step_cls <- .get_ProcessingStep_class()
 
-  cls <- S7::new_class("Pipeline",
+  cls <- S7::new_class(
+    "Pipeline",
     properties = list(
-      name  = S7::class_character,
+      name = S7::class_character,
       steps = S7::class_list
     ),
     validator = function(self) {
@@ -365,8 +398,10 @@ sw_pipeline_step_run <- function(step, input) {
       step_cls <- .get_ProcessingStep_class()
       for (i in seq_along(self@steps)) {
         if (!S7::S7_inherits(self@steps[[i]], step_cls)) {
-          errors <- c(errors,
-            paste0("Element ", i, " of 'steps' is not a ProcessingStep"))
+          errors <- c(
+            errors,
+            paste0("Element ", i, " of 'steps' is not a ProcessingStep")
+          )
         }
       }
 
@@ -374,9 +409,13 @@ sw_pipeline_step_run <- function(step, input) {
       step_names <- vapply(self@steps, function(s) s@name, character(1))
       dups <- step_names[duplicated(step_names)]
       if (length(dups) > 0) {
-        errors <- c(errors,
-          paste0("Duplicate step name(s): ",
-                 paste(unique(dups), collapse = ", ")))
+        errors <- c(
+          errors,
+          paste0(
+            "Duplicate step name(s): ",
+            paste(unique(dups), collapse = ", ")
+          )
+        )
       }
 
       if (length(errors) > 0) errors else NULL
@@ -433,8 +472,10 @@ sw_pipeline <- function(name, steps = NULL) {
   }
 
   if (!is.list(steps)) {
-    stop("'steps' must be a list of ProcessingStep objects or NULL.",
-         call. = FALSE)
+    stop(
+      "'steps' must be a list of ProcessingStep objects or NULL.",
+      call. = FALSE
+    )
   }
 
   cls <- .get_Pipeline_class()
@@ -475,23 +516,29 @@ sw_pipeline_add <- function(pipeline, step, after = NULL) {
   # Check for duplicate names
   existing_names <- vapply(steps, function(s) s@name, character(1))
   if (step@name %in% existing_names) {
-    stop("A step named '", step@name, "' already exists in the pipeline.",
-         call. = FALSE)
+    stop(
+      "A step named '",
+      step@name,
+      "' already exists in the pipeline.",
+      call. = FALSE
+    )
   }
 
   if (is.null(after)) {
     steps <- c(steps, list(step))
   } else {
     if (!is.numeric(after) || after < 0 || after > length(steps)) {
-      stop("'after' must be between 0 and ", length(steps), ".",
-           call. = FALSE)
+      stop("'after' must be between 0 and ", length(steps), ".", call. = FALSE)
     }
     after <- as.integer(after)
     if (after == 0) {
       steps <- c(list(step), steps)
     } else {
-      steps <- c(steps[seq_len(after)], list(step),
-                 steps[seq_along(steps) > after])
+      steps <- c(
+        steps[seq_len(after)],
+        list(step),
+        steps[seq_along(steps) > after]
+      )
     }
   }
 
@@ -526,18 +573,28 @@ sw_pipeline_remove <- function(pipeline, name_or_index) {
     step_names <- vapply(steps, function(s) s@name, character(1))
     idx <- match(name_or_index, step_names)
     if (is.na(idx)) {
-      stop("No step named '", name_or_index, "' found in pipeline.",
-           call. = FALSE)
+      stop(
+        "No step named '",
+        name_or_index,
+        "' found in pipeline.",
+        call. = FALSE
+      )
     }
   } else if (is.numeric(name_or_index)) {
     idx <- as.integer(name_or_index)
     if (idx < 1 || idx > length(steps)) {
-      stop("'name_or_index' must be between 1 and ", length(steps), ".",
-           call. = FALSE)
+      stop(
+        "'name_or_index' must be between 1 and ",
+        length(steps),
+        ".",
+        call. = FALSE
+      )
     }
   } else {
-    stop("'name_or_index' must be a character name or integer index.",
-         call. = FALSE)
+    stop(
+      "'name_or_index' must be a character name or integer index.",
+      call. = FALSE
+    )
   }
 
   steps <- steps[-idx]
@@ -577,25 +634,39 @@ sw_pipeline_replace <- function(pipeline, name_or_index, new_step) {
     step_names <- vapply(steps, function(s) s@name, character(1))
     idx <- match(name_or_index, step_names)
     if (is.na(idx)) {
-      stop("No step named '", name_or_index, "' found in pipeline.",
-           call. = FALSE)
+      stop(
+        "No step named '",
+        name_or_index,
+        "' found in pipeline.",
+        call. = FALSE
+      )
     }
   } else if (is.numeric(name_or_index)) {
     idx <- as.integer(name_or_index)
     if (idx < 1 || idx > length(steps)) {
-      stop("'name_or_index' must be between 1 and ", length(steps), ".",
-           call. = FALSE)
+      stop(
+        "'name_or_index' must be between 1 and ",
+        length(steps),
+        ".",
+        call. = FALSE
+      )
     }
   } else {
-    stop("'name_or_index' must be a character name or integer index.",
-         call. = FALSE)
+    stop(
+      "'name_or_index' must be a character name or integer index.",
+      call. = FALSE
+    )
   }
 
   # Check duplicate names (excluding the step being replaced)
   other_names <- vapply(steps[-idx], function(s) s@name, character(1))
   if (new_step@name %in% other_names) {
-    stop("A step named '", new_step@name, "' already exists in the pipeline.",
-         call. = FALSE)
+    stop(
+      "A step named '",
+      new_step@name,
+      "' already exists in the pipeline.",
+      call. = FALSE
+    )
   }
 
   steps[[idx]] <- new_step
@@ -705,11 +776,15 @@ sw_pipeline_length <- function(pipeline) {
 #' @seealso \code{\link{sw_pipeline_run_targets}},
 #'   \code{\link{sw_pipeline_to_targets}}
 #' @export
-sw_pipeline_run <- function(pipeline, input, trace = TRUE,
-                            backend = c("sequential", "targets"),
-                            store = "_targets",
-                            script = "_targets.R",
-                            ...) {
+sw_pipeline_run <- function(
+  pipeline,
+  input,
+  trace = TRUE,
+  backend = c("sequential", "targets"),
+  store = "_targets",
+  script = "_targets.R",
+  ...
+) {
   .check_s7()
   pip_cls <- .get_Pipeline_class()
 
@@ -721,18 +796,22 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
   if (backend == "targets") {
     return(sw_pipeline_run_targets(
       pipeline = pipeline,
-      input    = input,
-      script   = script,
-      store    = store,
-      trace    = trace,
+      input = input,
+      script = script,
+      store = store,
+      trace = trace,
       ...
     ))
   }
 
   steps <- pipeline@steps
   if (length(steps) == 0) {
-    stop("Pipeline '", pipeline@name, "' has no steps to execute.",
-         call. = FALSE)
+    stop(
+      "Pipeline '",
+      pipeline@name,
+      "' has no steps to execute.",
+      call. = FALSE
+    )
   }
 
   # --- Static pre-run type-compatibility walk -----------------------------
@@ -743,17 +822,29 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
   if (length(steps) >= 2) {
     for (i in seq_len(length(steps) - 1)) {
       out_t <- .step_output_type(steps[[i]])
-      in_t  <- .step_input_type(steps[[i + 1]])
-      if (length(out_t) > 0 && length(in_t) > 0 &&
-          length(intersect(out_t, in_t)) == 0) {
-        warning(sprintf(
-          paste0("Pipeline '%s': declared types incompatible between ",
-                 "step %d ('%s', outputs %s) and step %d ('%s', expects %s). ",
-                 "Execution will proceed but may fail."),
-          pipeline@name,
-          i,     steps[[i]]@name,     paste(out_t, collapse = "|"),
-          i + 1, steps[[i + 1]]@name, paste(in_t,  collapse = "|")),
-          call. = FALSE)
+      in_t <- .step_input_type(steps[[i + 1]])
+      if (
+        length(out_t) > 0 &&
+          length(in_t) > 0 &&
+          length(intersect(out_t, in_t)) == 0
+      ) {
+        warning(
+          sprintf(
+            paste0(
+              "Pipeline '%s': declared types incompatible between ",
+              "step %d ('%s', outputs %s) and step %d ('%s', expects %s). ",
+              "Execution will proceed but may fail."
+            ),
+            pipeline@name,
+            i,
+            steps[[i]]@name,
+            paste(out_t, collapse = "|"),
+            i + 1,
+            steps[[i + 1]]@name,
+            paste(in_t, collapse = "|")
+          ),
+          call. = FALSE
+        )
       }
     }
   }
@@ -765,22 +856,31 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
   # Pre-compute whether the pipeline is "typed at all" so that fully
   # untyped legacy pipelines don't flood trace output with "skipped" notes,
   # while mixed pipelines still surface opt-outs to the user.
-  any_typed <- any(vapply(steps,
-                          function(s) length(.step_input_type(s)) > 0,
-                          logical(1)))
+  any_typed <- any(vapply(
+    steps,
+    function(s) length(.step_input_type(s)) > 0,
+    logical(1)
+  ))
 
   for (i in seq_along(steps)) {
     step <- steps[[i]]
     step_name <- step@name
 
     if (trace) {
-      message(sprintf("=== [%d/%d] %s: %s ===",
-                      i, n_steps, pipeline@name, step_name))
+      message(sprintf(
+        "=== [%d/%d] %s: %s ===",
+        i,
+        n_steps,
+        pipeline@name,
+        step_name
+      ))
     }
 
     if (trace && any_typed && length(.step_input_type(step)) == 0) {
-      message(sprintf("    (step '%s': type check skipped - no input_type declared)",
-                      step_name))
+      message(sprintf(
+        "    (step '%s': type check skipped - no input_type declared)",
+        step_name
+      ))
     }
 
     # The input-type check runs inside sw_pipeline_step_run(). Its error gets
@@ -790,12 +890,21 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
       sw_pipeline_step_run(step, current),
       error = function(e) {
         if (inherits(e, "sw_type_check_error")) {
-          stop(.sw_type_check_message(pipeline@name, i, step_name, e$detail),
-               call. = FALSE)
+          stop(
+            .sw_type_check_message(pipeline@name, i, step_name, e$detail),
+            call. = FALSE
+          )
         }
-        stop(sprintf("Pipeline '%s' failed at step %d ('%s'): %s",
-                     pipeline@name, i, step_name, conditionMessage(e)),
-             call. = FALSE)
+        stop(
+          sprintf(
+            "Pipeline '%s' failed at step %d ('%s'): %s",
+            pipeline@name,
+            i,
+            step_name,
+            conditionMessage(e)
+          ),
+          call. = FALSE
+        )
       }
     )
 
@@ -803,8 +912,11 @@ sw_pipeline_run <- function(pipeline, input, trace = TRUE,
   }
 
   if (trace) {
-    message(sprintf("=== Pipeline '%s' complete (%d steps) ===",
-                    pipeline@name, n_steps))
+    message(sprintf(
+      "=== Pipeline '%s' complete (%d steps) ===",
+      pipeline@name,
+      n_steps
+    ))
   }
 
   list(
@@ -852,8 +964,11 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
   all_names <- vapply(all_steps, function(s) s@name, character(1))
   dups <- all_names[duplicated(all_names)]
   if (length(dups) > 0) {
-    stop("Duplicate step name(s) across pipelines: ",
-         paste(unique(dups), collapse = ", "), call. = FALSE)
+    stop(
+      "Duplicate step name(s) across pipelines: ",
+      paste(unique(dups), collapse = ", "),
+      call. = FALSE
+    )
   }
 
   cls <- .get_Pipeline_class()
@@ -915,12 +1030,15 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
   .check_s7()
 
   if (is.null(lhs) || is.null(rhs)) {
-    stop("'%>>%' operands must be ProcessingStep or Pipeline objects, ",
-         "not NULL.", call. = FALSE)
+    stop(
+      "'%>>%' operands must be ProcessingStep or Pipeline objects, ",
+      "not NULL.",
+      call. = FALSE
+    )
   }
 
   step_cls <- .get_ProcessingStep_class()
-  pip_cls  <- .get_Pipeline_class()
+  pip_cls <- .get_Pipeline_class()
 
   lhs_is_step <- S7::S7_inherits(lhs, step_cls)
   lhs_is_pipe <- S7::S7_inherits(lhs, pip_cls)
@@ -928,12 +1046,16 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
   rhs_is_pipe <- S7::S7_inherits(rhs, pip_cls)
 
   if (!(lhs_is_step || lhs_is_pipe)) {
-    stop("'%>>%' left operand must be a ProcessingStep or Pipeline.",
-         call. = FALSE)
+    stop(
+      "'%>>%' left operand must be a ProcessingStep or Pipeline.",
+      call. = FALSE
+    )
   }
   if (!(rhs_is_step || rhs_is_pipe)) {
-    stop("'%>>%' right operand must be a ProcessingStep or Pipeline.",
-         call. = FALSE)
+    stop(
+      "'%>>%' right operand must be a ProcessingStep or Pipeline.",
+      call. = FALSE
+    )
   }
 
   lhs_pip <- if (lhs_is_step) .sw_step_as_pipeline(lhs) else lhs
@@ -946,8 +1068,12 @@ sw_pipeline_concat <- function(pipeline1, pipeline2, name = NULL) {
     error = function(e) {
       msg <- conditionMessage(e)
       if (grepl("^Duplicate step name", msg)) {
-        stop("'%>>%': ", tolower(substring(msg, 1, 1)), substring(msg, 2),
-             call. = FALSE)
+        stop(
+          "'%>>%': ",
+          tolower(substring(msg, 1, 1)),
+          substring(msg, 2),
+          call. = FALSE
+        )
       }
       stop("'%>>%': ", msg, call. = FALSE)
     }
@@ -995,9 +1121,11 @@ sw_pipeline_show <- function(pipeline) {
       itypes <- .step_input_type(step)
       otypes <- .step_output_type(step)
       type_str <- if (length(itypes) > 0 || length(otypes) > 0) {
-        sprintf(" [%s -> %s]",
-                if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
-                if (length(otypes) > 0) paste(otypes, collapse = "|") else "*")
+        sprintf(
+          " [%s -> %s]",
+          if (length(itypes) > 0) paste(itypes, collapse = "|") else "*",
+          if (length(otypes) > 0) paste(otypes, collapse = "|") else "*"
+        )
       } else {
         ""
       }
@@ -1021,28 +1149,37 @@ sw_pipeline_show <- function(pipeline) {
 # structure that cannot be cleanly type-matched - opt out of the static
 # and runtime checks for that edge".
 .SW_STEP_DEFAULT_TYPES <- list(
-  read_fcs       = list(input = "character",
-                        output = c("flowFrame", "flowSet")),
-  remove_margins = list(input = "flowFrame",
-                        output = "flowFrame"),
-  signal_qc      = list(input = "flowFrame",
-                        output = character(0)),
-  batch_correct  = list(input = c("tbl_df", "data.frame"),
-                        output = c("tbl_df", "data.frame")),
-  normalize      = list(input = c("tbl_df", "data.frame"),
-                        output = c("tbl_df", "data.frame")),
-  create_som     = list(input = c("tbl_df", "data.frame"),
-                        output = character(0)),
-  correct_data   = list(input = c("tbl_df", "data.frame"),
-                        output = c("tbl_df", "data.frame")),
-  cluster        = list(input = c("tbl_df", "data.frame", "matrix"),
-                        output = character(0)),
-  design_audit   = list(input = c("tbl_df", "data.frame"),
-                        output = "sw_design_audit"),
-  batch_decide   = list(input = "sw_design_audit",
-                        output = "sw_batch_decision"),
-  flag_iqr       = list(input = c("tbl_df", "data.frame"),
-                        output = "sw_flag_iqr")
+  read_fcs = list(input = "character", output = c("flowFrame", "flowSet")),
+  remove_margins = list(input = "flowFrame", output = "flowFrame"),
+  signal_qc = list(input = "flowFrame", output = character(0)),
+  batch_correct = list(
+    input = c("tbl_df", "data.frame"),
+    output = c("tbl_df", "data.frame")
+  ),
+  normalize = list(
+    input = c("tbl_df", "data.frame"),
+    output = c("tbl_df", "data.frame")
+  ),
+  create_som = list(input = c("tbl_df", "data.frame"), output = character(0)),
+  correct_data = list(
+    input = c("tbl_df", "data.frame"),
+    output = c("tbl_df", "data.frame")
+  ),
+  cluster = list(
+    input = c("tbl_df", "data.frame", "matrix"),
+    output = character(0)
+  ),
+  design_audit = list(
+    input = c("tbl_df", "data.frame"),
+    output = "sw_design_audit"
+  ),
+  batch_decide = list(input = "sw_design_audit", output = "sw_batch_decision"),
+  flag_iqr = list(input = c("tbl_df", "data.frame"), output = "sw_flag_iqr"),
+  integrity_audit = list(
+    input = "character",
+    output = c("tbl_df", "data.frame")
+  ),
+  bind_files = list(input = "sw_manifest", output = character(0))
 )
 
 #' Create a Step for Reading FCS Files
@@ -1059,11 +1196,18 @@ sw_pipeline_show <- function(pipeline) {
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_read_fcs <- function(...,
-                             input_type  = .SW_STEP_DEFAULT_TYPES$read_fcs$input,
-                             output_type = .SW_STEP_DEFAULT_TYPES$read_fcs$output) {
-  sw_pipeline_step("read_fcs", sw_io_read_fcs, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_read_fcs <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$read_fcs$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$read_fcs$output
+) {
+  sw_pipeline_step(
+    "read_fcs",
+    sw_io_read_fcs,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Margin Removal
@@ -1079,11 +1223,18 @@ sw_pipeline_step_read_fcs <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_filter_margins <- function(...,
-                                   input_type  = .SW_STEP_DEFAULT_TYPES$remove_margins$input,
-                                   output_type = .SW_STEP_DEFAULT_TYPES$remove_margins$output) {
-  sw_pipeline_step("remove_margins", sw_filter_margins, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_filter_margins <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$remove_margins$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$remove_margins$output
+) {
+  sw_pipeline_step(
+    "remove_margins",
+    sw_filter_margins,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Signal QC
@@ -1102,11 +1253,18 @@ sw_pipeline_step_filter_margins <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_qc <- function(...,
-                              input_type  = .SW_STEP_DEFAULT_TYPES$signal_qc$input,
-                              output_type = .SW_STEP_DEFAULT_TYPES$signal_qc$output) {
-  sw_pipeline_step("signal_qc", sw_qc_run, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_qc <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$signal_qc$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$signal_qc$output
+) {
+  sw_pipeline_step(
+    "signal_qc",
+    sw_qc_run,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Batch Correction
@@ -1123,11 +1281,18 @@ sw_pipeline_step_qc <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_correct <- function(...,
-                                  input_type  = .SW_STEP_DEFAULT_TYPES$batch_correct$input,
-                                  output_type = .SW_STEP_DEFAULT_TYPES$batch_correct$output) {
-  sw_pipeline_step("batch_correct", sw_correct_run, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_correct <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$batch_correct$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$batch_correct$output
+) {
+  sw_pipeline_step(
+    "batch_correct",
+    sw_correct_run,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Data Normalisation
@@ -1142,11 +1307,18 @@ sw_pipeline_step_correct <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_normalize <- function(...,
-                              input_type  = .SW_STEP_DEFAULT_TYPES$normalize$input,
-                              output_type = .SW_STEP_DEFAULT_TYPES$normalize$output) {
-  sw_pipeline_step("normalize", sw_correct_normalize, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_normalize <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$normalize$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$normalize$output
+) {
+  sw_pipeline_step(
+    "normalize",
+    sw_correct_normalize,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for SOM Clustering
@@ -1162,11 +1334,18 @@ sw_pipeline_step_normalize <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_som <- function(...,
-                               input_type  = .SW_STEP_DEFAULT_TYPES$create_som$input,
-                               output_type = .SW_STEP_DEFAULT_TYPES$create_som$output) {
-  sw_pipeline_step("create_som", sw_correct_som, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_som <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$create_som$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$create_som$output
+) {
+  sw_pipeline_step(
+    "create_som",
+    sw_correct_som,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for ComBat Correction
@@ -1181,11 +1360,18 @@ sw_pipeline_step_som <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_correct_apply <- function(...,
-                                 input_type  = .SW_STEP_DEFAULT_TYPES$correct_data$input,
-                                 output_type = .SW_STEP_DEFAULT_TYPES$correct_data$output) {
-  sw_pipeline_step("correct_data", sw_correct_apply, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_correct_apply <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$correct_data$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$correct_data$output
+) {
+  sw_pipeline_step(
+    "correct_data",
+    sw_correct_apply,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Clustering
@@ -1201,11 +1387,18 @@ sw_pipeline_step_correct_apply <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_cluster <- function(...,
-                            input_type  = .SW_STEP_DEFAULT_TYPES$cluster$input,
-                            output_type = .SW_STEP_DEFAULT_TYPES$cluster$output) {
-  sw_pipeline_step("cluster", sw_cluster_run, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_cluster <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$cluster$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$cluster$output
+) {
+  sw_pipeline_step(
+    "cluster",
+    sw_cluster_run,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for the Batch Design Audit
@@ -1224,11 +1417,18 @@ sw_pipeline_step_cluster <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_design_audit <- function(...,
-                              input_type  = .SW_STEP_DEFAULT_TYPES$design_audit$input,
-                              output_type = .SW_STEP_DEFAULT_TYPES$design_audit$output) {
-  sw_pipeline_step("design_audit", sw_design_audit, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_design_audit <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$design_audit$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$design_audit$output
+) {
+  sw_pipeline_step(
+    "design_audit",
+    sw_design_audit,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for the Batch Decision
@@ -1248,11 +1448,18 @@ sw_pipeline_step_design_audit <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_batch_decide <- function(...,
-                              input_type  = .SW_STEP_DEFAULT_TYPES$batch_decide$input,
-                              output_type = .SW_STEP_DEFAULT_TYPES$batch_decide$output) {
-  sw_pipeline_step("batch_decide", sw_batch_decide, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_batch_decide <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$batch_decide$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$batch_decide$output
+) {
+  sw_pipeline_step(
+    "batch_decide",
+    sw_batch_decide,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 #' Create a Step for Control IQR Flags
@@ -1271,11 +1478,78 @@ sw_pipeline_step_batch_decide <- function(...,
 #' @return A \code{ProcessingStep} object.
 #'
 #' @export
-sw_pipeline_step_flag_iqr <- function(...,
-                              input_type  = .SW_STEP_DEFAULT_TYPES$flag_iqr$input,
-                              output_type = .SW_STEP_DEFAULT_TYPES$flag_iqr$output) {
-  sw_pipeline_step("flag_iqr", sw_flag_iqr, list(...),
-          input_type = input_type, output_type = output_type)
+sw_pipeline_step_flag_iqr <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$flag_iqr$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$flag_iqr$output
+) {
+  sw_pipeline_step(
+    "flag_iqr",
+    sw_flag_iqr,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
+}
+
+#' Create a Step for the FCS Integrity Audit
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_fcs_integrity_audit}}. Input is a character vector of FCS
+#' paths (the \code{paths} argument); output is the long audit tibble.
+#'
+#' @param ... Additional arguments passed to \code{sw_fcs_integrity_audit}.
+#'   Include \code{tot_tolerance}, \code{time_keyword} and
+#'   \code{header_only} (no defaults there), or the step stops when it runs.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_pipeline_step_integrity_audit <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$integrity_audit$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$integrity_audit$output
+) {
+  sw_pipeline_step(
+    "integrity_audit",
+    sw_fcs_integrity_audit,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
+}
+
+#' Create a Step for Binding FCS Files to a Manifest
+#'
+#' Convenience constructor for a \code{ProcessingStep} that wraps
+#' \code{\link{sw_manifest_bind_files}}. Input is a manifest from
+#' \code{sw_sample_manifest()} (the \code{manifest} argument); the output is
+#' the six-element list that function returns, so no output type is declared.
+#'
+#' @param ... Additional arguments passed to \code{sw_manifest_bind_files}.
+#'   Include \code{paths}, \code{key}, \code{case}, \code{recursive},
+#'   \code{on_duplicate_file}, \code{on_extra_file} and \code{nextdata} (no
+#'   defaults there), or the step stops when it runs.
+#' @param input_type Character vector overriding the default input port type.
+#' @param output_type Character vector overriding the default output port type.
+#'
+#' @return A \code{ProcessingStep} object.
+#'
+#' @export
+sw_pipeline_step_bind_files <- function(
+  ...,
+  input_type = .SW_STEP_DEFAULT_TYPES$bind_files$input,
+  output_type = .SW_STEP_DEFAULT_TYPES$bind_files$output
+) {
+  sw_pipeline_step(
+    "bind_files",
+    sw_manifest_bind_files,
+    list(...),
+    input_type = input_type,
+    output_type = output_type
+  )
 }
 
 

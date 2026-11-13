@@ -112,8 +112,10 @@ test_that(".tool_read_xlsx_columns returns error for missing file", {
 })
 
 test_that(".tool_read_xlsx_columns reports missing readxl", {
-  skip_if(requireNamespace("readxl", quietly = TRUE),
-          "readxl is installed, cannot test missing-package path")
+  skip_if(
+    requireNamespace("readxl", quietly = TRUE),
+    "readxl is installed, cannot test missing-package path"
+  )
 
   tmp <- tempdir()
   xlsx_path <- file.path(tmp, "test.xlsx")
@@ -128,7 +130,8 @@ test_that(".tool_read_xlsx_columns reports missing readxl", {
 
 test_that(".tool_validate_sample_meta returns error for missing metadata", {
   result <- SpectraWeaveR:::.tool_validate_sample_meta(
-    "/nonexistent/meta.csv", "/tmp"
+    "/nonexistent/meta.csv",
+    "/tmp"
   )
   expect_match(result, "not found")
 })
@@ -138,11 +141,15 @@ test_that(".tool_validate_sample_meta returns error for missing fcs_dir", {
   csv_path <- file.path(tmp, "test_validate_meta.csv")
   on.exit(unlink(csv_path), add = TRUE)
 
-  write.csv(data.frame(file = "a.fcs", sample = "A", batch = "B1"),
-            csv_path, row.names = FALSE)
+  write.csv(
+    data.frame(file = "a.fcs", sample = "A", batch = "B1"),
+    csv_path,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_validate_sample_meta(
-    csv_path, "/nonexistent/fcs_dir"
+    csv_path,
+    "/nonexistent/fcs_dir"
   )
   expect_match(result, "not found")
 })
@@ -152,14 +159,20 @@ test_that(".tool_validate_sample_meta identifies missing columns", {
   csv_path <- file.path(tmp, "test_validate_meta2.csv")
   fcs_dir <- file.path(tmp, "test_validate_fcs")
   dir.create(fcs_dir, showWarnings = FALSE)
-  on.exit({
-    unlink(csv_path)
-    unlink(fcs_dir, recursive = TRUE)
-  }, add = TRUE)
+  on.exit(
+    {
+      unlink(csv_path)
+      unlink(fcs_dir, recursive = TRUE)
+    },
+    add = TRUE
+  )
 
   # CSV with non-standard columns
-  write.csv(data.frame(filename = "a.fcs", patient_id = "P1", run = "R1"),
-            csv_path, row.names = FALSE)
+  write.csv(
+    data.frame(filename = "a.fcs", patient_id = "P1", run = "R1"),
+    csv_path,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_validate_sample_meta(csv_path, fcs_dir)
   expect_match(result, "Missing expected columns")
@@ -170,19 +183,26 @@ test_that(".tool_validate_sample_meta validates successfully", {
   csv_path <- file.path(tmp, "test_validate_ok.csv")
   fcs_dir <- file.path(tmp, "test_validate_ok_fcs")
   dir.create(fcs_dir, showWarnings = FALSE)
-  on.exit({
-    unlink(csv_path)
-    unlink(fcs_dir, recursive = TRUE)
-  }, add = TRUE)
+  on.exit(
+    {
+      unlink(csv_path)
+      unlink(fcs_dir, recursive = TRUE)
+    },
+    add = TRUE
+  )
 
   # Create matching files
   file.create(file.path(fcs_dir, "s1.fcs"))
   file.create(file.path(fcs_dir, "s2.fcs"))
-  write.csv(data.frame(
-    file = c("s1.fcs", "s2.fcs"),
-    sample = c("S1", "S2"),
-    batch = c("B1", "B2")
-  ), csv_path, row.names = FALSE)
+  write.csv(
+    data.frame(
+      file = c("s1.fcs", "s2.fcs"),
+      sample = c("S1", "S2"),
+      batch = c("B1", "B2")
+    ),
+    csv_path,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_validate_sample_meta(csv_path, fcs_dir)
   expect_match(result, "No issues found")
@@ -193,7 +213,8 @@ test_that(".tool_validate_sample_meta validates successfully", {
 
 test_that(".tool_check_batch_balance returns error for missing file", {
   result <- SpectraWeaveR:::.tool_check_batch_balance(
-    "/nonexistent/meta.csv", "batch"
+    "/nonexistent/meta.csv",
+    "batch"
   )
   expect_match(result, "not found")
 })
@@ -214,10 +235,14 @@ test_that(".tool_check_batch_balance summarises batches correctly", {
   csv_path <- file.path(tmp, "test_balance2.csv")
   on.exit(unlink(csv_path), add = TRUE)
 
-  write.csv(data.frame(
-    sample = paste0("S", 1:6),
-    batch = c("B1", "B1", "B1", "B2", "B2", "B2")
-  ), csv_path, row.names = FALSE)
+  write.csv(
+    data.frame(
+      sample = paste0("S", 1:6),
+      batch = c("B1", "B1", "B1", "B2", "B2", "B2")
+    ),
+    csv_path,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_check_batch_balance(csv_path, "batch")
   expect_match(result, "Number of batches: 2")
@@ -230,10 +255,14 @@ test_that(".tool_check_batch_balance warns about imbalance", {
   csv_path <- file.path(tmp, "test_imbalance.csv")
   on.exit(unlink(csv_path), add = TRUE)
 
-  write.csv(data.frame(
-    sample = paste0("S", 1:7),
-    batch = c("B1", "B1", "B1", "B1", "B1", "B2", "B2")
-  ), csv_path, row.names = FALSE)
+  write.csv(
+    data.frame(
+      sample = paste0("S", 1:7),
+      batch = c("B1", "B1", "B1", "B1", "B1", "B2", "B2")
+    ),
+    csv_path,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_check_batch_balance(csv_path, "batch")
   expect_match(result, "WARNING")
@@ -258,7 +287,8 @@ test_that(".tool_detect_channels returns error for missing file", {
 
 test_that(".tool_validate_markers returns error for missing file", {
   result <- SpectraWeaveR:::.tool_validate_markers(
-    c("CD3", "CD4"), "/nonexistent/file.fcs"
+    c("CD3", "CD4"),
+    "/nonexistent/file.fcs"
   )
   expect_match(result, "not found")
 })
@@ -325,8 +355,11 @@ test_that("sw_pipeline_generate_code generates sw_pipeline_run_all code", {
     seed = 42
   )
 
-  code <- sw_pipeline_generate_code(config, style = "sw_pipeline_run_all",
-                                     output = "string")
+  code <- sw_pipeline_generate_code(
+    config,
+    style = "sw_pipeline_run_all",
+    output = "string"
+  )
   expect_type(code, "character")
   expect_match(code, "library\\(SpectraWeaveR\\)")
   expect_match(code, "sw_pipeline_run_all")
@@ -344,8 +377,11 @@ test_that("sw_pipeline_generate_code generates composable code", {
     cofactor = 6000
   )
 
-  code <- sw_pipeline_generate_code(config, style = "composable",
-                                     output = "string")
+  code <- sw_pipeline_generate_code(
+    config,
+    style = "composable",
+    output = "string"
+  )
   expect_type(code, "character")
   expect_match(code, "sw_pipeline")
   expect_match(code, "sw_filter_margins")
@@ -451,8 +487,10 @@ test_that("sw_pipeline_generate_code errors when file output lacks path", {
 
 test_that(".check_ellmer provides clear install instructions", {
   # We can only test the message format if ellmer is not installed
-  skip_if(requireNamespace("ellmer", quietly = TRUE),
-          "ellmer is installed, cannot test missing-package path")
+  skip_if(
+    requireNamespace("ellmer", quietly = TRUE),
+    "ellmer is installed, cannot test missing-package path"
+  )
 
   expect_error(SpectraWeaveR:::.check_ellmer(), "ellmer")
 })
@@ -482,15 +520,16 @@ test_that("the ellmer floor in DESCRIPTION equals the code constant", {
 })
 
 test_that("sw_assistant requires ellmer", {
-  skip_if(requireNamespace("ellmer", quietly = TRUE),
-          "ellmer is installed, cannot test missing-package path")
+  skip_if(
+    requireNamespace("ellmer", quietly = TRUE),
+    "ellmer is installed, cannot test missing-package path"
+  )
 
   expect_error(sw_assistant(), "ellmer")
 })
 
 test_that("sw_pipeline_quick validates description argument", {
-  skip_if(!requireNamespace("ellmer", quietly = TRUE),
-          "ellmer required")
+  skip_if(!requireNamespace("ellmer", quietly = TRUE), "ellmer required")
 
   expect_error(sw_pipeline_quick(""), "non-empty")
   expect_error(sw_pipeline_quick(42), "non-empty")
@@ -533,8 +572,10 @@ test_that("sw_pipeline_config_type returns ellmer type object", {
 # ===========================================================================
 
 test_that("sw_assistant_mcp requires mcptools", {
-  skip_if(requireNamespace("mcptools", quietly = TRUE),
-          "mcptools is installed; cannot test missing-package error")
+  skip_if(
+    requireNamespace("mcptools", quietly = TRUE),
+    "mcptools is installed; cannot test missing-package error"
+  )
 
   expect_error(sw_assistant_mcp(), "mcptools")
 })
@@ -549,14 +590,26 @@ test_that(".sw_tool_list returns list of tools", {
 
   tools <- SpectraWeaveR:::.sw_tool_list()
   expect_true(is.list(tools))
-  expect_true(length(tools) == 12)  # 9 file tools + 3 batch tools
+  expect_true(length(tools) == 14) # 9 file, 3 batch, 2 import tools
   # the system prompts in inst/prompts refer to these tools by name
   expect_identical(
     vapply(tools, \(tool) tool@name, character(1)),
-    c("list_fcs_files", "list_directory", "read_fcs_header",
-      "read_csv_columns", "read_xlsx_columns", "validate_sample_meta",
-      "detect_channels", "check_batch_balance", "validate_markers",
-      "design_audit", "flag_iqr", "batch_decide")
+    c(
+      "list_fcs_files",
+      "list_directory",
+      "read_fcs_header",
+      "read_csv_columns",
+      "read_xlsx_columns",
+      "validate_sample_meta",
+      "detect_channels",
+      "check_batch_balance",
+      "validate_markers",
+      "design_audit",
+      "flag_iqr",
+      "batch_decide",
+      "fcs_integrity",
+      "manifest_bind_files"
+    )
   )
   expect_identical(
     names(tools[[4]]@arguments@properties),
@@ -578,8 +631,11 @@ test_that("sw_assistant works with include_btw = FALSE", {
   skip_if_not_installed("ellmer")
   skip_if(Sys.getenv("OPENAI_API_KEY") == "", "No OpenAI API key")
 
-  chat <- sw_assistant(interactive = FALSE, privacy_notice = FALSE,
-                       include_btw = FALSE)
+  chat <- sw_assistant(
+    interactive = FALSE,
+    privacy_notice = FALSE,
+    include_btw = FALSE
+  )
   expect_true(inherits(chat, "Chat"))
 })
 
@@ -591,8 +647,19 @@ test_that("sw_assistant works with include_btw = FALSE", {
 
 test_that(".detect_sensitive_columns detects PII column names", {
   sensitive <- SpectraWeaveR:::.detect_sensitive_columns(
-    c("patient_id", "name", "dob", "mrn", "ssn", "diagnosis",
-      "batch", "file", "sample", "CD3", "CD4")
+    c(
+      "patient_id",
+      "name",
+      "dob",
+      "mrn",
+      "ssn",
+      "diagnosis",
+      "batch",
+      "file",
+      "sample",
+      "CD3",
+      "CD4"
+    )
   )
   expect_true("patient_id" %in% sensitive)
   expect_true("name" %in% sensitive)
@@ -621,7 +688,10 @@ test_that(".detect_sensitive_columns returns empty for safe columns", {
 })
 
 test_that(".detect_sensitive_columns handles empty input", {
-  expect_equal(length(SpectraWeaveR:::.detect_sensitive_columns(character(0))), 0)
+  expect_equal(
+    length(SpectraWeaveR:::.detect_sensitive_columns(character(0))),
+    0
+  )
 })
 
 # ---- .redact_preview ----
@@ -636,7 +706,7 @@ test_that(".redact_preview redacts sensitive columns", {
   redacted <- SpectraWeaveR:::.redact_preview(df, c("patient_id", "diagnosis"))
   expect_equal(redacted$patient_id, c("[REDACTED]", "[REDACTED]"))
   expect_equal(redacted$diagnosis, c("[REDACTED]", "[REDACTED]"))
-  expect_equal(redacted$batch, c("B1", "B2"))  # unchanged
+  expect_equal(redacted$batch, c("B1", "B2")) # unchanged
 })
 
 test_that(".redact_preview with no sensitive columns returns unchanged df", {
@@ -650,8 +720,11 @@ test_that(".redact_preview with no sensitive columns returns unchanged df", {
 test_that(".tool_read_csv_columns columns_only suppresses rows", {
   tmp <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp))
-  write.csv(data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
-            tmp, row.names = FALSE)
+  write.csv(
+    data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
+    tmp,
+    row.names = FALSE
+  )
 
   result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, columns_only = TRUE)
   expect_match(result, "patient_id")
@@ -662,14 +735,20 @@ test_that(".tool_read_csv_columns columns_only suppresses rows", {
 test_that(".tool_read_csv_columns standard mode redacts PII", {
   tmp <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp))
-  write.csv(data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
-            tmp, row.names = FALSE)
+  write.csv(
+    data.frame(patient_id = "P001", batch = "B1", CD3 = 1.5),
+    tmp,
+    row.names = FALSE
+  )
 
-  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, sensitivity = "standard")
+  result <- SpectraWeaveR:::.tool_read_csv_columns(
+    tmp,
+    sensitivity = "standard"
+  )
   expect_match(result, "REDACTED")
   expect_match(result, "patient_id")
   expect_no_match(result, "P001")
-  expect_match(result, "B1")  # non-sensitive values still shown
+  expect_match(result, "B1") # non-sensitive values still shown
 })
 
 test_that(".tool_read_csv_columns strict mode forces columns_only", {
@@ -686,23 +765,36 @@ test_that(".tool_read_csv_columns strict mode forces columns_only", {
 test_that(".tool_read_csv_columns standard mode passes through safe data", {
   tmp <- tempfile(fileext = ".csv")
   on.exit(unlink(tmp))
-  write.csv(data.frame(batch = "B1", file = "s1.fcs", CD3 = 1.5),
-            tmp, row.names = FALSE)
+  write.csv(
+    data.frame(batch = "B1", file = "s1.fcs", CD3 = 1.5),
+    tmp,
+    row.names = FALSE
+  )
 
-  result <- SpectraWeaveR:::.tool_read_csv_columns(tmp, sensitivity = "standard")
+  result <- SpectraWeaveR:::.tool_read_csv_columns(
+    tmp,
+    sensitivity = "standard"
+  )
   expect_no_match(result, "REDACTED")
-  expect_match(result, "B1")  # safe preview shown
+  expect_match(result, "B1") # safe preview shown
 })
 
 # ---- sensitivity parameter acceptance ----
 
 test_that("all assistant functions accept sensitivity parameter", {
-  for (fn_name in c("sw_assistant", "sw_assistant_configure",
-                    "sw_assistant_batch_correction", "sw_assistant_gating",
-                    "sw_assistant_unmixing", "sw_assistant_mcp")) {
+  for (fn_name in c(
+    "sw_assistant",
+    "sw_assistant_configure",
+    "sw_assistant_batch_correction",
+    "sw_assistant_gating",
+    "sw_assistant_unmixing",
+    "sw_assistant_mcp"
+  )) {
     fn <- get(fn_name, envir = asNamespace("SpectraWeaveR"))
-    expect_true("sensitivity" %in% names(formals(fn)),
-                info = paste(fn_name, "missing sensitivity param"))
+    expect_true(
+      "sensitivity" %in% names(formals(fn)),
+      info = paste(fn_name, "missing sensitivity param")
+    )
   }
 })
 
@@ -711,8 +803,11 @@ test_that("sensitivity rejects invalid values", {
   skip_if(Sys.getenv("OPENAI_API_KEY") == "", "No OpenAI API key")
 
   expect_error(
-    sw_assistant(interactive = FALSE, privacy_notice = FALSE,
-                 sensitivity = "invalid"),
+    sw_assistant(
+      interactive = FALSE,
+      privacy_notice = FALSE,
+      sensitivity = "invalid"
+    ),
     "arg"
   )
 })
@@ -723,13 +818,20 @@ test_that("all system prompts contain Data Privacy section", {
   prompt_dir <- system.file("prompts", package = "SpectraWeaveR")
   skip_if(!nzchar(prompt_dir), "prompts directory not found")
 
-  for (name in c("pipeline_builder", "batch_correction_builder",
-                  "gating_builder", "unmixing_builder")) {
+  for (name in c(
+    "pipeline_builder",
+    "batch_correction_builder",
+    "gating_builder",
+    "unmixing_builder"
+  )) {
     path <- file.path(prompt_dir, paste0(name, ".md"))
     skip_if(!file.exists(path), paste("prompt file missing:", name))
     content <- paste(readLines(path, warn = FALSE), collapse = "\n")
-    expect_match(content, "Data Privacy",
-                 info = paste(name, "missing Data Privacy section"))
+    expect_match(
+      content,
+      "Data Privacy",
+      info = paste(name, "missing Data Privacy section")
+    )
   }
 })
 
@@ -778,7 +880,13 @@ test_that(".tool_design_audit audits a CSV sample table and needs every threshol
   expect_match(out, "sw_design_audit")
   expect_no_match(out, "^Error")
   expect_match(
-    SpectraWeaveR:::.tool_design_audit("/nonexistent.csv", "batch", 2, "t", TRUE),
+    SpectraWeaveR:::.tool_design_audit(
+      "/nonexistent.csv",
+      "batch",
+      2,
+      "t",
+      TRUE
+    ),
     "^Error: File does not exist"
   )
   # A missing threshold is an error that reaches the model, never a default.
@@ -858,7 +966,10 @@ test_that(".tool_batch_decide reads saved objects, needs the contrast choice, an
     max_contrast_change = NULL,
     min_donors_per_condition = NULL,
     min_contrast_spread_ratio = NULL,
-    threshold_origins = stats::setNames(rep("test value, uncalibrated", 5), thr),
+    threshold_origins = stats::setNames(
+      rep("test value, uncalibrated", 5),
+      thr
+    ),
     calibration_artifacts = character(0)
   )
   design <- structure(
@@ -912,13 +1023,21 @@ test_that(".tool_batch_decide reads saved objects, needs the contrast choice, an
   expect_match(out, "cc +eligible_for_review")
   expect_match(out, "No recommendation")
   expect_match(out, "uncalibrated")
-  expect_match(decide(file.path(dir, "absent.csv")), "^Error: File does not exist")
+  expect_match(
+    decide(file.path(dir, "absent.csv")),
+    "^Error: File does not exist"
+  )
   # A wrong object class is reported by the package, not swallowed.
   saveRDS(policy, file.path(dir, "design.rds"))
   expect_match(decide("none"), "^Error deciding on batch correction")
   expect_match(
     SpectraWeaveR:::.tool_batch_decide(
-      "/nonexistent.rds", "p", "r", "none", "reference", "none"
+      "/nonexistent.rds",
+      "p",
+      "r",
+      "none",
+      "reference",
+      "none"
     ),
     "^Error: File does not exist"
   )
@@ -933,10 +1052,14 @@ test_that("the three batch tools carry no hidden defaults for impactful settings
   }
   expect_true(all(
     c(
-      "iqr_multiplier", "min_cells_per_side", "quantile_type",
-      "min_effect_neg_median", "min_effect_pos_median",
+      "iqr_multiplier",
+      "min_cells_per_side",
+      "quantile_type",
+      "min_effect_neg_median",
+      "min_effect_pos_median",
       "min_effect_pct_positive"
-    ) %in% names(by_name$flag_iqr@arguments@properties)
+    ) %in%
+      names(by_name$flag_iqr@arguments@properties)
   ))
   # None of the impactful settings is optional.
   props <- by_name$flag_iqr@arguments@properties
@@ -945,6 +1068,99 @@ test_that("the three batch tools carry no hidden defaults for impactful settings
     \(p) isTRUE(p@required),
     logical(1)
   )))
-  expect_true("contrast_records_csv" %in% names(by_name$batch_decide@arguments@properties))
-  expect_true(isTRUE(by_name$design_audit@arguments@properties$minimum_batches@required))
+  expect_true(
+    "contrast_records_csv" %in% names(by_name$batch_decide@arguments@properties)
+  )
+  expect_true(isTRUE(
+    by_name$design_audit@arguments@properties$minimum_batches@required
+  ))
+})
+
+# ---- import tools: fcs_integrity, manifest_bind_files ----
+
+write_import_fcs <- function(dir, names) {
+  for (nm in names) {
+    m <- cbind(Time = 1:20, "B1-A" = stats::rnorm(20))
+    flowCore::write.FCS(flowCore::flowFrame(m), file.path(dir, nm))
+  }
+}
+
+test_that(".tool_fcs_integrity prints status counts and no verdict", {
+  skip_if_not_installed("flowCore")
+  dir <- withr::local_tempdir()
+  write_import_fcs(dir, c("a.fcs", "b.fcs"))
+  out <- SpectraWeaveR:::.tool_fcs_integrity(
+    file.path(dir, c("a.fcs", "b.fcs")),
+    tot_tolerance = 0,
+    time_keyword = "Time",
+    header_only = FALSE
+  )
+  expect_match(out, "FCS integrity on 2 files")
+  expect_match(out, "tot_vs_rows")
+  expect_match(out, "not a pass or fail")
+  expect_match(
+    SpectraWeaveR:::.tool_fcs_integrity("/nonexistent.fcs", 0, "Time", FALSE),
+    "^Error: File does not exist"
+  )
+  # A missing setting is reported by the package, not defaulted.
+  expect_match(
+    SpectraWeaveR:::.tool_fcs_integrity(file.path(dir, "a.fcs"), 0, "Time"),
+    "^Error running FCS integrity audit"
+  )
+})
+
+test_that(".tool_manifest_bind_files lists unmatched rows and files", {
+  skip_if_not_installed("flowCore")
+  dir <- withr::local_tempdir()
+  write_import_fcs(dir, c("s1.fcs", "extra.fcs"))
+  csv <- file.path(dir, "meta.csv")
+  utils::write.csv(
+    data.frame(id = c("s1", "s2"), run = c("b1", "b2")),
+    csv,
+    row.names = FALSE
+  )
+  out <- SpectraWeaveR:::.tool_manifest_bind_files(
+    csv,
+    "id",
+    "run",
+    dir,
+    key = "file_stem",
+    case = "exact",
+    recursive = FALSE,
+    on_duplicate_file = "stop",
+    on_extra_file = "list",
+    nextdata = "bind"
+  )
+  expect_match(out, "bound=1")
+  expect_match(out, "manifest rows with no file: s2")
+  expect_match(out, "files with no manifest row: extra.fcs")
+  expect_match(
+    SpectraWeaveR:::.tool_manifest_bind_files(
+      "/nonexistent.csv",
+      "id",
+      "run",
+      dir,
+      "file_stem",
+      "exact",
+      FALSE,
+      "stop",
+      "list",
+      "bind"
+    ),
+    "^Error: File does not exist"
+  )
+})
+
+test_that("the import tools require every impactful setting", {
+  skip_if_not_installed("ellmer")
+  tools <- SpectraWeaveR:::.sw_import_tools()
+  by_name <- stats::setNames(tools, vapply(tools, \(t) t@name, character(1)))
+  expect_setequal(names(by_name), c("fcs_integrity", "manifest_bind_files"))
+  for (tool in by_name) {
+    expect_true(all(vapply(
+      tool@arguments@properties,
+      \(p) isTRUE(p@required),
+      logical(1)
+    )))
+  }
 })
