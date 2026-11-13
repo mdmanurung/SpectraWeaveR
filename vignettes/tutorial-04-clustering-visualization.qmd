@@ -288,25 +288,29 @@ stopifnot(file.exists(ssm_pdf))
 cat("SSM heatmap saved to:", ssm_pdf, "\n")
 ```
 
-### Unmixing quality per channel
+### Event metrics per channel
 
-`sw_unmix_quality()` computes mean, SD, CV, and percentage of negative
-values per channel — flagging channels with high CV.
+`sw_unmix_event_metrics()` scores negatives, spread, stain index and (optionally)
+the pairwise line check per file and channel. Edges come from an unmixed
+unstained control, here simulated; every threshold is your choice.
 
 ```{r}
-#| label: unmixing-quality
-quality <- sw_unmix_quality(
-  ff_unmixed,
-  channels = c("BV421", "BV510", "BV605", "BV711", "PE", "APC"),
-  cv_threshold = 0.5
+#| label: event-metrics
+chans <- c("BV421", "BV510", "BV605", "BV711", "PE", "APC")
+unstained <- matrix(
+  rnorm(2000 * length(chans), 0, 300),
+  ncol = length(chans),
+  dimnames = list(NULL, chans)
 )
-
-stopifnot(is.data.frame(quality))
-stopifnot(all(c("channel", "mean", "sd", "cv", "pct_negative", "flagged") %in%
-              names(quality)))
-stopifnot(nrow(quality) == 6)
-cat("Per-channel quality:\n")
-print(quality)
+edges <- sw_unmix_edges(unstained = unstained, probs = c(floor = 0.005, edge = 0.995))
+em <- sw_unmix_event_metrics(
+  ff_unmixed, edges,
+  cofactor = 6000, negative_cut = -1.5, spread_probs = c(0.025, 0.975),
+  min_pos = 100, hyper_k = 3, spread = NULL, kappa = NULL,
+  pairs = NULL, n_bins = NULL, min_cells = NULL
+)
+stopifnot(nrow(em$channels) == length(chans))
+print(em$channels[, c("channel", "pct_below_cut", "spread_q", "si_mad")])
 ```
 
 ## Clean up
@@ -331,7 +335,8 @@ cat("Tutorial Part 4 complete. All functions verified.\n")
 | `sw_plot_dimred()` | dimred |
 | `sw_unmix_spillover_matrix()` | unmix_diagnostics |
 | `sw_plot_spillover_matrix()` | unmix_diagnostics |
-| `sw_unmix_quality()` | unmix_diagnostics |
+| `sw_unmix_edges()` | unmix_event_metrics |
+| `sw_unmix_event_metrics()` | unmix_event_metrics |
 
 **Previous:** [Part 3 — Batch Correction](tutorial-03-batch-correction.qmd)\
 **Next:** [Part 5 — Pipeline Frameworks](tutorial-05-pipeline-frameworks.qmd)

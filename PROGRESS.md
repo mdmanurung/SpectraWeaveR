@@ -371,3 +371,10 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 - Deliverables: dashboard artifact https://claude.ai/artifact/AMvG73XbSU1La32hEJVjxR (v9), local `experiments/runs/2026-11-11_bmv-dashboard-common-v3/dashboard.html`; group deck https://claude.ai/artifact/HkUGBqTSpb6HYee4HMuaZE (17 slides).
 - Open, needs new samples: unstimulated control (true TNF+ %), eFluor 450 FMO (Th2–GLUT1 tilt). Planned, not run: CD38 spike for opt188, TNF/IFNg spike for GLS.
 - Status: closed 2026-11-11.
+
+## Session 19 (2026-11-15): unmix event metrics in the package
+
+- New: `sw_unmix_edges()`, `sw_unmix_event_metrics()`, `sw_unmix_heldout()`; `sw_unmix_diagnose(event_metrics=, heldout=)` adds `event_channel`, `event_pair`, `heldout` rows and 10 limit names; `sw_unmix_report()` writes `event_channels.csv`, `event_pairs.csv`, `heldout_scores.csv`, `heldout_repro.csv` and two HTML sections.
+- Removed: `sw_unmix_quality()` (user decision 2026-11-15); diagnose keeps mean, sd, cv, pct_negative through `.sw_channel_stats()`. Tutorial 04 and benchmark 05 `02_metrics.R` updated.
+- Tests: `tests/testthat/test-unmix_event_metrics.R` (55 expectations, AutoSpectral mocked). Real-data smoke: one 24H SEB file (1e5 events, 35 channels, 1190 pairs, spread-aware edges from the variants) in 23 s.
+- Plan: `plans/2026-11-15_unmix-event-metrics.md`. NAMESPACE: 240 `export()` lines.

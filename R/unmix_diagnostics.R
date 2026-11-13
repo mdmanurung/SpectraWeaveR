@@ -62,7 +62,7 @@ NULL
 #' This is equivalent to the absolute cosine similarity and ranges from 0
 #' (orthogonal spectra) to 1 (identical spectra).
 #'
-#' @seealso \code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_quality}},
+#' @seealso \code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_event_metrics}},
 #'   \code{\link{sw_unmix_prepare}}
 #'
 #' @examples
@@ -224,102 +224,4 @@ sw_plot_spillover_matrix <- function(ssm, plot_file = NULL, ...) {
   }
 
   invisible(NULL)
-}
-
-
-# ---------------------------------------------------------------------------
-# Unmixing quality summary
-# ---------------------------------------------------------------------------
-
-#' Unmixing Quality Summary
-#'
-#' Computes per-channel quality metrics for unmixed flow cytometry data.
-#' Reports the mean, standard deviation, coefficient of variation (CV),
-#' and flags channels exceeding a CV threshold.
-#'
-#' @param unmixed_ff A \code{flowFrame} of unmixed data.
-#' @param channels Character vector of channel names to evaluate.  If
-#'   \code{NULL} (default), all fluorochrome channels (excluding scatter
-#'   and metadata) are used.
-#' @param cv_threshold Numeric; channels with CV exceeding this value
-#'   are flagged (default: 0.5).
-#'
-#' @return A \code{tibble} with columns: \code{channel}, \code{mean},
-#'   \code{sd}, \code{cv}, \code{pct_negative}, and \code{flagged}.
-#'
-#' @seealso \code{\link{sw_unmix_spillover_matrix}}
-#'
-#' @examples
-#' \dontrun{
-#' if (requireNamespace("flowCore", quietly = TRUE)) {
-#'   mat <- matrix(abs(rnorm(300, 5000, 2000)), ncol = 3,
-#'                 dimnames = list(NULL, c("CD3", "CD4", "CD8")))
-#'   ff <- flowCore::flowFrame(mat)
-#'   quality <- sw_unmix_quality(ff, channels = c("CD3", "CD4", "CD8"))
-#'   quality
-#' }
-#' }
-#'
-#' @export
-sw_unmix_quality <- function(unmixed_ff, channels = NULL,
-                                cv_threshold = 0.5) {
-  if (!requireNamespace("flowCore", quietly = TRUE)) {
-    stop("Package 'flowCore' is required.", call. = FALSE)
-  }
-
-  if (!methods::is(unmixed_ff, "flowFrame")) {
-    stop("'unmixed_ff' must be a flowFrame object.", call. = FALSE)
-  }
-
-  if (!is.numeric(cv_threshold) || cv_threshold <= 0) {
-    stop("'cv_threshold' must be a positive number.", call. = FALSE)
-  }
-
-  expr_mat <- flowCore::exprs(unmixed_ff)
-
-  if (is.null(channels)) {
-    fluor_mask <- sw_channel_is_fluor(unmixed_ff)
-    channels <- flowCore::colnames(unmixed_ff)[fluor_mask]
-  }
-
-  missing_ch <- setdiff(channels, colnames(expr_mat))
-  if (length(missing_ch) > 0) {
-    stop("Channel(s) not found: ",
-         paste(missing_ch, collapse = ", "), call. = FALSE)
-  }
-
-  stats_list <- lapply(channels, function(ch) {
-    vals <- expr_mat[, ch]
-    ch_mean <- mean(vals, na.rm = TRUE)
-    ch_sd <- stats::sd(vals, na.rm = TRUE)
-    ch_cv <- if (abs(ch_mean) > .Machine$double.eps) {
-      ch_sd / abs(ch_mean)
-    } else {
-      NA_real_
-    }
-    pct_neg <- 100 * sum(vals < 0, na.rm = TRUE) / length(vals)
-
-    tibble::tibble(
-      channel = ch,
-      mean = ch_mean,
-      sd = ch_sd,
-      cv = ch_cv,
-      pct_negative = pct_neg,
-      flagged = !is.na(ch_cv) && ch_cv > cv_threshold
-    )
-  })
-
-  result <- dplyr::bind_rows(stats_list)
-
-  n_flagged <- sum(result$flagged)
-  if (n_flagged > 0) {
-    message("Unmixing quality: ", n_flagged, " channel(s) flagged (CV > ",
-            cv_threshold, "): ",
-            paste(result$channel[result$flagged], collapse = ", "))
-  } else {
-    message("Unmixing quality: all channels within CV threshold (",
-            cv_threshold, ")")
-  }
-
-  result
 }

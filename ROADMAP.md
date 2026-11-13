@@ -258,4 +258,4 @@ These defaults pre-date this roadmap. Each can change a result. The user confirm
 | `sw_gate_singlets()` | `nmad = 4` |
 | `sw_qc_run()` | `IT_limit = 0.55`, `MAD = 6` |
 | `sw_qc_summary()` | `threshold = 30` |
-| `sw_unmix_quality()` | `cv_threshold = 0.5` |
+| `sw_unmix_quality()` | removed 2026-11-15; replaced by `sw_unmix_event_metrics()` (no defaults) |

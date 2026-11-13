@@ -11,6 +11,8 @@ sw_unmix_diagnose(
   unmixed_data = NULL,
   spike = NULL,
   screen = NULL,
+  event_metrics = NULL,
+  heldout = NULL,
   ...
 )
 }
@@ -30,6 +32,11 @@ files and needs no flowCore.}
 \item{spike}{Optional \code{sw_spike_score} from \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}.}
 
 \item{screen}{Optional \code{sw_marker_screen} from \code{\link[=sw_unmix_marker_screen]{sw_unmix_marker_screen()}}.}
+
+\item{event_metrics}{Optional \code{sw_event_metrics} from
+\code{\link[=sw_unmix_event_metrics]{sw_unmix_event_metrics()}}.}
+
+\item{heldout}{Optional \code{sw_heldout} from \code{\link[=sw_unmix_heldout]{sw_unmix_heldout()}}.}
 
 \item{...}{Passed to \code{\link[=sw_unmix_check_controls]{sw_unmix_check_controls()}}.}
 }
@@ -80,7 +87,7 @@ fluorophore channel, \code{mean}, \code{sd}, \code{cv} (\verb{sd / |mean|}) and
 \code{"-A"} (AutoSpectral's unmixed FCS naming). With \code{unmixed_data} the
 statistics come from those matrices. Otherwise files are read with
 flowCore (\code{truncate_max_range = FALSE}) and summarised by
-\code{\link[=sw_unmix_quality]{sw_unmix_quality()}} with its flag switched off.
+the formulas of the removed \code{sw_unmix_quality()}, without a flag.
 \item \code{spike_recovery} (only with \code{spike}): from an \code{\link[=sw_unmix_spike_score]{sw_unmix_spike_score()}}
 result. \code{item} is \code{"setup|marker|pop"}, where the marker slot holds the
 spike set (the marker for single spikes, \verb{cospike_<dye2>_<level2>} for
@@ -95,6 +102,17 @@ the status still follows \code{limits} only.
 
 For both, the value is the donor median and \code{reason} gives the number of
 donors and their range.
+\itemize{
+\item \code{event_channel} (only with \code{event_metrics}): from
+\code{\link[=sw_unmix_event_metrics]{sw_unmix_event_metrics()}}, \code{item} is \code{"file|channel"}; metrics
+\code{pct_below_cut}, \code{pct_below_floor}, \code{neg_median}, \code{neg_rsd}, \code{spread_q},
+\code{pileup}, \code{hyper_share}, \code{si_mad}, \code{si_q}.
+\item \code{event_pair} (only with \code{event_metrics} that has pairs): \code{item} is
+\code{"file|channel_i|channel_j"}; \code{abs_slope} and \code{abs_rho} of the line check.
+These rows go to checks.csv and event_pairs.csv, not to the HTML table.
+\item \code{heldout} (only with \code{heldout}): from \code{\link[=sw_unmix_heldout]{sw_unmix_heldout()}}, \code{item} is
+\code{"control|channel"}; \code{heldout_spread_q} and \code{heldout_bias} (linear).
+}
 
 \code{limits} names and the metric each judges. \verb{max_*} limits fail when the
 value is larger than the limit; \verb{min_*} limits fail when it is smaller. A
@@ -114,6 +132,16 @@ value equal to the limit passes.\tabular{ll}{
    \code{min_median_recovery} \tab \code{median_recovery} \cr
    \code{max_share_moved} \tab \code{share_moved} \cr
    \code{max_delta_squeezed} \tab \code{delta_squeezed} \cr
+   \code{max_pct_below_cut} \tab \code{pct_below_cut} \cr
+   \code{max_pct_below_floor} \tab \code{pct_below_floor} \cr
+   \code{max_spread_q} \tab \code{spread_q} \cr
+   \code{max_hyper_share} \tab \code{hyper_share} \cr
+   \code{min_stain_index} \tab \code{si_mad} \cr
+   \code{min_stain_index_q} \tab \code{si_q} \cr
+   \code{max_abs_slope} \tab \code{abs_slope} \cr
+   \code{max_abs_rho} \tab \code{abs_rho} \cr
+   \code{max_heldout_spread} \tab \code{heldout_spread_q} \cr
+   \code{max_heldout_bias} \tab \code{heldout_bias} \cr
 }
 
 

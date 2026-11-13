@@ -68,6 +68,6 @@ ssm$summary
 
 }
 \seealso{
-\code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_quality}},
+\code{\link{sw_plot_spillover_matrix}}, \code{\link{sw_unmix_event_metrics}},
 \code{\link{sw_unmix_prepare}}
 }

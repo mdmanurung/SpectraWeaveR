@@ -48,7 +48,17 @@ NULL
   max_share_lost = "share_lost",
   min_median_recovery = "median_recovery",
   max_share_moved = "share_moved",
-  max_delta_squeezed = "delta_squeezed"
+  max_delta_squeezed = "delta_squeezed",
+  max_pct_below_cut = "pct_below_cut",
+  max_pct_below_floor = "pct_below_floor",
+  max_spread_q = "spread_q",
+  max_hyper_share = "hyper_share",
+  min_stain_index = "si_mad",
+  min_stain_index_q = "si_q",
+  max_abs_slope = "abs_slope",
+  max_abs_rho = "abs_rho",
+  max_heldout_spread = "heldout_spread_q",
+  max_heldout_bias = "heldout_bias"
 )
 .sw_unmix_limit_spec <- data.frame(
   limit = names(.sw_unmix_limit_metrics),
@@ -73,7 +83,11 @@ NULL
   "report.json",
   "spike_summary.csv",
   "baseline_check.csv",
-  "marker_screen.csv"
+  "marker_screen.csv",
+  "event_channels.csv",
+  "event_pairs.csv",
+  "heldout_scores.csv",
+  "heldout_repro.csv"
 )
 
 
@@ -740,8 +754,7 @@ print.sw_unmix_result <- function(x, ...) {
   checks
 }
 
-# Mean, sd, cv and percent negative per channel of a numeric matrix. Same
-# formulas as sw_unmix_quality(), without its built-in flag.
+# Mean, sd, cv and percent negative per channel of a numeric matrix (no flag).
 .sw_channel_stats <- function(mat, channels) {
   do.call(
     dplyr::bind_rows,
@@ -1149,15 +1162,7 @@ print.sw_unmix_result <- function(x, ...) {
         truncate_max_range = FALSE
       )
       mat <- flowCore::exprs(ff)
-      # sw_unmix_quality() with an infinite cv_threshold, so it flags nothing.
-      stats_fn <- \(ch) {
-        suppressMessages(sw_unmix_quality(
-          ff,
-          channels = ch,
-          cv_threshold = Inf
-        ))
-      }
-      .sw_diag_one_file(basename(f), mat, stats_fn, fluors)
+      .sw_diag_one_file(basename(f), mat, \(ch) .sw_channel_stats(mat, ch), fluors)
     })
   )
 }
@@ -1357,7 +1362,7 @@ sw_unmix_limits_autospectral <- function() {
 #'   `"-A"` (AutoSpectral's unmixed FCS naming). With `unmixed_data` the
 #'   statistics come from those matrices. Otherwise files are read with
 #'   flowCore (`truncate_max_range = FALSE`) and summarised by
-#'   [sw_unmix_quality()] with its flag switched off.
+#'   the formulas of the removed `sw_unmix_quality()`, without a flag.
 #' * `spike_recovery` (only with `spike`): from an [sw_unmix_spike_score()]
 #'   result. `item` is `"setup|marker|pop"`, where the marker slot holds the
 #'   spike set (the marker for single spikes, `cospike_<dye2>_<level2>` for
@@ -1371,6 +1376,15 @@ sw_unmix_limits_autospectral <- function() {
 #'
 #' For both, the value is the donor median and `reason` gives the number of
 #' donors and their range.
+#' * `event_channel` (only with `event_metrics`): from
+#'   [sw_unmix_event_metrics()], `item` is `"file|channel"`; metrics
+#'   `pct_below_cut`, `pct_below_floor`, `neg_median`, `neg_rsd`, `spread_q`,
+#'   `pileup`, `hyper_share`, `si_mad`, `si_q`.
+#' * `event_pair` (only with `event_metrics` that has pairs): `item` is
+#'   `"file|channel_i|channel_j"`; `abs_slope` and `abs_rho` of the line check.
+#'   These rows go to checks.csv and event_pairs.csv, not to the HTML table.
+#' * `heldout` (only with `heldout`): from [sw_unmix_heldout()], `item` is
+#'   `"control|channel"`; `heldout_spread_q` and `heldout_bias` (linear).
 #'
 #' `limits` names and the metric each judges. `max_*` limits fail when the
 #' value is larger than the limit; `min_*` limits fail when it is smaller. A
@@ -1392,6 +1406,16 @@ sw_unmix_limits_autospectral <- function() {
 #' | `min_median_recovery` | `median_recovery` |
 #' | `max_share_moved` | `share_moved` |
 #' | `max_delta_squeezed` | `delta_squeezed` |
+#' | `max_pct_below_cut` | `pct_below_cut` |
+#' | `max_pct_below_floor` | `pct_below_floor` |
+#' | `max_spread_q` | `spread_q` |
+#' | `max_hyper_share` | `hyper_share` |
+#' | `min_stain_index` | `si_mad` |
+#' | `min_stain_index_q` | `si_q` |
+#' | `max_abs_slope` | `abs_slope` |
+#' | `max_abs_rho` | `abs_rho` |
+#' | `max_heldout_spread` | `heldout_spread_q` |
+#' | `max_heldout_bias` | `heldout_bias` |
 #'
 #' Each element is `c(warn = , fail = )`, either one alone, or a single
 #' unnamed number, which is read as the `fail` limit. Unknown names error.
@@ -1406,6 +1430,9 @@ sw_unmix_limits_autospectral <- function() {
 #'   files and needs no flowCore.
 #' @param spike Optional `sw_spike_score` from [sw_unmix_spike_score()].
 #' @param screen Optional `sw_marker_screen` from [sw_unmix_marker_screen()].
+#' @param event_metrics Optional `sw_event_metrics` from
+#'   [sw_unmix_event_metrics()].
+#' @param heldout Optional `sw_heldout` from [sw_unmix_heldout()].
 #' @param ... Passed to [sw_unmix_check_controls()].
 #'
 #' @return An object of class `sw_unmix_diagnostics`: a list with `run_id`,
@@ -1438,6 +1465,8 @@ sw_unmix_diagnose <- function(
   unmixed_data = NULL,
   spike = NULL,
   screen = NULL,
+  event_metrics = NULL,
+  heldout = NULL,
   ...
 ) {
   if (!inherits(result, "sw_unmix_result")) {
@@ -1483,7 +1512,9 @@ sw_unmix_diagnose <- function(
     .sw_diag_variants(result$variants, fluors),
     .sw_diag_files(files, unmixed_data, fluors),
     .sw_diag_spike(spike),
-    .sw_diag_screen(screen)
+    .sw_diag_screen(screen),
+    .sw_diag_event_metrics(event_metrics),
+    .sw_diag_heldout(heldout)
   )
   checks <- .sw_apply_limits(checks, lims)
 
@@ -1510,7 +1541,9 @@ sw_unmix_diagnose <- function(
       limits = lims,
       notes = c(notes, if (!is.null(spike)) spike$notes),
       spike = spike,
-      screen = screen
+      screen = screen,
+      event_metrics = event_metrics,
+      heldout = heldout
     ),
     class = "sw_unmix_diagnostics"
   )
@@ -1850,6 +1883,24 @@ sw_unmix_report <- function(
     out[["marker_screen"]] <- file.path(path, "marker_screen.csv")
     utils::write.csv(screen$flags, out[["marker_screen"]], row.names = FALSE)
   }
+  em <- diagnostics$event_metrics
+  ho <- diagnostics$heldout
+  if (!is.null(em)) {
+    out[["event_channels"]] <- file.path(path, "event_channels.csv")
+    utils::write.csv(em$channels, out[["event_channels"]], row.names = FALSE)
+    if (!is.null(em$pairs)) {
+      out[["event_pairs"]] <- file.path(path, "event_pairs.csv")
+      utils::write.csv(em$pairs, out[["event_pairs"]], row.names = FALSE)
+    }
+  }
+  if (!is.null(ho)) {
+    out[["heldout_scores"]] <- file.path(path, "heldout_scores.csv")
+    utils::write.csv(ho$scores, out[["heldout_scores"]], row.names = FALSE)
+    if (!is.null(ho$repro)) {
+      out[["heldout_repro"]] <- file.path(path, "heldout_repro.csv")
+      utils::write.csv(ho$repro, out[["heldout_repro"]], row.names = FALSE)
+    }
+  }
 
   has_json <- .sw_has_jsonlite()
   if (has_json) {
@@ -1865,7 +1916,10 @@ sw_unmix_report <- function(
         notes = c(diagnostics$notes, notes),
         spike_summary = spike$summary,
         baseline_check = spike$baseline_check,
-        marker_screen = screen$flags
+        marker_screen = screen$flags,
+        event_channels = em$channels,
+        heldout_scores = ho$scores,
+        heldout_repro = ho$repro
       ),
       out[["json"]],
       digits = NA,
@@ -1979,11 +2033,15 @@ sw_unmix_report <- function(
         .sw_html_table(screen$flags)
       )
     },
+    .sw_report_event_sections(em, ho),
     "<h2>Diagnostics</h2>",
     "<p><strong>Verdicts appear only where you supplied a limit; no cutoff is built in.</strong></p>",
     .sw_html_table(diagnostics$summary),
     .sw_html_list(diagnostics$notes),
-    .sw_html_table(checks),
+    .sw_html_table(checks[checks$check_id != "event_pair", ]),
+    if (any(checks$check_id == "event_pair")) {
+      "<p>Pair rows (event_pair) are in checks.csv and event_pairs.csv only.</p>"
+    },
     "<h2>Limitations</h2>",
     .sw_html_list(limitations),
     "<h2>Output files</h2>",
