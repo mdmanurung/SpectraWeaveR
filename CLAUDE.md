@@ -9,7 +9,7 @@
 ```
 SpectraWeaveR/
 ├── DESCRIPTION          # Package metadata, dependencies, and version
-├── NAMESPACE            # 139 exported functions and imported namespaces
+├── NAMESPACE            # 240 exported functions (recounted 2026-11-15) and imported namespaces
 ├── LICENSE              # MIT license
 ├── README.md            # Project overview, installation, usage examples
 ├── CLAUDE.md            # This file — repo summary for AI assistants
@@ -29,7 +29,14 @@ SpectraWeaveR/
 │   ├── cytoscan_wrap.R           # CytoScan and CytoTools wrappers (GPL, Suggests)
 │   ├── diagnose.R                # sw_diagnose(): stacks the diagnostic modules
 │   ├── fcs_header_audit.R        # FCS header audit against a reference file
-│   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation)
+│   ├── fcs_signal_audit.R        # Per-file signal checks (saturation, dead channel, rate, correlation); optional per-channel summary
+│   ├── import_bind.R             # sw_manifest_bind_files(): manifest to FCS paths, orphans, multi-dataset files
+│   ├── import_integrity.R        # sw_fcs_integrity_audit(): readable, $TOT vs rows, time span, channel set
+│   ├── import_signatures.R       # sw_fcs_header_signatures(): files grouped by keyword and channel signature, panel match
+│   ├── import_compensation.R     # sw_fcs_compensation_state(): matrix present, identity, apply flag
+│   ├── import_batch_date.R       # sw_fcs_batch_date_check(): batch crossed with date, time and serial keywords
+│   ├── import_dye_map.R          # sw_fcs_marker_dye_map(): marker x batch dyes from $PnN and $PnS
+│   ├── report_import.R           # sw_report_import(): tables, figures, source data, provenance for the import step
 │   ├── qc_app.R                  # sw_qc_app(): Shiny explorer (layout adapted from iidx, Apache-2.0)
 │   ├── ref_vs_study.R            # Reference vs donor spread (EMD)
 │   ├── ref_composition.R         # Reference population shares and floor
@@ -119,7 +126,8 @@ SpectraWeaveR/
 | Unmix correction | `sw_unmix_correct()`, `sw_unmix_correct_signatures()`, `sw_unmix_correct_spillover()`, `sw_unmix_compare_spectra()` | AutoSpectral (wrapped) | spectra → candidate corrected spectra, change table |
 | Manifest and correctors | `sw_sample_manifest()`, `sw_corrector_*()` | cyTether design (paired shift engine) | manifest + frozen model → corrected data with per-cell-group actions. Role `synthetic_reference` (needs `source_batch`) is listed in `sw_design_audit()$synthetic_references` and never bridges, like `biological_pseudo_control` |
 | FCS header audit | `sw_fcs_header_audit()`, `sw_fcs_header_summary()` | CytoTools idea (clean rewrite) | FCS paths + required keywords + reference file → long tibble of channel and keyword differences |
-| Signal audit | `sw_fcs_signal_audit()` | own code | per-file event matrices → numbers for saturation, dead channel, non-finite, event-rate and correlation shifts, and `bimodality`/`bimodality_z`; no cutoffs; `reference` (required, NULL = cohort) scores `median_z`/`sd_z` against a frozen reference |
+| Signal audit | `sw_fcs_signal_audit()` | own code | per-file event matrices → numbers for saturation, dead channel, non-finite, event-rate and correlation shifts, and `bimodality`/`bimodality_z`; no cutoffs; `reference` (required, NULL = cohort) scores `median_z`/`sd_z` against a frozen reference; `summary` (required, NULL = skip, output unchanged) is a list `probs`, `min_events`, `stat` that adds per-channel counts, median or mean and quantiles (`summary_*` checks, thin channels `not_assessed`) and a `provenance` attribute |
+| Import and harmonise | `sw_manifest_bind_files()`, `sw_fcs_integrity_audit()`, `sw_fcs_header_signatures()`, `sw_fcs_compensation_state()`, `sw_fcs_batch_date_check()`, `sw_fcs_marker_dye_map()`, `sw_report_import()` | `sw_fcs_header_audit()` helpers; ideas only, clean rewrite (plan `plans/2026-11-13_import-step.md`) | manifest + FCS paths → tables with one row per file and item, `not_assessed` for unreadable or thin files, no pass or fail; the report writes a new run folder (tables, figures, source data, `provenance.json`, `sessionInfo.txt`) and stops if it exists |
 | Frozen signal reference | `sw_signal_reference_fit()`, `sw_signal_reference_save()`, `sw_signal_reference_load()` | own code | clean reference files → per-channel centre and scale of file medians and SDs, S3 object with digest, for faults most files share |
 | Synthetic references | `sw_synref_downsample()`, `sw_synref_mix()`, `sw_synref_split()`, `sw_synref_spread()`, `sw_synref_fidelity()`, `sw_synref_goal()`, `sw_synref_check_overlap()`, `sw_synref_as_manifest()`, `sw_synref_save()`, `sw_synref_load()` | own code | real events → within-batch draws without replacement (strata none, file, donor, population; stop on shortfall) or disjoint pseudo-aliquots (`floor = "sampling only"`) → S3 `sw_synref` with provenance, recipe and digest, `certainty = "diagnostic_only"`; overlap guard stops on shared event, file or donor above `max_overlap_share`; manifest rows with role `synthetic_reference`; `sw_synref_mix()` hits set population shares (requested vs realised, `short_stratum` stop or cap); `sw_synref_spread()` gives sd and range of marker quantiles across draws; `sw_synref_fidelity()` gives marker EMD and population share ratio against the source; `sw_synref_goal()` gives a batch quantile goal table with role `goal` (never a reference); `n_events`, `n_draws`, `seed`, `strata`, `n_parts`, `events_per_part`, `short_stratum`, `goal_statistic`, `probs` required |
 | Reference checks | `sw_ref_inventory()`, `sw_ref_consistency()`, `sw_ref_noise_floor()` | own code on `.sw_batch_scores_groups()` (per-group rows of the batch scores) and `sw_synref_split()` | reference samples (manifest `reference_role`, `reference_id`) → counts per batch (`under_min`); per reference id, marker and batch: `pair_emd`, `rest_emd`, `rest_emd_z`, `median_shift_z`, `order_rho`, `count_ratio` with status `not_assessed` for thin rows; chance floor from cell halves (`floor_type = "sampling only"`) and, with 2 or more aliquots in a batch, aliquot pairs. No per-reference verdict (Q14). `min_events`, `roles`, `n_events`, `seed`, `order`, `min_batches_per_reference`, `transform` and `cofactor` (recorded, never applied), `n_splits`, `n_quantiles` required |

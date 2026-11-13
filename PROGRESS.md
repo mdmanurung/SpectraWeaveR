@@ -372,6 +372,12 @@ Renamed all ~90 exported functions to a consistent `sw_{module}_{verb}()` hierar
 - Open, needs new samples: unstimulated control (true TNF+ %), eFluor 450 FMO (Th2–GLUT1 tilt). Planned, not run: CD38 spike for opt188, TNF/IFNg spike for GLS.
 - Status: closed 2026-11-11.
 
+## Session 18 (2026-11-13): import and harmonise step
+
+- New: `sw_manifest_bind_files()`, `sw_fcs_integrity_audit()`, `sw_fcs_header_signatures()`, `sw_fcs_compensation_state()`, `sw_fcs_batch_date_check()`, `sw_fcs_marker_dye_map()`, `sw_report_import()`. Plan: `plans/2026-11-13_import-step.md`.
+- Changed: `sw_fcs_signal_audit()` has a required `summary` argument (NULL = skip, output unchanged).
+- `devtools::document()` added exactly these 7 exports (NAMESPACE now has 231 `export()` lines) and 7 new man pages. Vignette: `vignettes/import-and-harmonise.qmd`. Test results: see the integration report.
+
 ## Session 19 (2026-11-15): unmix event metrics in the package
 
 - New: `sw_unmix_edges()`, `sw_unmix_event_metrics()`, `sw_unmix_heldout()`; `sw_unmix_diagnose(event_metrics=, heldout=)` adds `event_channel`, `event_pair`, `heldout` rows and 10 limit names; `sw_unmix_report()` writes `event_channels.csv`, `event_pairs.csv`, `heldout_scores.csv`, `heldout_repro.csv` and two HTML sections.

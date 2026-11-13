@@ -12,6 +12,14 @@ those, because a different choice flags different files.
 | Problem | Function | What it reports |
 |---|---|---|
 | Header differs from a reference (voltage, instrument, channel names) | `sw_fcs_header_audit()` | one row per file and compared item, with a status |
+| Manifest rows with no file, files with no row, multi-dataset files | `sw_manifest_bind_files()` | orphan lists |
+| Truncated or unreadable file, `$TOT` vs rows read | `sw_fcs_integrity_audit()` | one row per file and item |
+| Files grouped by header signature; panel markers missing or extra | `sw_fcs_header_signatures()` | signature groups with counts |
+| Compensation matrix present, identity, apply flag | `sw_fcs_compensation_state()` | three columns per file |
+| Batch crossed with acquisition date and serial | `sw_fcs_batch_date_check()` | batch x date table |
+| Marker x batch dye | `sw_fcs_marker_dye_map()` | dye per marker and batch |
+| Import step report | `sw_report_import()` | new run folder with tables, figures, provenance |
+| Per-channel count, median or mean, quantiles per file | `sw_fcs_signal_audit(summary = )` | `summary_*` checks |
 | Saturation, dead channel, non-finite values, negative share | `sw_fcs_signal_audit()` | share or flag per file and channel |
 | Event-rate instability, clog, gaps in time | `sw_fcs_signal_audit()` | `rate_cv`, `max_gap` |
 | Drift of a marker inside one file | `sw_fcs_signal_audit()` | `time_trend` per channel |
