@@ -5,11 +5,17 @@
 #          Spearman rho for every cytokine pair and for three expected links (IFNg-Tbet, IL-10-FoxP3,
 #          IL-2-CD25), and negative spread against as188_joint on cells negative in every arm.
 #          Copy of 47_other_cytokines.R: new gated dir, cut 1.5, new run dir, Nature-style figures.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/47c_other_cytokines_common.R <run_dir>
-#          from the repo root, after batch 0 has written GATED_DIR/README.md. <run_dir> must not exist.
-# Inputs:  GATED_DIR/manifest.csv, GATED_DIR/gs/<arm>/  common-gate GatingSets [97_common_gs.R]
+# Run:     SW_DATASET=<3d|24h> SW_RUN_DATE=<YYYY-MM-DD> \
+#            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/47c_other_cytokines_common.R [<run_dir>]
+#          from the repo root, after batch 0 has written GATED_DIR/README.md. <run_dir> overrides the registry
+#          output run_out("common-cut15-47c"); it must not exist. Stops on a dataset without TNF, IFNg,
+#          IL-2, IL-10 and Th2 (EXV).
+# Inputs:  run_in("common-gated")/manifest.csv, gs/<arm>/  common-gate GatingSets [97_common_gs.R]
+#          cut_of(arm, sample, channel, "pos" and "neg")  positive and negative cuts [config pos_rule and
+#            neg_rule; cuts.csv from 97e when not fixed]
+#          experiments/benchmarks/05_bmv-unmix-compare/datasets/  config, run registry, sample table
 #          experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R, report_figures.R  labels, builders
-# Outputs: <run_dir>/pct_pos.csv                % above the cut per arm, donor, parent, cytokine
+# Outputs: <run_dir>/pct_pos.csv                % above the cut per arm, sample, parent, cytokine
 #          <run_dir>/il2_coexpression.csv       % IL-2+ among TNF+ and among IFNg+
 #          <run_dir>/rho_pairs.csv              Spearman rho per arm, donor, parent, pair
 #          <run_dir>/neg_spread.csv             Nguyen rSD on shared negatives and ratio to as188_joint
@@ -32,21 +38,48 @@ suppressPackageStartupMessages({
   library(tibble)
   library(ggplot2)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), cut_of()
 source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R") # theme, save_panel, builders, ARM_LABELS
 
 # Parameters ------------------------------------------------------------------------------
-GATED_DIR <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0 output (G9: read-only here)
-CUT <- 1.5 # fixed cut, arcsinh, for every cytokine, arm and donor (G7a, user 2026-11-11; was 1)
+GATED_DIR <- run_in("common-gated") # batch 0 output (G9: read-only here)
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-# TNF and IFNg are stored as arcsinh in the GatingSets (19a); every other channel is stored linear.
-CYTOKINES <- c(
-  TNF = "BV510-A",
-  IFNg = "BV570-A",
-  `IL-2` = "BV605-A",
-  `IL-10` = "BB700-A",
-  Th2 = "eFluor 450-A"
+# This script needs TNF, IFNg, IL-2, IL-10 and Th2; stop and name what the dataset lacks
+EXTRA_CHANNEL_KEYS <- c(`IL-2` = "IL2", `IL-10` = "IL10", Th2 = "Th2") # names inside cfg("channels")
+missing_targets <- c(
+  if (!identical(cfg("targets")$tnf_label, "TNF")) "TNF",
+  if (!identical(cfg("targets")$ifng_label, "IFNg")) "IFNg",
+  names(EXTRA_CHANNEL_KEYS)[!EXTRA_CHANNEL_KEYS %in% names(cfg("channels"))]
 )
-STORED_ARCSINH <- c("BV510-A", "BV570-A")
+if (length(missing_targets) > 0) {
+  stop(
+    "47c_other_cytokines_common.R: needs ",
+    paste(missing_targets, collapse = ", "),
+    ", missing in dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
+# TNF and IFNg are stored as arcsinh in the GatingSets (19a); every other channel is stored linear.
+# The cut comes from cut_of() per arm, sample and channel (3D: fixed arcsinh 1.5, G7a).
+CYTOKINES <- c(
+  TNF = cfg("channels")$TNF_slot,
+  IFNg = cfg("channels")$IFNg_slot,
+  unlist(cfg("channels")[EXTRA_CHANNEL_KEYS]) |>
+    set_names(names(EXTRA_CHANNEL_KEYS))
+)
+STORED_ARCSINH <- c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot)
+# Cut text for titles: the fixed value when the rule is fixed (3D: 1.5), else the per-sample cut
+CUT_VALUE_TXT <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  cfg("pos_rule")$value
+} else {
+  "per sample"
+}
+CUT_TXT <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  paste("arcsinh", CUT_VALUE_TXT)
+} else {
+  "the per-sample cut"
+}
 NEW_CYTOKINES <- c("IL-2", "IL-10", "Th2") # the three this script adds
 # expected biological links, used as reference: rank correlation only, no cut
 LINKS <- tribble(
@@ -69,7 +102,10 @@ VERSION_GROUP <- VERSION_ROWS |>
   unlist()
 DENSITY_RANGE <- c(-1.5, 4) # arcsinh display range for densities; display only
 
-run_dir <- commandArgs(trailingOnly = TRUE)[[1]]
+run_dir <- commandArgs(trailingOnly = TRUE)[1]
+if (is.na(run_dir)) {
+  run_dir <- run_out("common-cut15-47c")
+}
 stopifnot("47c run dir must not exist" = !dir.exists(run_dir))
 dir.create(run_dir, recursive = TRUE)
 manifest <- read_csv(
@@ -79,6 +115,10 @@ manifest <- read_csv(
 stopifnot(
   "all 11 figure arms are in the gated manifest" = all(
     ARM_ORDER %in% manifest$arm
+  ),
+  "gated samples equal the sample table" = setequal(
+    manifest$sample,
+    samples_tbl()$sample
   )
 )
 donors <- sort(unique(manifest$sample))
@@ -121,7 +161,8 @@ per_cell_metrics <- by_donor |>
           set_names() |>
           map(\(pop) {
             x <- d$ev[[a]][d$in_pop[[a]][[pop]], ]
-            pos <- x[, names(CYTOKINES)] > CUT
+            cut_pos <- map_dbl(CYTOKINES, \(ch) cut_of(a, s, ch, "pos"))
+            pos <- sweep(x[, names(CYTOKINES)], 2, cut_pos, ">")
             pairs <- pair_names |>
               map(\(p) {
                 tibble(
@@ -191,7 +232,12 @@ neg_spread <- by_donor |>
         names(CYTOKINES) |>
           set_names() |>
           map(\(cy) {
-            neg_all <- reduce(map(d$ev, \(x) x[, cy] < CUT), `&`)
+            neg_all <- reduce(
+              imap(d$ev, \(x, a) {
+                x[, cy] < cut_of(a, s, CYTOKINES[[cy]], "neg")
+              }),
+              `&`
+            )
             keep <- in_all & neg_all
             map(d$ev, \(x) {
               lin <- COFACTOR * sinh(x[keep, cy])
@@ -222,7 +268,7 @@ write_csv(fig_a, file.path(run_dir, "fig_a_table.csv"))
 redraw_panel(
   file.path(run_dir, "fig_a_table.csv"),
   "pct_pos",
-  paste0("% positive at arcsinh ", CUT),
+  paste0("% positive at ", CUT_TXT),
   run_dir,
   "fig_a_pct_pos"
 )
@@ -274,7 +320,7 @@ write_csv(il2_coexpression, file.path(run_dir, "fig_c_table.csv"))
 redraw_panel(
   file.path(run_dir, "fig_c_table.csv"),
   "il2",
-  paste0("% IL-2+ among cytokine-positive cells, cut ", CUT),
+  paste0("% IL-2+ among cytokine-positive cells, cut ", CUT_VALUE_TXT),
   run_dir,
   "fig_c_il2_coexpression"
 )

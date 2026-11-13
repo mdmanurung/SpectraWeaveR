@@ -3,15 +3,21 @@
 #          each cell coloured by its SpectroFlo label (CD4T, CD8T, DP, DN). The same rows sit in every arm,
 #          so panels differ only by unmixing. Gate lines appear on the SpectroFlo panel only, with % of CD3+
 #          per label. Also draws the check figure of 97f_common_gs_check.R (donor A3, no % labels).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_gate_cd4_cd8.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/<arm>/   common-gate GatingSets [97e]
-#          experiments/runs/2026-11-11_bmv-common-gates-clean3/cuts.csv   SpectroFlo pooled gate bounds [97d]
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_gate_cd4_cd8.R from the repo root.
+# Inputs:  run_in("common-gated")/gs/<arm>/   common-gate GatingSets [97e]
+#          run_in("common-gates-clean3")/cuts.csv   SpectroFlo pooled gate bounds [97d]; one pooled cut per gate group
 #          experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R   ARM_LABELS, VERSION_ROWS
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/02_gates/cd4_cd8_tmix_pooled/gate_cd4_cd8_<donor>.{pdf,png,csv}
-#          experiments/runs/2026-11-11_bmv-restyle-common/02_gates/check/cd4_cd8_A3_p_arms.{pdf,png,csv}
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), channels CD4 and CD8, check_sample
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/02_gates/cd4_cd8_tmix_pooled/gate_cd4_cd8_<sample>.{pdf,png,csv}
+#          run_out("restyle-common")/02_gates/check/cd4_cd8_<check_sample>_p_arms.{pdf,png,csv}
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths()))
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -26,10 +32,12 @@ source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R") # ARM_LABELS, VERSION_ROWS
 
 # Parameters ---------------------------------------------------------------------------------------
-COMMON_GS <- "experiments/runs/2026-11-11_bmv-common-gated/gs"
-CUTS <- "experiments/runs/2026-11-11_bmv-common-gates-clean3/cuts.csv"
-CD4 <- "Spark Blue 574-A" # channels as in 19a_gate_arm.R
-CD8 <- "SBUV445-A"
+COMMON_GS <- file.path(run_in("common-gated"), "gs")
+CUTS <- file.path(run_in(cfg("label_key")), "cuts.csv") # 3D: 97d cuts per sample; 24H and ex vivo: 99a pooled cuts
+CD4 <- cfg("channels")$CD4 # channels as in 19a_gate_arm.R
+CD8 <- cfg("channels")$CD8
+CHECK_SAMPLE <- cfg("check_sample") # the sample of the 97f check figure
+UNIT <- if (is.null(DS$conditions)) "donor" else "sample" # what one figure shows
 AXIS_T <- c(-3, 6) # display window, arcsinh; % use every CD3+ cell
 N_DRAW <- 15000 # cells drawn per panel; the same rows in every arm
 SEED <- 42 # row subsample
@@ -82,8 +90,22 @@ stopifnot(
     n_distinct(events$donor)
 )
 
-# Gate lines from the SpectroFlo pooled cuts: one CD4T/CD8T boundary, same for every donor --------
-cuts <- read_csv(CUTS, show_col_types = FALSE) |>
+# Gate lines from the SpectroFlo pooled cuts: one CD4T/CD8T boundary, same within a gate group --------
+cuts <- read_csv(CUTS, show_col_types = FALSE)
+if (!"version" %in% names(cuts)) {
+  # 99a cuts.csv: one pooled cut per node; give every sample the same cut
+  cuts <- cuts |>
+    dplyr::filter(type == "polygon", node %in% c("CD4T", "CD8T")) |>
+    transmute(
+      version = "clean3_pooled",
+      gate = node,
+      dim,
+      lo = min,
+      hi = max
+    ) |>
+    tidyr::crossing(sample = samples_tbl()$sample)
+}
+cuts <- cuts |>
   dplyr::filter(
     version == "clean3_pooled",
     gate %in% c("CD4T", "CD8T"),
@@ -106,7 +128,7 @@ lines_of <- \(d) {
     dplyr::slice(-2)
 }
 
-# Subtitle: the pooled cut values (arcsinh), the same for every donor
+# Subtitle: the pooled cut values (arcsinh), the same within a gate group
 cut_text <- \(d) {
   sprintf(
     "Pooled gate cuts (arcsinh): CD4 %.3f / %.3f, CD8 %.3f",
@@ -207,7 +229,8 @@ walk(sort(unique(events$donor)), \(d) {
     OUT_GATES,
     stem,
     sprintf(
-      "CD3+ T cells, donor %s, coloured by SpectroFlo label (%d cells per panel)",
+      "CD3+ T cells, %s %s, coloured by SpectroFlo label (%d cells per panel)",
+      UNIT,
       d,
       N_DRAW
     )
@@ -223,21 +246,23 @@ walk(sort(unique(events$donor)), \(d) {
   )
 })
 
-# The 97f check figure: donor A3, labels only, x axes on the bottom panels of each column -----------
+# The 97f check figure: one sample (check_sample), labels only, x axes on the bottom panels of each column -----------
 draw_donor(
-  "A3",
+  CHECK_SAMPLE,
   NULL,
   OUT_CHECK,
-  "cd4_cd8_A3_p_arms",
+  paste0("cd4_cd8_", CHECK_SAMPLE, "_p_arms"),
   sprintf(
-    "Check, donor A3: CD3+ cells coloured by SpectroFlo label (%d cells, same in every panel)",
+    "Check, %s %s: CD3+ cells coloured by SpectroFlo label (%d cells, same in every panel)",
+    UNIT,
+    CHECK_SAMPLE,
     N_DRAW
   )
 )
 add_manifest(
   "95c_restyle_events_gate_cd4_cd8",
   NA_character_,
-  file.path(OUT_CHECK, "cd4_cd8_A3_p_arms.png"),
+  file.path(OUT_CHECK, paste0("cd4_cd8_", CHECK_SAMPLE, "_p_arms.png")),
   paste(COMMON_GS, CUTS, sep = "; "),
   note = "97f check figure; no old restyle counterpart"
 )

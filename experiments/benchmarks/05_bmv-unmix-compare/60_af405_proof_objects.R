@@ -9,20 +9,24 @@
 #            dose_000   every variant = s102 (offset only, no spread); dose_025, dose_050 = s102 + a * e
 #            recentre   s188 + e (1.0.2 spread, no offset)
 #          alpha = 1 is the existing arm var102_only_Alexa_Fluor_405 (45_variant_per_dye.R).
-# Run:     sbatch experiments/slurm/run_af405_proof.sbatch 60 (or pixi run Rscript <this script>)
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/table_spectra/Automated_..._143803.csv
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2/Reference Group/table_spectra/
-#            Cells Matching Negative_autospectral_spectra.csv   1.0.2 reference spectra [user zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/figure_spectral_variants/Spectral_variants.rds
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2/Reference Group/figure_spectral_variants/
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> sbatch experiments/slurm/run_af405_proof.sbatch 60
+#          (or SW_DATASET=... SW_RUN_DATE=... pixi run Rscript <this script>)
+# Inputs:  <data_dir>/autoSpectral_v1.8.8/table_spectra/<config stamps$as188_spectra>
+#          <data_dir>/autoSpectral_v1.0.2/Reference Group/table_spectra/
+#            <config stamps$as102_spectra>   1.0.2 reference spectra [user zip]
+#          <data_dir>/autoSpectral_v1.8.8/figure_spectral_variants/Spectral_variants.rds
+#          <data_dir>/autoSpectral_v1.0.2/Reference Group/figure_spectral_variants/
 #            Spectral_variants.rds
-# Outputs: experiments/runs/2026-11-10_bmv-af405-proof/objects/<arm>.rds   variants object per arm
-#          experiments/runs/2026-11-10_bmv-af405-proof/overlap_coef.csv      per variant: projection and cosine
-#          experiments/runs/2026-11-10_bmv-af405-proof/fig1_delta_overlap.png  deltas with BV510 / BV570 shape
-#          experiments/runs/2026-11-10_bmv-af405-proof/fig1b_coef.png        coefficient and cosine per version
-#          experiments/runs/2026-11-10_bmv-af405-proof/fig1_delta_overlap_source.csv
-#          experiments/runs/2026-11-10_bmv-af405-proof/objects_check.csv     per arm: variants, norms, coef
-#          experiments/runs/2026-11-10_bmv-af405-proof/sessionInfo_60.txt
+#          dyes from config targets (glut1_dye, tnf_dye, ifng_dye)
+# Outputs: run_out("af405-proof")/objects/<arm>.rds   variants object per arm
+#          run_out("af405-proof")/overlap_coef.csv      per variant: projection and cosine
+#          run_out("af405-proof")/fig1_delta_overlap.png  deltas with the TNF-dye / IFNg-dye shape
+#          run_out("af405-proof")/fig1b_coef.png        coefficient and cosine per version
+#          run_out("af405-proof")/fig1_delta_overlap_source.csv
+#          run_out("af405-proof")/objects_check.csv     per arm: variants, norms, coef
+#          run_out("af405-proof")/sessionInfo_60.txt
+#          Run folder is experiments/runs/<SW_RUN_DATE>_bmv<run_tag>-af405-proof; register it in
+#          datasets/<ds>_runs.csv before the next script reads it.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -33,11 +37,15 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- "experiments/bmv_test/compare_3D/data"
-RUN_DIR <- "experiments/runs/2026-11-10_bmv-af405-proof"
-DYE <- "Alexa Fluor 405"
-TARGETS <- c("BV510", "BV570") # BV510 = TNF; BV570 = IFNg, the contrast
+DATA <- data_path()
+RUN_DIR <- run_out("af405-proof")
+DYE <- cfg("targets")$glut1_dye # the GLUT1 dye (3D: Alexa Fluor 405)
+DYE_SHORT <- sub("^Alexa Fluor ", "AF", DYE) # axis label only
+TARGETS <- c(cfg("targets")$tnf_dye, cfg("targets")$ifng_dye) # TNF slot (3D: BV510); IFNg slot (3D: BV570), the contrast
 DOSES <- c(dose_000 = 0, dose_025 = 0.25, dose_050 = 0.5) # user-approved grid (alpha 1 = existing arm)
 
 stopifnot("run dir must not exist" = !dir.exists(RUN_DIR))
@@ -49,11 +57,13 @@ read_raw <- \(path) {
 }
 s188 <- read_raw(file.path(
   DATA,
-  "autoSpectral_v1.8.8/table_spectra/Automated_autospectral_spectra_20261105_143803.csv"
+  "autoSpectral_v1.8.8/table_spectra",
+  cfg("stamps")$as188_spectra
 ))
 s102 <- read_raw(file.path(
   DATA,
-  "autoSpectral_v1.0.2/Reference Group/table_spectra/Cells Matching Negative_autospectral_spectra.csv"
+  "autoSpectral_v1.0.2/Reference Group/table_spectra",
+  cfg("stamps")$as102_spectra
 ))[rownames(s188), colnames(s188)]
 var188 <- readRDS(file.path(
   DATA,
@@ -138,11 +148,14 @@ p1 <- ggplot(plot_frame, aes(detector, delta, group = variant)) +
     linewidth = 0.8
   ) +
   scale_colour_manual(
-    values = c(BV510 = "#d95f02", BV570 = "#1b9e77"),
+    values = set_names(c("#d95f02", "#1b9e77"), TARGETS),
     name = "Dye shape"
   ) +
   facet_wrap(~version, ncol = 1) +
-  labs(x = "Detector", y = "AF405 variant minus 1.8.8 AF405 spectrum") +
+  labs(
+    x = "Detector",
+    y = paste0(DYE_SHORT, " variant minus 1.8.8 ", DYE_SHORT, " spectrum")
+  ) +
   theme_bw(base_size = 11) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 6))
 ggsave(
@@ -183,7 +196,7 @@ ggsave(
 # for 1.0.2-based arms and (v - s188) for 1.8.8-based arms. delta.norms only gate the "no variation"
 # check (sanitize.optimization.inputs), so dose_000 keeps the 1.0.2 norms to stay optimised.
 norm_rows <- \(m) m / apply(m, 1, max)
-b510 <- s188["BV510", ]
+b510 <- s188[cfg("targets")$tnf_dye, ] # TNF dye signature (3D: BV510)
 d_eff <- sweep(v102, 2, ref188) # what the swap arm feeds the unmixer
 c102 <- proj_coef(d_eff, b510)
 c188 <- proj_coef(sweep(v188, 2, ref188), b510)

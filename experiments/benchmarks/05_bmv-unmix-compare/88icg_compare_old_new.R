@@ -5,10 +5,16 @@
 #          half of the spike (loss cut recovery < 0.5), the donor range, and the median of the donor median
 #          recoveries. Also compares the 88f GLUT1 quartiles, the 62/64 af405 proof, the 88h drift counts and the
 #          unspiked-cell checks, and how many cells each population holds.
-# Run:     sbatch experiments/slurm/run_spike_cg.sbatch 88icg_compare_old_new.R
-# Inputs:  old and new score tables under experiments/runs/ (paths in OLD_NEW below) [88 family, 88cg family]
-#          old and new spike keys (population sizes and overlap)
-# Outputs: <OUT_DIR>/compare_pct_lost.csv     one row per table cell: section, setup or setting, marker, pop, arm,
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> sbatch experiments/slurm/run_spike_cg.sbatch 88icg_compare_old_new.R
+#          Both variables are required. The old runs (per-arm gates) exist for 3D only, so the script stops for any other
+#          dataset.
+# Inputs:  old and new score tables, by registry key (datasets/<ds>_runs.csv) [88 family, 88cg family]:
+#            spike-in-v2 / spike-in-cg, spike-in-panel2 / spike-in-panel2-cg, spike-in-cd3neg / spike-in-cd3neg-cg,
+#            spike-passes / spike-passes-cg, cospike-tnf-glut1 / -cg, tnf-spike-by-glut1 / -cg, af405-proof / -cg
+#          old and new spike keys (population sizes and overlap): spike-in, spike-in-panel2-build,
+#            spike-in-cd3neg-build / spike-in-cg-build, spike-in-panel2-cg-build, spike-in-cd3neg-cg-build
+# Outputs: run_out("spike-cg-compare") = experiments/runs/<SW_RUN_DATE>_bmv<run_tag>-spike-cg-compare/
+#          <OUT_DIR>/compare_pct_lost.csv     one row per table cell: section, setup or setting, marker, pop, arm,
 #                                             old_ and new_ median % lost, min, max, median recovery, delta
 #          <OUT_DIR>/compare_af405.csv        62/64 proof: recovery and squeezed share by setup, pop, level
 #          <OUT_DIR>/compare_drift.csv        88h unspiked cells moved, old vs new
@@ -26,25 +32,36 @@ suppressPackageStartupMessages({
 })
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/palettes.R")
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+if (DS$dataset != "3d") {
+  stop(
+    "88icg_compare_old_new.R: compares the 3D per-arm-gate runs with the common-gate runs; no old runs exist for dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
 
 # Parameters ---------------------------------------------------------------------------------------
-RUNS <- "experiments/runs"
-OUT_DIR <- file.path(RUNS, "2026-11-11_bmv-spike-cg-compare")
+OUT_DIR <- run_out("spike-cg-compare")
 FIG_LEVEL <- 1 # the level of the INDEX tables (+1 arcsinh)
 SPIKE_FILES <- tribble(
-  ~section , ~old                             , ~new                                ,
-  "s18"    , "2026-11-10_bmv-spike-in-v2"     , "2026-11-11_bmv-spike-in-cg"        ,
-  "s20"    , "2026-11-10_bmv-spike-in-panel2" , "2026-11-11_bmv-spike-in-panel2-cg" ,
-  "s22"    , "2026-11-11_bmv-spike-in-cd3neg" , "2026-11-11_bmv-spike-in-cd3neg-cg" ,
-  "s25"    , "2026-11-11_bmv-spike-passes"    , "2026-11-11_bmv-spike-passes-cg"
+  ~section , ~old              , ~new                 ,
+  "s18"    , "spike-in-v2"     , "spike-in-cg"        ,
+  "s20"    , "spike-in-panel2" , "spike-in-panel2-cg" ,
+  "s22"    , "spike-in-cd3neg" , "spike-in-cd3neg-cg" ,
+  "s25"    , "spike-passes"    , "spike-passes-cg"
 )
 KEY_FILES <- tribble(
-  ~section , ~old                                   , ~new                                      ,
-  "s18"    , "2026-11-10_bmv-spike-in"              , "2026-11-11_bmv-spike-in-cg-build"        ,
-  "s20"    , "2026-11-10_bmv-spike-in-panel2-build" , "2026-11-11_bmv-spike-in-panel2-cg-build" ,
-  "s22"    , "2026-11-11_bmv-spike-in-cd3neg-build" , "2026-11-11_bmv-spike-in-cd3neg-cg-build"
+  ~section , ~old                    , ~new                       ,
+  "s18"    , "spike-in"              , "spike-in-cg-build"        ,
+  "s20"    , "spike-in-panel2-build" , "spike-in-panel2-cg-build" ,
+  "s22"    , "spike-in-cd3neg-build" , "spike-in-cd3neg-cg-build"
 )
-KEY_MARKER <- c(s18 = "TNF", s20 = "IFNg", s22 = "TNF") # one marker per key set: all markers share the cells
+KEY_MARKER <- c(
+  s18 = cfg("targets")$tnf_label,
+  s20 = cfg("targets")$ifng_label,
+  s22 = cfg("targets")$tnf_label
+) # one marker per key set: all markers share the cells
 
 stopifnot("compare dir must not exist" = !dir.exists(OUT_DIR))
 dir.create(OUT_DIR)
@@ -67,7 +84,7 @@ spike <- pmap(SPIKE_FILES, \(section, old, new) {
   arm_col <- if (section == "s25") "setting" else "setup"
   read_one <- \(run) {
     read_csv(
-      file.path(RUNS, run, "spike_summary.csv"),
+      file.path(run_in(run), "spike_summary.csv"),
       show_col_types = FALSE
     ) |>
       donor_stats(arm_col)
@@ -84,7 +101,10 @@ spike <- pmap(SPIKE_FILES, \(section, old, new) {
 
 # Co-spike (section 23): per setup and GLUT1 level ----------------------------------------------------------
 cospike_stats <- \(run) {
-  read_csv(file.path(run, "cospike_summary.csv"), show_col_types = FALSE) |>
+  read_csv(
+    file.path(run_in(run), "cospike_summary.csv"),
+    show_col_types = FALSE
+  ) |>
     summarise(
       n_donors = n(),
       median_pct_lost = median(pct_tnf_lost),
@@ -96,9 +116,9 @@ cospike_stats <- \(run) {
     )
 }
 cospike <- full_join(
-  cospike_stats(file.path(RUNS, "2026-11-11_bmv-cospike-tnf-glut1")) |>
+  cospike_stats("cospike-tnf-glut1") |>
     rename_with(\(n) paste0("old_", n), -c(setup, glut1_level, pop)),
-  cospike_stats(file.path(RUNS, "2026-11-11_bmv-cospike-tnf-glut1-cg")) |>
+  cospike_stats("cospike-tnf-glut1-cg") |>
     rename_with(\(n) paste0("new_", n), -c(setup, glut1_level, pop)),
   by = c("setup", "glut1_level", "pop"),
   relationship = "one-to-one"
@@ -106,14 +126,14 @@ cospike <- full_join(
   mutate(
     section = "s23_cospike",
     arm = paste0(setup, " GLUT1 +", glut1_level),
-    marker = "TNF"
+    marker = cfg("targets")$tnf_label
   ) |>
   select(-setup, -glut1_level)
 
 # TNF loss by natural GLUT1 quartile (section 23, script 88f) -----------------------------------------------
 quartile_stats <- \(run) {
   read_csv(
-    file.path(RUNS, run, "summary_by_glut1.csv"),
+    file.path(run_in(run), "summary_by_glut1.csv"),
     show_col_types = FALSE
   ) |>
     summarise(
@@ -126,9 +146,9 @@ quartile_stats <- \(run) {
     )
 }
 quartile <- full_join(
-  quartile_stats("2026-11-11_bmv-tnf-spike-by-glut1") |>
+  quartile_stats("tnf-spike-by-glut1") |>
     rename_with(\(n) paste0("old_", n), -c(setup, glut1_bin, pop)),
-  quartile_stats("2026-11-11_bmv-tnf-spike-by-glut1-cg") |>
+  quartile_stats("tnf-spike-by-glut1-cg") |>
     rename_with(\(n) paste0("new_", n), -c(setup, glut1_bin, pop)),
   by = c("setup", "glut1_bin", "pop"),
   relationship = "one-to-one"
@@ -136,7 +156,7 @@ quartile <- full_join(
   mutate(
     section = "s23_glut1_quartile",
     arm = paste(setup, glut1_bin),
-    marker = "TNF"
+    marker = cfg("targets")$tnf_label
   ) |>
   select(-setup, -glut1_bin)
 
@@ -150,7 +170,10 @@ write_csv(compare_pct, file.path(OUT_DIR, "compare_pct_lost.csv"))
 
 # 62/64 af405 proof ------------------------------------------------------------------------------------------
 proof_stats <- \(run) {
-  read_csv(file.path(RUNS, run, "spike_summary.csv"), show_col_types = FALSE) |>
+  read_csv(
+    file.path(run_in(run), "spike_summary.csv"),
+    show_col_types = FALSE
+  ) |>
     summarise(
       n_donors = n(),
       median_recovery = median(median_recovery),
@@ -160,9 +183,9 @@ proof_stats <- \(run) {
     )
 }
 compare_af405 <- full_join(
-  proof_stats("2026-11-10_bmv-af405-proof") |>
+  proof_stats("af405-proof") |>
     rename_with(\(n) paste0("old_", n), -c(setup, pop, level)),
-  proof_stats("2026-11-11_bmv-af405-proof-cg") |>
+  proof_stats("af405-proof-cg") |>
     rename_with(\(n) paste0("new_", n), -c(setup, pop, level)),
   by = c("setup", "pop", "level"),
   relationship = "one-to-one"
@@ -172,12 +195,12 @@ write_csv(compare_af405, file.path(OUT_DIR, "compare_af405.csv"))
 # 88h drift and baseline checks -----------------------------------------------------------------------------
 compare_drift <- full_join(
   read_csv(
-    file.path(RUNS, "2026-11-11_bmv-spike-passes/drift_summary.csv"),
+    file.path(run_in("spike-passes"), "drift_summary.csv"),
     show_col_types = FALSE
   ) |>
     rename_with(\(n) paste0("old_", n), -c(setting, marker, pop)),
   read_csv(
-    file.path(RUNS, "2026-11-11_bmv-spike-passes-cg/drift_summary.csv"),
+    file.path(run_in("spike-passes-cg"), "drift_summary.csv"),
     show_col_types = FALSE
   ) |>
     rename_with(\(n) paste0("new_", n), -c(setting, marker, pop)),
@@ -187,7 +210,7 @@ compare_drift <- full_join(
 write_csv(compare_drift, file.path(OUT_DIR, "compare_drift.csv"))
 baseline <- \(run, arm_col) {
   read_csv(
-    file.path(RUNS, run, "baseline_check.csv"),
+    file.path(run_in(run), "baseline_check.csv"),
     show_col_types = FALSE
   ) |>
     rename(arm = all_of(arm_col)) |>
@@ -216,7 +239,10 @@ write_csv(compare_baseline, file.path(OUT_DIR, "compare_baseline.csv"))
 compare_population <- pmap(KEY_FILES, \(section, old, new) {
   read_key <- \(run) {
     read_csv(
-      file.path(RUNS, run, paste0("spike_key_", KEY_MARKER[[section]], ".csv")),
+      file.path(
+        run_in(run),
+        paste0("spike_key_", KEY_MARKER[[section]], ".csv")
+      ),
       show_col_types = FALSE
     ) |>
       select(sample, pop, raw_row, level)

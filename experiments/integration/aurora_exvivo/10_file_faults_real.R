@@ -159,7 +159,8 @@ long <- lapply(SEEDS, function(seed) {
         area_height = NULL,
         area_height_quantile = NULL,
         reference_group = NULL,
-        reference = NULL
+        reference = NULL,
+        summary = NULL
       )
       # Hit channel's row for channel checks; the file's single row for file-level checks.
       row_of <- function(check, item) {

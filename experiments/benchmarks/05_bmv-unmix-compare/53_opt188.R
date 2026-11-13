@@ -11,22 +11,27 @@
 #          Two cell-negative options, pending the chain6a/6b result (user, 2026-11-10):
 #            neg_same_fsc4e5  Unstained (Cells) re-gated from raw with the wider cell rectangle
 #            neg_h12          the H12 unstained sample, inside the same rectangle, as the cell negative
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/53_opt188.R <route> <neg> <n_passes> <stage>
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/53_opt188.R <route> <neg> <n_passes> <stage> [condition]
 #            from the repo root, on SLURM (experiments/slurm/run_opt188.sbatch); route = pregate or legacy;
 #            neg = neg_same_fsc4e5 or neg_h12; stage = extract (controls, spectra, AF, variants, object check
 #            only; the smoke test) or full (also unmix and verify).
-#            extract writes to experiments/runs/2026-11-10_bmv-opt188-smoke/<arm>/, full to
-#            experiments/bmv_test/compare_3D/data/unmix_cells/<arm>/; either must not exist.
+#            extract writes to experiments/runs/<SW_RUN_DATE>_bmv<run_tag>-opt188-smoke/<arm>/ (the folder
+#            is shared by the arms of one extract batch; the arm folder must not exist), full to
+#            <data_dir>/unmix_cells/<arm>[/<condition>]/, which must not exist.
 #            arm = opt188_pregate or opt188_legacyspec, then _<neg>_p<n_passes>.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group/  raw controls and
-#            unstained_AF/H12 [user zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/Zombie NIR (Cells).fcs
-#            84,528-event file (user, 2026-11-10, D13)
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Raw/  the 5 samples [user zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/table_spectra/  143803 spectra, for the
-#            object check [user zip]
-#          experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv  control-file copy with
+#            condition = last argument, only for stage full and required then when the dataset has conditions
+#            (24H: one task per condition; the objects are rebuilt in each condition folder), refused otherwise.
+# Inputs:  <data_dir>/autoSpectral_v1.8.8/Reference Group/  raw controls and
+#            unstained_AF (the one file) [user zip]
+#          <data_dir>/autoSpectral_v1.8.8/Reference Group Clean/Zombie NIR (Cells).fcs
+#            84,528-event file in 3D (user, 2026-11-10, D13)
+#          <data_dir>/autoSpectral_v1.8.8/Raw[/<condition>]/  the samples [user zip]; the stained sample for
+#            get.spectral.variants is config stained_sample, found by sample id in the sample table
+#          <data_dir>/autoSpectral_v1.8.8/table_spectra/  config-stamp spectra, for the object check [user zip]
+#          run key cell-gating: fcs_control_file_landmark.csv  control-file copy with
 #            gate.name lymphocyte for the cell controls and Unstained (Cells) [50_cell_gate_plots.R]
+#          config control_gates: bead_wide, cell_wide rectangles and landmark n_cells, percentile
+#          stamp file name (spectra) from config stamps; samples from datasets/<ds>_samples.csv [00_samples.R]
 # Outputs: <out_dir>/controls/          control files used (re-gated) and the control-file copy
 #          <out_dir>/work/              AutoSpectral tables and figures, incl. figure_gate/
 #          <out_dir>/control_gate_log.csv  events kept per control and gate
@@ -43,24 +48,35 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
-SMOKE_ROOT <- "experiments/runs/2026-11-10_bmv-opt188-smoke"
+DATA <- normalizePath(data_path())
+# Shared by the arms of one extract batch (53b reads it with run_in("opt188-smoke")), so run_out()'s
+# must-not-exist check cannot apply to the folder; it applies to the arm folder below. Same name as run_out().
+SMOKE_ROOT <- file.path(
+  "experiments/runs",
+  paste0(Sys.getenv("SW_RUN_DATE"), "_bmv", cfg("run_tag"), "-opt188-smoke")
+)
 PIPELINE <- "joint" # zip 1.8.8 script (inherited: user zip)
 SPEED <- "slow" # always slow (user, 2026-11-10); no effect under pipeline "joint"
 N_AF_PASSES <- 1L # default; the passes grid (52) may change n.passes and n.af.passes later
 EXTRACT_SEED <- 42 # set.seed() around extraction (user, 2026-11-10, D5); inside, asp$bird.seed
-BEAD_FSC <- c(2e5, 9e5) # widened bead rectangle (user, 2026-11-10, O1)
-BEAD_SSC <- c(1.3e6, 2.25e6) # same
-CELL_FSC <- c(4e5, 4e6) # wider cell rectangle (user, 2026-11-10, chain6, after 50's plots)
-CELL_SSC <- c(1e5, 1.6e6) # zip SSC bounds kept (same)
-LANDMARK_N_CELLS <- 2000 # define.gate.landmarks n.cells (user, 2026-11-10, from the tune.gate grid)
-LANDMARK_PERCENTILE <- 70 # define.gate.landmarks percentile (same)
-STAINED_SAMPLE <- "A3 BMV_009C_3dCD328_BMV_Aurora_3dCD328_Batch1.fcs" # get.spectral.variants stained.sample: donor A3 raw (user, 2026-11-10)
+# rectangles and landmark settings are dataset config (3D: bead_wide FSC 2e5-9e5, SSC 1.3e6-2.25e6, user 2026-11-10 O1;
+# cell_wide FSC 4e5-4e6, SSC 1e5-1.6e6, user 2026-11-10 chain6 after 50's plots; landmark n_cells 2000, percentile 70,
+# user 2026-11-10 from the tune.gate grid)
+BEAD_FSC <- cfg("control_gates")$bead_wide$fsc
+BEAD_SSC <- cfg("control_gates")$bead_wide$ssc
+CELL_FSC <- cfg("control_gates")$cell_wide$fsc
+CELL_SSC <- cfg("control_gates")$cell_wide$ssc
+LANDMARK_N_CELLS <- cfg("control_gates")$landmark$n_cells # define.gate.landmarks n.cells
+LANDMARK_PERCENTILE <- cfg("control_gates")$landmark$percentile # define.gate.landmarks percentile
+STAINED_SAMPLE_ID <- cfg("stained_sample") # sample id of the raw file for get.spectral.variants stained.sample (3D: A3, user 2026-11-10)
 NECESSITY_THRESHOLD <- 0.01 # optimize.necessity.threshold, package default kept (user, 2026-11-10)
 LANDMARK_FILE <- normalizePath(
-  "experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv"
-)
+  file.path(run_in("cell-gating"), "fcs_control_file_landmark.csv")
+) # written by 50_cell_gate_plots.R
 
 # Setup -----------------------------------------------------------------------------------
 cli_args <- commandArgs(trailingOnly = TRUE)
@@ -68,6 +84,41 @@ route <- cli_args[[1]]
 neg <- cli_args[[2]]
 n_passes <- as.integer(cli_args[[3]])
 stage <- cli_args[[4]]
+# 24H: one task per condition subfolder (argument 5, stage full only); 3D and EXV have no condition level
+cond <- if (length(cli_args) >= 5) cli_args[[5]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "53_opt188.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 5 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (stage == "extract" && !is.null(cond)) {
+  stop(
+    "53_opt188.R: stage extract is dataset-level; drop argument 5 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (
+  stage == "full" &&
+    !is.null(DS$conditions) &&
+    (is.null(cond) || !cond %in% DS$conditions)
+) {
+  stop(
+    "53_opt188.R: stage full needs argument 5, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+samples <- samples_tbl()
+if (!is.null(cond)) {
+  samples <- filter(samples, .data$condition == .env$cond)
+}
 stopifnot(
   "route is pregate or legacy" = route %in% c("pregate", "legacy"),
   # neg_h12 dropped (user, 2026-11-10): the H12 file holds the same events as Unstained (Cells)
@@ -82,10 +133,19 @@ arm <- paste0(
   "_p",
   n_passes
 )
+if (
+  stage == "extract" &&
+    !grepl("^20[0-9]{2}-[0-9]{2}-[0-9]{2}$", Sys.getenv("SW_RUN_DATE"))
+) {
+  stop(
+    "53_opt188.R: SW_RUN_DATE must be YYYY-MM-DD for stage extract",
+    call. = FALSE
+  )
+}
 out_dir <- if (stage == "extract") {
   file.path(normalizePath(SMOKE_ROOT, mustWork = FALSE), arm)
 } else {
-  file.path(DATA, "unmix_cells", arm)
+  paste(c(file.path(DATA, "unmix_cells", arm), cond), collapse = "/")
 }
 stopifnot("out dir must not exist" = !dir.exists(out_dir))
 ctrl_dir <- file.path(out_dir, "controls")
@@ -95,12 +155,25 @@ dir.create(work_dir)
 d188 <- file.path(DATA, "autoSpectral_v1.8.8")
 raw_ctrl_dir <- file.path(d188, "Reference Group")
 clean_dir <- file.path(d188, "Reference Group Clean")
-h12_file <- file.path(
-  raw_ctrl_dir,
-  "unstained_AF",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs"
+h12_file <- list.files(
+  file.path(raw_ctrl_dir, "unstained_AF"),
+  pattern = "\\.fcs$",
+  full.names = TRUE
 )
-stained_file <- file.path(d188, "Raw", STAINED_SAMPLE)
+stopifnot("one unstained AF file" = length(h12_file) == 1)
+# stained sample: the raw file of config stained_sample, in its own condition folder
+stained_row <- filter(samples_tbl(), .data$sample == STAINED_SAMPLE_ID)
+stopifnot(
+  "stained_sample is one sample of the sample table" = nrow(stained_row) == 1
+)
+stained_file <- paste(
+  c(
+    file.path(d188, "Raw"),
+    if (!is.null(DS$conditions)) stained_row$condition,
+    paste0(stained_row$stem, ".fcs")
+  ),
+  collapse = "/"
+)
 stopifnot("stained sample exists" = file.exists(stained_file))
 asp <- get.autospectral.param(cytometer = "aurora", figures = FALSE)
 dir_fields <- names(asp)[grepl("dir", names(asp)) & map_lgl(asp, is.character)]
@@ -262,7 +335,7 @@ read_raw <- \(path) {
 spectra_zip <- read_raw(file.path(
   d188,
   "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
+  cfg("stamps")$as188_spectra
 ))
 variants_zip <- readRDS(file.path(
   d188,
@@ -328,7 +401,7 @@ writeLines(
     "get.af.spectra(H12, refine = TRUE)",
     paste(
       "get.spectral.variants(stained.sample =",
-      STAINED_SAMPLE,
+      basename(stained_file),
       ", optimize.necessity.threshold =",
       NECESSITY_THRESHOLD,
       ")"
@@ -359,7 +432,7 @@ if (stage == "full") {
   flow.control <- reload.flow.control(ctrl_dir, control_file, asp)
   t1 <- Sys.time()
   unmix.folder(
-    fcs.dir = file.path(d188, "Raw"),
+    fcs.dir = paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
     spectra = spectra,
     asp = asp,
     flow.control = flow.control,
@@ -378,14 +451,29 @@ if (stage == "full") {
     "unmix minutes: ",
     round(as.numeric(difftime(Sys.time(), t1, units = "mins")), 1)
   )
-  ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+  ref_dir <- paste(
+    c(file.path(d188, "AutoSpectral_unmixed"), cond),
+    collapse = "/"
+  )
   read_hdr <- \(path) {
     ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
     list(n = nrow(ff), channels = colnames(ff))
   }
-  verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
+  # one unmixed file per sample: the stem is the delivered file name without its " AutoSpectral*.fcs" suffix (EXV: _v1-8-8);
+  # the join stops on any other file
+  verify <- tibble(
+    ref_file = list.files(ref_dir, pattern = "\\.fcs$", recursive = TRUE)
+  ) |>
+    mutate(stem = sub(" AutoSpectral[^ ]*\\.fcs$", "", ref_file)) |>
+    inner_join(
+      select(samples, stem),
+      by = "stem",
+      relationship = "one-to-one",
+      unmatched = "error"
+    ) |>
     mutate(
-      ref = map(file.path(ref_dir, file), read_hdr),
+      file = paste0(stem, " AutoSpectral.fcs"), # the arm's own file name
+      ref = map(file.path(ref_dir, ref_file), read_hdr),
       new = map(file.path(out_dir, file), read_hdr),
       n_ref = map_int(ref, "n"),
       n_new = map_int(new, "n"),
@@ -396,7 +484,7 @@ if (stage == "full") {
     select(file, n_ref, n_new, channels_equal)
   write_csv(verify, file.path(out_dir, "verify.csv"))
   stopifnot(
-    "5 files unmixed" = nrow(verify) == 5,
+    "one unmixed file per sample" = nrow(verify) == nrow(samples),
     "event counts equal as188_joint" = all(verify$n_ref == verify$n_new),
     "channel names equal as188_joint" = all(verify$channels_equal)
   )

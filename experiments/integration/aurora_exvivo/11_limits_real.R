@@ -118,7 +118,8 @@ long <- lapply(SEEDS, function(seed) {
         area_height = NULL,
         area_height_quantile = NULL,
         reference_group = NULL,
-        reference = NULL
+        reference = NULL,
+        summary = NULL
       )
       sd_z <- sa[sa$check == "sd_z" & sa$channel == b, ]
       bz <- sa[sa$check == "bimodality_z" & sa$channel == b, ]

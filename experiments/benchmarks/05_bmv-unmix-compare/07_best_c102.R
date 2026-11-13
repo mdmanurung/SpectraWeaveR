@@ -1,16 +1,26 @@
 # Purpose: AutoSpectral 1.0.2 in its documented best form: AF spectra and spectral variants rebuilt with
 #          refine = TRUE, then unmixing at speed = "slow" (10 variants, the 1.0.2 default).
-# Run:     pixi run Rscript 07_best_c102.R <spectra: neg | af> <out_dir>   (from the repo root)
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript 07_best_c102.R <spectra: neg | af> <out_dir> [condition]
+#            (from the repo root)
 #            neg = "Cells Matching Negative" spectra (used in the original run), af = "Cells AF clean up" spectra
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2 (controls, spectra, unstained_AF, Raw) [user zip]
+#            condition = last argument, required when the dataset has conditions (24H: one task per condition,
+#              out_dir = <data_dir>/unmix_cells/<arm>/<condition>), refused otherwise
+#            SW_RUN_DATE is only read by scripts that write a run folder; this one writes to <out_dir>.
+# Inputs:  <data_dir>/autoSpectral_v1.0.2 (controls, spectra, unstained_AF, Raw[/<condition>]) [user zip]
+#          spectra file name for neg from config stamps$as102_spectra; lib dir from config lib_dirs
 # Outputs: <out_dir>/*.fcs, <out_dir>/af_spectra.rds, <out_dir>/spectral_variants.rds, <out_dir>/args.txt, sessionInfo.txt
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
-LIB_102 <- file.path(DATA, "lib_as102")
+DATA <- normalizePath(data_path())
+LIB_102 <- normalizePath(cfg("lib_dirs")[
+  basename(cfg("lib_dirs")) == "lib_as102"
+])
 SPECTRA_FILES <- c(
-  neg = "Cells Matching Negative_autospectral_spectra.csv",
-  af = "Cells AF clean up_autospectral_spectra.csv"
+  neg = cfg("stamps")$as102_spectra,
+  af = "Cells AF clean up_autospectral_spectra.csv" # a 1.0.2 setup file name, not a stamp
 )
 AF_REFINE <- TRUE # grill Q16: documented quality lever
 VARIANTS_REFINE <- TRUE # grill Q16: "may help reduce spillover spread", no unmixing-time cost
@@ -19,6 +29,26 @@ VARIANTS_REFINE <- TRUE # grill Q16: "may help reduce spillover spread", no unmi
 args <- commandArgs(trailingOnly = TRUE)
 spectra_choice <- args[[1]]
 out_dir <- args[[2]]
+# 24H: one task per condition subfolder (argument 3); 3D and EXV have no condition level
+cond <- if (length(args) >= 3) args[[3]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "07_best_c102.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 3 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (!is.null(DS$conditions) && (is.null(cond) || !cond %in% DS$conditions)) {
+  stop(
+    "07_best_c102.R: needs argument 3, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
 stopifnot(
   "out dir must not exist" = !dir.exists(out_dir),
   "spectra is neg or af" = spectra_choice %in% names(SPECTRA_FILES)
@@ -88,7 +118,7 @@ writeLines(
   file.path(out_dir, "args.txt")
 )
 unmix.folder(
-  fcs.dir = file.path(d102, "Raw"),
+  fcs.dir = paste(c(file.path(d102, "Raw"), cond), collapse = "/"),
   spectra = spectra,
   asp = asp,
   flow.control = flow.control,

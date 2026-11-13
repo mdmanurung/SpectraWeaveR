@@ -1,6 +1,6 @@
 # Purpose: ablation chain, block B (user plan, 2026-11-10). Start from the zip AutoSpectral 1.8.8 setup and
 #          switch one more component to its 1.0.2 behaviour at each step, regenerating every object from that
-#          step down, inside 1.8.8 code. Each arm then unmixes the 5 raw files (joint, speed slow) so it can be scored
+#          step down, inside 1.8.8 code. Each arm then unmixes the raw files (joint, speed slow) so it can be scored
 #          against as188_joint (start) and s102_c188 (target) by 51_score_ablation.R.
 #            chain1_var     variants with 1.0.2 size: som.dim 10, n.cells 2000
 #            chain2_filt    + variant event filter loosened: sim.threshold = sim.threshold.floor = 0.9
@@ -21,23 +21,29 @@
 #          Unstained (Cells) and Negative_1 (Beads), which 1.8.8 define.flow.control rejects (user, 2026-11-10).
 #            chain1_var_s43 chain1_var with seed 43, to bound regeneration noise
 #          Step "check" runs after all arms: every arm's objects must differ from the previous step's.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/49_ablation_chain.R <arm | check>
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/49_ablation_chain.R <arm | check> [condition]
 #          from the repo root (SLURM: experiments/slurm/run_ablation_chain.sbatch). Output goes to
-#          experiments/bmv_test/compare_3D/data/unmix_cells/<arm>, which must not exist.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/ [user zip]
+#          <data_dir>/unmix_cells/<arm>[/<condition>], which must not exist.
+#          condition = last argument, required when the dataset has conditions (24H: one task per condition;
+#          the arm's objects are regenerated in each condition folder, and check reads one condition's folders),
+#          refused otherwise. SW_RUN_DATE is only read by scripts that write a run folder.
+# Inputs:  <data_dir>/autoSpectral_v1.8.8/ [user zip]
 #            Reference Group Clean/*.fcs + fcs_control_file.csv   controls after the zip rectangles
 #            Reference Group/*.fcs                                 raw controls (chain5 on)
-#          experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv  chain7 on [user]
-#            Reference Group/unstained_AF/H12 *.fcs                unstained sample for AF
-#            table_spectra/ run 143803 dye spectra, run 143933 AF spectra
+#          run key cell-gating: fcs_control_file_landmark.csv  chain7 on [50_cell_gate_plots.R, user-chosen gates]
+#          run key ablation-chain: fcs_control_file_gatefix.csv  chain4 on; a hand-made control-file copy [user]
+#            Reference Group/unstained_AF/*.fcs                    unstained sample for AF (the one file)
+#            table_spectra/ config-stamp dye spectra and AF spectra
 #            figure_spectral_variants/Spectral_variants.rds        zip variants (previous step of chain1)
-#            Raw/*.fcs, AutoSpectral_unmixed/*.fcs                 samples to unmix; as188_joint for verify
+#            Raw[/<condition>]/*.fcs, AutoSpectral_unmixed[/<condition>]/*.fcs  samples to unmix; as188_joint for verify
+#          config control_gates: bead_wide, cell_wide rectangles and landmark n_cells, percentile
+#          stamp file names (spectra, AF) from config stamps; samples from datasets/<ds>_samples.csv [00_samples.R]
 # Outputs: <out_dir>/*.fcs                unmixed files
 #          <out_dir>/objects/spectra.rds, af_spectra.rds, spectral_variants.rds   the arm's spectra set
 #          <out_dir>/object_check.csv     variants per dye, BV510 variant angles, thresholds, AF rows, angles
 #          <out_dir>/args.txt, verify.csv, sessionInfo.txt
 #          <out_dir>/controls/, control_gate_log.csv   chain5 on: rebuilt controls and events kept per file
-#          unmix_cells/chain_object_check.csv  step "check": differs-from-previous per arm
+#          unmix_cells/chain_object_check[_<condition>].csv  step "check": differs-from-previous per arm
 
 suppressPackageStartupMessages({
   library(AutoSpectral)
@@ -48,29 +54,34 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path()) # absolute: the script changes its working directory below
 PIPELINE <- "joint" # zip 1.8.8 script (inherited: user zip)
 SPEED <- "slow" # user rule 2026-11-10: always slow; under pipeline joint speed has no effect (repro188 fast = s188_c188_slow on A3)
 N_CANDIDATES <- 10000L # zip get.spectra.automated call (not rerun here; documents the 143803 spectra)
 VAR_SOM_DIM <- 10L # 1.0.2 get.spectral.variants value (factors.csv F5; user plan D12)
 VAR_N_CELLS <- 2000L # same
 SIM_THRESHOLD <- 0.9 # F7 loosened: sim.threshold = sim.threshold.floor (user plan D6)
-BEAD_FSC <- c(2e5, 9e5) # widened bead rectangle (user, 2026-11-10, O1)
-BEAD_SSC <- c(1.3e6, 2.25e6) # same
-CELL_FSC <- c(4e5, 4e6) # wider cell rectangle for cell controls and the unstained (user, 2026-11-10, chain6)
-CELL_SSC <- c(1e5, 1.6e6) # zip SSC bounds kept (user, 2026-11-10)
+# rectangles and landmark settings are dataset config (3D: bead_wide FSC 2e5-9e5, SSC 1.3e6-2.25e6, user 2026-11-10 O1;
+# cell_wide FSC 4e5-4e6, SSC 1e5-1.6e6, user 2026-11-10 chain6; landmark n_cells 2000, percentile 70, user 2026-11-10 chain7)
+BEAD_FSC <- cfg("control_gates")$bead_wide$fsc
+BEAD_SSC <- cfg("control_gates")$bead_wide$ssc
+CELL_FSC <- cfg("control_gates")$cell_wide$fsc
+CELL_SSC <- cfg("control_gates")$cell_wide$ssc
 LANDMARK_FILE <- normalizePath(
-  "experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv"
-) # gate.name lymphocyte (user)
-LANDMARK_N_CELLS <- 2000 # define.gate.landmarks n.cells (user, 2026-11-10, chain7)
-LANDMARK_PERCENTILE <- 70 # define.gate.landmarks percentile (same)
+  file.path(run_in("cell-gating"), "fcs_control_file_landmark.csv")
+) # gate.name lymphocyte (user); written by 50_cell_gate_plots.R
+LANDMARK_N_CELLS <- cfg("control_gates")$landmark$n_cells # define.gate.landmarks n.cells
+LANDMARK_PERCENTILE <- cfg("control_gates")$landmark$percentile # define.gate.landmarks percentile
 # Control-file gate fix for define.flow.control (chain4 on): the zip file puts Unstained (Cells) and
 # Negative_1 (Beads) in one gate.name, which 1.8.8 rejects. Fix in a copy, used from chain4 on (chain7 on: the
 # landmark copy, which also groups Unstained (Cells) with the cells).
 CONTROL_GATE_FIX <- normalizePath(
-  "experiments/runs/2026-11-10_bmv-ablation-chain/fcs_control_file_gatefix.csv"
-) # copy: Unstained (Cells) moved to smallGate_2 (user, 2026-11-10)
+  file.path(run_in("ablation-chain"), "fcs_control_file_gatefix.csv")
+) # hand-made copy: Unstained (Cells) moved to smallGate_2 (user, 2026-11-10)
 
 # arm: cumulative switches (each step adds one to the previous), previous step and extraction seed
 # (user plan D5: asp$bird.seed inside AutoSpectral, set.seed() around extraction)
@@ -110,30 +121,56 @@ ARMS <- list(
 )
 
 # Inputs ---------------------------------------------------------------------------------------
-arm <- commandArgs(trailingOnly = TRUE)[[1]]
+cli_args <- commandArgs(trailingOnly = TRUE)
+arm <- cli_args[[1]]
 stopifnot("arm is one of ARMS or check" = arm %in% c(names(ARMS), "check"))
+# 24H: one task per condition subfolder (argument 2); 3D and EXV have no condition level
+cond <- if (length(cli_args) >= 2) cli_args[[2]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "49_ablation_chain.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 2 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (!is.null(DS$conditions) && (is.null(cond) || !cond %in% DS$conditions)) {
+  stop(
+    "49_ablation_chain.R: needs argument 2, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+samples <- samples_tbl()
+if (!is.null(cond)) {
+  samples <- filter(samples, .data$condition == .env$cond)
+}
 stopifnot(
   "1.8.8 code loaded" = as.character(packageVersion("AutoSpectral")) == "1.8.8"
 )
+# arm output folder; 24H adds the condition level
+arm_dir <- \(a) {
+  paste(c(file.path(DATA, "unmix_cells", a), cond), collapse = "/")
+}
 d188 <- file.path(DATA, "autoSpectral_v1.8.8")
 clean_dir <- file.path(d188, "Reference Group Clean")
 raw_ctrl_dir <- file.path(d188, "Reference Group")
 ctrl_csv <- "fcs_control_file.csv"
-h12_file <- file.path(
-  raw_ctrl_dir,
-  "unstained_AF",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs"
+h12_file <- list.files(
+  file.path(raw_ctrl_dir, "unstained_AF"),
+  pattern = "\\.fcs$",
+  full.names = TRUE
 )
+stopifnot("one unstained AF file" = length(h12_file) == 1)
 spectra_zip_file <- file.path(
   d188,
   "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
+  cfg("stamps")$as188_spectra
 )
-af_zip_file <- file.path(
-  d188,
-  "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
-)
+af_zip_file <- file.path(d188, "table_spectra", cfg("stamps")$as188_af)
 # raw csv read: read.spectra() rescales rows (user, 2026-11-10)
 read_raw <- \(path) {
   as.matrix(read.csv(path, row.names = 1, check.names = FALSE))
@@ -163,7 +200,7 @@ if (arm == "check") {
         ))
       ))
     }
-    obj_dir <- file.path(DATA, "unmix_cells", a, "objects")
+    obj_dir <- file.path(arm_dir(a), "objects")
     list(
       spectra = readRDS(file.path(obj_dir, "spectra.rds")),
       af = readRDS(file.path(obj_dir, "af_spectra.rds")),
@@ -173,13 +210,7 @@ if (arm == "check") {
   # only arms that finished, with a finished previous step (chain4/5 can be blocked; see args)
   has_objects <- \(a) {
     a == "zip" ||
-      file.exists(file.path(
-        DATA,
-        "unmix_cells",
-        a,
-        "objects",
-        "spectral_variants.rds"
-      ))
+      file.exists(file.path(arm_dir(a), "objects", "spectral_variants.rds"))
   }
   done <- keep(ARMS, \(a) has_objects(a$prev))
   done <- done[map_lgl(names(done), has_objects)]
@@ -208,7 +239,18 @@ if (arm == "check") {
     )
   }) |>
     list_rbind()
-  write_csv(check, file.path(DATA, "unmix_cells", "chain_object_check.csv"))
+  write_csv(
+    check,
+    file.path(
+      DATA,
+      "unmix_cells",
+      paste0(
+        "chain_object_check",
+        if (!is.null(cond)) paste0("_", cond),
+        ".csv"
+      )
+    )
+  )
   stopifnot(
     "every arm changes at least one object vs its previous step" = all(
       check$unmix_only |
@@ -222,7 +264,7 @@ if (arm == "check") {
 }
 
 a <- ARMS[[arm]]
-out_dir <- file.path(DATA, "unmix_cells", arm)
+out_dir <- arm_dir(arm)
 stopifnot("out dir must not exist" = !dir.exists(out_dir))
 obj_dir <- file.path(out_dir, "objects")
 dir.create(obj_dir, recursive = TRUE)
@@ -409,8 +451,8 @@ saveRDS(spectra_variants, file.path(obj_dir, "spectral_variants.rds"))
 
 # Object check: what this arm's spectra set looks like -------------------------------------------------
 # angle of each BV510 variant to the zip 143803 BV510 signature
-bv510_var <- spectra_variants$variants[["BV510"]]
-bv510_ref <- spectra_zip["BV510", colnames(bv510_var)]
+bv510_var <- spectra_variants$variants[[cfg("targets")$tnf_dye]] # TNF dye, BV510 in 3D
+bv510_ref <- spectra_zip[cfg("targets")$tnf_dye, colnames(bv510_var)]
 bv510_cos <- drop(bv510_var %*% bv510_ref) /
   (sqrt(rowSums(bv510_var^2)) * sqrt(sum(bv510_ref^2)))
 bv510_angles <- acos(pmin(1, bv510_cos)) * 180 / pi
@@ -427,7 +469,7 @@ object_check <- bind_rows(
   ),
   tibble(
     item = "bv510_variant_angle_deg",
-    dye = paste0("BV510_variant_", seq_along(bv510_angles)),
+    dye = paste0(cfg("targets")$tnf_dye, "_variant_", seq_along(bv510_angles)),
     value = unname(bv510_angles)
   ),
   tibble(
@@ -558,7 +600,7 @@ writeLines(
 flow_control <- reload.flow.control(control_dir, control_file, asp)
 t1 <- Sys.time()
 unmix.folder(
-  fcs.dir = file.path(d188, "Raw"),
+  fcs.dir = paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
   spectra = spectra,
   asp = asp,
   flow.control = flow_control,
@@ -580,14 +622,29 @@ cat(
 )
 
 # Verify: same files, event counts and channel names as as188_joint ---------------------------------
-ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+ref_dir <- paste(
+  c(file.path(d188, "AutoSpectral_unmixed"), cond),
+  collapse = "/"
+)
 read_hdr <- \(path) {
   ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
   list(n = nrow(ff), channels = colnames(ff))
 }
-verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
+# one unmixed file per sample: the stem is the delivered file name without its " AutoSpectral*.fcs" suffix (EXV: _v1-8-8);
+# the join stops on any other file
+verify <- tibble(
+  ref_file = list.files(ref_dir, pattern = "\\.fcs$", recursive = TRUE)
+) |>
+  mutate(stem = sub(" AutoSpectral[^ ]*\\.fcs$", "", ref_file)) |>
+  inner_join(
+    select(samples, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
   mutate(
-    ref = map(file.path(ref_dir, file), read_hdr),
+    file = paste0(stem, " AutoSpectral.fcs"), # the arm's own file name
+    ref = map(file.path(ref_dir, ref_file), read_hdr),
     new = map(file.path(out_dir, file), read_hdr),
     n_ref = map_int(ref, "n"),
     n_new = map_int(new, "n"),
@@ -598,7 +655,7 @@ verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
   select(file, n_ref, n_new, channels_equal)
 write_csv(verify, file.path(out_dir, "verify.csv"))
 stopifnot(
-  "5 files unmixed" = nrow(verify) == 5,
+  "one unmixed file per sample" = nrow(verify) == nrow(samples),
   "event counts equal as188_joint" = all(verify$n_ref == verify$n_new),
   "channel names equal as188_joint" = all(verify$channels_equal)
 )

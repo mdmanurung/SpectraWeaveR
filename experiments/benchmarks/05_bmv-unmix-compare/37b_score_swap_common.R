@@ -4,17 +4,20 @@
 #          On CD4T and CD8T cells defined by as188_joint's gates (rows paired across arms), per donor, for
 #          BV510-A (TNF) and BV570-A (IFNg): Nguyen rSD of events below arcsinh 1.5, share of events with
 #          |x| < 0.5 x as188_joint's rSD, and share of events above arcsinh 1.5 (G7a).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/37b_score_swap_common.R
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/37b_score_swap_common.R
 #            from the repo root, after both swap arms of 37_swap_af_variants.R finished.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/as188_joint        common-gate GatingSet [batch 0, 97d]
-#          experiments/runs/2026-11-11_bmv-common-gated/manifest.csv          clean3 FCS per arm [97c]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/swap_af102, swap_var102   [37_swap_af_variants.R]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/AutoSpectral_unmixed   raw as188_joint
-# Outputs: experiments/runs/2026-11-11_bmv-swap-test-common/scores.csv           one row per arm, donor, population, channel
-#          experiments/runs/2026-11-11_bmv-swap-test-common/bv510_events.csv.gz  source data of the density figure
-#          experiments/runs/2026-11-11_bmv-swap-test-common/fig_bv510_density.{pdf,png,csv}
-#          experiments/runs/2026-11-11_bmv-swap-test-common/fig_scores.{pdf,png,csv}
-#          experiments/runs/2026-11-11_bmv-swap-test-common/sessionInfo.txt
+# Inputs:  run_in("common-gated")/gs/as188_joint        common-gate GatingSet [batch 0, 97d]
+#          run_in("common-gated")/manifest.csv          clean3 FCS per arm [97c]
+#          data_path("unmix_cells", "swap_af102" / "swap_var102", [<condition>,] <file>)   [37_swap_af_variants.R]
+#          data_path("autoSpectral_v1.8.8/AutoSpectral_unmixed", [<condition>,] <file>)   raw as188_joint
+#          datasets/<SW_DATASET>.json (channels, targets, conditions, pos_rule, neg_rule), <ds>_samples.csv
+#          The cuts come from cut_of(); one value, or per sample when they differ (3D: 1.5; helper98_common_scores.R labels both).
+# Outputs: run_out("swap-test-common")/scores.csv           one row per arm, sample, population, channel
+#          run_out("swap-test-common")/bv510_events.csv.gz  source data of the density figure
+#          run_out("swap-test-common")/fig_bv510_density.{pdf,png,csv}
+#          run_out("swap-test-common")/fig_scores.{pdf,png,csv}
+#          run_out("swap-test-common")/sessionInfo.txt
 
 suppressPackageStartupMessages({
   library(flowCore)
@@ -26,16 +29,32 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 
 # Parameters ------------------------------------------------------------------------------
-RUN_DIR <- "experiments/runs/2026-11-11_bmv-swap-test-common"
-GATED <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
-DATA <- "experiments/bmv_test/compare_3D/data"
+RUN_DIR <- run_out("swap-test-common")
+GATED <- run_in("common-gated") # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
+DATA <- data_path()
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-NEG_CUT <- 1.5 # negatives (rSD, squeeze cut) are events below arcsinh 1.5, as the positivity cut (G13, user 2026-11-11; was 1)
-POS_CUT <- 1.5 # positives are events above arcsinh 1.5 (G7a, user 2026-11-11; was 1)
+# negatives (rSD, squeeze cut) are events below cut_of(arm, sample, channel, "neg"), positives above the "pos" cut
+# (3D: arcsinh 1.5 for both, G13 and G7a, user 2026-11-11; was 1)
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| below this fraction of as188_joint's rSD (user, 2026-11-10)
-CHANNELS <- c(TNF = "BV510-A", IFNg = "BV570-A")
+TNF_LABEL <- cfg("targets")$tnf_label
+IFNG_LABEL <- cfg("targets")$ifng_label
+CHANNELS <- set_names(
+  c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot),
+  c(TNF_LABEL, IFNG_LABEL)
+)
+SAMPLES <- samples_tbl()
+# 24H keeps arm and raw files in one subfolder per condition; 3D and EXV have none
+cond_path <- \(dir, sample, file) {
+  cond <- if (is.null(DS$conditions)) {
+    NULL
+  } else {
+    SAMPLES$condition[SAMPLES$sample == sample]
+  }
+  do.call(file.path, as.list(c(dir, cond, file)))
+}
 POPS <- c("CD4T", "CD8T") # gates of as188_joint
 KEY_COLS <- c("Time", "FSC-A", "FSC-H", "SSC-A") # identical across arms; maps raw rows to cleaned rows
 ARM_COLORS <- c(
@@ -64,8 +83,49 @@ read_x <- \(path) {
 key_of <- \(e) do.call(paste, c(as.data.frame(e[, KEY_COLS]), sep = "|"))
 raw_ref_dir <- file.path(DATA, "autoSpectral_v1.8.8/AutoSpectral_unmixed")
 ref <- manifest |> filter(arm == "as188_joint")
+stopifnot(
+  "manifest holds the samples of samples_tbl()" = setequal(
+    ref$sample,
+    SAMPLES$sample
+  )
+)
+CHECK_SAMPLE <- sort(ref$sample)[[1]] # sample of the row-mapping check (3D: A3)
+
+# Cuts per arm, sample and channel, read once (cut_of re-reads cuts.csv when the rule is not fixed)
+cut_tbl <- tidyr::expand_grid(
+  arm = names(ARM_COLORS),
+  sample = ref$sample,
+  channel = unname(CHANNELS)
+) |>
+  mutate(
+    neg_cut = pmap_dbl(list(arm, sample, channel), \(a, s, ch) {
+      cut_of(a, s, ch, "neg")
+    }),
+    pos_cut = pmap_dbl(list(arm, sample, channel), \(a, s, ch) {
+      cut_of(a, s, ch, "pos")
+    })
+  )
+cut_here <- \(a, s, ch, col) {
+  v <- cut_tbl[[col]][
+    cut_tbl$arm == a[1] & cut_tbl$sample == s[1] & cut_tbl$channel == ch[1]
+  ]
+  stopifnot("one cut per arm, sample and channel" = length(v) == 1)
+  v
+}
+# helper98_common_scores.R takes one value or a per-sample cut; one value when all samples share it
+PLOT_NEG_CUT <- cut_tbl |>
+  filter(arm == "as188_joint", channel == CHANNELS[[TNF_LABEL]]) |>
+  transmute(sample, cut = neg_cut)
+if (n_distinct(PLOT_NEG_CUT$cut) == 1) {
+  PLOT_NEG_CUT <- PLOT_NEG_CUT$cut[[1]]
+}
+PLOT_POS_CUT <- cut_tbl$pos_cut
 keep <- map2(ref$file, ref$sample, \(clean_file, sample) {
-  raw_key <- key_of(read_x(file.path(raw_ref_dir, basename(clean_file))))
+  raw_key <- key_of(read_x(cond_path(
+    raw_ref_dir,
+    sample,
+    basename(clean_file)
+  )))
   stopifnot("keys unique in raw file" = !anyDuplicated(raw_key))
   raw_key %in% key_of(read_x(clean_file))
 }) |>
@@ -81,7 +141,11 @@ gate_rows <- imap(keep, \(k, sample) {
 # Values per arm, donor, population ---------------------------------------------------------
 arm_file <- \(arm, sample, clean_file) {
   if (arm %in% NEW_ARMS) {
-    file.path(DATA, "unmix_cells", arm, basename(clean_file))
+    cond_path(
+      file.path(DATA, "unmix_cells", arm),
+      sample,
+      basename(clean_file)
+    )
   } else {
     clean_file
   }
@@ -109,12 +173,12 @@ events <- manifest |>
     })
   )
 # identity check: masking a raw crossed-arm file reproduces its cleaned file (tests the row mapping)
-chk <- events |> filter(arm == "s102_c188", sample == "A3")
-raw_s102 <- read_x(file.path(
-  DATA,
-  "unmix_cells/s102_c188",
+chk <- events |> filter(arm == "s102_c188", sample == CHECK_SAMPLE)
+raw_s102 <- read_x(cond_path(
+  file.path(DATA, "unmix_cells/s102_c188"),
+  CHECK_SAMPLE,
   basename(chk$file)
-))[keep[["A3"]], CHANNELS]
+))[keep[[CHECK_SAMPLE]], CHANNELS]
 stopifnot(
   "row mapping reproduces cleaned file" = isTRUE(all.equal(
     unname(raw_s102),
@@ -156,8 +220,12 @@ nguyen <- \(v) unname(diff(quantile(v, c(0.5, 0.84)))) # q84 - q50
 scores <- long |>
   summarise(
     n = n(),
-    rsd_neg = nguyen(x[asinh(x / COFACTOR) < NEG_CUT]),
-    pos_share = mean(asinh(x / COFACTOR) > POS_CUT),
+    rsd_neg = nguyen(x[
+      asinh(x / COFACTOR) < cut_here(arm, sample, channel, "neg_cut")
+    ]),
+    pos_share = mean(
+      asinh(x / COFACTOR) > cut_here(arm, sample, channel, "pos_cut")
+    ),
     .by = c(arm, sample, pop, channel)
   )
 ref_rsd <- scores |>
@@ -187,18 +255,18 @@ scores <- scores |>
   mutate(rsd_ratio = rsd_neg / ref_rsd)
 write_csv(scores, file.path(RUN_DIR, "scores.csv"))
 long |>
-  filter(channel == CHANNELS[["TNF"]]) |>
+  filter(channel == CHANNELS[[TNF_LABEL]]) |>
   mutate(arcsinh = round(asinh(x / COFACTOR), 4)) |>
   select(arm, sample, pop, arcsinh) |>
   write_csv(file.path(RUN_DIR, "bv510_events.csv.gz"))
 
 # Figures: BV510 density and the three scores per arm (helper98_common_scores.R) --------------
 curves <- long |>
-  filter(channel == CHANNELS[["TNF"]]) |>
+  filter(channel == CHANNELS[[TNF_LABEL]]) |>
   transmute(arm, sample, pop, arcsinh = asinh(x / COFACTOR)) |>
   density_curves(from = -1.5, to = 4)
-p_dens <- plot_density_curves(curves, ARM_COLORS, NEG_CUT)
+p_dens <- plot_density_curves(curves, ARM_COLORS, PLOT_NEG_CUT)
 save_panel(p_dens, curves, RUN_DIR, "fig_bv510_density", 183, 90)
-scores_plot <- plot_arm_scores(scores, ARM_COLORS, POS_CUT)
+scores_plot <- plot_arm_scores(scores, ARM_COLORS, PLOT_POS_CUT)
 save_panel(scores_plot$plot, scores_plot$frame, RUN_DIR, "fig_scores", 183, 160)
 writeLines(capture.output(sessionInfo()), file.path(RUN_DIR, "sessionInfo.txt"))

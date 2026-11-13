@@ -1,6 +1,5 @@
 ---
 title: "BMV Unmix Dashboard"
-subtitle: "AutoSpectral 1.0.2 vs 1.8.8 on 3-day CD3/CD28-stimulated BMV cells, 5 donors: common SpectroFlo gates"
 date: today
 format:
   html:
@@ -22,26 +21,26 @@ execute:
 
 ```{r}
 #| label: params
-# Banner:  dashboard/header_common.html (header band plus the rerun banner, linked to the changes table).
-# Purpose: one-page dashboard of the BMV unmix comparison rerun on common SpectroFlo gates (cut arcsinh 1.5,
-#          2026-11-11). Sections follow the new INDEX; every figure the INDEX cites is shown as its 300-dpi PNG,
+# Banner:  header band from dashboard/header_common.html; the rerun banner comes from cfg("dashboard_banner") in the howto chunk.
+# Purpose: one-page dashboard of the BMV unmix comparison rerun on common SpectroFlo gates. One copy serves
+#          3d, 24h and exv (SW_DATASET). Sections follow the new INDEX; every figure the INDEX cites is shown as its 300-dpi PNG,
 #          the Conclusions bullets carry theirs, and a cited figure with no file stops the render.
-# Run:     pixi run quarto render experiments/benchmarks/05_bmv-unmix-compare/96c_dashboard.qmd   (repo root)
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run quarto render experiments/benchmarks/05_bmv-unmix-compare/96c_dashboard.qmd   (repo root)
+#          SW_DATASET (3d, 24h, exv) and SW_RUN_DATE are required. SW_OUT_NAME (optional) names the output folder
+#          under experiments/runs; unset, it is run_out("dashboard-common").
 #          then mv the rendered dashboard_common.html to OUT_DIR/dashboard.html (the render creates OUT_DIR).
-# Inputs:  experiments/runs/2026-11-11_bmv-summary-common/INDEX.md     text, verbatim
-#          experiments/runs/2026-11-11_bmv-summary-common/CHANGES.md   the "What changed" table
-#          dashboard/figs_common.py                                    figure list, resolved through MANIFEST_restyle_common.csv
-#          dashboard/artifact/cards_common.json                        headline cards
+# Inputs:  run_in("summary-common")/INDEX.md     text, verbatim (registry: datasets/<ds>_runs.csv)
+#          run_in("summary-common")/CHANGES.md   the "What changed" table
+#          dashboard/figs_common.py              figure list, resolved through run_in("restyle-common")/MANIFEST_restyle_common.csv
+#          dashboard/artifact/cards_common.json (3d) or cards_<ds>.json (24h, exv)   headline cards
+#          datasets/<ds>.json key dashboard_subject; datasets/<ds>_samples.csv (donor list)
 #          <figure>.csv beside every cited PNG                         plotted data
 # Outputs: <OUT_DIR>/figures.csv       section, figure, kind (restyled, cited, run-dir), caption
 #          <OUT_DIR>/sessionInfo.txt
 # Parameters --------------------------------------------------------------------
 RUNS_DIR <- "experiments/runs"
-INDEX_MD <- "experiments/runs/2026-11-11_bmv-summary-common/INDEX.md"
-CHANGES_MD <- "experiments/runs/2026-11-11_bmv-summary-common/CHANGES.md"
 FIGS_PY <- "experiments/benchmarks/05_bmv-unmix-compare/dashboard/figs_common.py"
-CARDS_JSON <- "experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact/cards_common.json"
-OUT_DIR <- file.path("experiments/runs", Sys.getenv("SW_OUT_NAME", "2026-11-11_bmv-dashboard-common")) # set SW_OUT_NAME to render into a new dir
+CARDS_DIR <- "experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact"
 SKIP_SECTIONS <- "^08" # 08 points at the superseded offline dashboard this page replaces
 MAX_ROWS <- 500 # rows shown per data table; larger tables show the first MAX_ROWS
 ```
@@ -61,6 +60,19 @@ suppressPackageStartupMessages({
   library(tibble)
   library(reactable)
 })
+```
+
+```{r}
+#| label: dataset
+# Dataset paths ------------------------------------------------------------------------------------
+# dataset.R reads SW_DATASET and stops when it is unset; run_in() stops on an unregistered key.
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+INDEX_MD <- file.path(run_in("summary-common"), "INDEX.md")
+CHANGES_MD <- file.path(run_in("summary-common"), "CHANGES.md")
+CARDS_JSON <- file.path(CARDS_DIR, if (DS$dataset == "3d") "cards_common.json" else paste0("cards_", DS$dataset, ".json"))
+OUT_DIR <- if (nzchar(Sys.getenv("SW_OUT_NAME"))) file.path(RUNS_DIR, Sys.getenv("SW_OUT_NAME")) else run_out("dashboard-common") # SW_OUT_NAME renders into a named dir
+# Replicate units named in the reading note: 3d and exv have one file per well (condition NA), 24h has conditions per donor.
+DONORS <- if (is.null(DS$conditions)) sort(samples_tbl()$sample) else sort(unique(samples_tbl()$donor))
 ```
 
 ```{r}
@@ -130,6 +142,7 @@ image_md <- \(caption, path, src) {
 # Headline cards ----------------------------------------------------------------------------------
 # The card values come from INDEX text (cards_common.json).
 cards <- jsonlite::read_json(CARDS_JSON)
+if (!is.null(names(cards))) cards <- cards$cards # cards_<ds>.json is {"cards": [...]}; the 3D file is a bare list
 card_html <- map_chr(cards, \(c) {
   sprintf(
     '  <div class="verdict %s">\n    <div class="v-label">%s</div>\n    <div class="v-value">%s</div>\n    <div class="v-note">%s</div>\n  </div>',
@@ -142,7 +155,21 @@ cat(
 )
 ```
 
-> **How to read this page.** Each section states the finding, then shows its figures (300-dpi PNG, Nature spec) and the data behind each figure (sortable and searchable). Conclusions carry their figures under each bullet. Arms are the unmixing setups compared; donors (A3, A6, B11, B2, D1) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell. The tab "What changed" lists every old claim against its new value.
+```{r}
+#| label: howto
+#| results: asis
+# Rerun banner from the dataset config (dashboard/header_common.html carries no banner).
+cat(sprintf(
+  '<div class="rerun-banner"><strong>%s</strong><a href="#what-changed">What changed: every old claim against its new value</a></div>\n\n',
+  cfg("dashboard_banner")
+))
+# Subtitle and reading note; the subject text is the dataset config, the donor list comes from the sample table.
+cat(sprintf('<p class="subtitle">AutoSpectral 1.0.2 vs 1.8.8 on %s, %d donors: common SpectroFlo gates</p>\n\n', cfg("dashboard_subject"), length(DONORS)))
+cat(sprintf(
+  '> **How to read this page.** Each section states the finding, then shows its figures (300-dpi PNG, Nature spec) and the data behind each figure (sortable and searchable). Conclusions carry their figures under each bullet. Arms are the unmixing setups compared; donors (%s) are the replicates. "Losing most of the spike" means less than half of a +1 arcsinh spike is recovered in a cell. The tab "What changed" lists every old claim against its new value.\n',
+  paste(DONORS, collapse = ", ")
+))
+```
 
 ```{r}
 #| label: intro
@@ -190,6 +217,10 @@ render_section <- \(sec) {
   }
   knitr::knit_child(text = lines, envir = environment(), quiet = TRUE)
 }
+not_dashboard <- filter(sections, str_detect(heading, SKIP_SECTIONS), !str_detect(heading, regex("dashboard", ignore_case = TRUE)))
+stopifnot(
+  "96c_dashboard.qmd: the section skipped by SKIP_SECTIONS is not the superseded dashboard section" = nrow(not_dashboard) == 0
+)
 out <- pmap_chr(filter(sections, !str_detect(heading, SKIP_SECTIONS)), \(...) render_section(tibble(...)))
 cat(out, sep = "\n\n")
 ```

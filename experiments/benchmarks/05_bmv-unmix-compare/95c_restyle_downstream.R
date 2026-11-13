@@ -2,20 +2,25 @@
 #          common-gate runs (95_restyle_downstream.R repointed; plans/common_gates_plan.md G11, G13). Donors
 #          are encoded by colour and shape as in the report; no line joins a donor across arms, and the
 #          median is a bar drawn behind the points. Nothing is recomputed.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_downstream.R (repo root)
-# Inputs:  runs/2026-11-11_bmv-common-downstream-opt188-v2/fig_pop_pct.csv           [89b common]
-#          runs/2026-11-11_bmv-common-downstream-opt188/fig_{cluster_abundance,marker_flags,ari}.csv [89 common]
-#          runs/2026-11-11_bmv-common-umap-knn/knn_overlap.csv, embeddings.rds        [92 common]
-# Outputs: restyle-common/19_downstream_umap/fig_{pop_pct,cluster_abundance,marker_flags,ari,knn_overlap,
-#            umap_lineage_zscore}.{pdf,png,csv}, sessionInfo_95c_downstream.txt
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_downstream.R
+#          (repo root)
+# Inputs:  run_in("common-downstream-opt188-v2")/fig_pop_pct.csv           [89b common]
+#          run_in("common-downstream-opt188")/fig_{cluster_abundance,marker_flags,ari}.csv [89 common]
+#          run_in("common-umap-knn")/knn_overlap.csv, embeddings.rds        [92 common]
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/19_downstream_umap/
+#            fig_{pop_pct,cluster_abundance,marker_flags,ari,knn_overlap,umap_lineage_zscore}.{pdf,png,csv},
+#            sessionInfo_95c_downstream.txt
 suppressPackageStartupMessages({
   library(dplyr)
   library(ggplot2)
   library(purrr)
   library(readr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 SCRIPT <- "95c_restyle_downstream.R"
+TNF_LAB <- cfg("targets")$tnf_label
+TH2_LAB <- need_target(SCRIPT, "th2_label") # the UMAP figure colours by TNF and Th2
 
 # Parameters ---------------------------------------------------------------------------------------
 ARMS <- c("as188_joint", "opt188") # 89, grill Q1
@@ -29,8 +34,8 @@ MARKER_SET_LABEL <- c(
   lineage_functional = "lineage + 17 functional"
 )
 SCALING_LABEL <- c(zscore = "z-scored", none = "unscaled")
-RUN_89 <- file.path(RUNS, "2026-11-11_bmv-common-downstream-opt188")
-RUN_92 <- file.path(RUNS, "2026-11-11_bmv-common-umap-knn")
+RUN_89 <- run_in("common-downstream-opt188")
+RUN_92 <- run_in("common-umap-knn")
 
 OUT <- fresh_dir("19_downstream_umap")
 OLD <- "2026-11-11_bmv-restyle/19_downstream_umap"
@@ -50,6 +55,7 @@ arm_n_labels <- \(donor) {
 
 # Arms along x, donors as colour and shape over a median bar, no line across arms --------------------
 paired_arms <- function(d, value, facet, y_label, title) {
+  need_cond(d, SCRIPT)
   d <- mutate(d, donor = factor_by_pal(.data$donor, DONOR_PAL))
   ggplot(d, aes(arm, .data[[value]])) +
     stat_summary(
@@ -65,7 +71,7 @@ paired_arms <- function(d, value, facet, y_label, title) {
     donor_scales() +
     scale_x_discrete(labels = arm_n_labels(d$donor)) +
     facet_wrap(
-      vars(.data[[facet]]),
+      vars(.data[[facet]], !!!rlang::syms(COND)),
       scales = "free_y",
       ncol = 4,
       axes = "all",
@@ -76,10 +82,7 @@ paired_arms <- function(d, value, facet, y_label, title) {
 }
 
 # Figure: gated populations, % of parent -----------------------------------------------------------------
-src_pop <- file.path(
-  RUNS,
-  "2026-11-11_bmv-common-downstream-opt188-v2/fig_pop_pct.csv"
-)
+src_pop <- file.path(run_in("common-downstream-opt188-v2"), "fig_pop_pct.csv")
 pop_df <- read_csv(src_pop, show_col_types = FALSE) |>
   mutate(
     arm = factor(arm, levels = ARMS),
@@ -161,6 +164,7 @@ log_fig("fig_marker_flags", src_flag)
 # Figure: ARI per donor, opt188 and the as188_joint seed noise floor ---------------------------------------
 src_ari <- file.path(RUN_89, "fig_ari.csv")
 ari_df <- read_csv(src_ari, show_col_types = FALSE) |>
+  need_cond(SCRIPT) |>
   mutate(
     comparison = factor(
       comparison,
@@ -185,6 +189,7 @@ p_ari <- ggplot(ari_df, aes(comparison, ari)) +
   ) +
   donor_scales() +
   scale_x_discrete(labels = scales::label_wrap(12)) +
+  cond_facet() +
   labs(
     x = NULL,
     y = "ARI vs as188_joint (seed 42)",
@@ -197,6 +202,7 @@ log_fig("fig_ari", src_ari)
 # Figure: UMAP neighbour overlap per donor, flipped so arm names read horizontally (r-0012) -------------
 src_knn <- file.path(RUN_92, "knn_overlap.csv")
 overlap_df <- read_csv(src_knn, show_col_types = FALSE) |>
+  need_cond(SCRIPT) |>
   mutate(
     group = if_else(comparison %in% NOISE, "1.8.8 zip, other seed", comparison),
     group = factor(group, levels = rev(c(ARM_ORDER, "1.8.8 zip, other seed"))),
@@ -235,7 +241,8 @@ p_overlap <- ggplot(overlap_df, aes(median_overlap, group)) +
   donor_scales() +
   # free_y + space: each reference row lists only the arms scored against it
   facet_grid(
-    reference ~ panel,
+    rows = vars(reference, !!!rlang::syms(COND)),
+    cols = vars(panel),
     scales = "free_y",
     space = "free_y",
     axes = "all",
@@ -266,7 +273,11 @@ umap_df <- readRDS(file.path(RUN_92, "embeddings.rds")) |>
   tidyr::unnest(umap) |>
   mutate(arm = factor(arm, levels = ARM_ORDER))
 umap_long <- umap_df |>
-  tidyr::pivot_longer(c(TNF, Th2), names_to = "marker", values_to = "arcsinh")
+  tidyr::pivot_longer(
+    all_of(c(TNF_LAB, TH2_LAB)),
+    names_to = "marker",
+    values_to = "arcsinh"
+  )
 umap_panel <- function(d, title, show_arrows) {
   d <- d[order(d$arcsinh), ] # high values on top
   arrow_len <- 0.22 * c(diff(range(d$dim1)), diff(range(d$dim2)))
@@ -385,8 +396,8 @@ arm_header <- cowplot::plot_grid(
 )
 grid_rows <- cowplot::plot_grid(
   arm_header,
-  marker_row("TNF"),
-  marker_row("Th2"),
+  marker_row(TNF_LAB),
+  marker_row(TH2_LAB),
   ncol = 1,
   rel_heights = c(0.1, 1, 1)
 )

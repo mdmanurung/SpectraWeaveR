@@ -1,23 +1,31 @@
-# Purpose: unmix the 5 BMV files with the AutoSpectral 1.8.8 noise model and GLS (estimate.noise.model()
+# Purpose: unmix the BMV files of the dataset with the AutoSpectral 1.8.8 noise model and GLS (estimate.noise.model()
 #          then unmix.gls()), the Honeychrome-style noise weighting that unmix.folder() never calls.
-#          Same 1.8.8 inputs as as188_joint: run 143803 dye spectra, raw-csv AF, Spectral_variants.rds,
+#          Same 1.8.8 inputs as as188_joint: config-stamp dye spectra, raw-csv AF, Spectral_variants.rds,
 #          Reference Group Clean controls. Per-cell AF comes from assign.af.joint.cov(); per-cell spectral
 #          variants are committed inside unmix.gls() (spectra.variants), as in the joint pipeline.
-# Run:     from the repo root, in this order:
+# Run:     from the repo root, with SW_DATASET=<3d|24h|exv> and SW_RUN_DATE=<YYYY-MM-DD> set, in this order:
 #            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/42_unmix_gls_noise.R noise
-#              fits the noise model once; both arms load it
-#            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/42_unmix_gls_noise.R <arm> <mode>
+#              fits the noise model once (new run folder run_out("gls-noise")); both arms load it.
+#              Register that folder in datasets/<ds>_runs.csv before the arm steps below read it
+#              (run_in("gls-noise")).
+#            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/42_unmix_gls_noise.R <arm> <mode> [condition]
 #              arm = gls188_noise (include.spillover FALSE) or gls188_noise_spill (TRUE)
-#              mode = smoke: donor A3 only, written to <RUN_DIR>/smoke_<arm>/, then verified
-#                     A3, A6, B11, B2 or D1: that donor into the arm folder (one SLURM job each;
+#              mode = smoke: the sample(s) of config smoke_donor (a sample id or a donor id) only, written to
+#                       <RUN_DIR>/smoke_<arm>/, then verified
+#                     <sample id> (3D: A3, A6, B11, B2 or D1): that sample into the arm folder (one SLURM job each;
 #                       unmix.gls() takes about 2 core-minutes per 1000 events)
-#                     verify: after all 5 donors, checks the arm folder against as188_joint
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8 (Raw, Reference Group Clean,
-#            table_spectra, figure_spectral_variants, AutoSpectral_unmixed) [user zip]
-# Outputs: <RUN_DIR>/noise_model/noise_model.rds        fitted noise model (noise step)
-#          <RUN_DIR>/noise_model/detectors.csv          sigma0^2, kappa and flags per detector
-#          <RUN_DIR>/noise_model/calibration_sources.csv held-out calibration, one row per source
-#          <RUN_DIR>/noise_model/summary.txt            in-band shares, clamped flag, notes
+#                     verify: after all samples, checks the arm folder against as188_joint
+#              condition = last argument, required when the dataset has conditions (24H: one task per condition,
+#                arm folder <data_dir>/unmix_cells/<arm>/<condition>), refused otherwise
+# Inputs:  <data_dir>/autoSpectral_v1.8.8 (Raw[/<condition>], Reference Group Clean,
+#            table_spectra, figure_spectral_variants, AutoSpectral_unmixed[/<condition>]) [user zip]
+#          stamp file names (spectra, AF) from config stamps; samples from datasets/<ds>_samples.csv [00_samples.R]
+#          run key gls-noise: noise_model/noise_model.rds  (arm steps) [this script, step noise]
+#          config smoke_donor
+# Outputs: run_out("gls-noise")/noise_model/noise_model.rds        fitted noise model (noise step)
+#          run_out("gls-noise")/noise_model/detectors.csv          sigma0^2, kappa and flags per detector
+#          run_out("gls-noise")/noise_model/calibration_sources.csv held-out calibration, one row per source
+#          run_out("gls-noise")/noise_model/summary.txt            in-band shares, clamped flag, notes
 #          <out_dir>/*.fcs           unmixed files, same channels as as188_joint
 #          <out_dir>/args.txt        what was run
 #          <out_dir>/noise_model.rds copy of the noise model used
@@ -33,14 +41,14 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
 # All noise-model and GLS settings are the AutoSpectral 1.8.8 package defaults (user, 2026-11-10).
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
-RUN_DIR <- "experiments/runs/2026-11-10_bmv-gls-noise"
+DATA <- normalizePath(data_path())
 ARMS <- c(gls188_noise = FALSE, gls188_noise_spill = TRUE) # include.spillover per arm (user, 2026-11-10)
-SMOKE_DONOR <- "A3" # whole donor for the smoke test (all events)
 N_CORES <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "6")) # parallel chunks; unmix.gls() is per cell, so chunking does not change results
-DONORS <- c("A3", "A6", "B11", "B2", "D1")
 # estimate.noise.model() (user, 2026-11-10: package defaults)
 NOISE_SELECTION <- "auto" # scatter core and FSC-A/FSC-H singlets of every control file
 NOISE_UNSTAINED_TRAIN_FRAC <- 0.5 # training share of the unstained cells
@@ -66,25 +74,48 @@ cli_args <- commandArgs(trailingOnly = TRUE)
 step <- cli_args[[1]]
 mode <- if (length(cli_args) > 1) cli_args[[2]] else ""
 smoke <- mode == "smoke"
+SMOKE_DONOR <- if (smoke) cfg("smoke_donor") # sample or donor id for the smoke test (all its events); 3D: A3
+# 24H: one task per condition subfolder (argument 3, arm steps only); 3D and EXV have no condition level
+cond <- if (length(cli_args) >= 3) cli_args[[3]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "42_unmix_gls_noise.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 3 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (
+  step != "noise" &&
+    !is.null(DS$conditions) &&
+    (is.null(cond) || !cond %in% DS$conditions)
+) {
+  stop(
+    "42_unmix_gls_noise.R: an arm step needs argument 3, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+samples <- samples_tbl()
+if (!is.null(cond)) {
+  samples <- filter(samples, .data$condition == .env$cond)
+}
 stopifnot(
   "step is noise or an arm" = step %in% c("noise", names(ARMS)),
-  "arm mode is smoke, a donor or verify" = step == "noise" ||
-    mode %in% c("smoke", DONORS, "verify"),
+  "arm mode is smoke, a sample id or verify" = step == "noise" ||
+    mode %in% c("smoke", samples$sample, "verify"),
   "1.8.8 code loaded" = as.character(packageVersion("AutoSpectral")) == "1.8.8"
 )
+# noise step creates the run folder; the arm steps read it, so it must be registered by then
+RUN_DIR <- if (step == "noise") run_out("gls-noise") else run_in("gls-noise")
 d188 <- file.path(DATA, "autoSpectral_v1.8.8")
 control_dir <- file.path(d188, "Reference Group Clean")
 control_file <- file.path(control_dir, "fcs_control_file.csv")
-spectra_file <- file.path(
-  d188,
-  "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
-)
-af_file <- file.path(
-  d188,
-  "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
-)
+spectra_file <- file.path(d188, "table_spectra", cfg("stamps")$as188_spectra)
+af_file <- file.path(d188, "table_spectra", cfg("stamps")$as188_af)
 variants_rds <- file.path(
   d188,
   "figure_spectral_variants",
@@ -178,7 +209,7 @@ arm <- step
 out_dir <- if (smoke) {
   file.path(RUN_DIR, paste0("smoke_", arm))
 } else {
-  file.path(DATA, "unmix_cells", arm)
+  paste(c(file.path(DATA, "unmix_cells", arm), cond), collapse = "/")
 }
 # smoke: a new folder; donor jobs share the arm folder but never overwrite a file (checked per file)
 if (smoke) {
@@ -195,7 +226,11 @@ variant_basis <- build.variant.basis(
 )
 writeLines(
   c(
-    paste("arm:", arm, if (smoke) "(smoke, donor A3)" else ""),
+    paste(
+      "arm:",
+      arm,
+      if (smoke) paste0("(smoke, donor ", SMOKE_DONOR, ")") else ""
+    ),
     "method: estimate.noise.model() + assign.af.joint.cov() + unmix.gls()",
     paste(
       "include.spillover:",
@@ -230,16 +265,44 @@ writeLines(
   file.path(out_dir, "args.txt")
 )
 
-raw_files <- list.files(
-  file.path(d188, "Raw"),
-  pattern = "\\.fcs$",
-  full.names = TRUE
-)
-if (mode != "verify") {
-  donor <- if (smoke) SMOKE_DONOR else mode
-  raw_files <- raw_files[startsWith(basename(raw_files), paste0(donor, " "))]
+# samples to do: smoke = the rows of SMOKE_DONOR (sample or donor id), a sample id = that row, verify = all
+todo <- if (mode == "verify") {
+  samples
+} else if (smoke) {
+  filter(
+    samples,
+    .data$sample == .env$SMOKE_DONOR | .data$donor == .env$SMOKE_DONOR
+  )
+} else {
+  filter(samples, .data$sample == .env$mode)
 }
-ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+stopifnot("samples to do are in the sample table" = nrow(todo) > 0)
+# raw files by full file stem, one per sample; extra files in the folder are dropped, a missing one stops
+raw_files <- tibble(
+  path = list.files(
+    paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
+    pattern = "\\.fcs$",
+    full.names = TRUE,
+    recursive = TRUE
+  )
+) |>
+  mutate(stem = sub("\\.fcs$", "", basename(path))) |>
+  inner_join(
+    select(todo, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = c("drop", "error")
+  ) |>
+  pull(path)
+ref_dir <- paste(
+  c(file.path(d188, "AutoSpectral_unmixed"), cond),
+  collapse = "/"
+)
+# delivered as188_joint file of each sample, by stem (EXV files end in " AutoSpectral_v1-8-8.fcs")
+ref_lookup <- tibble(
+  ref_file = list.files(ref_dir, pattern = "\\.fcs$", recursive = TRUE)
+) |>
+  mutate(stem = sub(" AutoSpectral[^ ]*\\.fcs$", "", ref_file))
 for (raw_file in if (mode == "verify") character() else raw_files) {
   t0 <- Sys.time()
   ff <- read.FCS(raw_file, transformation = FALSE, truncate_max_range = FALSE)
@@ -283,10 +346,9 @@ for (raw_file in if (mode == "verify") character() else raw_files) {
   unmixed <- do.call(rbind, unmixed)
 
   # Write with the as188_joint channel order: scatter and Time from the raw file, dyes, AF, AF Index
-  ref_file <- file.path(
-    ref_dir,
-    sub("\\.fcs$", " AutoSpectral.fcs", basename(raw_file))
-  )
+  stem <- sub("\\.fcs$", "", basename(raw_file))
+  ref_file <- file.path(ref_dir, ref_lookup$ref_file[ref_lookup$stem == stem])
+  stopifnot("one as188_joint file for this sample" = length(ref_file) == 1)
   ref_channels <- colnames(read.FCS(
     ref_file,
     which.lines = 1:2,
@@ -306,7 +368,7 @@ for (raw_file in if (mode == "verify") character() else raw_files) {
   stopifnot(
     "output channels equal as188_joint" = setequal(colnames(out), ref_channels)
   )
-  out_file <- file.path(out_dir, basename(ref_file))
+  out_file <- file.path(out_dir, paste0(stem, " AutoSpectral.fcs"))
   stopifnot("output file must not exist" = !file.exists(out_file))
   write.FCS(
     flowFrame(out[, ref_channels]),
@@ -323,8 +385,8 @@ for (raw_file in if (mode == "verify") character() else raw_files) {
   )
 }
 
-# a donor job stops here; the verify step checks the arm once all 5 donors are written
-if (mode %in% DONORS) {
+# a sample job stops here; the verify step checks the arm once all samples are written
+if (mode %in% samples$sample) {
   writeLines(
     capture.output(sessionInfo()),
     file.path(out_dir, paste0("sessionInfo_", mode, ".txt"))
@@ -337,9 +399,25 @@ read_hdr <- \(path) {
   ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
   list(n = nrow(ff), channels = colnames(ff))
 }
-verify <- tibble(file = list.files(out_dir, pattern = "\\.fcs$")) |>
+# one unmixed file per sample: the stem is the file name without " AutoSpectral.fcs"; the joins stop on any other file
+verify <- tibble(
+  file = list.files(out_dir, pattern = "\\.fcs$", recursive = TRUE)
+) |>
+  mutate(stem = sub(" AutoSpectral\\.fcs$", "", file)) |>
+  inner_join(
+    select(todo, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
+  inner_join(
+    ref_lookup,
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = c("error", "drop")
+  ) |>
   mutate(
-    ref = map(file.path(ref_dir, file), read_hdr),
+    ref = map(file.path(ref_dir, ref_file), read_hdr),
     new = map(file.path(out_dir, file), read_hdr),
     n_ref = map_int(ref, "n"),
     n_new = map_int(new, "n"),

@@ -1,17 +1,25 @@
 # Purpose: Nature-spec redraw on the common gates (plans/common_gates_plan.md G7a, G11) of the CD8T cytokine
 #          hexbin grids of 95_restyle_events_scatter.R: same layout, but GatingSets come from the common-gate
-#          dir, so every arm holds the same SpectroFlo-labelled CD8T cells, and the cut is arcsinh 1.5. The
-#          only line drawn is the cut (gate lines belong to SpectroFlo panels of the gate figures, G11).
-#          Arm strips are filled with the arm colour key; one 183 mm figure per x marker.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_scatter.R <figure>
+#          dir, so every arm holds the same SpectroFlo-labelled CD8T cells, and the cut is the dataset's positive
+#          cut (cut_of(); arcsinh 1.5 in 3D). The only line drawn is the cut (gate lines belong to SpectroFlo
+#          panels of the gate figures, G11). Arm strips are filled with the arm colour key; one 183 mm figure per
+#          x marker. The th2 figure stops on a dataset without Th2 (EXV).
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_scatter.R <figure>
 #            from the repo root; <figure> is one of names(FIGURES): per_dye_v8, af_swap_v3, per_dye,
 #            tnf_new, th2.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/<arm>/   common-gate GatingSets [97e_common_gs.R]
+# Inputs:  run_in("common-gated")/gs/<arm>/   common-gate GatingSets [97e_common_gs.R]
 #          experiments/benchmarks/05_bmv-unmix-compare/95c_common.R   theme, donor key, add_manifest()
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/<folder>/<stem>[_<x>].pdf, .png, .csv
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), channels, targets
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/<folder>/<stem>[_<x>].pdf, .png, .csv
 #            the .csv holds the % above the cut printed in each panel
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -22,10 +30,11 @@ suppressPackageStartupMessages({
   library(readr)
 })
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
+SCRIPT <- "95c_restyle_events_scatter.R"
 
 # Parameters ---------------------------------------------------------------------------------------
 FIGURE <- commandArgs(trailingOnly = TRUE)[1]
-COMMON_GS <- "experiments/runs/2026-11-11_bmv-common-gated/gs"
+COMMON_GS <- file.path(run_in("common-gated"), "gs")
 REFERENCE <- c("SpectroFlo\n(reference)" = "spectroflo")
 REFERENCE_FILL <- "#252525"
 # arms (label = arm folder), strip fill per arm, y marker, x markers, summary folder and file stem;
@@ -149,15 +158,23 @@ COFACTOR <- 6000 # arcsinh cofactor for linear channels (CLAUDE.md)
 AXIS <- c(-1.5, 4) # display window only; the % above the cut uses every event
 BINS <- 50 # hexagon bins per panel; display only, for ~22 mm panels
 LABEL_PT <- 6 # in-panel % text, inside Nature's 5-7 pt
+# role (key used in FIGURES) -> channel; Th2 is added below when the figure needs it
 CHANNELS <- c(
-  TNF = "BV510-A",
-  Th2 = "eFluor 450-A",
-  IFNg = "BV570-A",
-  GLUT1 = "Alexa Fluor 405-A",
+  TNF = cfg("channels")$TNF_slot,
+  IFNg = cfg("channels")$IFNg_slot,
+  GLUT1 = paste0(cfg("targets")$glut1_dye, "-A"),
   AF = "AF-A",
   SSC = "SSC-A"
 )
-LINEAR_TO_ARCSINH <- c("Alexa Fluor 405-A", "AF-A", "eFluor 450-A")
+# role -> label shown on axes and in titles (the dataset's marker names for the BV510 and BV570 slots)
+LABELS <- c(
+  TNF = cfg("targets")$tnf_label,
+  IFNg = cfg("targets")$ifng_label,
+  GLUT1 = "GLUT1",
+  AF = "AF",
+  SSC = "SSC"
+)
+LINEAR_TO_ARCSINH <- c(paste0(cfg("targets")$glut1_dye, "-A"), "AF-A")
 SCALE_LABEL <- c(
   TNF = "arcsinh",
   Th2 = "arcsinh, cofactor 6000",
@@ -169,13 +186,22 @@ SCALE_LABEL <- c(
 X_LIMITS <- list(IFNg = AXIS, GLUT1 = AXIS, AF = AXIS, SSC = c(0, 2.5e6))
 
 spec <- FIGURES[[FIGURE]]
+stopifnot("FIGURE is one of names(FIGURES)" = !is.null(spec))
+if ("Th2" %in% c(spec$y, spec$blocks)) {
+  CHANNELS[["Th2"]] <- need_target(SCRIPT, "Th2", "channels")
+  LABELS[["Th2"]] <- need_target(SCRIPT, "th2_label")
+  LINEAR_TO_ARCSINH <- c(LINEAR_TO_ARCSINH, CHANNELS[["Th2"]])
+}
+# only the channels this figure plots are cut from each frame
+CH_USED <- CHANNELS[unique(c(spec$y, spec$blocks))]
+LINEAR_TO_ARCSINH <- intersect(LINEAR_TO_ARCSINH, CH_USED)
 ARMS <- if (spec$reference) c(REFERENCE, spec$arms) else spec$arms
 ARM_FILL <- set_names(
   c(if (spec$reference) REFERENCE_FILL, spec$fill),
   names(ARMS)
 )
-Y_NAME <- spec$y
-Y_CH <- CHANNELS[[Y_NAME]]
+Y_NAME <- LABELS[[spec$y]]
+Y_CH <- CHANNELS[[spec$y]]
 OUT_DIR <- file.path(OUT_ROOT, spec$folder)
 stems <- if (length(spec$blocks) == 1) {
   spec$stem
@@ -199,7 +225,7 @@ frames <- ARMS |>
       set_names(\(s) paste(label, s, sep = "|")) |>
       map(\(s) {
         cytoframe_to_flowFrame(gh_pop_get_data(gs[[s]], POP))[, unname(
-          CHANNELS
+          CH_USED
         )]
       })
   }) |>
@@ -223,11 +249,21 @@ pd <- tibble(name = sampleNames(fs)) |>
 pData(fs) <- as.data.frame(pd) |> `rownames<-`(pd$name)
 
 # % of CD8T above the cut per arm and donor, printed in each panel ----------------------------------
-pct_pos <- fsApply(fs, \(ff) 100 * mean(exprs(ff)[, Y_CH] >= CUT)) |>
-  as.data.frame() |>
-  tibble::rownames_to_column("name") |>
-  rename(pct_above_cut = V1) |>
-  left_join(pd, by = "name", relationship = "one-to-one", unmatched = "error")
+# cut of one frame: its arm folder (ARMS value) and sample (donor) pick the cell of cuts.csv
+cut_df <- pd |>
+  mutate(
+    cut = map2_dbl(arm, donor, \(a, d) {
+      cut_of(ARMS[[as.character(a)]], d, Y_CH, "pos")
+    })
+  )
+pct_pos <- cut_df |>
+  mutate(
+    pct_above_cut = pmap_dbl(
+      list(name, cut),
+      \(n, k) 100 * mean(exprs(fs[[n]])[, Y_CH] >= k)
+    )
+  ) |>
+  select(name, pct_above_cut, arm, donor)
 pct_table <- pct_pos |>
   mutate(
     arm_id = ARMS[as.character(arm)],
@@ -245,10 +281,15 @@ fig_height_mm <- round(
 )
 walk2(spec$blocks, stems, \(x_name, stem) {
   x_ch <- CHANNELS[[x_name]]
-  # the cut as a line at arcsinh 1.5: an open-ended gate would draw box edges at the display limits
+  # the cut as a line: an open-ended gate would draw box edges at the display limits
   p <- ggcyto(fs, aes(x = !!rlang::sym(x_ch), y = !!rlang::sym(Y_CH))) +
     geom_hex(bins = BINS) +
-    geom_hline(yintercept = CUT, colour = "red", linewidth = FIG_LINE) +
+    geom_hline(
+      data = cut_df,
+      aes(yintercept = cut),
+      colour = "red",
+      linewidth = FIG_LINE
+    ) +
     geom_label(
       data = pct_pos,
       aes(
@@ -281,12 +322,12 @@ walk2(spec$blocks, stems, \(x_name, stem) {
       guide = "none"
     ) +
     labs(
-      x = sprintf("%s, %s (%s)", x_name, x_ch, SCALE_LABEL[[x_name]]),
-      y = sprintf("%s, %s (%s)", Y_NAME, Y_CH, SCALE_LABEL[[Y_NAME]]),
+      x = sprintf("%s, %s (%s)", LABELS[[x_name]], x_ch, SCALE_LABEL[[x_name]]),
+      y = sprintf("%s, %s (%s)", Y_NAME, Y_CH, SCALE_LABEL[[spec$y]]),
       title = sprintf(
         "CD8 T cells: %s vs %s, red line = cut at %s",
         Y_NAME,
-        x_name,
+        LABELS[[x_name]],
         CUT_TXT
       )
     ) +

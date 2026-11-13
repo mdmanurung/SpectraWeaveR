@@ -1,6 +1,6 @@
 # Purpose: Common-gates copy (plans/common_gates_plan.md, batch 3): CD4T and CD8T membership and rows come from the
 #          common SpectroFlo labels (clean3); the near-zero cut is refitted as 0.5 x the CD4T negative rSD of
-#          as188_joint on those cells. Negatives for the rSD are below arcsinh 1.5 (G13). Figures follow lib/theme.R.
+#          as188_joint on those cells. Negatives for the rSD are below the negative cut (cut_of; 3D arcsinh 1.5, G13). Figures follow lib/theme.R.
 #          Original purpose: test whether the autofluorescence (AF) spectra explain why BV510 (TNF) looks different between
 #          unmixing arms. Arms on the AutoSpectral 1.0.2 spectra set push many CD4 T / CD8 T cells to ~0 in
 #          BV510-A; arms on the 1.8.8 set do not. Hypothesis: the AF spectra travelling with the 1.0.2 set
@@ -10,16 +10,21 @@
 #          3. paired view against the reference arm, and AF-A abundance against BV510
 #          4. BV510 content of each AF spectrum (least squares on the fluor signatures) times AF-A
 #          Nothing is re-unmixed. Evidence only; no method ranking.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/36_af_bv510_common.R <run_dir>
-#          from the repo root. run_dir must not exist; use experiments/runs/2026-11-11_bmv-af-bv510-common.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/manifest.csv      clean3 FCS per arm and donor [97c]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/as188_joint    GatingSet with CD4T, CD8T [batch 0, 97d]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2/Reference Group/table_spectra/*.csv
-#            spectra (Matching Negative, AF clean up) and the zip's AF set [user zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/table_spectra/*.csv
-#            run 143803 spectra and its AF set 143933 [user zip]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/<arm>/af_spectra.rds
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/36_af_bv510_common.R <run_dir>
+#          from the repo root. run_dir must not exist; use run_out("af-bv510-common") of the caller
+#          (3D: experiments/runs/2026-11-11_bmv-af-bv510-common). Stops on 24H: the refined AF sets sit in
+#          unmix_cells/<arm>/<condition>/ and which one each sample's AF Index points into is not decided.
+# Inputs:  run_in("common-gated")/manifest.csv      clean3 FCS per arm and sample [97c]
+#          run_in("common-gated")/gs/as188_joint    GatingSet with CD4T, CD8T [batch 0, 97d]
+#          data_path("autoSpectral_v1.0.2/Reference Group/table_spectra/*.csv")
+#            spectra (Matching Negative, AF clean up) and the zip's AF set [user zip]; file names are
+#            cfg("stamps")$as102_spectra, $as102_af and cfg("stamps")$as102_afclean_spectra
+#          data_path("autoSpectral_v1.8.8/table_spectra/*.csv")
+#            the 1.8.8 spectra and its AF set; cfg("stamps")$as188_spectra, $as188_af [user zip]
+#          data_path("unmix_cells", <arm>, "af_spectra.rds")
 #            refined AF sets of best102_neg, best102_af, best188_p1 [07_best_c102.R, 07_best_c188.R]
+#          datasets/<SW_DATASET>.json (stamps, channels, targets, neg_rule), <ds>_samples.csv
 # Outputs: <run_dir>/af_spectra_cosines.csv        one row per AF spectrum: cosine to BV510, top 3 fluors, BV510 content
 #          <run_dir>/bv510_signature_angle.csv     angle between the BV510 signatures of the spectra sets
 #          <run_dir>/reference_cut.csv             reference rSD and the near-zero cut (linear BV510)
@@ -50,14 +55,44 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(ggridges)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R") # theme_set(), save_panel()
+
+# Config lookups ---------------------------------------------------------------------------
+# a nested config value that the dataset may lack: stop naming this script and the value
+need <- \(group, name) {
+  v <- cfg(group)[[name]]
+  if (is.null(v)) {
+    stop(
+      "36_af_bv510_common.R: needs ",
+      name,
+      ", missing in dataset ",
+      DS$dataset,
+      call. = FALSE
+    )
+  }
+  v
+}
+if (!is.null(DS$conditions)) {
+  stop(
+    "36_af_bv510_common.R: refined AF sets sit in unmix_cells/<arm>/<condition>/; ",
+    "which one each sample's AF Index points into is not decided for dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
+TNF_SLOT <- cfg("channels")$TNF_slot # channel of the TNF-slot dye in the unmixed files
+TNF_DYE <- cfg("targets")$tnf_dye # its signature row in the spectra
+# the time stamp of the zip AF file, for the panel label
+AF_CLOSE_LABEL <- sprintf("3 AF closest to %s", TNF_DYE)
+AF188_STAMP <- str_extract(cfg("stamps")$as188_af, "[0-9]{6}(?=\\.csv$)")
 
 # Parameters ------------------------------------------------------------------------------
 REF_ARM <- "as188_joint" # reference arm (README, approved choices); defines CD4T/CD8T membership and the rSD
 POPS <- c("CD4T", "CD8T") # populations scored in the tables
 FIG_POP <- "CD4T" # population shown in the figures (task brief); CD8T numbers are in the tables
 COFACTOR <- 6000 # arcsinh cofactor for spectral flow (CLAUDE.md)
-RSD_CEIL <- 1.5 # Nguyen rSD uses reference CD4T events below this arcsinh value (G13, user 2026-11-11; was 1)
+# Nguyen rSD uses the arm's CD4T events below its negative cut, cut_of(arm, sample, TNF_SLOT, "neg") (3D 1.5, G13, user 2026-11-11; was 1)
 NEAR_ZERO_FRACTION <- 0.5 # near zero = |BV510| < this x reference rSD (task brief)
 EXACT_ZERO_TOL <- 1e-6 # |BV510| below this counts as exactly zero (clamped value), linear scale
 PAIRED_ARMS <- c("as102_var", "s102_c188", "s188_c102") # arms in the paired view (task brief)
@@ -70,23 +105,28 @@ MIN_CELLS_BIN <- 30 # a donor-bin point is drawn only with at least this many ce
 XLIM <- c(-1.5, 3.5) # arcsinh display range for BV510
 NEG_CLIP <- -0.3 # fig 1 y-axis floor; AF spectra dipping below it (row max = 1) are clipped (min_value in af_spectra_cosines.csv)
 JITTER_SEED <- 42 # jitter only moves points sideways; same seed gives the same picture
-DATA_DIR <- "experiments/bmv_test/compare_3D/data"
-GATED_DIR <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
+DATA_DIR <- data_path()
+GATED_DIR <- run_in("common-gated") # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
 
 # Spectra sets and arms (settings from 06_unmix_c188.R, 06_unmix_c102.R, 07_best_*.R args.txt) --
 # spectra_set = which spectra csv the arm unmixed with; af_set = which AF matrix its AF Index points into
+AS102_DIR <- "autoSpectral_v1.0.2/Reference Group/table_spectra"
+AS188_DIR <- "autoSpectral_v1.8.8/table_spectra"
 SPECTRA_FILES <- c(
-  sp102_neg = "autoSpectral_v1.0.2/Reference Group/table_spectra/Cells Matching Negative_autospectral_spectra.csv",
-  sp102_afclean = "autoSpectral_v1.0.2/Reference Group/table_spectra/Cells AF clean up_autospectral_spectra.csv",
-  sp188 = "autoSpectral_v1.8.8/table_spectra/Automated_autospectral_spectra_20261105_143803.csv"
+  sp102_neg = file.path(AS102_DIR, cfg("stamps")$as102_spectra),
+  sp102_afclean = file.path(
+    AS102_DIR,
+    need("stamps", "as102_afclean_spectra")
+  ),
+  sp188 = file.path(AS188_DIR, cfg("stamps")$as188_spectra)
 )
 AF_SETS <- tribble(
-  ~af_set                 , ~spectra_set    , ~af_path                                                                                                                                       , ~label                           ,
-  "af188"                 , "sp188"         , "autoSpectral_v1.8.8/table_spectra/H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"                   , "1.8.8 zip AF (143933)"          ,
-  "af188_refined"         , "sp188"         , "unmix_cells/best188_p1/af_spectra.rds"                                                                                                        , "1.8.8 refined AF (best188)"     ,
-  "af102"                 , "sp102_neg"     , "autoSpectral_v1.0.2/Reference Group/table_spectra/H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs_H12 Unstained_BMV_Aurora_3dCD328_Batch1_AF.csv" , "1.0.2 zip AF"                   ,
-  "af102_neg_refined"     , "sp102_neg"     , "unmix_cells/best102_neg/af_spectra.rds"                                                                                                       , "1.0.2 refined AF (best102_neg)" ,
-  "af102_afclean_refined" , "sp102_afclean" , "unmix_cells/best102_af/af_spectra.rds"                                                                                                        , "1.0.2 refined AF (best102_af)"
+  ~af_set                 , ~spectra_set    , ~af_path                                     , ~label                                     ,
+  "af188"                 , "sp188"         , file.path(AS188_DIR, cfg("stamps")$as188_af) , paste0("1.8.8 zip AF (", AF188_STAMP, ")") ,
+  "af188_refined"         , "sp188"         , "unmix_cells/best188_p1/af_spectra.rds"      , "1.8.8 refined AF (best188)"               ,
+  "af102"                 , "sp102_neg"     , file.path(AS102_DIR, cfg("stamps")$as102_af) , "1.0.2 zip AF"                             ,
+  "af102_neg_refined"     , "sp102_neg"     , "unmix_cells/best102_neg/af_spectra.rds"     , "1.0.2 refined AF (best102_neg)"           ,
+  "af102_afclean_refined" , "sp102_afclean" , "unmix_cells/best102_af/af_spectra.rds"      , "1.0.2 refined AF (best102_af)"
 )
 ARMS <- tribble(
   ~arm             , ~af_set                 , ~source     ,
@@ -166,19 +206,19 @@ af_cos <- AF_SETS |>
     tibble(
       af_set = af_set,
       af_index = seq_len(nrow(af)),
-      cos_bv510 = cos_fl[, "BV510"],
+      cos_bv510 = cos_fl[, TNF_DYE],
       top3_similar = apply(cos_fl, 1, \(x) {
         o <- order(x, decreasing = TRUE)[1:3]
         str_c(colnames(cos_fl)[o], " (", round(x[o], 3), ")", collapse = "; ")
       }),
-      bv510_content = coefs["BV510", ],
+      bv510_content = coefs[TNF_DYE, ],
       min_value = apply(af, 1, min)
     )
   }) |>
   list_rbind()
 write_csv(af_cos, file.path(run_dir, "af_spectra_cosines.csv"))
 
-bv_sig <- SPECTRA |> map(\(m) m["BV510", ])
+bv_sig <- SPECTRA |> map(\(m) m[TNF_DYE, ])
 angle_deg <- \(a, b) acos(sum(a * b) / sqrt(sum(a^2) * sum(b^2))) * 180 / pi
 tibble(
   pair = c(
@@ -197,6 +237,17 @@ tibble(
 # Cells: one row per CD4T/CD8T event of the reference arm, for every arm -------------------
 gs <- load_gs(file.path(GATED_DIR, "gs", REF_ARM))
 samples <- sampleNames(gs)
+stopifnot(
+  "gating set holds the samples of samples_tbl()" = setequal(
+    samples,
+    samples_tbl()$sample
+  )
+)
+# negative cut per arm and sample
+NEG_CUTS <- tidyr::expand_grid(arm = ARMS$arm, sample = samples) |>
+  mutate(
+    neg_cut = pmap_dbl(list(arm, sample), \(a, s) cut_of(a, s, TNF_SLOT, "neg"))
+  )
 ref_pop <- samples |>
   set_names() |>
   map(\(s) {
@@ -238,7 +289,7 @@ cells <- manifest |>
       sample = file_sample,
       event = seq_len(nrow(ex)),
       pop = ref_pop[[file_sample]],
-      bv510 = ex[, "BV510-A"],
+      bv510 = ex[, TNF_SLOT],
       afa = ex[, "AF-A"],
       af_index = as.integer(ex[, "AF Index"])
     ) |>
@@ -256,6 +307,12 @@ cells <- manifest |>
     join_by(af_set, af_index),
     relationship = "many-to-one"
   ) |>
+  left_join(
+    NEG_CUTS,
+    join_by(arm, sample),
+    relationship = "many-to-one",
+    unmatched = c("error", "drop")
+  ) |>
   mutate(
     bv_asinh = asinh(bv510 / COFACTOR),
     afa_asinh = asinh(afa / COFACTOR),
@@ -269,7 +326,7 @@ stopifnot(
 
 # Reference rSD and near-zero cut ---------------------------------------------------------
 ref_neg <- cells |>
-  filter(arm == REF_ARM, pop == "CD4T", bv_asinh < RSD_CEIL) |>
+  filter(arm == REF_ARM, pop == "CD4T", bv_asinh < neg_cut) |>
   pull(bv510)
 RSD_REF <- unname(quantile(ref_neg, 0.84) - quantile(ref_neg, 0.5))
 ZERO_CUT <- NEAR_ZERO_FRACTION * RSD_REF
@@ -287,15 +344,15 @@ tibble(
   write_csv(file.path(run_dir, "reference_cut.csv"))
 
 # Arm summary: per arm, population, donor -------------------------------------------------
-rsd_below <- \(x, ax) {
-  unname(quantile(x[ax < RSD_CEIL], 0.84) - quantile(x[ax < RSD_CEIL], 0.5))
+rsd_below <- \(x, ax, cut) {
+  unname(quantile(x[ax < cut[1]], 0.84) - quantile(x[ax < cut[1]], 0.5))
 }
 arm_pop <- cells |>
   summarise(
     n = n(),
     frac_near_zero = mean(near_zero),
     frac_exact_zero = mean(exact_zero),
-    rsd_own = rsd_below(bv510, bv_asinh),
+    rsd_own = rsd_below(bv510, bv_asinh, neg_cut),
     median_bv510 = median(bv510),
     .by = c(arm, source, pop, sample)
   ) |>
@@ -411,16 +468,16 @@ p1 <- ggplot(fig1_lines, aes(detector, value, group = af_index)) +
   ) +
   geom_line(
     data = \(d) filter(d, top3),
-    aes(colour = "3 AF closest to BV510"),
+    aes(colour = AF_CLOSE_LABEL),
     linewidth = 0.6
   ) +
   geom_line(
     data = fig1_bv,
-    aes(colour = "BV510", group = 1),
+    aes(colour = TNF_DYE, group = 1),
     linewidth = 0.9
   ) +
   scale_colour_manual(
-    values = c(`3 AF closest to BV510` = "#E69F00", BV510 = "#C0392B"),
+    values = set_names(c("#E69F00", "#C0392B"), c(AF_CLOSE_LABEL, TNF_DYE)),
     name = NULL
   ) +
   # every 8th detector named; 64 names do not fit
@@ -488,7 +545,7 @@ p1b <- ggplot(fig1b_dat, aes(cos_bv510, label)) +
     max.overlaps = Inf
   ) +
   scale_colour_manual(values = set_names("#C0392B", key_legend), name = NULL) +
-  labs(x = "Cosine of AF spectrum to BV510", y = NULL) +
+  labs(x = sprintf("Cosine of AF spectrum to %s", TNF_DYE), y = NULL) +
   scale_y_discrete(labels = scales::label_wrap(22))
 save_panel(p1b, fig1b_dat, run_dir, "fig1b_cosine_by_set", 183, 90)
 write_csv(key_idx, file.path(run_dir, "key_af_indices.csv"))
@@ -503,7 +560,7 @@ p2 <- ggplot(fig2_dat, aes(bv_asinh, class, fill = source)) +
   coord_cartesian(xlim = XLIM) +
   facet_wrap(~arm, ncol = 3) +
   labs(
-    x = sprintf("BV510-A in %s, arcsinh", FIG_POP),
+    x = sprintf("%s in %s, arcsinh", TNF_SLOT, FIG_POP),
     y = "AF Index rank in arm"
   )
 save_panel(p2, plotted_layer(p2), run_dir, "fig2_bv510_by_af_index", 183, 200)
@@ -549,8 +606,8 @@ p3 <- ggplot(paired, aes(bv_ref, bv_asinh)) +
   coord_equal(xlim = XLIM, ylim = XLIM) +
   facet_grid(arm ~ class, labeller = labeller(class = rank_labels)) +
   labs(
-    x = sprintf("BV510-A in %s, arcsinh", REF_ARM),
-    y = "BV510-A in arm, arcsinh"
+    x = sprintf("%s in %s, arcsinh", TNF_SLOT, REF_ARM),
+    y = sprintf("%s in arm, arcsinh", TNF_SLOT)
   )
 save_panel(p3, plotted_layer(p3), run_dir, "fig3_paired_bv510", 183, 130)
 fig3_src <- paired |>
@@ -575,7 +632,7 @@ p4 <- ggplot(fig4_dat, aes(afa_asinh, bv_asinh)) +
   facet_wrap(~arm, ncol = 2) +
   labs(
     x = sprintf("AF-A abundance, arcsinh(x / %g)", COFACTOR),
-    y = "BV510-A, arcsinh"
+    y = sprintf("%s, arcsinh", TNF_SLOT)
   )
 save_panel(p4, plotted_layer(p4), run_dir, "fig4_afa_vs_bv510", 183, 130)
 
@@ -622,7 +679,12 @@ panel5 <- \(dat, xvar, xlab, brks) {
 }
 p5 <- cowplot::plot_grid(
   panel5(by_decile, afa_decile, "AF-A decile in arm", c(1, 5, 10)),
-  panel5(by_cos, cos_bin, "Cosine of assigned AF to BV510", seq(0, 1, 0.2)),
+  panel5(
+    by_cos,
+    cos_bin,
+    sprintf("Cosine of assigned AF to %s", TNF_DYE),
+    seq(0, 1, 0.2)
+  ),
   ncol = 1,
   labels = c("a", "b"),
   label_size = 7
@@ -685,7 +747,10 @@ p6a <- ggplot(
   ) +
   geom_vline(xintercept = 0, linewidth = 0.2, linetype = "dashed") +
   scale_colour_manual(values = set_names("#C0392B", key_legend), name = NULL) +
-  labs(x = "BV510 content of AF spectrum (per unit AF-A)", y = NULL) +
+  labs(
+    x = sprintf("%s content of AF spectrum (per unit AF-A)", TNF_DYE),
+    y = NULL
+  ) +
   coord_cartesian(xlim = c(-0.5, 1.2)) +
   scale_y_discrete(labels = scales::label_wrap(22)) +
   theme(plot.margin = margin(5, 5, 5, 25)) # room for the set names after cowplot
@@ -699,8 +764,8 @@ p6b <- ggplot(
   coord_equal(xlim = c(-3.5, 3.5), ylim = c(-3.5, 3.5)) +
   facet_wrap(~arm, nrow = 1) +
   labs(
-    x = "Predicted BV510 from AF, arcsinh",
-    y = sprintf("BV510 change vs %s, arcsinh", REF_ARM)
+    x = sprintf("Predicted %s from AF, arcsinh", TNF_DYE),
+    y = sprintf("%s change vs %s, arcsinh", TNF_DYE, REF_ARM)
   )
 p6 <- cowplot::plot_grid(
   p6a,

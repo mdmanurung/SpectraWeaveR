@@ -3,22 +3,32 @@
 #          2026-11-11). For every marker flagged (revised Q2 rule) in as102_var, s188_c102 or opt188: a ggcyto
 #          hexbin of that marker against GLUT1 (Alexa Fluor 405-A) in the population where it is flagged (CD8T,
 #          else CD4T, else live), on the common SpectroFlo labels, as the flag scores were. Columns are arms
-#          (SpectroFlo and 1.8.8 zip as references), rows donors; the fixed cut at arcsinh 1.5 (G7a) is drawn
-#          with geom_gate and the % above it printed per panel. The script stops unless FSC-A and SSC-A of
+#          (SpectroFlo and 1.8.8 zip as references), rows donors; the positive cut (cut_of, kind "pos"; fixed
+#          arcsinh 1.5 in 3D, G7a) is drawn with geom_gate and the % above it printed per panel. The script stops unless FSC-A and SSC-A of
 #          every root row are identical in every arm (G8).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/93_flag_raw_scatter_common.R <flags.csv>
-#            (repo root); <flags.csv> is the new 86b flags.csv from batch 3
-# Inputs:  <flags.csv>                                                        as102_var, s188_c102 flags [86b, batch 3]
-#          experiments/runs/2026-11-11_bmv-common-downstream-opt188/marker_flags.csv  opt188 flags [89 common]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/{as188_joint,opt188_pregate_joint_p1af1,as102_var,
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> \
+#            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/93_flag_raw_scatter_common.R <flags.csv>
+#            (repo root); <flags.csv> is the new 86b flags.csv from batch 3. The out dir is run_out("common-flag-raw-scatter").
+# Inputs:  the dataset config and run registry (datasets/<SW_DATASET>.json, <SW_DATASET>_runs.csv); run folders come
+#          from the registry keys below, the sample table from samples_tbl()
+#          <flags.csv>                                                        as102_var, s188_c102 flags [86b, batch 3]
+#          run_in("common-downstream-opt188")/marker_flags.csv                opt188 flags [89 common]
+#          run_in("common-gated")/gs/{as188_joint,opt188_pregate_joint_p1af1,as102_var,
 #            spectroflo,s188_c102}   common-gate GatingSets [batch 0], README.md
-# Outputs: <out_dir>/fig_flag_<marker>_<pop>.{png,pdf,csv}   one figure per flagged marker, 183 mm wide, 300 dpi PNG
+#          cut_of(arm, sample, "<channel>", "pos")   positive cut per arm, sample and channel (fixed 1.5 in 3D, G7a)
+# Outputs: <out_dir>/fig_flag_<marker>_<pop>.{png,pdf,csv}   one figure per flagged marker, 183 mm wide, 300 dpi PNG;
+#                                                         with conditions: one per condition, suffix _<condition>
 #          <out_dir>/flagged_markers.csv                 marker, population shown, arms that flag it
 #          <out_dir>/pct_above_cut.csv                   % above the cut per marker, arm and donor
 #          <out_dir>/pairing.csv                         arm, donor, root rows, FSC-A and SSC-A equal to 1.8.8 zip
+#                                                        (donor = sample id; with conditions, a condition column too)
 #          <out_dir>/sessionInfo.txt
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+# dataset.R loads only dplyr and readr, so it can run before .libPaths puts ggplot2 3.5.2 (for ggcyto) first
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+LIB_GGPLOT2 <- grep("lib_ggplot2", cfg("lib_dirs"), value = TRUE, fixed = TRUE)
+stopifnot("one ggplot2 lib dir in lib_dirs" = length(LIB_GGPLOT2) == 1)
+.libPaths(c(LIB_GGPLOT2, .libPaths()))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -29,11 +39,19 @@ suppressPackageStartupMessages({
   library(readr)
 })
 
+# dataset.R calls a bare filter(); here flowCore's filter generic comes first on the search path, so give
+# its two helpers a scope where filter is dplyr's (dataset.R should say dplyr::filter itself)
+.dataset_scope <- new.env(parent = globalenv())
+.dataset_scope$filter <- dplyr::filter
+environment(run_in) <- .dataset_scope
+environment(cut_of) <- .dataset_scope
+
 # Parameters ---------------------------------------------------------------------------------------
-OUT_DIR <- "experiments/runs/2026-11-11_bmv-common-flag-raw-scatter"
+OUT_DIR <- run_out("common-flag-raw-scatter")
 FLAGS_86B <- commandArgs(trailingOnly = TRUE)[1] # new 86b flags.csv, batch 3
-FLAGS_89 <- "experiments/runs/2026-11-11_bmv-common-downstream-opt188/marker_flags.csv"
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0; gs/<arm> for all arms
+FLAGS_89 <- file.path(run_in("common-downstream-opt188"), "marker_flags.csv")
+COMMON <- run_in("common-gated") # batch 0; gs/<arm> for all arms
+HEIGHT_PER_ROW_MM <- 35 # figure height per sample row; 5 rows give the 175 mm of the 3D figure
 FIG_WIDTH_MM <- 183 # double column, the width save_panel takes besides 89
 PAIR_COLS <- c("FSC-A", "SSC-A") # equal per row means every arm holds the same cells (G8)
 # column label = GatingSet; references first, then the flagged arms
@@ -63,17 +81,13 @@ FLAG_ARM <- c(
 ARM_FILL <- c("#252525", "#d9d9d9", "#9ecae1", "#08519c", "#7f0000") # as the 72 scatters
 DARK_FILLS <- c("#252525", "#08519c", "#7f0000") # strips that take white text
 POP_PRIORITY <- c("CD8T", "CD4T", "live") # population shown when a marker is flagged in several
-CUT <- 1.5 # fixed cut, arcsinh, cofactor 6000 (G7a, user 2026-11-11; was 1)
 COFACTOR <- 6000 # README "Transform"
 # 19a_gate_arm.R:113 writes these channels as arcsinh already; all other fluorescence channels are linear
-STORED_ARCSINH <- c(
-  "SBUV510-A",
-  "Spark Blue 574-A",
-  "SBUV445-A",
-  "BV510-A",
-  "BV570-A"
+STORED_ARCSINH <- unlist(
+  cfg("channels")[c("CD3", "CD4", "CD8", "TNF_slot", "IFNg_slot")],
+  use.names = FALSE
 )
-GLUT1 <- "Alexa Fluor 405-A"
+GLUT1 <- paste0(cfg("targets")$glut1_dye, "-A")
 AXIS <- c(-1.5, 4) # display window only; the % above the cut uses every cell
 BINS <- 60 # hexagons per panel; display only
 
@@ -84,8 +98,7 @@ stopifnot(
   )),
   "pass the new 86b flags.csv as the first argument" = !is.na(FLAGS_86B) &&
     file.exists(FLAGS_86B),
-  "89 common run finished" = file.exists(FLAGS_89),
-  "output dir must not exist" = !dir.exists(OUT_DIR)
+  "89 common run finished" = file.exists(FLAGS_89)
 )
 dir.create(OUT_DIR)
 source(file.path(
@@ -109,11 +122,68 @@ flagged <- flags |>
     .by = c(marker, channel)
   )
 write_csv(flagged, file.path(OUT_DIR, "flagged_markers.csv"))
+# a non-fixed positive rule has cuts only for its own channels; a flagged marker outside them has no cut,
+# and which cut to use for it is the user's choice, so the run stops here and names the channels
+POS_RULE <- cfg("pos_rule")
+no_cut <- if (identical(POS_RULE$type, "fixed")) {
+  character()
+} else {
+  setdiff(flagged$channel, POS_RULE$channels)
+}
+if (length(no_cut)) {
+  stop(
+    "93_flag_raw_scatter_common.R: no positive cut in dataset ",
+    DS$dataset,
+    " for flagged channel(s) ",
+    paste(no_cut, collapse = ", "),
+    "; pos_rule has cuts for ",
+    paste(POS_RULE$channels, collapse = ", "),
+    "; the user must decide how these markers are cut",
+    call. = FALSE
+  )
+}
 
 # Live cells of each arm and donor, rows paired on the common labels ------------------------------------
 gs_list <- map(ARMS, load_gs)
 gs_ref <- gs_list[["1.8.8 zip"]]
+smp <- samples_tbl()
 donors <- sampleNames(gs_ref)
+stopifnot(
+  "gating set samples are the sample table" = setequal(donors, smp$sample)
+)
+# arm key of each column, as cuts.csv names it
+ARM_KEY <- setNames(basename(ARMS), names(ARMS))
+# positive cut of every arm, sample and flagged channel, read once (cut_of re-reads cuts.csv per call)
+pos_cuts <- tidyr::expand_grid(
+  arm = names(ARMS),
+  donor = donors,
+  channel = unique(flagged$channel)
+) |>
+  mutate(
+    cut = pmap_dbl(list(arm, donor, channel), \(a, d, ch) {
+      cut_of(ARM_KEY[[a]], d, ch, "pos")
+    })
+  )
+POS_CUT <- set_names(
+  pos_cuts$cut,
+  paste(pos_cuts$arm, pos_cuts$donor, pos_cuts$channel, sep = "|")
+)
+pos_cut <- \(arm, donor, channel) {
+  POS_CUT[[paste(arm, donor, channel, sep = "|")]]
+}
+# with conditions, a condition column joins the sample-level tables; 3D and EXV keep their columns
+add_condition <- \(d) {
+  if (is.null(DS$conditions)) {
+    return(d)
+  }
+  left_join(
+    d,
+    select(smp, donor = sample, condition),
+    by = join_by(donor),
+    relationship = "many-to-one",
+    unmatched = "error"
+  )
+}
 channels <- unique(c(GLUT1, flagged$channel))
 live <- map(set_names(donors), \(d) {
   which(gh_pop_get_indices(gs_ref[[d]], "live"))
@@ -150,7 +220,7 @@ pairing <- gs_list |>
   }) |>
   list_rbind(names_to = "arm")
 write_csv(
-  mutate(pairing, arm = gsub("\n", " ", arm)),
+  add_condition(mutate(pairing, arm = gsub("\n", " ", arm))),
   file.path(OUT_DIR, "pairing.csv")
 )
 stopifnot("rows pair across arms" = all(pairing$paired))
@@ -166,20 +236,22 @@ pct_above <- flagged |>
         pct_above_cut = map2_dbl(arm, donor, \(a, d) {
           100 *
             mean(
-              cells[[a]][[d]][in_pop[[d]][[which_pop]], which_channel] >= CUT
+              cells[[a]][[d]][in_pop[[d]][[which_pop]], which_channel] >=
+                pos_cut(a, d, which_channel)
             )
         })
       )
   }) |>
   list_rbind()
 write_csv(
-  mutate(pct_above, arm = gsub("\n", " ", arm)),
+  add_condition(mutate(pct_above, arm = gsub("\n", " ", arm))),
   file.path(OUT_DIR, "pct_above_cut.csv")
 )
 
 # One ggcyto figure per flagged marker ------------------------------------------------------------------
-flag_figure <- \(which_marker, channel, pop, flagged_by) {
-  frames <- tidyr::expand_grid(arm = names(ARMS), donor = donors) |>
+# with conditions, one figure per condition: its samples are the rows
+flag_figure <- \(which_marker, channel, pop, flagged_by, set_donors, suffix) {
+  frames <- tidyr::expand_grid(arm = names(ARMS), donor = set_donors) |>
     mutate(name = paste(arm, donor, sep = "|")) |>
     with(set_names(
       map2(arm, donor, \(a, d) {
@@ -197,12 +269,26 @@ flag_figure <- \(which_marker, channel, pop, flagged_by) {
     ) |>
     mutate(arm = factor(arm, levels = names(ARMS)))
   pData(fs) <- as.data.frame(pd) |> `rownames<-`(pd$name)
-  gate <- rectangleGate(
-    filterId = "above cut",
-    .gate = setNames(list(c(-Inf, Inf), c(CUT, Inf)), c(GLUT1, channel))
-  )
-  gate <- filterList(set_names(rep(list(gate), length(fs)), sampleNames(fs)))
-  labels <- dplyr::filter(pct_above, marker == which_marker) |>
+  # one gate per panel: the cut belongs to the arm and sample
+  gate <- pd |>
+    with(set_names(
+      map2(as.character(arm), donor, \(a, d) {
+        rectangleGate(
+          filterId = "above cut",
+          .gate = setNames(
+            list(c(-Inf, Inf), c(pos_cut(a, d, channel), Inf)),
+            c(GLUT1, channel)
+          )
+        )
+      }),
+      name
+    )) |>
+    filterList()
+  labels <- dplyr::filter(
+    pct_above,
+    marker == which_marker,
+    donor %in% set_donors
+  ) |>
     mutate(arm = factor(arm, levels = names(ARMS)))
   flagged_labels <- FLAG_ARM[strsplit(flagged_by, "; ")[[1]]]
   p <- ggcyto(fs, aes(x = !!rlang::sym(GLUT1), y = !!rlang::sym(channel))) +
@@ -267,13 +353,34 @@ flag_figure <- \(which_marker, channel, pop, flagged_by) {
     g,
     mutate(labels, arm = gsub("\n", " ", arm)),
     OUT_DIR,
-    sprintf("fig_flag_%s_%s", gsub("[^A-Za-z0-9]", "", which_marker), pop),
+    sprintf(
+      "fig_flag_%s_%s%s",
+      gsub("[^A-Za-z0-9]", "", which_marker),
+      pop,
+      suffix
+    ),
     width_mm = FIG_WIDTH_MM,
-    height_mm = 175
+    height_mm = HEIGHT_PER_ROW_MM * length(set_donors)
   )
 }
-flagged |>
-  select(which_marker = marker, channel, pop, flagged_by) |>
+# rows per figure: all samples without conditions, else the samples of each condition
+sample_sets <- if (is.null(DS$conditions)) {
+  list(all = donors)
+} else {
+  split(
+    smp$sample[smp$sample %in% donors],
+    smp$condition[smp$sample %in% donors]
+  )
+}
+tidyr::expand_grid(
+  flagged |> select(which_marker = marker, channel, pop, flagged_by),
+  set = names(sample_sets)
+) |>
+  mutate(
+    set_donors = sample_sets[set],
+    suffix = if (is.null(DS$conditions)) "" else paste0("_", set)
+  ) |>
+  select(-set) |>
   pwalk(flag_figure)
 
 writeLines(capture.output(sessionInfo()), file.path(OUT_DIR, "sessionInfo.txt"))

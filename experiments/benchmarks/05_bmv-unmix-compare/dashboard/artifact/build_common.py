@@ -1,15 +1,20 @@
 # Purpose: build the hand-written artifact page of the BMV unmix comparison on the common SpectroFlo gates
-#          (rerun, cut arcsinh 1.5, 2026-11-11). Text verbatim from the new INDEX.md; every cited figure is
+#          (banner text from the dataset config). One copy serves 3d, 24h and exv. Text verbatim from the new INDEX.md; every cited figure is
 #          resolved through MANIFEST_restyle_common.csv (restyled copy first, cited run-dir path otherwise) by
 #          dashboard/figs_common.py. Figures are the 300-dpi PNGs; the Conclusions bullets carry their figures.
 #          A cited figure with no file stops the build. Nothing is published.
-# Run:     pixi run python3 experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact/build_common.py   (repo root)
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run python3 experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact/build_common.py   (repo root)
+#          SW_DATASET (3d, 24h, exv) and SW_RUN_DATE are required. SW_OUT_NAME (optional) names the output folder under
+#          experiments/runs; unset, it is run_out("dashboard-artifact-common").
 #          then publish OUT_DIR/index.html with img/ and data/ as Artifact files (by hand).
-# Inputs:  experiments/runs/2026-11-11_bmv-summary-common/INDEX.md      text, verbatim (via pandoc)
-#          experiments/runs/2026-11-11_bmv-summary-common/CHANGES.md    the "What changed" table
-#          experiments/runs/2026-11-11_bmv-restyle-common/MANIFEST_restyle_common.csv   old -> new figure paths
+# Inputs:  run_in("summary-common")/INDEX.md      text, verbatim (via pandoc)
+#          run_in("summary-common")/CHANGES.md    the "What changed" table
+#          run_in("restyle-common")/MANIFEST_restyle_common.csv   old -> new figure paths
+#          (both keys come from datasets/<ds>_runs.csv)
 #          <figure>.csv beside each cited PNG                            plotted data, loaded when opened
-#          experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact/{page.html, cards_common.json}
+#          dashboard/artifact/page.html
+#          dashboard/artifact/cards_common.json (3d) or cards_<ds>.json (24h, exv); headline cards, hand-written per dataset
+#          datasets/<ds>.json key dashboard_banner; datasets/<ds>_samples.csv (donor count)
 # Outputs: OUT_DIR/index.html     the page
 #          OUT_DIR/img/*.png      one 300-dpi PNG per figure
 #          OUT_DIR/data/*.json    plotted data per figure (first MAX_ROWS rows)
@@ -28,16 +33,22 @@ from pathlib import Path
 HERE = Path("experiments/benchmarks/05_bmv-unmix-compare/dashboard/artifact")
 sys.path.insert(0, str(HERE.parent))
 import figs_common as fc  # noqa: E402
+import dataset as ds  # noqa: E402
 
 # Parameters ---------------------------------------------------------------------------------------
 RUNS = fc.RUNS
-CHANGES_MD = RUNS / "2026-11-11_bmv-summary-common/CHANGES.md"
-OUT_DIR = RUNS / os.environ.get("SW_OUT_NAME", "2026-11-11_bmv-dashboard-artifact-common")  # set SW_OUT_NAME to build into a new dir
+SUMMARY_DIR = ds.run_in("summary-common")
+CHANGES_MD = SUMMARY_DIR / "CHANGES.md"
+OUT_DIR = RUNS / os.environ["SW_OUT_NAME"] if os.environ.get("SW_OUT_NAME") else ds.run_out("dashboard-artifact-common")  # SW_OUT_NAME builds into a named dir
 MAX_ROWS = 500  # rows per data table; the full CSV path is named under the table
 MAX_FILE_MB = 15  # Artifact limit per file
 SKIP_SECTIONS = {"08"}  # 08 points at the superseded offline dashboard this page replaces
 SPIKE_FOLDERS = ["18_spike_in/", "20_spike_in_panel2/", "22_spike_cd3neg/", "23_cospike/", "25_spike_passes/"]
-BANNER = "Rerun on common SpectroFlo gates, cut arcsinh 1.5 (2026-11-11)"
+BANNER = ds.cfg("dashboard_banner")  # 3D today: "Rerun on common SpectroFlo gates, cut arcsinh 1.5 (2026-11-11)"
+INDEX_DATE = SUMMARY_DIR.name[:10]  # the run folder starts with its date, YYYY-MM-DD
+# 3d and exv: one row per donor (condition NA). 24h: three conditions per donor, so count distinct donors.
+N_DONORS = len({r["donor"] for r in ds.samples()})
+CARDS_FILE = "cards_common.json" if ds.DATASET == "3d" else "cards_%s.json" % ds.DATASET
 
 assert not OUT_DIR.exists(), f"output dir must not exist: {OUT_DIR}"
 manifest_text = fc.MANIFEST.read_text()
@@ -47,6 +58,9 @@ assert not no_spike, f"manifest has no spike rows yet for {no_spike}"
 # Figures cited by the INDEX, resolved ---------------------------------------------------------------------
 sections, items, missing = fc.collect()
 assert not missing, "cited figures with no file:\n" + "\n".join(missing)
+# A skipped section number must be the superseded dashboard section; another heading under that number stops the build.
+not_dashboard = [h for h, _, _ in sections if h[:2] in SKIP_SECTIONS and "dashboard" not in h.lower()]
+assert not not_dashboard, f"build_common.py: section {SKIP_SECTIONS} is skipped as the superseded dashboard, but its heading is {not_dashboard}"
 items = fc.dedupe(items)
 
 # INDEX text, converted once with pandoc ------------------------------------------------------------------
@@ -149,7 +163,8 @@ changes_html = subprocess.run(
 nav.append('<a href="#what-changed">What changed</a>')
 body.append(f'<section id="what-changed"><h2>What changed</h2><div class="prose">{changes_html}</div></section>')
 
-cards = json.loads((HERE / "cards_common.json").read_text())
+cards = json.loads((HERE / CARDS_FILE).read_text())
+cards = cards["cards"] if isinstance(cards, dict) else cards  # 3D file is a bare list; cards_<ds>.json is {"cards": [...]}
 cards_html = "".join(
     f'<div class="card {c["state"]}"><div class="c-label">{html.escape(c["label"])}</div>'
     f'<div class="c-value">{html.escape(c["value"])}</div><div class="c-note">{html.escape(c["note"])}</div></div>'
@@ -168,8 +183,10 @@ page = (HERE / "page.html").read_text()
 swaps = [
     ("</style>", banner_css),
     ("</header>", "</header>\n" + banner_html),
+    ("<div class=\"eyebrow\">SpectraWeaveR · benchmark 05 · 5 donors · {{N_FIG}} figures</div>",
+     "<div class=\"eyebrow\">SpectraWeaveR · benchmark 05 · %d donors · {{N_FIG}} figures</div>" % N_DONORS),
     ("Text from INDEX.md as of 2026-11-11. Figures are the certified current set at Nature spec (300-dpi images, shown scaled to the column); open a figure for the full-resolution image and expand \"Plotted data\" for the table behind it.",
-     "Text from the common-gate INDEX.md as of 2026-11-11. Figures are 300-dpi images at Nature spec, shown scaled to the column; open one for full resolution and expand \"Plotted data\" for the table behind it."),
+     "Text from the common-gate INDEX.md as of " + INDEX_DATE + ". Figures are 300-dpi images at Nature spec, shown scaled to the column; open one for full resolution and expand \"Plotted data\" for the table behind it."),
     ("Built by <code>dashboard/artifact/build.py</code> from INDEX.md, 90_report.qmd and audit_freshness.csv.",
      "Built by <code>dashboard/artifact/build_common.py</code> from the common-gate INDEX.md, CHANGES.md and MANIFEST_restyle_common.csv."),
 ]

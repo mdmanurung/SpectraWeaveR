@@ -1,8 +1,10 @@
 # Purpose: shared setup for the three 95c spike restyles (95c_restyle_spike.R, 95c_restyle_events_spike_raw.R,
 #          95c_restyle_events_cospike_raw.R): the common-gate spike run paths, marker dyes, setup display names
 #          through arm_label(), and the REDRAW_ONLY switch for spike figures (plans/common_gates_plan.md G5, G11).
+#          The dataset comes from SW_DATASET (3d, 24h, exv) with SW_RUN_DATE; spike runs are registry keys.
 # Run:     source("experiments/benchmarks/05_bmv-unmix-compare/95c_spike_common.R") from the repo root.
 # Inputs:  experiments/benchmarks/05_bmv-unmix-compare/95c_common.R   RUNS, ONLY, fresh_dir(), add_manifest(), arm_label()
+#          datasets/<SW_DATASET>.json   spike_marker_dyes (marker label -> dye, in figure order)
 # Outputs: none; defines want(), SRC(), MARKERS, setup_label(), SETUP_ORDER, SETTING_ORDER, FIG_LEVEL, LOSS_FRAC, SEED
 
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
@@ -14,22 +16,10 @@ want <- \(stem) is.null(ONLY) || "spike" %in% ONLY || any(stem %in% ONLY)
 FIG_LEVEL <- 1 # level the figures show (user, 2026-11-10: +1 arcsinh), inherited (G5)
 LOSS_FRAC <- 0.5 # "losing most of the spike" = recovery below 0.5, inherited (G5)
 SEED <- 42 # figure jitter, inherited (G5)
-SRC <- \(run, file) file.path(RUNS, paste0("2026-11-11_bmv-", run), file)
-# marker = dye, from the control file (as 88, 88b, 88e)
-MARKERS <- c(
-  TNF = "BV510",
-  Th2 = "eFluor 450",
-  IL10 = "BB700",
-  IFNg = "BV570",
-  IL2 = "BV605",
-  GLUT1 = "Alexa Fluor 405",
-  ATP5A = "Alexa Fluor 488",
-  CS = "Alexa Fluor 594",
-  CPT1A = "PE-Cy5.5",
-  ATGL = "PE-Cy7",
-  G6PD = "APC-Cy7",
-  CD71 = "Spark YG 593"
-)
+# run is a registry key (datasets/<SW_DATASET>_runs.csv), e.g. "spike-in-cg"
+SRC <- \(run, file) file.path(run_in(run), file)
+# marker = dye, from the control file (as 88, 88b, 88e); a dataset with a different panel lists its own
+MARKERS <- unlist(cfg("spike_marker_dyes"))
 # setup code -> arm key of ARM_DISPLAY; afrefine has no arm key and is named here
 SETUP_ARM <- c(
   c188 = "as188_joint",

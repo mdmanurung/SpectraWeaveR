@@ -76,7 +76,7 @@ long <- lapply(SEEDS, function(seed) {
       }
     })
     b <- sample(ch, 1) # one marker's row, as a user ranks per marker (Q14)
-    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL)
+    sa <- sw_fcs_signal_audit(files, ch, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL, summary = NULL)
     sd_z <- sa[sa$check == "sd_z" & sa$channel == b, ]
     cs <- sw_cluster_scores(files, ch, CLUSTER_K, CLUSTER_EVENTS, seed, 3, 30, reference = NULL, reference_group = NULL)
     fz <- cs[cs$check == "freq_z", ]

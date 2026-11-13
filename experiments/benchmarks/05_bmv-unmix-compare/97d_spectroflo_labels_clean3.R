@@ -1,34 +1,42 @@
 # Purpose: common gates on the clean3 files (plans/common_gates_plan.md, G10 and G10a). Refit the approved pooled
-#          SpectroFlo template (every row collapseDataForGating = TRUE, groupBy = 5) on the clean3 SpectroFlo
+#          SpectroFlo template (every row collapseDataForGating = TRUE, groupBy = samples per gate group, 5 in 3D) on the clean3 SpectroFlo
 #          files written by 97c_reclean_pooled.R. Exports per-event labels, checks that every arm's clean3
 #          files pair row by row with SpectroFlo (Time, FSC-A, FSC-H, SSC-A), compares the cuts of three
 #          pooled fits (clean2, uncleaned, clean3) and the % per gate (clean2 vs clean3), and draws the gate
 #          figures per donor. Copy of 97b_spectroflo_labels_pooled.R pointed at clean3.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/97d_spectroflo_labels_clean3.R
+#          One script for 3D, 24H and EXV. With gate_group set in the config (24H: condition) the pooled
+#          template is fitted once per group and the GatingSets are merged, and "pooled gates are
+#          identical" is checked within a group; with null it is one pooled fit, as before.
+# Run:     SW_DATASET=3d SW_RUN_DATE=2026-11-11 pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/97d_spectroflo_labels_clean3.R
 #            from the repo root; on SLURM: sbatch experiments/slurm/run_clean3.sbatch 97d_spectroflo_labels_clean3.R
-# Inputs:  experiments/runs/2026-11-11_bmv-clean3/manifest.csv        clean3 FCS of every arm [97c]
-#          experiments/runs/2026-11-11_bmv-clean3/gs/spectroflo/      pooled gates on the uncleaned files [97c]
-#          experiments/runs/2026-11-11_bmv-common-gates-pooled/{cuts,label_counts}.csv   clean2 pooled fit [97b]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Raw   raw files, for raw_row
+#          SW_DATASET is 3d, 24h or exv and SW_RUN_DATE is YYYY-MM-DD (neither has a default).
+# Inputs:  registry keys of datasets/<SW_DATASET>_runs.csv, files under data_path():
+#          run_in("clean3")/manifest.csv        clean3 FCS of every arm [97c]
+#          run_in("clean3")/gs/spectroflo/      pooled gates on the uncleaned files [97c]
+#          run_in("common-gates-pooled")/{cuts,label_counts}.csv   clean2 pooled fit [97b]; 3D only, the
+#                                               clean2 comparison is left out when the key is not registered
+#          data_path("autoSpectral_v1.8.8", "Raw")/**/*.fcs   raw files, for raw_row, joined on the file stem
+#          datasets/<SW_DATASET>_samples.csv, <SW_DATASET>.json   samples, channels, gate_group, lib_dirs
 #          experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R
-# Outputs: <out_dir>/gs/spectroflo/, templates/spectroflo.csv   pooled GatingSet on clean3 and the template used
+# Outputs: <out_dir> = run_out("common-gates-clean3")
+#          <out_dir>/gs/spectroflo/, templates/spectroflo.csv   pooled GatingSet on clean3 and the template used
+#                                      (all samples; templates/spectroflo_<group>.csv per group when gate_group is set)
 #          <out_dir>/labels.csv.gz     one row per event and donor: sample, row (clean3), raw_row, FSC_A, SSC_A,
 #                                      nondebris, singlet, live, CD3pos, CD4T, CD8T, CD3neg_live
 #          <out_dir>/label_counts.csv  events per gate and donor, and % of parent
 #          <out_dir>/quadrant_counts.csv  CD4T, CD8T, DP, DN events and % of CD3+ per donor
 #          <out_dir>/cuts.csv          gate bounds per fit (clean2_pooled, uncleaned_pooled, clean3_pooled), donor, node
 #          <out_dir>/cuts_wide.csv     one row per node and dimension, one column pair per fit
-#          <out_dir>/compare_clean2_clean3.csv  n and % of parent per gate and donor, clean2 pooled vs clean3 pooled
+#          <out_dir>/compare_clean2_clean3.csv  n and % of parent per gate and donor, clean2 pooled vs clean3 pooled (3D only)
 #          <out_dir>/pairing.csv       arm, sample, n_rows_equal, time_equal, fsca_equal, fsch_equal, ssca_equal
 #          <out_dir>/figures/strategy_<donor>.png, .pdf, .csv       debris, singlets, live, CD3+ gates
 #          <out_dir>/figures/gate_cd4_cd8_<donor>.png, .pdf, .csv   CD4 vs CD8, four quadrants shaded
 #          <out_dir>/sessionInfo.txt
 
-.libPaths(c(
-  "experiments/bmv_test/compare_3D/data/lib_ggplot2_35", # ggplot2 3.5.2 for ggcyto
-  "experiments/bmv_test/compare_3D/data/lib_cytoutils", # cytoUtils 0.1.1 as 19a
-  .libPaths()
-))
+# dataset.R first: it only loads dplyr and readr, and cfg("lib_dirs") must be known before the other libraries
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+.libPaths(c(cfg("lib_dirs"), .libPaths())) # ggplot2 3.5.2 for ggcyto, cytoUtils 0.1.1 as 19a
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -45,26 +53,27 @@ pkgload::load_all(".", export_all = FALSE, quiet = TRUE) # sw_gate_run
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R")
 
 # Parameters ---------------------------------------------------------------------------------------
-CLEAN3_RUN <- "experiments/runs/2026-11-11_bmv-clean3" # manifest and uncleaned pooled gates from 97c
-OUT_DIR <- "experiments/runs/2026-11-11_bmv-common-gates-clean3"
-CLEAN2_RUN <- "experiments/runs/2026-11-11_bmv-common-gates-pooled" # clean2 pooled fit from 97b
+CLEAN3_RUN <- run_in("clean3") # manifest and uncleaned pooled gates from 97c
+OUT_DIR <- run_out("common-gates-clean3")
+HAS_CLEAN2 <- "common-gates-pooled" %in% .sw05_runs$key # the clean2 pooled fit exists for 3D only
+CLEAN2_RUN <- if (HAS_CLEAN2) run_in("common-gates-pooled") # clean2 pooled fit from 97b
 N_CORES <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "4")) # pairing reads run in parallel
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
 PAIR_COLS <- c("Time", "FSC-A", "FSC-H", "SSC-A") # all must be equal on every clean3 row
-VIABILITY <- "LIVE DEAD NIR-A" # SpectroFlo viability channel (manifest.csv)
+VIABILITY <- cfg("channels")$viability_spectroflo # SpectroFlo viability channel (manifest.csv)
 DEBRIS_RANGE <- "c(2e5, 1.5e6)" # as 19a_gate_arm.R
 LINEAGE_RANGE <- "c(0, 3)" # as 19a_gate_arm.R
 CD4_CD8_TMIX_ARGS <- "K=3, usePrior='no', quantile1=0.8, quantile3=0.8" # as 19a_gate_arm.R
-TNF <- "BV510-A" # transformed with the others, as 19a_gate_arm.R
-IFNG <- "BV570-A"
-RAW_DIR <- "experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Raw" # raw files, as 88_spike_in_markers.R
+TNF <- cfg("channels")$TNF_slot # transformed with the others, as 19a_gate_arm.R
+IFNG <- cfg("channels")$IFNg_slot
+RAW_DIR <- data_path("autoSpectral_v1.8.8", "Raw") # raw files, as 88_spike_in_markers.R
 KEY_COLS <- c("Time", "FSC-A", "FSC-H", "SSC-A") # as 88_spike_in_markers.R:51; maps clean rows to raw rows
 REF_ARM <- "spectroflo" # the arm whose gates all arms inherit (G1)
 BINS <- 60 # hexagons per panel; display only
 LABEL_PT <- 6 # in-panel % text, inside Nature's 5-7 pt
-CD4 <- "Spark Blue 574-A" # channels as in 19a_gate_arm.R
-CD8 <- "SBUV445-A"
-CD3 <- "SBUV510-A"
+CD4 <- cfg("channels")$CD4 # channels as in 19a_gate_arm.R
+CD8 <- cfg("channels")$CD8
+CD3 <- cfg("channels")$CD3
 QUAD_FILL <- c(
   CD4T = "#2166ac",
   CD8T = "#b2182b",
@@ -100,50 +109,94 @@ PARENT <- c(
 stopifnot("run dir is new" = !dir.exists(OUT_DIR))
 dir.create(file.path(OUT_DIR, "figures"), recursive = TRUE)
 
-# Gate SpectroFlo fresh, every row pooled over the 5 donors ------------------------------------------------
+# Gate SpectroFlo fresh, every row pooled over the samples (per gate group when gate_group is set) ----------
+# The clean3 files are joined to the sample table on the file stem, one file per sample.
+smp <- samples_tbl()
 manifest <- read_csv(
   file.path(CLEAN3_RUN, "manifest.csv"),
   show_col_types = FALSE
 ) |>
   dplyr::filter(arm == REF_ARM) |>
+  mutate(
+    stem = basename(file) |>
+      stringr::str_remove("\\.fcs$") |>
+      stringr::str_remove("[ _]*AutoSpectral.*$")
+  ) |>
+  select(-sample) |>
+  inner_join(
+    select(smp, sample, stem),
+    by = join_by(stem),
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
+  select(-stem) |>
   arrange(sample)
 donors <- manifest$sample
-stopifnot("5 donors" = length(donors) == 5)
-# same methods and arguments as 19a_gate_arm.R; collapseDataForGating = TRUE and groupBy = 5 on every row
-template <- tibble(
+stopifnot("donors are the sample table" = setequal(donors, smp$sample))
+gate_group_of <- if (is.null(DS$gate_group)) {
+  set_names(rep("all", nrow(smp)), smp$sample)
+} else {
+  set_names(smp[[DS$gate_group]], smp$sample)
+}
+manifest <- mutate(manifest, gate_group = gate_group_of[sample])
+# same methods and arguments as 19a_gate_arm.R; collapseDataForGating = TRUE on every row, groupBy = samples per group
+# Viability search window: mindensity2 needs one (user 2026-11-12, page Q17); NULL keeps the 3D template
+VIABILITY_ARGS <- if (is.null(cfg("viability_range"))) NA else paste0("gate_range=", cfg("viability_range"))
+template_base <- tibble(
   alias = c("nonDebris", "singlets", "live", "CD3pos", "*"),
   pop = c("+", "+", "-", "+", "+/-+/-"),
   parent = c("root", "nonDebris", "singlets", "live", "CD3pos"),
   dims = c("FSC-A", "FSC-A,FSC-H", VIABILITY, CD3, paste(CD4, CD8, sep = ",")),
   gating_method = c(
-    "mindensity",
+    cfg("mindensity_method"),
     "singletGate",
-    "mindensity",
-    "mindensity",
+    cfg("mindensity_method"),
+    cfg("mindensity_method"),
     "quadGate.tmix"
   ),
   gating_args = c(
     paste0("gate_range=", DEBRIS_RANGE),
     "wider_gate=TRUE",
-    NA,
+    VIABILITY_ARGS,
     paste0("gate_range=", LINEAGE_RANGE),
     CD4_CD8_TMIX_ARGS
   ),
   collapseDataForGating = TRUE,
-  groupBy = nrow(manifest),
   preprocessing_method = NA,
   preprocessing_args = NA
 )
 dir.create(file.path(OUT_DIR, "templates"))
-template_file <- file.path(OUT_DIR, "templates", paste0(REF_ARM, ".csv"))
-write_csv(template, template_file)
-ref_gs <- sw_gate_run(
-  fcs_files = manifest$file,
-  gating_template = template_file,
-  transform_channels = c(VIABILITY, CD3, CD4, CD8, TNF, IFNG),
-  cofactor = COFACTOR
-)
-sampleNames(ref_gs) <- manifest$sample
+# groupBy = number of samples in the group: openCyto pools only when groupBy is not empty
+fit_group <- function(src, group) {
+  template_file <- file.path(
+    OUT_DIR,
+    "templates",
+    paste0(
+      REF_ARM,
+      if (is.null(DS$gate_group)) "" else paste0("_", group),
+      ".csv"
+    )
+  )
+  template_base |>
+    mutate(groupBy = nrow(src), .after = collapseDataForGating) |>
+    write_csv(template_file)
+  gs <- sw_gate_run(
+    fcs_files = src$file,
+    gating_template = template_file,
+    transform_channels = c(VIABILITY, CD3, CD4, CD8, TNF, IFNG),
+    cofactor = COFACTOR
+  )
+  sampleNames(gs) <- src$sample
+  gs
+}
+ref_fits <- manifest |>
+  split(~gate_group) |>
+  imap(fit_group)
+ref_gs <- if (length(ref_fits) == 1) {
+  ref_fits[[1]]
+} else {
+  merge_list_to_gs(unname(ref_fits)) # one GatingSet over all samples, each with its group's gates
+}
 iwalk(QUADRANTS, \(node, alias) {
   gs_pop_set_name(
     ref_gs,
@@ -157,6 +210,27 @@ save_gs(ref_gs, file.path(OUT_DIR, "gs", REF_ARM))
 read_x <- \(path) {
   exprs(read.FCS(path, transformation = FALSE, truncate_max_range = FALSE))
 }
+# raw file of each sample: stem join, one file per sample (24H Raw has one subfolder per condition)
+raw_file_of <- tibble(
+  file = list.files(
+    RAW_DIR,
+    pattern = "\\.fcs$",
+    full.names = TRUE,
+    recursive = TRUE
+  )
+) |>
+  mutate(
+    stem = basename(file) |>
+      stringr::str_remove("\\.fcs$") |>
+      stringr::str_remove("[ _]*AutoSpectral.*$")
+  ) |>
+  inner_join(
+    select(smp, sample, stem),
+    by = join_by(stem),
+    relationship = "one-to-one",
+    unmatched = "error"
+  )
+raw_file_of <- set_names(raw_file_of$file, raw_file_of$sample)
 key_of <- \(e) do.call(paste, c(as.data.frame(e[, KEY_COLS]), sep = "|"))
 
 # Per-event labels, one table per donor ------------------------------------------------------------------
@@ -170,10 +244,7 @@ labels <- map(set_names(donors), \(d) {
   # raw_row: row of the same event in the uncleaned file, matched on KEY_COLS as 88_spike_in_markers.R does.
   # The clean2 row set stays frozen; the check needs unique keys in both files, every clean key found,
   # and the same order, so clean row i maps to exactly one raw row.
-  raw_key <- key_of(read_x(file.path(
-    RAW_DIR,
-    basename(manifest$file[manifest$sample == d])
-  )))
+  raw_key <- key_of(read_x(raw_file_of[[d]]))
   clean_key <- key_of(read_x(manifest$file[manifest$sample == d]))
   raw_row <- match(clean_key, raw_key)
   stopifnot(
@@ -276,55 +347,78 @@ cuts_of <- \(gs) {
   }) |>
     list_rbind(names_to = "sample")
 }
-cuts <- list(
-  clean2_pooled = read_csv(
-    file.path(CLEAN2_RUN, "cuts.csv"),
-    show_col_types = FALSE
-  ) |>
-    dplyr::filter(version == "pooled") |>
-    select(-version),
-  uncleaned_pooled = cuts_of(load_gs(file.path(CLEAN3_RUN, "gs", REF_ARM))),
-  clean3_pooled = cuts_of(ref_gs)
+if (!HAS_CLEAN2) {
+  message(
+    "97d_spectroflo_labels_clean3.R: no clean2 pooled fit registered for dataset ",
+    DS$dataset,
+    ": cuts.csv has no clean2_pooled rows and compare_clean2_clean3.csv is not written"
+  )
+}
+cuts <- c(
+  if (HAS_CLEAN2) {
+    list(
+      clean2_pooled = read_csv(
+        file.path(CLEAN2_RUN, "cuts.csv"),
+        show_col_types = FALSE
+      ) |>
+        dplyr::filter(version == "pooled") |>
+        select(-version)
+    )
+  },
+  list(
+    uncleaned_pooled = cuts_of(load_gs(file.path(CLEAN3_RUN, "gs", REF_ARM))),
+    clean3_pooled = cuts_of(ref_gs)
+  )
 ) |>
   list_rbind(names_to = "version")
 write_csv(cuts, file.path(OUT_DIR, "cuts.csv"))
-# pooled gates are one gate per node: the cut must be identical on every donor
+# pooled gates are one gate per node and gate group: the cut must be identical on every sample of a group
 stopifnot(
-  "pooled gates are identical on every donor" = cuts |>
+  "pooled gates are identical within a gate group" = cuts |>
+    mutate(gate_group = gate_group_of[sample]) |>
     summarise(
       n_cut = n_distinct(lo, hi, vertices),
-      .by = c(version, gate, dim)
+      .by = c(version, gate, dim, gate_group)
     ) |>
     pull(n_cut) |>
     (\(x) all(x == 1))()
 )
-cuts |>
-  dplyr::filter(sample == donors[[1]]) |>
-  select(version, gate, dim, lo, hi) |>
+# one representative sample per gate group (3D: the first donor)
+cuts_rep <- cuts |>
+  dplyr::filter(
+    sample %in% dplyr::slice(manifest, 1, .by = gate_group)$sample
+  ) |>
+  select(sample, version, gate, dim, lo, hi)
+if (is.null(DS$gate_group)) {
+  cuts_rep <- select(cuts_rep, -sample)
+}
+cuts_rep |>
   tidyr::pivot_wider(names_from = version, values_from = c(lo, hi)) |>
   write_csv(file.path(OUT_DIR, "cuts_wide.csv"))
 
 # clean2 pooled vs clean3 pooled, % of parent per gate and donor ----------------------------------------
-compare <- read_csv(
-  file.path(CLEAN2_RUN, "label_counts.csv"),
-  show_col_types = FALSE
-) |>
-  select(sample, gate, n_clean2 = n, pct_clean2 = pct_of_parent) |>
-  inner_join(
-    select(
-      label_counts,
-      sample,
-      gate,
-      n_clean3 = n,
-      pct_clean3 = pct_of_parent
-    ) |>
-      mutate(gate = as.character(gate)),
-    by = join_by(sample, gate),
-    relationship = "one-to-one",
-    unmatched = "error"
+if (HAS_CLEAN2) {
+  compare <- read_csv(
+    file.path(CLEAN2_RUN, "label_counts.csv"),
+    show_col_types = FALSE
   ) |>
-  mutate(delta_pct = pct_clean3 - pct_clean2)
-write_csv(compare, file.path(OUT_DIR, "compare_clean2_clean3.csv"))
+    select(sample, gate, n_clean2 = n, pct_clean2 = pct_of_parent) |>
+    inner_join(
+      select(
+        label_counts,
+        sample,
+        gate,
+        n_clean3 = n,
+        pct_clean3 = pct_of_parent
+      ) |>
+        mutate(gate = as.character(gate)),
+      by = join_by(sample, gate),
+      relationship = "one-to-one",
+      unmatched = "error"
+    ) |>
+    mutate(delta_pct = pct_clean3 - pct_clean2)
+  write_csv(compare, file.path(OUT_DIR, "compare_clean2_clean3.csv"))
+}
 
 # Row pairing of every arm's clean3 files with SpectroFlo (G8) ---------------------------------------------
 # Reported, not enforced. Reference = the SpectroFlo clean3 files; every clean3 file is read and compared on all rows.
@@ -427,15 +521,16 @@ walk(donors, \(d) {
 })
 
 # CD4 vs CD8 within CD3+: the four quadrant gates drawn as shaded rectangles from their own bounds
+# bounds are read per sample: with gate groups the quadrant gates differ between groups
 quad_rects <- cuts |>
   dplyr::filter(
     version == "clean3_pooled",
-    sample == donors[[1]],
     gate %in% names(QUADRANTS)
   ) |>
-  select(gate, dim, lo, hi) |>
+  select(sample, gate, dim, lo, hi) |>
   tidyr::pivot_wider(names_from = dim, values_from = c(lo, hi)) |>
   transmute(
+    sample,
     quadrant = gate,
     xmin = pmax(.data[[paste0("lo_", CD4)]], AXIS_T[[1]]),
     xmax = pmin(.data[[paste0("hi_", CD4)]], AXIS_T[[2]]),
@@ -451,17 +546,21 @@ quad_anchor <- tribble(
   "DN"      , -Inf , -Inf ,      0 ,      0
 )
 # one filled rectangle per quadrant, constant fill so it does not touch the hexagon density scale
-quad_layers <- pmap(quad_rects, \(quadrant, xmin, xmax, ymin, ymax) {
-  geom_rect(
-    data = tibble(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE,
-    fill = QUAD_FILL[[quadrant]],
-    alpha = 0.18,
-    colour = QUAD_FILL[[quadrant]],
-    linewidth = FIG_LINE
-  )
-})
+quad_layers <- quad_rects |>
+  split(~sample) |>
+  map(\(rects) {
+    pmap(select(rects, -sample), \(quadrant, xmin, xmax, ymin, ymax) {
+      geom_rect(
+        data = tibble(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+        aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+        inherit.aes = FALSE,
+        fill = QUAD_FILL[[quadrant]],
+        alpha = 0.18,
+        colour = QUAD_FILL[[quadrant]],
+        linewidth = FIG_LINE
+      )
+    })
+  })
 walk(donors, \(d) {
   gh <- ref_gs[[d]]
   ff <- cytoframe_to_flowFrame(gh_pop_get_data(gh, "CD3pos"))
@@ -478,7 +577,7 @@ walk(donors, \(d) {
   p <- ggcyto(ff, aes(x = !!rlang::sym(CD4), y = !!rlang::sym(CD8))) +
     geom_hex(bins = BINS) +
     hex_fill +
-    quad_layers +
+    quad_layers[[d]] +
     geom_label(
       data = pct,
       aes(x = x, y = y, hjust = hjust, vjust = vjust, label = label),

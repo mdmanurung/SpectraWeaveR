@@ -1,18 +1,25 @@
 # Purpose: Nature-spec redraw on the common gates (plans/common_gates_plan.md G7a, G11) of the dashboard's
 #          per-sample viewer: for each donor and parent (CD4T, CD8T), the SpectroFlo-labelled events of all 11
-#          arms as ggcyto hexbins in three views, TNF x IFNg, SSC-A x TNF and SSC-A x IFNg, with the fixed
-#          cut at arcsinh 1.5 and the % above it. Same cells in every arm; the % must match 38c's table, else
-#          the script stops. Copy of 95_restyle_events_sample_viewer.R with new inputs.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_sample_viewer.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/<arm>/   common-gate GatingSets, 11 arms [97e]
-#          experiments/runs/2026-11-11_bmv-common-cut15-38c/pct_fixed_source.csv   % above 1.5 [38c]
+#          arms as ggcyto hexbins in three views, TNF x IFNg, SSC-A x TNF and SSC-A x IFNg (the dataset's tnf_label
+#          and ifng_label), with the positive cut of each arm and sample (cut_of(); fixed arcsinh 1.5 in 3D) and
+#          the % above it. Same cells in every arm; the % must match 38c's table, else the script stops.
+#          Copy of 95_restyle_events_sample_viewer.R with new inputs.
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_sample_viewer.R from the repo root.
+# Inputs:  run_in("common-gated")/gs/<arm>/   common-gate GatingSets, 11 arms [97e]
+#          run_in("common-cut15-38c")/pct_fixed_source.csv   % above the cut [38c]
 #          experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R   ARM_LABELS, VERSION_ROWS
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/08_dashboard_sample_viewer/
-#            tnf_vs_ifng_fixed_<parent>_<donor>.{pdf,png,csv}
-#            ssc_vs_<TNF|IFNg>_<parent>_<donor>.{pdf,png,csv}   the .csv holds the % printed per panel
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), channels, targets
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/08_dashboard_sample_viewer/
+#            tnf_vs_ifng_fixed_<parent>_<sample>.{pdf,png,csv}
+#            ssc_vs_<tnf_label|ifng_label>_<parent>_<sample>.{pdf,png,csv}   the .csv holds the % printed per panel
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -26,9 +33,15 @@ source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R")
 
 # Parameters ---------------------------------------------------------------------------------------
-COMMON_GS <- "experiments/runs/2026-11-11_bmv-common-gated/gs"
-PCT_38 <- "experiments/runs/2026-11-11_bmv-common-cut15-38c/pct_fixed_source.csv"
-CHANNELS <- c(TNF = "BV510-A", IFNg = "BV570-A", SSC = "SSC-A") # TNF and IFNg stored as arcsinh (19a)
+COMMON_GS <- file.path(run_in("common-gated"), "gs")
+PCT_38 <- file.path(run_in("common-cut15-38c"), "pct_fixed_source.csv")
+TNF_LAB <- cfg("targets")$tnf_label
+IFNG_LAB <- cfg("targets")$ifng_label
+# TNF and IFNg slots stored as arcsinh (19a)
+CHANNELS <- setNames(
+  c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot, "SSC-A"),
+  c(TNF_LAB, IFNG_LAB, "SSC")
+)
 POPULATIONS <- c("CD4T", "CD8T")
 AXIS <- c(-1.5, 5) # arcsinh display window, same on every panel and donor so SpectroFlo's negative cloud is not clipped; the % uses every event
 SSC_LIMITS <- c(0, 2.5e6)
@@ -37,9 +50,9 @@ LABEL_PT <- 6 # in-panel % text, inside Nature's 5-7 pt
 LABEL_INSET <- 0.08 # % label starts this fraction of the axis range in from the y axis
 N_COL <- 4 # 11 arms in 3 rows at 183 mm
 VIEWS <- list(
-  fixed = list(x = "TNF", y = "IFNg", stem = "tnf_vs_ifng_fixed"),
-  ssc_TNF = list(x = "SSC", y = "TNF", stem = "ssc_vs_TNF"),
-  ssc_IFNg = list(x = "SSC", y = "IFNg", stem = "ssc_vs_IFNg")
+  fixed = list(x = TNF_LAB, y = IFNG_LAB, stem = "tnf_vs_ifng_fixed"),
+  ssc_TNF = list(x = "SSC", y = TNF_LAB, stem = paste0("ssc_vs_", TNF_LAB)),
+  ssc_IFNg = list(x = "SSC", y = IFNG_LAB, stem = paste0("ssc_vs_", IFNG_LAB))
 )
 
 OUT_DIR <- fresh_dir("08_dashboard_sample_viewer")
@@ -63,20 +76,23 @@ for (pop in POPULATIONS) {
       ARM_LABELS[sampleNames(fs)],
       levels = ARM_LABELS[arm_order]
     )
+    # positive cut per arm for one channel (this sample), and the % above it
+    cut_in <- \(ch) map_dbl(sampleNames(fs), \(a) cut_of(a, donor, ch, "pos"))
+    pct_above <- \(ch) {
+      map2_dbl(sampleNames(fs), cut_in(ch), \(a, k) {
+        100 * mean(exprs(fs[[a]])[, ch] >= k)
+      })
+    }
     # % above the cut per arm, checked against 38's table
     pct <- tibble(
       arm_id = sampleNames(fs),
       arm = pData(fs)$arm,
-      TNF = fsApply(fs, \(ff) {
-        100 * mean(exprs(ff)[, CHANNELS[["TNF"]]] >= CUT)
-      })[, 1],
-      IFNg = fsApply(fs, \(ff) {
-        100 * mean(exprs(ff)[, CHANNELS[["IFNg"]]] >= CUT)
-      })[, 1]
+      !!TNF_LAB := pct_above(CHANNELS[[TNF_LAB]]),
+      !!IFNG_LAB := pct_above(CHANNELS[[IFNG_LAB]])
     )
     check <- pct |>
       tidyr::pivot_longer(
-        c(TNF, IFNg),
+        all_of(c(TNF_LAB, IFNG_LAB)),
         names_to = "cytokine",
         values_to = "pct_here"
       ) |>
@@ -100,14 +116,25 @@ for (pop in POPULATIONS) {
         mutate(
           label_x = x_lim[1] + LABEL_INSET * diff(x_lim),
           label = if (view_name == "fixed") {
-            sprintf("TNF+ %.1f%%\nIFNg+ %.1f%%", .data$TNF, .data$IFNg)
+            sprintf(
+              "%s+ %.1f%%\n%s+ %.1f%%",
+              TNF_LAB,
+              .data[[TNF_LAB]],
+              IFNG_LAB,
+              .data[[IFNG_LAB]]
+            )
           } else {
             sprintf("%s+ %.1f%%", view$y, .data[[view$y]])
           }
         )
       p <- ggcyto(fs, aes(x = !!rlang::sym(x_ch), y = !!rlang::sym(y_ch))) +
         geom_hex(bins = BINS, show.legend = TRUE) +
-        geom_hline(yintercept = CUT, colour = "red", linewidth = FIG_LINE) +
+        geom_hline(
+          data = tibble(arm = pct$arm, cut = cut_in(y_ch)),
+          aes(yintercept = cut),
+          colour = "red",
+          linewidth = FIG_LINE
+        ) +
         geom_label(
           data = labels,
           aes(x = label_x, y = Inf, label = label),
@@ -139,8 +166,9 @@ for (pop in POPULATIONS) {
           },
           y = sprintf("%s, %s (arcsinh)", view$y, y_ch),
           title = sprintf(
-            "%s, donor %s: %s vs %s, red line = cut at %s",
+            "%s, %s %s: %s vs %s, red line = cut at %s",
             pop,
+            if (is.null(DS$conditions)) "donor" else "sample",
             donor,
             view$y,
             view$x,
@@ -155,7 +183,12 @@ for (pop in POPULATIONS) {
       # vertical cut for the TNF x IFNg view: IFNg is on y, TNF on x
       if (view_name == "fixed") {
         p <- p +
-          geom_vline(xintercept = CUT, colour = "red", linewidth = FIG_LINE)
+          geom_vline(
+            data = tibble(arm = pct$arm, cut = cut_in(x_ch)),
+            aes(xintercept = cut),
+            colour = "red",
+            linewidth = FIG_LINE
+          )
       }
       if (view$x == "SSC") {
         p <- p +
@@ -164,7 +197,7 @@ for (pop in POPULATIONS) {
       stem <- sprintf("%s_%s_%s", view$stem, pop, donor)
       save_panel(
         as.ggplot(p),
-        select(labels, arm_id, arm, TNF, IFNg),
+        select(labels, arm_id, arm, all_of(c(TNF_LAB, IFNG_LAB))),
         OUT_DIR,
         stem,
         183,

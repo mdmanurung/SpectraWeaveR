@@ -1,14 +1,17 @@
 # Purpose: redraw the dashboard figures of section 08 from the common-gate runs (95_restyle_dashboard_extras.R,
 #          repointed; plans/common_gates_plan.md G7a, G11): BV510 density in the swap test, TNF+ among IFNg+
 #          cells, rank correlation with activation markers, Th2 density, the zip 1.8.8 SSM, and two extras
-#          (47c cytokine-pair rho). Cut lines and labels read "arcsinh 1.5". Rho x tick labels are turned 90
+#          (47c cytokine-pair rho). Cut lines and labels read CUT_TXT (the dataset's cut rule). Rho x tick labels are turned 90
 #          degrees so neighbours do not overlap. proof_subsets_gap_closed has no new source (see manifest).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_dashboard_extras.R (repo root)
-# Inputs:  runs/2026-11-11_bmv-swap-test-common/bv510_events.csv.gz      BV510 per cell [37b common]
-#          runs/2026-11-11_bmv-common-cut15-46c/{fig_a_tnf_among_ifng,fig_b_rho_activation}.csv  [46c]
-#          runs/2026-11-11_bmv-common-cut15-47c/{fig_b_density_Th2,fig_d_rho_cytokine_pairs}.csv [47c]
-#          runs/2026-11-10_bmv-ssm-188/ssm_long.csv                        zip SSM; unchanged source [81]
-# Outputs: restyle-common/08_dashboard_extras/{fig_bv510_density,fig_coh_tnf_among_ifng,fig_coh_rho_activation,
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_dashboard_extras.R
+#          (repo root). Stops on a dataset without Th2 (EXV): the cytokine and Th2 sections need it.
+# Inputs:  run_in("swap-test-common")/bv510_events.csv.gz      BV510 per cell [37b common]
+#          run_in("common-cut15-46c")/{fig_a_tnf_among_ifng,fig_b_rho_activation}.csv  [46c]
+#          run_in("common-cut15-47c")/{fig_b_density_Th2,fig_d_rho_cytokine_pairs}.csv [47c]
+#          run_in("ssm-188")/ssm_long.csv                        zip SSM; unchanged source [81]
+#          cut_of(arm, sample, channel, "pos")                   cut lines (cuts.csv of "common-cuts" unless fixed)
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/08_dashboard_extras/
+#            {fig_bv510_density,fig_coh_tnf_among_ifng,fig_coh_rho_activation,
 #            fig_oc_density_th2,fig_ssm_188_zip,fig_d_rho_cytokine_pairs}.{pdf,png,csv}, sessionInfo.txt
 suppressPackageStartupMessages({
   library(dplyr)
@@ -16,12 +19,18 @@ suppressPackageStartupMessages({
   library(readr)
   library(tidyr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 SCRIPT <- "95c_restyle_dashboard_extras.R"
+TNF_LAB <- cfg("targets")$tnf_label
+IFNG_LAB <- cfg("targets")$ifng_label
+TNF_CH <- cfg("channels")$TNF_slot
+TH2_LAB <- need_target(SCRIPT, "th2_label")
+TH2_CH <- need_target(SCRIPT, "Th2", "channels")
 
 # Parameters ---------------------------------------------------------------------------------------
 DENSITY_WINDOW <- c(-1.5, 4) # display window, arcsinh; the density uses every event
-CYTOKINE_PAL <- c(TNF = "#D55E00", IFNg = "#0072B2") # cytokine key for the rho figures
+CYTOKINE_PAL <- setNames(c("#D55E00", "#0072B2"), c(TNF_LAB, IFNG_LAB)) # cytokine key for the rho figures
 OUT_DIR <- fresh_dir("08_dashboard_extras")
 OLD <- "2026-11-11_bmv-restyle/08_dashboard_extras"
 arm_levels_all <- unlist(VERSION_ROWS, use.names = FALSE)
@@ -36,7 +45,7 @@ log_fig <- function(name, source, old = TRUE, ...) {
 }
 
 # BV510 density in the swap test -------------------------------------------------------------------
-src <- file.path(RUNS, "2026-11-11_bmv-swap-test-common/bv510_events.csv.gz")
+src <- file.path(run_in("swap-test-common"), "bv510_events.csv.gz")
 swap_arms <- c(
   "as188_joint",
   "swap_af102",
@@ -57,9 +66,11 @@ bv510_density <- read_csv(src, show_col_types = FALSE) |>
   ) |>
   mutate(arm = factor(.data$arm, levels = swap_arms))
 stopifnot("swap-test arms as expected" = !anyNA(bv510_density$arm))
+bv510_cuts <- cut_lines(bv510_density, "sample", TNF_CH)
 p_bv510 <- ggplot(bv510_density, aes(x, y, colour = arm)) +
   geom_vline(
-    xintercept = CUT,
+    data = bv510_cuts,
+    aes(xintercept = cut),
     linetype = "dashed",
     colour = "grey50",
     linewidth = 0.3
@@ -72,10 +83,13 @@ p_bv510 <- ggplot(bv510_density, aes(x, y, colour = arm)) +
   ) +
   facet_grid(pop ~ sample, axes = "all", axis.labels = "margins") +
   labs(
-    x = "TNF, BV510-A (arcsinh)",
+    x = paste0(TNF_LAB, ", ", TNF_CH, " (arcsinh)"),
     y = "Density",
     title = paste0(
-      "BV510 (TNF) density, swap test; dashed line = cut at ",
+      cfg("targets")$tnf_dye,
+      " (",
+      TNF_LAB,
+      ") density, swap test; dashed line = cut at ",
       CUT_TXT
     )
   )
@@ -83,17 +97,20 @@ save_panel(p_bv510, bv510_density, OUT_DIR, "fig_bv510_density", 183, 80)
 log_fig("fig_bv510_density", src)
 
 # TNF+ among IFNg+ and IFNg- cells -----------------------------------------------------------------
-src <- file.path(
-  RUNS,
-  "2026-11-11_bmv-common-cut15-46c/fig_a_tnf_among_ifng.csv"
-)
+src <- file.path(run_in("common-cut15-46c"), "fig_a_tnf_among_ifng.csv")
 coh <- read_csv(src, show_col_types = FALSE) |>
-  mutate(among = if_else(.data$among == "IFNg+", "among IFNg+", "among IFNg-"))
+  mutate(
+    among = if_else(
+      .data$among == paste0(IFNG_LAB, "+"),
+      paste0("among ", IFNG_LAB, "+"),
+      paste0("among ", IFNG_LAB, "-")
+    )
+  )
 coh_out <- panel_arm_donor(
   coh,
   "pct",
-  paste0("% TNF+ (", CUT_TXT, " cut)"),
-  "TNF+ among IFNg+ and IFNg- cells",
+  paste0("% ", TNF_LAB, "+ (", CUT_TXT, " cut)"),
+  paste0(TNF_LAB, "+ among ", IFNG_LAB, "+ and ", IFNG_LAB, "- cells"),
   intersect(arm_levels_all, unique(coh$arm)),
   rows = "among",
   cols = "parent"
@@ -110,11 +127,9 @@ log_fig("fig_coh_tnf_among_ifng", src)
 
 # TNF and IFNg rank correlation with activation markers --------------------------------------------
 # donor points small, donor median a diamond; x labels turned 90 degrees (they overlapped in 46c)
-src <- file.path(
-  RUNS,
-  "2026-11-11_bmv-common-cut15-46c/fig_b_rho_activation.csv"
-)
+src <- file.path(run_in("common-cut15-46c"), "fig_b_rho_activation.csv")
 rho <- read_csv(src, show_col_types = FALSE) |>
+  need_cond(SCRIPT) |>
   mutate(
     arm = factor(
       .data$arm,
@@ -124,7 +139,7 @@ rho <- read_csv(src, show_col_types = FALSE) |>
 rho_median <- summarise(
   rho,
   rho = median(.data$rho),
-  .by = c(arm, parent, cytokine, marker)
+  .by = c(arm, parent, cytokine, marker, any_of(COND))
 )
 p_rho <- ggplot(rho, aes(rho, arm, colour = cytokine)) +
   value_grid("x") +
@@ -139,7 +154,12 @@ p_rho <- ggplot(rho, aes(rho, arm, colour = cytokine)) +
   scale_colour_manual(values = CYTOKINE_PAL, name = "Cytokine") +
   scale_y_discrete(labels = arm_label) +
   scale_x_continuous(breaks = c(-0.4, 0, 0.4), guide = guide_axis(angle = 90)) +
-  facet_grid(parent ~ marker, axes = "all", axis.labels = "margins") +
+  facet_grid(
+    rows = vars(parent, !!!rlang::syms(COND)),
+    cols = vars(marker),
+    axes = "all",
+    axis.labels = "margins"
+  ) +
   labs(
     x = "Spearman rho (diamond = donor median)",
     y = NULL,
@@ -157,11 +177,9 @@ log_fig(
 )
 
 # Cytokine-pair rho (extra) ------------------------------------------------------------------------
-src <- file.path(
-  RUNS,
-  "2026-11-11_bmv-common-cut15-47c/fig_d_rho_cytokine_pairs.csv"
-)
-pairs <- read_csv(src, show_col_types = FALSE)
+src <- file.path(run_in("common-cut15-47c"), "fig_d_rho_cytokine_pairs.csv")
+pairs <- read_csv(src, show_col_types = FALSE) |>
+  need_cond(SCRIPT)
 # 10 pairs x 2 parents = 20 panels, 5 per row; fixed x scale with breaks at -0.2, 0, 0.2, 0.4
 pair_arms <- intersect(arm_levels_all, unique(pairs$arm))
 pairs <- mutate(
@@ -190,7 +208,7 @@ p_pairs <- ggplot(pairs, aes(rho, arm)) +
     guide = guide_axis(angle = 90)
   ) +
   facet_wrap(
-    vars(parent, pair),
+    vars(parent, pair, !!!rlang::syms(COND)),
     ncol = 5,
     axes = "all",
     axis.labels = "margins"
@@ -217,11 +235,13 @@ log_fig(
 )
 
 # Th2 density per arm ------------------------------------------------------------------------------
-src <- file.path(RUNS, "2026-11-11_bmv-common-cut15-47c/fig_b_density_Th2.csv")
+src <- file.path(run_in("common-cut15-47c"), "fig_b_density_Th2.csv")
 th2 <- read_csv(src, show_col_types = FALSE)
+th2_cuts <- cut_lines(th2, "donor", TH2_CH)
 p_th2 <- ggplot(th2, aes(value, density, group = arm, colour = version)) +
   geom_vline(
-    xintercept = CUT,
+    data = th2_cuts,
+    aes(xintercept = cut),
     linetype = "dashed",
     colour = "grey50",
     linewidth = 0.3
@@ -233,9 +253,9 @@ p_th2 <- ggplot(th2, aes(value, density, group = arm, colour = version)) +
   ) +
   facet_grid(parent ~ donor, axes = "all", axis.labels = "margins") +
   labs(
-    x = "Th2, eFluor 450-A (arcsinh)",
+    x = paste0(TH2_LAB, ", ", TH2_CH, " (arcsinh)"),
     y = "Density",
-    title = paste0("Th2 density per arm; dashed line = cut at ", CUT_TXT)
+    title = paste0(TH2_LAB, " density per arm; dashed line = cut at ", CUT_TXT)
   )
 save_panel(p_th2, th2, OUT_DIR, "fig_oc_density_th2", 183, 80)
 log_fig("fig_oc_density_th2", src)
@@ -251,7 +271,7 @@ add_manifest(
 )
 
 # Zip 1.8.8 spillover spread matrix: no gate dependence, source unchanged ----------------------------
-src <- file.path(RUNS, "2026-11-10_bmv-ssm-188/ssm_long.csv")
+src <- file.path(run_in("ssm-188"), "ssm_long.csv")
 ssm <- read_csv(src, show_col_types = FALSE)
 dye_levels <- unique(ssm$row_dye)
 ssm <- mutate(

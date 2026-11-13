@@ -7,59 +7,114 @@
 #            CUT 1 -> 1.5 (G7a): TNF+/IFNg+ cut, the negatives that define the rSD, and "above cut".
 #            The squeeze cut (SQUEEZE_FRAC x as188_joint negative rSD) is refitted on the common pops;
 #            squeeze_cut.csv gives it at cut 1.5 (used) and, for the old-vs-new comparison, at cut 1.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/51c_score_ablation_common.R <run_dir> <arms>
-#            from the repo root. <arms> is a comma-separated list of arm names in the common gated dir.
-#            <run_dir> must not exist. Example (Block A):
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/51c_score_ablation_common.R <run_dir> <arms>
+#            from the repo root. <arms> is a comma-separated list of arm names in the common gated dir;
+#            every arm must also be in the config list arms_cg. <run_dir> must not exist and is
+#            run_out("<key>") of the caller (3D example below). Example (Block A):
 #            ... 51c_score_ablation_common.R experiments/runs/2026-11-11_bmv-common-ablation \
 #                swap_spec102,swap_af102_var102,rev_var188,rev_af188,swap_thr102,regen188,bead_wide
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/README.md, manifest.csv, gs/<arm>   [batch 0]
+# Inputs:  run_in("common-gated")/README.md, manifest.csv, gs/<arm>   [batch 0, 97c to 97d]
 #          nodes /nonDebris/singlets/live/CD3pos/{CD4T,CD8T,DP,DN}, children TNFpos and IFNgpos (not used:
-#          the cytokine cut is the fixed 1.5, computed here)
+#          the cytokine cuts come from cut_of(): 3D the fixed 1.5, computed here)
+#          datasets/<SW_DATASET>.json (arms_cg, channels, targets, pos_rule, neg_rule), <ds>_samples.csv
+#          run_in("common-cuts")/cuts.csv when the dataset's rule is not fixed [97e]
 # Outputs: <run_dir>/pct_pos.csv        TNF+ and IFNg+ % at cut 1.5 in CD4T and CD8T
 #          <run_dir>/tnf_among_ifng.csv TNF+ % among IFNg+ cells
 #          <run_dir>/scores.csv         squeezed share, share above 1.5, rSD of negatives; BV510 and BV570
 #          <run_dir>/squeeze_cut.csv    squeeze cut per donor, pop, cytokine at cut 1.5 and at cut 1
 #          <run_dir>/neg_spread.csv     Nguyen rSD ratio to as188_joint, TNF, IFNg, Th2, IL-10, shared negatives
-#          <run_dir>/gap_closed.csv     per donor fraction of the as188_joint -> s102_c188 gap closed
-#          <run_dir>/labels.csv         resembles / contributes / null per arm
+#          <run_dir>/gap_closed.csv     per donor fraction of the as188_joint -> s102_c188 gap closed (24H: + condition)
+#          <run_dir>/labels.csv         resembles / contributes / null per arm (24H: per arm and condition)
 #          <run_dir>/fig_gap_closed.{pdf,png,csv} gap closed per arm, donors as points
 #          <run_dir>/sessionInfo.txt
+#          The column `donor` holds the sample id (3D and EXV the well, 24H donor_condition) in every table.
 
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
   library(ggplot2)
-  library(dplyr, exclude = "filter")
+  library(dplyr)
   library(purrr)
   library(readr)
   library(tidyr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 LIB <- "experiments/benchmarks/05_bmv-unmix-compare/lib"
 source(file.path(LIB, "theme.R"))
 source(file.path(LIB, "palettes.R"))
 
+# Config lookups ---------------------------------------------------------------------------
+# a nested config value that the dataset may lack: stop naming this script and the value
+need <- \(group, name) {
+  v <- cfg(group)[[name]]
+  if (is.null(v)) {
+    stop(
+      "51c_score_ablation_common.R: needs ",
+      name,
+      ", missing in dataset ",
+      DS$dataset,
+      call. = FALSE
+    )
+  }
+  v
+}
+
 # Parameters ------------------------------------------------------------------------------
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0 output, read only
+COMMON <- run_in("common-gated") # batch 0 output, read only
+ARMS_CG <- cfg("arms_cg") # arms of the dataset's common gated manifest (97c)
 BASE_ARMS <- c("as188_joint", "s102_c188", "as102_var") # D1: start, chain target, final target
 REF_ARM <- "as188_joint"
 TARGET_ARM <- "s102_c188" # gap is as188_joint -> s102_c188 (D3)
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-CUT <- 1.5 # fixed cytokine cut, arcsinh, every arm and donor (G7a, user, 2026-11-11)
+# cytokine cuts: cut_of(arm, sample, channel, "pos" or "neg"); 3D is the fixed 1.5 in every arm (G7a, G13)
 CUT_OLD <- 1 # the pre-G7a cut, only to report the old squeeze cut on the new pops
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| below this fraction of as188_joint's rSD (39b; user, 2026-11-10)
-CYTOKINES <- c(
-  TNF = "BV510-A",
-  IFNg = "BV570-A",
-  Th2 = "eFluor 450-A",
-  `IL-10` = "BB700-A"
+TNF_LABEL <- cfg("targets")$tnf_label # name of the TNF-slot readout in the tables
+IFNG_LABEL <- cfg("targets")$ifng_label
+CYTOKINES <- set_names(
+  c(
+    need("channels", "TNF_slot"),
+    need("channels", "IFNg_slot"),
+    need("channels", "Th2_slot"),
+    need("channels", "IL10_slot")
+  ),
+  c(TNF_LABEL, IFNG_LABEL, "Th2", "IL-10")
 )
-STORED_ARCSINH <- c("BV510-A", "BV570-A") # 19a transforms these; the others are linear in the GatingSet
+STORED_ARCSINH <- unname(CYTOKINES[c(TNF_LABEL, IFNG_LABEL)]) # 19a transforms these; the others are linear in the GatingSet
+# label of the positive cut in the figure: the fixed value, or the per-donor rule
+POS_LABEL <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  sprintf("arcsinh %s", cfg("pos_rule")$value)
+} else {
+  "the positive cut"
+}
 POPS <- c("CD4T", "CD8T")
 POP_PATH <- "/nonDebris/singlets/live/CD3pos/" # full node path prefix, so CD4T/CD8T are unambiguous
 PAIR_COLS <- c("Time", "FSC-A", "FSC-H", "SSC-A") # G8: rows must pair across arms
-DONORS <- c("A3", "A6", "B11", "B2", "D1")
-DONOR_SHAPES <- setNames(c(16, 17, 15, 18, 8), DONORS) # as the approved demo (2026-11-11)
+# Samples: 3D and EXV the well, 24H donor_condition. Figures plot the sample (3D, EXV) or the donor over conditions (24H).
+SAMPLES <- samples_tbl()
+SAMPLE_IDS <- sort(SAMPLES$sample)
+COND_KEY <- if (is.null(DS$conditions)) character() else "condition"
+PLOT_DONOR <- set_names(
+  if (is.null(DS$conditions)) SAMPLES$sample else SAMPLES$donor,
+  SAMPLES$sample
+)
+DONORS <- sort(unique(PLOT_DONOR))
+DONOR_SHAPES <- setNames(rep_len(c(16, 17, 15, 18, 8), length(DONORS)), DONORS) # as the approved demo (2026-11-11)
+add_condition <- \(d) {
+  if (is.null(DS$conditions)) {
+    d
+  } else {
+    left_join(
+      d,
+      select(SAMPLES, donor = sample, condition),
+      by = "donor",
+      relationship = "many-to-one",
+      unmatched = c("error", "drop")
+    )
+  }
+}
 # Pre-registered labels (user, 2026-11-10, D3)
 RESEMBLE_MEDIAN <- 0.8
 RESEMBLE_MIN <- 0.5
@@ -71,6 +126,14 @@ run_dir <- cli_args[[1]]
 new_arms <- strsplit(cli_args[[2]], ",")[[1]]
 stopifnot("run dir must not exist" = !dir.exists(run_dir))
 arms <- union(BASE_ARMS, new_arms)
+off_config <- setdiff(arms, ARMS_CG)
+if (length(off_config) > 0) {
+  stop(
+    "51c_score_ablation_common.R: arms not in config arms_cg: ",
+    toString(off_config),
+    call. = FALSE
+  )
+}
 stopifnot(
   "common dir has its README" = file.exists(file.path(COMMON, "README.md"))
 )
@@ -90,12 +153,31 @@ no_gs <- arms[!dir.exists(file.path(COMMON, "gs", arms))]
 if (length(no_gs) > 0) {
   stop("arms without gs/ in the common dir: ", toString(no_gs), call. = FALSE)
 }
+# Cuts per arm, sample and cytokine, read once (cut_of re-reads cuts.csv when the rule is not fixed)
+cuts_of_kind <- \(kind) {
+  arms |>
+    set_names() |>
+    map(\(a) {
+      SAMPLE_IDS |>
+        set_names() |>
+        map(\(s) map_dbl(CYTOKINES, \(ch) cut_of(a, s, ch, kind)))
+    })
+}
+POS_CUTS <- cuts_of_kind("pos")
+NEG_CUTS <- cuts_of_kind("neg")
+
 dir.create(run_dir, recursive = TRUE)
 
 # Per donor: every arm's events on one arcsinh scale, and population rows ------------------------
 gating_sets <- arms |>
   set_names() |>
   map(\(a) load_gs(file.path(COMMON, "gs", a)))
+stopifnot(
+  "gating sets hold the samples of samples_tbl()" = all(map_lgl(
+    gating_sets,
+    \(g) setequal(sampleNames(g), SAMPLE_IDS)
+  ))
+)
 events_of <- function(gs, s) {
   x <- exprs(gh_pop_get_data(gs[[s]], "root"))[, CYTOKINES]
   colnames(x) <- names(CYTOKINES)
@@ -103,7 +185,7 @@ events_of <- function(gs, s) {
   x[, linear] <- asinh(x[, linear] / COFACTOR)
   x
 }
-by_donor <- DONORS |>
+by_donor <- SAMPLE_IDS |>
   set_names() |>
   map(\(s) {
     ev <- map(gating_sets, \(gs) events_of(gs, s))
@@ -134,16 +216,19 @@ own <- by_donor |>
     arms |>
       set_names() |>
       map(\(a) {
+        pos_tnf <- POS_CUTS[[a]][[s]][[TNF_LABEL]]
+        pos_ifng <- POS_CUTS[[a]][[s]][[IFNG_LABEL]]
         POPS |>
           set_names() |>
           map(\(pop) {
-            x <- d$ev[[a]][d$in_pop[[a]][[pop]], c("TNF", "IFNg")]
+            x <- d$ev[[a]][d$in_pop[[a]][[pop]], c(TNF_LABEL, IFNG_LABEL)]
             tibble(
               n_parent = nrow(x),
-              pct_tnf = 100 * mean(x[, "TNF"] > CUT),
-              pct_ifng = 100 * mean(x[, "IFNg"] > CUT),
-              n_ifng_pos = sum(x[, "IFNg"] > CUT),
-              pct_tnf_among_ifng = 100 * mean(x[x[, "IFNg"] > CUT, "TNF"] > CUT)
+              pct_tnf = 100 * mean(x[, TNF_LABEL] > pos_tnf),
+              pct_ifng = 100 * mean(x[, IFNG_LABEL] > pos_ifng),
+              n_ifng_pos = sum(x[, IFNG_LABEL] > pos_ifng),
+              pct_tnf_among_ifng = 100 *
+                mean(x[x[, IFNG_LABEL] > pos_ifng, TNF_LABEL] > pos_tnf)
             )
           }) |>
           list_rbind(names_to = "pop")
@@ -171,19 +256,22 @@ scores <- by_donor |>
           set_names() |>
           map(\(pop) {
             rows <- d$in_pop[[REF_ARM]][[pop]]
-            c("TNF", "IFNg") |>
+            c(TNF_LABEL, IFNG_LABEL) |>
               set_names() |>
               map(\(cy) {
+                neg_ref <- NEG_CUTS[[REF_ARM]][[s]][[cy]]
+                neg_own <- NEG_CUTS[[a]][[s]][[cy]]
+                pos_own <- POS_CUTS[[a]][[s]][[cy]]
                 lin <- COFACTOR * sinh(d$ev[[a]][rows, cy])
                 lin_ref <- COFACTOR * sinh(d$ev[[REF_ARM]][rows, cy])
-                ref_rsd <- nguyen(lin_ref[asinh(lin_ref / COFACTOR) < CUT])
+                ref_rsd <- nguyen(lin_ref[asinh(lin_ref / COFACTOR) < neg_ref])
                 tibble(
-                  rsd_neg = nguyen(lin[asinh(lin / COFACTOR) < CUT]),
+                  rsd_neg = nguyen(lin[asinh(lin / COFACTOR) < neg_own]),
                   ref_rsd = ref_rsd,
                   ref_rsd_cut_old = nguyen(lin_ref[
                     asinh(lin_ref / COFACTOR) < CUT_OLD
                   ]),
-                  pos_share = mean(asinh(lin / COFACTOR) > CUT),
+                  pos_share = mean(asinh(lin / COFACTOR) > pos_own),
                   squeezed_share = mean(abs(lin) < SQUEEZE_FRAC * ref_rsd)
                 )
               }) |>
@@ -225,7 +313,12 @@ neg_spread <- by_donor |>
             names(CYTOKINES) |>
               set_names() |>
               map(\(cy) {
-                neg_all <- reduce(map(d$ev[set_arms], \(x) x[, cy] < CUT), `&`)
+                neg_all <- reduce(
+                  imap(d$ev[set_arms], \(x, k) {
+                    x[, cy] < NEG_CUTS[[k]][[s]][[cy]]
+                  }),
+                  `&`
+                )
                 keep <- in_all & neg_all
                 tibble(
                   n_shared = sum(keep),
@@ -245,7 +338,7 @@ write_csv(neg_spread, file.path(run_dir, "neg_spread.csv"))
 
 # Gap closed and labels (D3): CD8T BV510, squeezed share and share above the cut -----------------
 gap <- scores |>
-  dplyr::filter(pop == "CD8T", cytokine == "TNF") |>
+  dplyr::filter(pop == "CD8T", cytokine == TNF_LABEL) |>
   select(donor, arm, squeezed_share, pos_share) |>
   pivot_longer(
     c(squeezed_share, pos_share),
@@ -257,7 +350,8 @@ gap <- scores |>
     target = value[arm == TARGET_ARM],
     frac_closed = (value - start) / (target - start),
     .by = c(donor, readout)
-  )
+  ) |>
+  add_condition()
 write_csv(gap, file.path(run_dir, "gap_closed.csv"))
 labels <- gap |>
   summarise(
@@ -266,7 +360,7 @@ labels <- gap |>
     max_frac = max(frac_closed),
     n_contrib = sum(frac_closed >= CONTRIB_FRAC),
     resembles_one = median_frac >= RESEMBLE_MEDIAN & min_frac >= RESEMBLE_MIN,
-    .by = c(arm, readout)
+    .by = c(arm, readout, any_of(COND_KEY))
   ) |>
   mutate(
     label = case_when(
@@ -274,14 +368,14 @@ labels <- gap |>
       all(n_contrib >= CONTRIB_DONORS) ~ "contributes",
       .default = "null"
     ),
-    .by = arm
+    .by = c(arm, any_of(COND_KEY))
   )
 write_csv(labels, file.path(run_dir, "labels.csv"))
 
 # Figure: gap closed per arm, donors as points ------------------------------------------------
 READOUT_LABELS <- c(
-  squeezed_share = "CD8T TNF squeezed near 0",
-  pos_share = sprintf("CD8T TNF above arcsinh %s", CUT)
+  squeezed_share = sprintf("CD8T %s squeezed near 0", TNF_LABEL),
+  pos_share = sprintf("CD8T %s above %s", TNF_LABEL, POS_LABEL)
 )
 fig <- gap |>
   dplyr::filter(!arm %in% c(REF_ARM, TARGET_ARM)) |>
@@ -293,10 +387,14 @@ fig <- gap |>
         new_arms
       )))
     ),
-    readout = factor(READOUT_LABELS[readout], levels = unname(READOUT_LABELS))
+    readout = factor(READOUT_LABELS[readout], levels = unname(READOUT_LABELS)),
+    donor = unname(PLOT_DONOR[donor])
   )
 fig_median <- fig |>
-  summarise(median_frac = median(frac_closed), .by = c(arm, readout))
+  summarise(
+    median_frac = median(frac_closed),
+    .by = c(arm, readout, any_of(COND_KEY))
+  )
 p <- ggplot(fig, aes(frac_closed, arm)) +
   geom_vline(
     xintercept = c(0, 1),
@@ -313,7 +411,7 @@ p <- ggplot(fig, aes(frac_closed, arm)) +
   geom_point(data = fig_median, aes(median_frac, arm), shape = 18, size = 2.5) +
   scale_colour_manual(values = categorical_palette(DONORS), name = "Donor") +
   scale_shape_manual(values = DONOR_SHAPES, name = "Donor") +
-  facet_wrap(~readout, axes = "all", axis.labels = "margins") +
+  facet_wrap(c("readout", COND_KEY), axes = "all", axis.labels = "margins") +
   labs(x = "Fraction of the as188_joint to s102_c188 gap closed", y = NULL) +
   value_grid("x")
 save_panel(

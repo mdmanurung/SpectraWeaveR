@@ -3,12 +3,15 @@
 # Purpose: unmix one proof-chain arm (user, 2026-11-10): the 1.8.8 zip setup (1.8.8 code, joint,
 #          speed "slow" (user rule), run-143803 dye spectra, raw-csv 1.8.8 AF, 1.8.8 thresholds) with a
 #          given variants object, on a given folder of raw FCS files (the zip Raw folder, or spiked copies).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/61_af405_proof_unmix.R \
-#            <arm> <variants_rds|188> [raw_dir]
-#          from the repo root; on SLURM via experiments/slurm/run_spike_cg.sbatch. "188" = the zip 1.8.8
-#          variants object unchanged. raw_dir defaults to the zip Raw folder. Output goes to
-#          experiments/bmv_test/compare_3D/data/unmix_cells/af405proof_<arm>, which must not exist.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8 (spectra, AF, variants, controls, Raw)
+# Run:     SW_DATASET=<3d|24h|exv> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/61cg_af405_proof_unmix.R \
+#            <arm> <variants_rds|188> [raw_dir|-] [condition]
+#          from the repo root; on SLURM via experiments/slurm/run_spike_cg.sbatch. SW_DATASET is required (3d, 24h, exv):
+#          it sets the data dir and the 1.8.8 spectra and AF names (cfg("stamps")). "188" = the zip 1.8.8
+#          variants object unchanged. raw_dir defaults to the zip Raw folder ("-" = default). Output goes to
+#          data_path("unmix_cells")/af405proof_<arm>, which must not exist.
+#          Datasets with conditions (24H): <condition> (iRBC, SEB or uRBC) is required, one task per condition;
+#          the default raw_dir is Raw/<condition> and the output goes to af405proof_<arm>/<condition>.
+# Inputs:  data_path("autoSpectral_v1.8.8") (spectra, AF, variants, controls, Raw)
 #          <variants_rds> [60_af405_proof_objects.R]
 # Outputs: <out_dir>/*.fcs   unmixed files
 #          <out_dir>/args.txt, verify.csv (event count and channels vs as188_joint), sessionInfo.txt
@@ -21,19 +24,45 @@ suppressPackageStartupMessages({
   library(readr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 
 # Setup -----------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path())
 cli_args <- commandArgs(trailingOnly = TRUE)
 arm <- cli_args[[1]]
 variants_arg <- cli_args[[2]]
 d188 <- file.path(DATA, "autoSpectral_v1.8.8")
-raw_dir <- if (length(cli_args) >= 3) {
+# datasets with conditions keep one raw and one unmixed folder per condition; one task per condition
+condition <- if (is.null(DS$conditions)) NULL else cli_args[4]
+if (!is.null(DS$conditions) && !condition %in% DS$conditions) {
+  stop(
+    "61cg_af405_proof_unmix.R: dataset ",
+    DS$dataset,
+    " needs a 4th argument <condition>, one of ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+raw_dir <- if (length(cli_args) >= 3 && cli_args[[3]] != "-") {
   normalizePath(cli_args[[3]])
-} else {
+} else if (is.null(condition)) {
   file.path(d188, "Raw")
+} else {
+  file.path(d188, "Raw", condition)
+}
+if (!is.null(condition) && basename(raw_dir) != condition) {
+  stop(
+    "61cg_af405_proof_unmix.R: raw_dir must end in the condition ",
+    condition,
+    "; got ",
+    raw_dir,
+    call. = FALSE
+  )
 }
 out_dir <- file.path(DATA, "unmix_cells", paste0("af405proof_", arm))
+if (!is.null(condition)) {
+  out_dir <- file.path(out_dir, condition)
+}
 stopifnot("out dir must not exist" = !dir.exists(out_dir))
 stopifnot(
   "1.8.8 code loaded" = as.character(packageVersion("AutoSpectral")) == "1.8.8"
@@ -45,12 +74,12 @@ control_dir <- file.path(d188, "Reference Group Clean")
 spectra_file <- file.path(
   d188,
   "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
+  cfg("stamps")$as188_spectra
 )
 af_file <- file.path(
   d188,
   "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
+  cfg("stamps")$as188_af
 )
 var188_rds <- file.path(
   d188,
@@ -74,6 +103,7 @@ writeLines(
   c(
     paste("arm:", arm),
     paste("variants:", variants_file),
+    if (!is.null(condition)) paste("condition:", condition),
     paste("raw dir:", raw_dir),
     "pipeline: joint",
     "speed: slow (user rule, 2026-11-10; no effect under joint)",
@@ -106,20 +136,54 @@ unmix.folder(
 )
 
 # Verify: same files, event counts and channel names as as188_joint -----------------------------
-ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+ref_dir <- file.path(d188, "AutoSpectral_unmixed") # 24H: one subfolder per condition, found recursively
 read_hdr <- \(path) {
   ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
   list(n = nrow(ff), channels = colnames(ff))
 }
-verify <- tibble(
-  file = sub(
-    "\\.fcs$",
-    " AutoSpectral.fcs",
-    list.files(raw_dir, pattern = "\\.fcs$")
+# raw file -> registered sample (join on the full file stem) -> its as188_joint file, one per sample
+raw_names <- list.files(raw_dir, pattern = "\\.fcs$")
+raw_stems <- sub("\\.fcs$", "", raw_names)
+stopifnot(
+  "61cg: every raw file is a registered sample (samples_tbl stem)" = all(
+    raw_stems %in% samples_tbl()$stem
+  )
+)
+raw_files <- tibble(raw_file = raw_names, stem = raw_stems) |>
+  inner_join(
+    samples_tbl() |>
+      filter(stem %in% raw_stems) |>
+      select(sample, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  )
+ref_files <- tibble(
+  ref_path = list.files(
+    ref_dir,
+    pattern = " AutoSpectral\\.fcs$",
+    recursive = TRUE,
+    full.names = TRUE
   )
 ) |>
+  mutate(stem = sub(" AutoSpectral\\.fcs$", "", basename(ref_path))) |>
+  filter(stem %in% raw_files$stem)
+stopifnot(
+  "61cg: one as188_joint file per raw file under ref_dir" = setequal(
+    ref_files$stem,
+    raw_files$stem
+  )
+)
+verify <- raw_files |>
+  inner_join(
+    ref_files,
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
+  mutate(file = sub("\\.fcs$", " AutoSpectral.fcs", raw_file)) |>
   mutate(
-    ref = map(file.path(ref_dir, file), read_hdr),
+    ref = map(ref_path, read_hdr),
     new = map(file.path(out_dir, file), read_hdr),
     n_ref = map_int(ref, "n"),
     n_new = map_int(new, "n"),

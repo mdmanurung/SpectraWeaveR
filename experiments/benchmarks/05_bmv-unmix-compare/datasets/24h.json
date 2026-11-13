@@ -1,0 +1,372 @@
+{
+  "dataset": "24h",
+  "data_dir": "experiments/bmv_test/compare_24H/data",
+  "run_tag": "24h",
+  "raw_layout": "by_condition",
+  "conditions": [
+    "iRBC",
+    "SEB",
+    "uRBC"
+  ],
+  "mindensity_method": "mindensity2",
+  "viability_range": "c(0, 3)",
+  "gate_group": "condition",
+  "sample_regex": "^(BMV_(?:\\d+[A-Z]|REF1))_(iRBC|SEB|uRBC)$",
+  "donor_regex": "BMV_(\\d+[A-Z]|REF1)",
+  "stamps": {
+    "as188_spectra": "Automated_autospectral_spectra_20261112_093539.csv",
+    "as188_af": "3_files_concat-17175061325735_3.fcs Autofluorescence spectra 20261112_093650.csv",
+    "as102_spectra": "Cells Matching Negative_autospectral_spectra.csv",
+    "as102_af": "NULL_3_files_concat-17175061325735_3_AF.csv",
+    "as102_afclean_spectra": "Cells AF clean up_autospectral_spectra.csv"
+  },
+  "channels": {
+    "viability_spectroflo": "LIVE DEAD NIR-A",
+    "viability_autospectral": "Zombie NIR-A",
+    "CD3": "SBUV510-A",
+    "CD4": "Spark Blue 574-A",
+    "CD8": "SBUV445-A",
+    "TNF_slot": "BV510-A",
+    "IFNg_slot": "BV570-A",
+    "IL2": "BV605-A",
+    "IL10": "BB700-A",
+    "Th2": "eFluor 450-A",
+    "Th2_slot": "eFluor 450-A",
+    "IL10_slot": "BB700-A"
+  },
+  "targets": {
+    "tnf_dye": "BV510",
+    "ifng_dye": "BV570",
+    "glut1_dye": "Alexa Fluor 405",
+    "tnf_label": "TNF",
+    "ifng_label": "IFNg",
+    "th2_dye": "eFluor 450",
+    "il10_dye": "BB700",
+    "th2_label": "Th2",
+    "cytokines": [
+      "TNF",
+      "IFNg",
+      "IL-2",
+      "IL-10",
+      "Th2"
+    ],
+    "streak_pair": [
+      "BV510-A",
+      "SBUV445-A"
+    ]
+  },
+  "control_gates_zip": {
+    "cell_zip": {
+      "fsc": [
+        600000.0,
+        4000000.0
+      ],
+      "ssc": [
+        100000.0,
+        1600000.0
+      ]
+    },
+    "bead_zip": {
+      "fsc": [
+        300000.0,
+        800000.0
+      ],
+      "ssc": [
+        1300000.0,
+        1900000.0
+      ]
+    }
+  },
+  "pos_rule": {
+    "type": "control_quantile",
+    "control_condition": "uRBC",
+    "control_arm": "as188_joint",
+    "prob": 0.995,
+    "parent": "CD3pos",
+    "by": "donor",
+    "channels": [
+      "BV510-A",
+      "BV570-A",
+      "BV605-A",
+      "BB700-A",
+      "eFluor 450-A"
+    ]
+  },
+  "neg_rule": {
+    "type": "both",
+    "variants": [
+      {
+        "name": "fixed15",
+        "type": "fixed",
+        "value": 1.5
+      },
+      {
+        "name": "urbc_q995",
+        "type": "control_quantile",
+        "same_as": "pos_rule"
+      }
+    ]
+  },
+  "smoke_donor": "BMV_011C",
+  "lib_dirs": [
+    "experiments/bmv_test/compare_3D/data/lib_as102",
+    "experiments/bmv_test/compare_3D/data/lib_cytoutils",
+    "experiments/bmv_test/compare_3D/data/lib_ggplot2_35"
+  ],
+  "reasons": {
+    "control_gates_zip": "What the zip ships: the rectangleGate values in compare_24H/data/autoSpectral_v1.8.8/AutoSpectral_unmix_v1.8.8.R lines 39-41 and 62-64. Dataset-specific; never copied between datasets. The widened rectangles (bead_wide, cell_wide) and the landmark settings in 3D are the user's 3D choices and are not in the 24H or ex vivo zips, so control_gates stays null for them (user 2026-11-12: do not apply the 3D control gates).",
+    "mindensity_method": "User 2026-11-12: use the optimised mindensity2 (openCyto gate_mindensity2: spline-smoothed density, adjust = 2, shoulder or inflection fallback when there is no valley).",
+    "data_dir": "24hstim.zip unpacked here, top folder stripped.",
+    "run_tag": "New run folders are <date>_bmv24h-<key>.",
+    "raw_layout": "Raw/, manual/ and AutoSpectral_unmixed/ have iRBC, SEB, uRBC subfolders; the 1.0.2 unmix folders are flat.",
+    "gate_group": "User 2026-11-12: openCyto gates pooled per condition.",
+    "sample_regex": "Sample is <donor>_<condition>; the well code collides across conditions (A1 = iRBC and SEB of BMV_011C).",
+    "stamps.as102_afclean_spectra": "File exists in compare_24H/data/autoSpectral_v1.0.2/Reference Group/table_spectra (ls checked 2026-11-12).",
+    "stamps": "inherited: 24hstim.zip, single 1.8.8 spectra run 093539; the 1.0.2 AF name NULL_... is unconfirmed (open choice 6).",
+    "channels": "Same panel assignments as 3D (control file diff), plus BUV661, BV711, PE.",
+    "pos_rule": "User 2026-11-12: per-donor q99.5 of the as188_joint uRBC values, all cytokines, applied to iRBC and SEB in every arm.",
+    "neg_rule": "User 2026-11-12: run both the fixed 1.5 and the uRBC cut, side by side.",
+    "smoke_donor": "Plan open choice 7; BMV_011C has a colliding A1 well.",
+    "lib_dirs": "Code libraries stay in the 3D folder.",
+    "channels.extra": "inherited: 3d.json, needs the user's one-line confirm (plan CP3); IL2, IL10, Th2 and the two slots exist in the 24H control file (V10-A, B9-A, V3-A).",
+    "targets.th2_il10_streak_cytokines": "inherited: 3d.json, needs the user's one-line confirm (plan CP3); th2_dye, il10_dye, th2_label, cytokines, streak_pair.",
+    "check_sample": "Plan open choice 7 family: BMV_011C_iRBC (its A1 well collides across iRBC and SEB).",
+    "stained_sample": "open: no numbered plan choice, user decision (raw stained file for get.spectral.variants in 53_opt188.R); needs_user.",
+    "af405_variants_102_n": "open: count of 1.0.2 AF405 variants in the 24H overlap_coef.csv is not known; the 3D value 65 is not copied.",
+    "control_gates": "open: plan open choice 4, user decision (bead and cell rectangles, landmark settings, landmark_define); the 3D values are not copied.",
+    "arms_cg": "open: plan open choice 5, user decision (arm list taken from the 3D 97c manifest or rebuilt for 24H).",
+    "spike_panels": "inherited: 3d.json, needs the user's one-line confirm (plan CP3); the 24H control file has all 12 spike dyes; NKG2C, CD16 and LDHA are not in these panels.",
+    "spike_marker_dyes": "inherited: 3d.json, needs the user's one-line confirm (plan CP3)",
+    "cluster_markers_other": "24H's own control file (BUV661 = NKG2C, BV711 = CD16, PE = LDHA are new vs 3D). 3D markers kept where the 24H panel carries them on the same dye (checked by datasets/check_panel.R). User 2026-11-12 (page Q5): the panels differ, so lists follow each zip's control file.",
+    "lineage_channels_other": "As cluster_markers_other. New markers placed by the rule the user chose for ex vivo (page Q9): NK surface markers in CD3neg live, metabolic LDHA in all four populations. My application of that rule to 24H; confirm on the page.",
+    "live_only_markers": "inherited: 3d.json, needs the user's one-line confirm (plan CP3); the null (PE without marker) no longer matches in 24H because PE is LDHA there.",
+    "marker_parent": "As cluster_markers_other. New markers placed by the rule the user chose for ex vivo (page Q9): NK surface markers in CD3neg live, metabolic LDHA in all four populations. My application of that rule to 24H; confirm on the page.",
+    "umap_markers": "As cluster_markers_other. New markers placed by the rule the user chose for ex vivo (page Q9): NK surface markers in CD3neg live, metabolic LDHA in all four populations. My application of that rule to 24H; confirm on the page.",
+    "palette": "open: cosmetic colours per plotted unit (24H units are donor_condition samples); not copied from 3D; needs_user.",
+    "dashboard_banner": "open: the 3D text names the cut arcsinh 1.5, 24H uses the uRBC quantile cut and the fixed cut; needs_user.",
+    "dashboard_subject": "open: the 3D text names 3-day CD3/CD28-stimulated cells; 24H wording not verified; needs_user.",
+    "gate_ref_arm": "User 2026-11-12: gate pooled samples on the 1.8.8 data and pass the labels to the other arms by row pairing.",
+    "population_gates": "User 2026-11-12 (grill Q2): T, NK and gamma-delta T. CD3pos then CD4/CD8 quad gate (as 3D); TCRgd under CD3pos; CD3neg then CD56+ NK. The panel has no CD19 or CD14. Search window c(0, 3) is my proposal, shown in the density figures for approval. NKpos window c(0.3, 2.5): user 2026-11-12 (first fit cut at 2.89, above the shoulder). TCRgdpos: gate sits under CD3pos; method pending, user wants plots of mindensity2 vs a tail cut (99b_gate_candidates.R). label: plain name of each population, used in figure titles. User 2026-11-13: TCRgd cut = cytoUtils gate_tail on CD3+ cells (0.41, 99b candidate_cuts.csv); CD1c DC cut = negative peak + 4 SD on pooled AS 1.8.8 CD11c+ events (1.2759, 99b candidate_cuts.csv), fixed here so the gate does not move; the CD1c readout cut stays fixed 1.0 (a separate choice).",
+    "gate_pool": "User 2026-11-12 (grill Q4): all 30 files in one fit, replacing the earlier per-condition pooling.",
+    "label_key": "User 2026-11-13: gate labels from pooled AS 1.8.8 (99a), passed to every arm by row; gates approved on the decision page.",
+    "manifest_key": "Uncleaned zip files of the four delivered arms (step 01); the clean step is still to be designed."
+  },
+  "check_sample": "BMV_011C_iRBC",
+  "stained_sample": null,
+  "af405_variants_102_n": null,
+  "control_gates": null,
+  "arms_cg": null,
+  "spike_panels": {
+    "panel1": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700"
+    },
+    "panel2": {
+      "IFNg": "BV570",
+      "IL2": "BV605",
+      "GLUT1": "Alexa Fluor 405",
+      "ATP5A": "Alexa Fluor 488",
+      "CS": "Alexa Fluor 594",
+      "CPT1A": "PE-Cy5.5",
+      "ATGL": "PE-Cy7",
+      "G6PD": "APC-Cy7",
+      "CD71": "Spark YG 593"
+    },
+    "cd3neg": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700",
+      "IFNg": "BV570",
+      "IL2": "BV605",
+      "GLUT1": "Alexa Fluor 405",
+      "ATP5A": "Alexa Fluor 488",
+      "CS": "Alexa Fluor 594",
+      "CPT1A": "PE-Cy5.5",
+      "ATGL": "PE-Cy7",
+      "G6PD": "APC-Cy7",
+      "CD71": "Spark YG 593"
+    },
+    "passes": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700"
+    }
+  },
+  "spike_marker_dyes": {
+    "TNF": "BV510",
+    "Th2": "eFluor 450",
+    "IL10": "BB700",
+    "IFNg": "BV570",
+    "IL2": "BV605",
+    "GLUT1": "Alexa Fluor 405",
+    "ATP5A": "Alexa Fluor 488",
+    "CS": "Alexa Fluor 594",
+    "CPT1A": "PE-Cy5.5",
+    "ATGL": "PE-Cy7",
+    "G6PD": "APC-Cy7",
+    "CD71": "Spark YG 593"
+  },
+  "cluster_markers_other": {
+    "CD45RA": "Spark UV 387-A",
+    "CCR7": "PE-Fire 810-A",
+    "CD127": "APC-Fire 810-A",
+    "CD25": "SBUV605-A",
+    "CD56": "RB744-A",
+    "TCRgd": "BUV395-A",
+    "CD161": "BUV563-A",
+    "CD57": "BV785-A",
+    "CD38": "SBUV740-A",
+    "CD7": "BUV805-A",
+    "CXCR5": "BV750-A",
+    "NKG2C": "BUV661-A",
+    "CD16": "BV711-A"
+  },
+  "lineage_channels_other": {
+    "CD45RA": "Spark UV 387-A",
+    "CCR7": "PE-Fire 810-A",
+    "CD127": "APC-Fire 810-A",
+    "CD25": "SBUV605-A",
+    "CD56": "RB744-A",
+    "TCRgd": "BUV395-A",
+    "CD161": "BUV563-A",
+    "CD57": "BV785-A",
+    "CD38": "SBUV740-A",
+    "CD7": "BUV805-A",
+    "CXCR5": "BV750-A",
+    "NKG2C": "BUV661-A",
+    "CD16": "BV711-A"
+  },
+  "live_only_markers": [
+    "Viability",
+    "CD56",
+    null
+  ],
+  "marker_parent": {
+    "default": [
+      "CD4T",
+      "CD8T"
+    ],
+    "by_marker": {
+      "Viability": [
+        "live"
+      ],
+      "CD56": [
+        "live"
+      ],
+      "NKG2C": [
+        "CD3neg_live"
+      ],
+      "CD16": [
+        "CD3neg_live"
+      ],
+      "LDHA": [
+        "CD4T",
+        "CD8T",
+        "live",
+        "CD3neg_live"
+      ]
+    },
+    "no_marker": [
+      "live"
+    ],
+    "map_pop": "CD8T",
+    "also_non_t": [
+      "CD45RA",
+      "CD7",
+      "CD161",
+      "CD57",
+      "CD38",
+      "CD71",
+      "CCR7",
+      "CD127",
+      "CD25"
+    ]
+  },
+  "umap_markers": {
+    "lineage": [
+      "CD45RA",
+      "TCRgd",
+      "CD8",
+      "CD3",
+      "CD161",
+      "CD25",
+      "CD38",
+      "CD7",
+      "CD4",
+      "CD56",
+      "CD57",
+      "CXCR5",
+      "CCR7",
+      "CD127",
+      "NKG2C",
+      "CD16"
+    ],
+    "functional": [
+      "GLUT1",
+      "Th2",
+      "TNF",
+      "IFNg",
+      "IL-2",
+      "CTLA-4",
+      "ATP5A",
+      "TCRvd2",
+      "IL-10",
+      "FoxP3",
+      "CD71",
+      "CS",
+      "PD-1",
+      "T-bet",
+      "CPT1A",
+      "ATGL",
+      "G6PD",
+      "LDHA"
+    ],
+    "colour": [
+      "TNF",
+      "Th2"
+    ]
+  },
+  "palette": null,
+  "dashboard_banner": null,
+  "dashboard_subject": null,
+  "gate_ref_arm": "as188_joint",
+  "population_gates": [
+    {
+      "alias": "TCRgdpos",
+      "parent": "CD3pos",
+      "marker": "TCRgd",
+      "channel": "BUV395-A",
+      "pop": "+",
+      "method": "tail",
+      "gate_range": null,
+      "cut": null,
+      "label": "TCRgd+ T cells"
+    },
+    {
+      "alias": "CD3neg",
+      "parent": "live",
+      "marker": "CD3",
+      "channel": "SBUV510-A",
+      "pop": "-",
+      "method": "refGate",
+      "gate_range": null,
+      "cut": null,
+      "label": "CD3- cells"
+    },
+    {
+      "alias": "NKpos",
+      "parent": "CD3neg",
+      "marker": "CD56",
+      "channel": "RB744-A",
+      "pop": "+",
+      "method": "mindensity2",
+      "gate_range": "c(0.3, 2.5)",
+      "cut": null,
+      "label": "NK cells (CD56+)"
+    }
+  ],
+  "gate_pool": "all",
+  "label_key": "pop-gates",
+  "manifest_key": "unmix-compare-final"
+}

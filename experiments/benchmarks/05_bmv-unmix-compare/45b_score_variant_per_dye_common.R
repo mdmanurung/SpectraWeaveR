@@ -6,15 +6,18 @@
 #          across arms), per donor, for BV510-A (TNF) and BV570-A (IFNg): Nguyen rSD of events below arcsinh 1
 #          (ratio to as188_joint), share of events with |x| < 0.5 x as188_joint's rSD (squeezed), and share of
 #          events above arcsinh 1.5. Draws one ranked dot plot of the CD8T TNF squeezed share per dye arm.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/45b_score_variant_per_dye_common.R
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/45b_score_variant_per_dye_common.R
 #            from the repo root, after the arms of 45_variant_per_dye.R finished.
-# Inputs:  experiments/runs/2026-11-10_bmv-variant-per-dye/dyes.txt   dye per arm [written at submit; read only]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/as188_joint   common-gate GatingSet [batch 0, 97d]
-#          experiments/runs/2026-11-11_bmv-common-gated/manifest.csv     clean3 FCS per arm [97c]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/var102_only_<dye_id> [45_variant_per_dye.R]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/var102_except_bv510   [39_variant_count.R]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/AutoSpectral_unmixed   raw as188_joint
-# Outputs: <RUN_DIR>/scores.csv                 one row per arm, donor, population, channel
+# Inputs:  run_in("variant-per-dye")/dyes.txt   dye per arm [written at submit; read only]
+#          run_in("common-gated")/gs/as188_joint   common-gate GatingSet [batch 0, 97d]
+#          run_in("common-gated")/manifest.csv     clean3 FCS per arm [97c]
+#          data_path("unmix_cells", "var102_only_<dye_id>", [<condition>,] <file>) [45_variant_per_dye.R]
+#          data_path("unmix_cells", "var102_except_bv510", [<condition>,] <file>)   [39_variant_count.R]
+#          data_path("autoSpectral_v1.8.8/AutoSpectral_unmixed", [<condition>,] <file>)   raw as188_joint
+#          datasets/<SW_DATASET>.json (channels, targets, conditions, pos_rule, neg_rule), <ds>_samples.csv
+# Outputs: <RUN_DIR>/scores.csv                 one row per arm, sample, population, channel
+#          (<RUN_DIR> is run_out("variant-per-dye-common"))
 #          <RUN_DIR>/fig_cd8t_tnf_squeezed.{pdf,png,csv}   ranked dot plot, CD8T TNF squeezed share per dye arm
 #          <RUN_DIR>/sessionInfo.txt
 
@@ -28,17 +31,49 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 
 # Parameters ------------------------------------------------------------------------------
-RUN_DIR <- "experiments/runs/2026-11-11_bmv-variant-per-dye-common"
-DYES_FILE <- "experiments/runs/2026-11-10_bmv-variant-per-dye/dyes.txt" # the 32 dyes of the old run, read only
-GATED <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
-DATA <- "experiments/bmv_test/compare_3D/data"
+RUN_DIR <- run_out("variant-per-dye-common")
+DYES_FILE <- file.path(run_in("variant-per-dye"), "dyes.txt") # the dyes of the per-dye run (3D: 32), read only
+GATED <- run_in("common-gated") # batch 0: gs/<arm> on SpectroFlo labels, manifest.csv
+DATA <- data_path()
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-NEG_CUT <- 1.5 # negatives (rSD, squeeze cut) are events below arcsinh 1.5, as the positivity cut (G13, user 2026-11-11; was 1)
-POS_CUT <- 1.5 # positives are events above arcsinh 1.5 (G7a, user 2026-11-11; was 1)
+# negatives (rSD, squeeze cut) are events below cut_of(arm, sample, channel, "neg"), positives above the "pos" cut
+# (3D: arcsinh 1.5 for both, G13 and G7a, user 2026-11-11; was 1)
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| below this fraction of as188_joint's rSD (user, 2026-11-10)
-CHANNELS <- c(TNF = "BV510-A", IFNg = "BV570-A")
+TNF_LABEL <- cfg("targets")$tnf_label
+IFNG_LABEL <- cfg("targets")$ifng_label
+CHANNELS <- set_names(
+  c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot),
+  c(TNF_LABEL, IFNG_LABEL)
+)
+SAMPLES <- samples_tbl()
+COND_KEY <- if (is.null(DS$conditions)) character() else "condition"
+# 24H keeps arm and raw files in one subfolder per condition; 3D and EXV have none
+cond_path <- \(dir, sample, file) {
+  cond <- if (is.null(DS$conditions)) {
+    NULL
+  } else {
+    SAMPLES$condition[SAMPLES$sample == sample]
+  }
+  do.call(file.path, as.list(c(dir, cond, file)))
+}
+# 24H figures colour the donor and facet by condition; 3D and EXV colour the sample
+COLOUR_VAR <- if (is.null(DS$conditions)) "sample" else "donor"
+add_donor_condition <- \(d) {
+  if (is.null(DS$conditions)) {
+    d
+  } else {
+    left_join(
+      d,
+      select(SAMPLES, sample, donor, condition),
+      by = "sample",
+      relationship = "many-to-one",
+      unmatched = c("error", "drop")
+    )
+  }
+}
 POPS <- c("CD4T", "CD8T") # gates of as188_joint
 KEY_COLS <- c("Time", "FSC-A", "FSC-H", "SSC-A") # identical across arms; maps raw rows to cleaned rows
 REF_ARMS <- c(
@@ -49,6 +84,7 @@ REF_ARMS <- c(
 stopifnot("run dir must not exist" = !dir.exists(RUN_DIR))
 dir.create(RUN_DIR, recursive = TRUE)
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R") # theme_set(), save_panel()
+source("experiments/benchmarks/05_bmv-unmix-compare/lib/palettes.R") # categorical_palette() for more than 8 donors
 dyes <- readLines(DYES_FILE)
 dye_arms <- set_names(paste0("var102_only_", gsub("[ -]", "_", dyes)), dyes)
 
@@ -60,8 +96,18 @@ read_x <- \(path) {
 key_of <- \(e) do.call(paste, c(as.data.frame(e[, KEY_COLS]), sep = "|"))
 raw_ref_dir <- file.path(DATA, "autoSpectral_v1.8.8/AutoSpectral_unmixed")
 ref <- manifest |> filter(arm == "as188_joint")
+stopifnot(
+  "manifest holds the samples of samples_tbl()" = setequal(
+    ref$sample,
+    SAMPLES$sample
+  )
+)
 keep <- map2(ref$file, ref$sample, \(clean_file, sample) {
-  raw_key <- key_of(read_x(file.path(raw_ref_dir, basename(clean_file))))
+  raw_key <- key_of(read_x(cond_path(
+    raw_ref_dir,
+    sample,
+    basename(clean_file)
+  )))
   stopifnot("keys unique in raw file" = !anyDuplicated(raw_key))
   raw_key %in% key_of(read_x(clean_file))
 }) |>
@@ -86,7 +132,11 @@ arm_events <- \(arm, sample, clean_file) {
   e <- if (arm == "as188_joint") {
     read_x(clean_file)
   } else {
-    read_x(file.path(DATA, "unmix_cells", arm, basename(clean_file)))[
+    read_x(cond_path(
+      file.path(DATA, "unmix_cells", arm),
+      sample,
+      basename(clean_file)
+    ))[
       keep[[sample]],
       ,
       drop = FALSE
@@ -106,6 +156,31 @@ arm_events <- \(arm, sample, clean_file) {
 }
 nguyen <- \(v) unname(diff(quantile(v, c(0.5, 0.84)))) # q84 - q50
 
+# Cuts per arm, sample and channel, read once (cut_of re-reads cuts.csv when the rule is not fixed)
+all_arms <- c(names(REF_ARMS), unname(dye_arms))
+cut_tbl <- tidyr::expand_grid(
+  arm = all_arms,
+  sample = ref$sample,
+  channel = unname(CHANNELS)
+) |>
+  mutate(
+    neg_cut = pmap_dbl(
+      list(arm, sample, channel),
+      \(a, s, ch) cut_of(a, s, ch, "neg")
+    ),
+    pos_cut = pmap_dbl(
+      list(arm, sample, channel),
+      \(a, s, ch) cut_of(a, s, ch, "pos")
+    )
+  )
+cut_here <- \(a, s, ch, col) {
+  v <- cut_tbl[[col]][
+    cut_tbl$arm == a[1] & cut_tbl$sample == s[1] & cut_tbl$channel == ch[1]
+  ]
+  stopifnot("one cut per arm, sample and channel" = length(v) == 1)
+  v
+}
+
 # Reference rSD from as188_joint -----------------------------------------------------------
 ref_events <- map2(ref$sample, ref$file, \(s, f) {
   arm_events("as188_joint", s, f) |> mutate(sample = s)
@@ -113,7 +188,9 @@ ref_events <- map2(ref$sample, ref$file, \(s, f) {
   list_rbind()
 ref_rsd <- ref_events |>
   summarise(
-    ref_rsd = nguyen(x[asinh(x / COFACTOR) < NEG_CUT]),
+    ref_rsd = nguyen(x[
+      asinh(x / COFACTOR) < cut_here("as188_joint", sample, channel, "neg_cut")
+    ]),
     .by = c(sample, pop, channel)
   )
 
@@ -133,9 +210,13 @@ score_arm <- \(arm) {
       ) |>
       summarise(
         n = n(),
-        rsd_neg = nguyen(x[asinh(x / COFACTOR) < NEG_CUT]),
+        rsd_neg = nguyen(x[
+          asinh(x / COFACTOR) < cut_here(arm, sample, channel, "neg_cut")
+        ]),
         squeezed_share = mean(abs(x) < SQUEEZE_FRAC * ref_rsd[1]),
-        pos_share = mean(asinh(x / COFACTOR) > POS_CUT),
+        pos_share = mean(
+          asinh(x / COFACTOR) > cut_here(arm, sample, channel, "pos_cut")
+        ),
         ref_rsd = ref_rsd[1],
         .by = c(sample, pop, channel)
       )
@@ -143,7 +224,6 @@ score_arm <- \(arm) {
     list_rbind() |>
     mutate(arm = arm, rsd_ratio = rsd_neg / ref_rsd, .before = 1)
 }
-all_arms <- c(names(REF_ARMS), unname(dye_arms))
 scores <- map(all_arms, score_arm) |>
   list_rbind() |>
   left_join(
@@ -155,16 +235,24 @@ write_csv(scores, file.path(RUN_DIR, "scores.csv"))
 
 # Figure: CD8T TNF squeezed share per dye arm, ranked by donor median -----------------------
 plot_frame <- scores |>
-  filter(pop == "CD8T", channel == CHANNELS[["TNF"]], !is.na(dye)) |>
-  mutate(median_share = median(squeezed_share), .by = dye) |>
+  filter(pop == "CD8T", channel == CHANNELS[[TNF_LABEL]], !is.na(dye)) |>
+  add_donor_condition() |>
+  mutate(
+    median_share = median(squeezed_share),
+    .by = c(dye, any_of(COND_KEY))
+  ) |>
   mutate(dye = reorder(dye, median_share))
 ref_lines <- scores |>
   filter(
     pop == "CD8T",
-    channel == CHANNELS[["TNF"]],
+    channel == CHANNELS[[TNF_LABEL]],
     arm %in% names(REF_ARMS)
   ) |>
-  summarise(median_share = median(squeezed_share), .by = arm) |>
+  add_donor_condition() |>
+  summarise(
+    median_share = median(squeezed_share),
+    .by = c(arm, any_of(COND_KEY))
+  ) |>
   mutate(label = REF_ARMS[arm])
 p <- ggplot(plot_frame, aes(squeezed_share, dye)) +
   geom_vline(
@@ -173,13 +261,24 @@ p <- ggplot(plot_frame, aes(squeezed_share, dye)) +
     colour = "grey40",
     linewidth = 0.3
   ) +
-  geom_point(aes(colour = sample), size = 1) +
+  geom_point(aes(colour = .data[[COLOUR_VAR]]), size = 1) +
   geom_point(aes(x = median_share), shape = 3, size = 1.5, stroke = 0.4) +
-  scale_colour_brewer(palette = "Dark2", name = "Donor") +
+  (if (n_distinct(plot_frame[[COLOUR_VAR]]) <= 8) {
+    scale_colour_brewer(palette = "Dark2", name = "Donor")
+  } else {
+    scale_colour_manual(
+      values = categorical_palette(sort(unique(plot_frame[[COLOUR_VAR]]))),
+      name = "Donor"
+    )
+  }) +
   scale_linetype_manual(
     values = c("dashed", "dotted"),
     name = "Reference (median)"
   ) +
-  labs(x = "CD8T TNF share squeezed near 0", y = "Dye given its 1.0.2 variants")
+  (if (is.null(DS$conditions)) NULL else facet_wrap(~condition)) +
+  labs(
+    x = sprintf("CD8T %s share squeezed near 0", TNF_LABEL),
+    y = "Dye given its 1.0.2 variants"
+  )
 save_panel(p, plot_frame, RUN_DIR, "fig_cd8t_tnf_squeezed", 183, 160)
 writeLines(capture.output(sessionInfo()), file.path(RUN_DIR, "sessionInfo.txt"))

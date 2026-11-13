@@ -1,13 +1,22 @@
 # Purpose: AutoSpectral 1.8.8 in its documented best form: AF spectra rebuilt with the package default
 #          refine = TRUE, joint pipeline, with a chosen n.passes.
-# Run:     pixi run Rscript 07_best_c188.R <n_passes> <out_dir> [af_rds]   (from the repo root)
-#            af_rds: reuse AF spectra built by an earlier run, so arms differ only in n.passes
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8 (Reference Group Clean controls, run-143803 spectra,
-#          Spectral_variants.rds built with defaults, unstained_AF, Raw) [user zip]
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript 07_best_c188.R <n_passes> <out_dir> [af_rds|NA] [condition]
+#            (from the repo root)
+#            af_rds: reuse AF spectra built by an earlier run, so arms differ only in n.passes; NA = rebuild
+#            condition = last argument, required when the dataset has conditions (24H: one task per condition,
+#              out_dir = <data_dir>/unmix_cells/<arm>/<condition>, so af_rds needs "NA" or the earlier condition's rds),
+#              refused otherwise
+#            SW_RUN_DATE is only read by scripts that write a run folder; this one writes to <out_dir>.
+# Inputs:  <data_dir>/autoSpectral_v1.8.8 (Reference Group Clean controls, config-stamp spectra,
+#          Spectral_variants.rds built with defaults, unstained_AF, Raw[/<condition>]) [user zip]
+#          stamp file name (spectra) from config stamps
 # Outputs: <out_dir>/*.fcs, <out_dir>/af_spectra.rds, <out_dir>/args.txt, <out_dir>/sessionInfo.txt
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path())
 AF_REFINE <- TRUE # package default in 1.8.8 (get_af_spectra.R:242); the original run used FALSE
 PIPELINE <- "joint"
 
@@ -15,7 +24,27 @@ PIPELINE <- "joint"
 args <- commandArgs(trailingOnly = TRUE)
 n_passes <- as.integer(args[[1]])
 out_dir <- args[[2]]
-af_rds <- if (length(args) >= 3) args[[3]] else NA
+af_rds <- if (length(args) >= 3 && args[[3]] != "NA") args[[3]] else NA
+# 24H: one task per condition subfolder (argument 4); 3D and EXV have no condition level
+cond <- if (length(args) >= 4) args[[4]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "07_best_c188.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 4 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (!is.null(DS$conditions) && (is.null(cond) || !cond %in% DS$conditions)) {
+  stop(
+    "07_best_c188.R: needs argument 4, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
 stopifnot(
   "out dir must not exist" = !dir.exists(out_dir),
   "n_passes is a positive integer" = !is.na(n_passes) && n_passes >= 1
@@ -37,7 +66,7 @@ flow.control <- reload.flow.control(
   asp
 )
 spectra <- read.spectra(
-  "Automated_autospectral_spectra_20261105_143803.csv",
+  cfg("stamps")$as188_spectra,
   spectra.dir = file.path(d188, "table_spectra")
 )
 spectra.variants <- readRDS(file.path(
@@ -79,7 +108,7 @@ writeLines(
   file.path(out_dir, "args.txt")
 )
 unmix.folder(
-  fcs.dir = file.path(d188, "Raw"),
+  fcs.dir = paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
   spectra = spectra,
   asp = asp,
   flow.control = flow.control,

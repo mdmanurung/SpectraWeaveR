@@ -1,17 +1,24 @@
 # Purpose: redraw the flag raw companions the report cites (IFNg in CD4T, Th2 in CD8T) from the common
 #          SpectroFlo gates (95_restyle_events_flag_raw.R repointed; plans/common_gates_plan.md G7a, G8, G11):
-#          flagged marker against GLUT1 in live cells, rows paired across arms, cut at arcsinh 1.5 drawn as a
-#          line on every panel (it is a threshold, not a gate), % above the cut per panel. Every arm shows the
-#          cells of the SpectroFlo population; strips are filled with the arm colour key only.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_flag_raw.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-flag-raw-scatter/flagged_markers.csv   marker, population [93 common]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/{spectroflo,as188_joint,opt188_pregate_joint_p1af1,
+#          flagged marker against GLUT1 in live cells, rows paired across arms, the positive cut (cut_of(); arcsinh
+#          1.5 in 3D) drawn as a line on every panel (it is a threshold, not a gate), % above the cut per panel.
+#          Every arm shows the cells of the SpectroFlo population; strips are filled with the arm colour key only.
+#          Stops on a dataset without Th2 (EXV).
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_flag_raw.R from the repo root.
+# Inputs:  run_in("common-flag-raw-scatter")/flagged_markers.csv   marker, population [93 common]
+#          run_in("common-gated")/gs/{spectroflo,as188_joint,opt188_pregate_joint_p1af1,
 #            s188_c102,as102_var}   common-gate GatingSets [97_common_gs.R]
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/21_raw_companions/flag_raw/fig_flag_<marker>_<pop>.
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), channels, targets
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/21_raw_companions/flag_raw/fig_flag_<marker>_<pop>.
 #            {pdf,png,csv}   the .csv holds the % above the cut per arm and donor
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -23,10 +30,12 @@ suppressPackageStartupMessages({
 })
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 SCRIPT <- "95c_restyle_events_flag_raw.R"
+CH <- cfg("channels")
 
 # Parameters ---------------------------------------------------------------------------------------
-COMMON_GS <- "experiments/runs/2026-11-11_bmv-common-gated/gs"
-CITED <- c("IFNg", "Th2") # flagged markers the report shows (90_report.qmd section 21)
+COMMON_GS <- file.path(run_in("common-gated"), "gs")
+# flagged markers the report shows (90_report.qmd section 21)
+CITED <- c(cfg("targets")$ifng_label, need_target(SCRIPT, "th2_label"))
 # column label = GatingSet; references first, then the flagged arms (as 93)
 ARMS <- c(
   SpectroFlo = file.path(COMMON_GS, "spectroflo"),
@@ -45,14 +54,8 @@ DARK_FILLS <- c("#252525", "#08519c", "#7f0000") # strips that take white text
 POP_PRIORITY <- c("CD8T", "CD4T", "live")
 COFACTOR <- 6000 # README "Transform"
 # 19a_gate_arm.R:113 writes these channels as arcsinh already; all other fluorescence channels are linear
-STORED_ARCSINH <- c(
-  "SBUV510-A",
-  "Spark Blue 574-A",
-  "SBUV445-A",
-  "BV510-A",
-  "BV570-A"
-)
-GLUT1 <- "Alexa Fluor 405-A"
+STORED_ARCSINH <- c(CH$CD3, CH$CD4, CH$CD8, CH$TNF_slot, CH$IFNg_slot)
+GLUT1 <- paste0(cfg("targets")$glut1_dye, "-A")
 AXIS <- c(-1.5, 4) # display window only; the % above the cut uses every cell
 BINS <- 50 # hexagons per panel; display only
 LABEL_PT <- 6 # in-panel % text, inside Nature's 5-7 pt
@@ -62,7 +65,7 @@ OUT_DIR <- fresh_dir("21_raw_companions/flag_raw")
 
 # Cited flagged markers and the population each is shown in -----------------------------------------------
 flagged <- read_csv(
-  "experiments/runs/2026-11-11_bmv-common-flag-raw-scatter/flagged_markers.csv",
+  file.path(run_in("common-flag-raw-scatter"), "flagged_markers.csv"),
   show_col_types = FALSE
 ) |>
   dplyr::filter(marker %in% CITED)
@@ -109,6 +112,8 @@ stopifnot(
 pwalk(
   list(flagged$marker, flagged$channel, flagged$pop, flagged$flagged_by, stems),
   \(which_marker, which_channel, which_pop, flagged_by, stem) {
+    # cut of one arm, donor and channel; the arm key is the GatingSet folder name
+    cut_for <- \(a, d) cut_of(basename(ARMS[[a]]), d, which_channel, "pos")
     pct_above <- tidyr::expand_grid(arm = names(ARMS), donor = donors) |>
       mutate(
         marker = which_marker,
@@ -116,9 +121,15 @@ pwalk(
         pct_above_cut = map2_dbl(arm, donor, \(a, d) {
           100 *
             mean(
-              cells[[a]][[d]][in_pop[[d]][[which_pop]], which_channel] >= CUT
+              cells[[a]][[d]][in_pop[[d]][[which_pop]], which_channel] >=
+                cut_for(a, d)
             )
         }),
+        arm = factor(arm, levels = names(ARMS))
+      )
+    cut_df <- tidyr::expand_grid(arm = names(ARMS), donor = donors) |>
+      mutate(
+        cut = map2_dbl(arm, donor, cut_for),
         arm = factor(arm, levels = names(ARMS))
       )
     frames <- tidyr::expand_grid(arm = names(ARMS), donor = donors) |>
@@ -149,7 +160,12 @@ pwalk(
     ) +
       geom_hex(bins = BINS) +
       # the cut as a line: an open-ended gate would draw box edges at the display limits
-      geom_hline(yintercept = CUT, colour = "red", linewidth = FIG_LINE) +
+      geom_hline(
+        data = cut_df,
+        aes(yintercept = cut),
+        colour = "red",
+        linewidth = FIG_LINE
+      ) +
       geom_label(
         data = pct_above,
         aes(
@@ -237,7 +253,10 @@ pwalk(
       file.path(OUT_DIR, paste0(stem, ".png")),
       file.path(
         COMMON_GS,
-        "<arms>; flagged_markers.csv of 2026-11-11_bmv-common-flag-raw-scatter"
+        paste0(
+          "<arms>; flagged_markers.csv of ",
+          basename(run_in("common-flag-raw-scatter"))
+        )
       )
     )
   }

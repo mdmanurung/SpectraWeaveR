@@ -1,7 +1,9 @@
 # Purpose: display labels and the version-row page layout for the unmixing arms, shared by the
 #          figure scripts (10, 19, 31-34, 38, 40). Arm IDs stay the folder and table keys; only plot
 #          titles and tick labels use these labels.
-# Run:     source("experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R") from the repo root.
+# Run:     source("experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R") from the repo root. It does not
+#          read SW_DATASET or SW_RUN_DATE: arm IDs, labels and version rows are the same for 3D, 24H and EXV
+#          (each zip ships the same four arms; the self-unmixed arms use the same IDs).
 # Inputs:  none. Settings per arm come from the zip scripts and unmix_cells/<arm>/args.txt.
 # Outputs: ARM_LABELS, a named character vector (arm ID -> label)
 #          ZIP_ARMS, ZIP_FILL, the arms shipped in the zip and their panel tint
@@ -26,7 +28,7 @@ ARM_LABELS <- c(
 )
 
 # Zip arms ------------------------------------------------------------------------------
-# The four arms the user shipped in compare_3Dstim.zip; their panels get a tinted background
+# The four arms the user shipped in each dataset zip (3D, 24H, EXV); their panels get a tinted background
 # (user, 2026-11-10) so they stand out from the reruns.
 ZIP_ARMS <- c("spectroflo", "as102_basic", "as102_var", "as188_joint")
 ZIP_FILL <- "#FFE9B3" # light amber; display only

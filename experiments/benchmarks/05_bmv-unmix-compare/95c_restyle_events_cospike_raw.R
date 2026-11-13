@@ -1,16 +1,23 @@
 # Purpose: redraw the co-spike raw hexbin the report cites (CD8T) from the common-gate co-spike run (plans/common_gates_plan.md
 #          G5, G10b, G11). Copy of 95_restyle_events_cospike_raw.R with the source repointed to bmv-cospike-tnf-glut1-cg,
 #          setups named through arm_label(), a density colourbar on the hexagons, and axis limits taken from the data.
-#          TNF before against after the TNF +1 spike with GLUT1 co-spiked at +0, +1, +2; five donors pooled; the % is the
-#          donor median of cells losing more than half of the TNF spike.
-# Run:     REDRAW_ONLY=spike pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_cospike_raw.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-cospike-tnf-glut1-cg/cospike_cells.csv     per co-spiked cell
-#          experiments/runs/2026-11-11_bmv-cospike-tnf-glut1-cg/cospike_summary.csv   % TNF lost per donor
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/23_cospike/fig_cospike_raw_CD8T_v2.{pdf,png,csv}   the .csv holds the donor-median %
-#          experiments/runs/2026-11-11_bmv-restyle-common/manifest_parts/95c_restyle_events_cospike_raw.R.csv
+#          TNF before against after the TNF +1 spike with GLUT1 co-spiked at +0, +1, +2; donors pooled (per condition
+#          when the dataset has conditions); the % is the donor median of cells losing more than half of the TNF spike.
+#          TNF is the dataset's tnf_label (the BV510 slot).
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD REDRAW_ONLY=spike pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_cospike_raw.R from the repo root.
+# Inputs:  run_in("cospike-tnf-glut1-cg")/cospike_cells.csv     per co-spiked cell
+#          run_in("cospike-tnf-glut1-cg")/cospike_summary.csv   % TNF lost per donor
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), targets, conditions
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/23_cospike/fig_cospike_raw_CD8T_v2.{pdf,png,csv}   the .csv holds the donor-median %
+#          run_out("restyle-common")/manifest_parts/95c_restyle_events_cospike_raw.R.csv
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(ggcyto)
@@ -22,6 +29,7 @@ suppressPackageStartupMessages({
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_spike_common.R")
 SCRIPT <- "95c_restyle_events_cospike_raw.R"
 STEM <- "fig_cospike_raw_CD8T_v2"
+TNF_LAB <- cfg("targets")$tnf_label
 if (!want(STEM)) {
   quit(save = "no")
 }
@@ -43,30 +51,45 @@ glut1_levels <- paste0("GLUT1 +", GLUT1_LEVELS)
 setup_levels <- SETUP_ORDER[
   SETUP_ORDER %in% setup_label(c("c188", "afrefine", "s102_c102"))
 ]
-labels <- read_csv(summary_file, show_col_types = FALSE) |>
-  dplyr::filter(.data$pop == POP) |>
+cospike_summary <- read_csv(summary_file, show_col_types = FALSE) |>
+  need_cond(SCRIPT) |>
+  dplyr::filter(.data$pop == POP)
+N_DONORS <- n_distinct(sample_keys(cospike_summary)$donor_key) # donors, not samples (24H)
+labels <- cospike_summary |>
   mutate(
     setup_label = factor(setup_label(.data$setup), levels = setup_levels),
     glut1_label = factor(
       paste0("GLUT1 +", .data$glut1_level),
       levels = glut1_levels
-    )
+    ),
+    across(any_of(COND), \(x) forcats::fct(x, levels = DS$conditions))
   ) |>
-  summarise(pct = median(.data$pct_tnf_lost), .by = c(setup_label, glut1_label))
+  summarise(
+    pct = median(.data$pct_tnf_lost),
+    .by = c(setup_label, glut1_label, any_of(COND))
+  )
 cells <- data.table::fread(
   cells_file,
-  select = c("pop", "tnf_before", "tnf_recovered", "setup", "glut1_level")
+  select = c("pop", "tnf_before", "tnf_recovered", "setup", "glut1_level", COND)
 ) |>
   as_tibble() |>
   dplyr::filter(.data$pop == POP) |>
   mutate(
+    across(any_of(COND), \(x) forcats::fct(x, levels = DS$conditions)),
     before = asinh(tnf_before / COFACTOR),
     after = asinh((tnf_before + tnf_recovered) / COFACTOR),
     setup_label = factor(setup_label(.data$setup), levels = setup_levels),
     glut1_label = paste0("GLUT1 +", .data$glut1_level)
   )
 frames <- cells |>
-  mutate(name = paste(.data$setup_label, .data$glut1_label, sep = "|")) |>
+  mutate(
+    name = paste(
+      .data$setup_label,
+      .data$glut1_label,
+      !!!rlang::syms(COND),
+      sep = "|"
+    )
+  ) |>
   split(~name) |>
   map(\(x) flowFrame(cbind(before = x$before, after = x$after)))
 fs <- flowSet(frames)
@@ -74,12 +97,13 @@ pd <- tibble(name = sampleNames(fs)) |>
   tidyr::separate_wider_delim(
     name,
     "|",
-    names = c("setup_label", "glut1_label"),
+    names = c("setup_label", "glut1_label", COND),
     cols_remove = FALSE
   ) |>
   mutate(
     setup_label = factor(.data$setup_label, levels = setup_levels),
-    glut1_label = factor(.data$glut1_label, levels = glut1_levels)
+    glut1_label = factor(.data$glut1_label, levels = glut1_levels),
+    across(any_of(COND), \(x) forcats::fct(x, levels = DS$conditions))
   )
 pData(fs) <- as.data.frame(pd) |> `rownames<-`(pd$name)
 
@@ -110,7 +134,11 @@ p <- ggcyto(fs, aes(x = before, y = after)) +
   ) +
   geom_label(
     data = labels,
-    aes(x = -Inf, y = Inf, label = sprintf("TNF lost >50%%: %.1f%%", pct)),
+    aes(
+      x = -Inf,
+      y = Inf,
+      label = sprintf("%s lost >50%%: %.1f%%", TNF_LAB, pct)
+    ),
     inherit.aes = FALSE,
     hjust = 0,
     vjust = 1,
@@ -123,7 +151,8 @@ p <- ggcyto(fs, aes(x = before, y = after)) +
     label.padding = unit(0.1, "lines")
   ) +
   facet_grid(
-    glut1_label ~ setup_label,
+    rows = vars(glut1_label, !!!rlang::syms(COND)),
+    cols = vars(setup_label),
     switch = "y",
     axes = "all",
     axis.labels = "margins",
@@ -141,11 +170,13 @@ p <- ggcyto(fs, aes(x = before, y = after)) +
     name = NULL
   ) +
   labs(
-    x = "TNF, unspiked unmix (arcsinh)",
-    y = "TNF, co-spiked unmix (arcsinh)",
+    x = paste0(TNF_LAB, ", unspiked unmix (arcsinh)"),
+    y = paste0(TNF_LAB, ", co-spiked unmix (arcsinh)"),
     title = sprintf(
-      "%s: TNF +1 with GLUT1 co-spike, per cell\n5 donors pooled; %% = donor median",
-      POP
+      "%s: %s +1 with GLUT1 co-spike, per cell\n%d donors pooled; %% = donor median",
+      POP,
+      TNF_LAB,
+      N_DONORS
     )
   ) +
   theme(
@@ -164,7 +195,11 @@ cairo_pdf(tempfile(fileext = ".pdf"))
 g <- ggplotGrob(as.ggplot(p))
 dev.off()
 height_mm <- round(
-  (WIDTH_MM - 60) / length(setup_levels) * length(GLUT1_LEVELS) + 40
+  (WIDTH_MM - 60) /
+    length(setup_levels) *
+    length(GLUT1_LEVELS) *
+    max(1, length(DS$conditions)) +
+    40
 )
 save_panel(g, labels, out_dir, STEM, WIDTH_MM, height_mm)
 add_manifest(

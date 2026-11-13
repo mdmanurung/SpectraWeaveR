@@ -5,14 +5,20 @@
 #          +1 arcsinh cells: marker value in the unspiked unmix (x) against the spiked unmix (y), ggcyto
 #          hexbin with ggcyto's default pseudocolor. Dashed curve = full recovery of the spike; grey
 #          diagonal = spike fully lost. Rows donors, columns setups; % of cells losing >50% per panel.
-# Run:     sbatch experiments/slurm/run_spike_cg.sbatch 88ccg_spike_raw_scatter.R   (repo root)
-# Inputs:  experiments/runs/2026-11-11_bmv-spike-in-cg/spike_cells.csv       TNF, Th2, IL-10; 5 setups [88]
-#          experiments/runs/2026-11-11_bmv-spike-in-panel2-cg/spike_cells.csv   9 markers; 2 setups [88b]
-# Outputs: <out_dir>/fig_raw_<marker>_<pop>.png, .pdf   one figure per marker and population
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> sbatch experiments/slurm/run_spike_cg.sbatch 88ccg_spike_raw_scatter.R
+#          (repo root). SW_DATASET and SW_RUN_DATE are required; the dataset sets the run folders and lib dirs.
+# Inputs:  run_in("spike-in-cg")/spike_cells.csv         TNF, Th2, IL-10; 5 setups [88cg]
+#          run_in("spike-in-panel2-cg")/spike_cells.csv  9 markers; 2 setups [88bcg]
+#          (registry keys of datasets/<ds>_runs.csv; the folders are written by 88cg and 88bcg)
+# Outputs: run_out("spike-raw-scatter-cg") = experiments/runs/<SW_RUN_DATE>_bmv<run_tag>-spike-raw-scatter-cg/
+#          <out_dir>/fig_raw_<marker>_<pop>.png, .pdf   one figure per marker and population
 #          <out_dir>/pct_lost.csv                       % of level-1 cells losing >50%, per panel
 #          <out_dir>/sessionInfo.txt
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+# the dataset config comes first: the lib dir it names must be on .libPaths before ggcyto loads
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+filter <- dplyr::filter # dataset.R calls filter() from the search path; flowCore, attached later, would mask it
+.libPaths(c(grep("lib_ggplot2_35", cfg("lib_dirs"), value = TRUE), .libPaths())) # ggplot2 3.5.2 for ggcyto
 suppressPackageStartupMessages({
   library(flowCore)
   library(ggcyto)
@@ -23,10 +29,10 @@ suppressPackageStartupMessages({
 })
 
 # Parameters ---------------------------------------------------------------------------------------
-OUT_DIR <- "experiments/runs/2026-11-11_bmv-spike-raw-scatter-cg"
-SOURCES <- c(
-  "experiments/runs/2026-11-11_bmv-spike-in-cg/spike_cells.csv",
-  "experiments/runs/2026-11-11_bmv-spike-in-panel2-cg/spike_cells.csv"
+OUT_DIR <- run_out("spike-raw-scatter-cg")
+SOURCES <- file.path(
+  c(run_in("spike-in-cg"), run_in("spike-in-panel2-cg")),
+  "spike_cells.csv"
 )
 SETUP_LABELS <- c(
   c188 = "1.8.8 zip",

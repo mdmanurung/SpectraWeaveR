@@ -3,13 +3,19 @@
 #          51c rescore, and redraws the panels. TNF and Th2 readouts and the gap-closed panel are rescored at
 #          the fixed cut 1.5 (G7a) on the common labels (rows paired across arms, G8); the squeeze cut is
 #          refitted on them. The AF-set and variant panels do not use gates and are redrawn unchanged.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/87b_af405_afremove_common.R   (repo root)
-#            -> experiments/runs/2026-11-11_bmv-common-af405-afremove (must not exist)
-#            after 51c_score_ablation_common.R wrote 2026-11-11_bmv-common-af405-afremove-score
-# Inputs:  experiments/bmv_test/compare_3D/data/unmix_cells/af405_afremove/   unmixed arm and its tables [87b]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/table_spectra, figure_spectral_variants  [user zip]
-#          experiments/runs/2026-11-11_bmv-common-af405-afremove-score/gap_closed.csv   [51c_score_ablation_common.R]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/<arm>   common-gate GatingSets [batch 0]
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/87b_af405_afremove_common.R   (repo root)
+#            -> run_out("common-af405-afremove") (must not exist)
+#            after 51c_score_ablation_common.R wrote the run registered as common-af405-afremove-score
+#          Stops on 24H (one spectra_used/variants_used per condition: which one the panel shows is not decided)
+#          and on EXV (no Th2).
+# Inputs:  data_path("unmix_cells", "af405_afremove")   unmixed arm and its tables [87b]
+#          data_path("autoSpectral_v1.8.8", "table_spectra"), figure_spectral_variants  [user zip]; the spectra and AF
+#            file names are cfg("stamps")$as188_spectra and $as188_af
+#          run_in("common-af405-afremove-score")/gap_closed.csv   [51c_score_ablation_common.R]
+#          run_in("common-gated")/gs/<arm>   common-gate GatingSets [batch 0]
+#          run_in("cell-gating")/fcs_control_file_landmark.csv   (named LANDMARK_FILE; not read in the report step)
+#          datasets/<SW_DATASET>.json (stamps, channels, targets, pos_rule, neg_rule), <ds>_samples.csv
 #          helper87c_marker-scores-common.R; lib/theme.R, lib/palettes.R, lib/plots.R
 # Outputs: <report_dir>/variant_spread.{pdf,png,csv}, marker_scores.csv, q2_flags.csv, gap_closed.{pdf,png,csv},
 #          sessionInfo.txt (and offset_spread.csv for 87b, af_bv510_coef.csv for 87)
@@ -23,14 +29,39 @@ suppressPackageStartupMessages({
   library(readr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+
+# Config lookups ---------------------------------------------------------------------------
+# a nested config value that the dataset may lack: stop naming this script and the value
+need <- \(group, name) {
+  v <- cfg(group)[[name]]
+  if (is.null(v)) {
+    stop(
+      "87b_af405_afremove_common.R: needs ",
+      name,
+      ", missing in dataset ",
+      DS$dataset,
+      call. = FALSE
+    )
+  }
+  v
+}
+if (!is.null(DS$conditions)) {
+  stop(
+    "87b_af405_afremove_common.R: unmix_cells/<arm>/<condition>/ holds one spectra_used and variants_used per ",
+    "condition; which one the panel shows is not decided for dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
 
 # Parameters ---------------------------------------------------------------------------------------
 STEP <- "report" # build and score ran before; this copy only reports on the common gates
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path())
 ARM <- "af405_afremove"
-DYE <- "Alexa Fluor 405"
+DYE <- cfg("targets")$glut1_dye
 LANDMARK_FILE <- normalizePath(
-  "experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv"
+  file.path(run_in("cell-gating"), "fcs_control_file_landmark.csv")
 )
 LANDMARK_N_CELLS <- 2000 # define.gate.landmarks, as chain7 (user, 2026-11-10)
 LANDMARK_PERCENTILE <- 70 # same
@@ -39,18 +70,44 @@ SEED <- 42 # repo seed (README: bird.seed + 42)
 VARIANT_SLOTS <- c("variants", "delta.list", "delta.norms") # per-dye slots swapped together, as in 45
 PIPELINE <- "joint" # zip script
 SPEED <- "slow" # always slow (user, 2026-11-10); no effect under joint
-REPORT_DIR <- "experiments/runs/2026-11-11_bmv-common-af405-afremove"
-SCORE_DIR <- "experiments/runs/2026-11-11_bmv-common-af405-afremove-score"
+REPORT_DIR <- run_out("common-af405-afremove")
+SCORE_DIR <- run_in("common-af405-afremove-score")
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md)
-CUT <- 1.5 # negatives below / positives above arcsinh 1.5 (G7a, user, 2026-11-11)
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0 output, read only
-STORED_ARCSINH <- c("BV510-A", "BV570-A") # stored arcsinh in the GatingSets, as 19a
+COMMON <- run_in("common-gated") # batch 0 output, read only
+TNF_LABEL <- cfg("targets")$tnf_label
+TNF_DYE <- cfg("targets")$tnf_dye
+STORED_ARCSINH <- c(need("channels", "TNF_slot"), need("channels", "IFNg_slot")) # stored arcsinh in the GatingSets, as 19a
 POP_PATH <- "/nonDebris/singlets/live/CD3pos/"
-DONORS <- c("A3", "A6", "B11", "B2", "D1")
-DONOR_SHAPES <- setNames(c(16, 17, 15, 18, 8), DONORS)
+SAMPLE_IDS <- sort(samples_tbl()$sample) # 3D and EXV the well
+# label of the positive cut in the figure: the fixed value, or the per-donor rule
+POS_LABEL <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  sprintf("arcsinh %s", cfg("pos_rule")$value)
+} else {
+  "the positive cut"
+}
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| < this fraction of as188_joint's rSD (39b; user, 2026-11-10)
 Q2_DELTA <- 0.10 # revised Q2 flag: donor-median rise in squeezed share, same sign in all donors (user)
-MARKERS <- c(TNF = "BV510-A", Th2 = "eFluor 450-A")
+MARKERS <- set_names(
+  c(need("channels", "TNF_slot"), need("channels", "Th2_slot")),
+  c(TNF_LABEL, "Th2")
+)
+# helper87c_marker-scores-common.R takes one CUT (negatives below, positives above) for every sample, arm and channel
+CUT <- tidyr::expand_grid(
+  arm = c("as188_joint", ARM),
+  sample = SAMPLE_IDS,
+  channel = unname(MARKERS),
+  kind = c("pos", "neg")
+) |>
+  mutate(cut = pmap_dbl(list(arm, sample, channel, kind), cut_of)) |>
+  pull(cut) |>
+  unique()
+if (length(CUT) != 1) {
+  stop(
+    "87b_af405_afremove_common.R: the cut differs between samples, arms or kinds; ",
+    "helper87c_marker-scores-common.R takes one CUT",
+    call. = FALSE
+  )
+}
 POPS <- c("CD4T", "CD8T")
 JITTER_WIDTH <- 0.15 # display only
 JITTER_SEED <- 1 # display only
@@ -65,12 +122,12 @@ read_raw <- \(path) {
 spectra_zip <- read_raw(file.path(
   d188,
   "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
+  cfg("stamps")$as188_spectra
 ))
 af_zip <- read_raw(file.path(
   d188,
   "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
+  cfg("stamps")$as188_af
 ))
 variants_zip <- readRDS(file.path(
   d188,
@@ -90,8 +147,8 @@ if (STEP == "report") {
     "experiments/benchmarks/05_bmv-unmix-compare/helper87c_marker-scores-common.R"
   )
 
-  # BV510 offset (reference - zip 1.8.8 reference) and variant spread (variant - own reference), script 74 metric
-  b510 <- spectra_zip["BV510", ]
+  # TNF-slot dye offset (reference - zip 1.8.8 reference) and variant spread (variant - own reference), script 74 metric
+  b510 <- spectra_zip[TNF_DYE, ]
   proj_coef <- \(d) as.vector(d %*% b510) / sum(b510^2)
   spectra_used <- read_raw(file.path(out_dir, "spectra_used.csv"))
   variants_used <- readRDS(file.path(out_dir, "variants_used.rds"))
@@ -138,8 +195,8 @@ if (STEP == "report") {
     pal = set_pal,
     jitter_width = JITTER_WIDTH,
     seed = JITTER_SEED,
-    value_label = "BV510 coefficient of variant spread",
-    title = "AF405 variants: BV510 part"
+    value_label = sprintf("%s coefficient of variant spread", TNF_DYE),
+    title = sprintf("AF405 variants: %s part", TNF_DYE)
   ) +
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60")
   save_panel(
@@ -153,7 +210,13 @@ if (STEP == "report") {
 
   # TNF and Th2 readouts per donor on as188_joint's CD4T and CD8T rows (helper87c, 39b metrics)
   gs <- load_gs(file.path(COMMON, "gs", "as188_joint")) # common labels are the same in every arm
-  donors <- DONORS
+  stopifnot(
+    "gating set holds the samples of samples_tbl()" = setequal(
+      sampleNames(gs),
+      SAMPLE_IDS
+    )
+  )
+  donors <- SAMPLE_IDS
   score_arm <- \(arm_name) {
     donors |>
       set_names() |>
@@ -206,13 +269,13 @@ if (STEP == "report") {
     mutate(
       readout = if_else(
         readout == "squeezed_share",
-        "TNF squeezed near 0",
-        "TNF above arcsinh 1.5"
+        sprintf("%s squeezed near 0", TNF_LABEL),
+        sprintf("%s above %s", TNF_LABEL, POS_LABEL)
       )
     )
   gap_pal <- categorical_palette(c(
-    "TNF squeezed near 0",
-    "TNF above arcsinh 1.5"
+    sprintf("%s squeezed near 0", TNF_LABEL),
+    sprintf("%s above %s", TNF_LABEL, POS_LABEL)
   ))
   p_gap <- plot_box(
     gap,
@@ -222,7 +285,7 @@ if (STEP == "report") {
     jitter_width = JITTER_WIDTH,
     seed = JITTER_SEED,
     value_label = "Fraction of 1.8.8 to 1.0.2 gap closed",
-    title = "AF removed: CD8T TNF gap closed"
+    title = sprintf("AF removed: CD8T %s gap closed", TNF_LABEL)
   ) +
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60")
   save_panel(

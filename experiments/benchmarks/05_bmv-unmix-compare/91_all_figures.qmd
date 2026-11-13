@@ -97,7 +97,7 @@ with_source <- with_source |>
   mutate(
     sig = map_chr(
       .data$src,
-      \(s) if (is.na(s)) NA_character_ else paste(names(read_csv(s, n_max = 1, show_col_types = FALSE)), collapse = ",")
+      \(s) if (is.na(s)) NA_character_ else table_signature(s) # LAYOUTS key, without a condition column
     )
   )
 ```
@@ -112,7 +112,21 @@ dir.create(OUT_DIR, recursive = TRUE)
 
 to_draw <- with_source |>
   mutate(layout = unname(LAYOUTS[.data$sig])) |>
-  filter(!is.na(.data$layout), !.data$run %in% LUCID_RUNS)
+  filter(!.data$run %in% LUCID_RUNS)
+# A dataset with conditions stops on a table no layout maps; 3D keeps the inventory status "table layout not mapped".
+unmapped <- filter(to_draw, is.na(.data$layout), !is.na(.data$src))
+if (!is.null(DS$conditions) && nrow(unmapped) > 0) {
+  stop(
+    "91_all_figures.qmd: no LAYOUTS entry for the table of ",
+    nrow(unmapped),
+    " figure(s) of dataset ",
+    DS$dataset,
+    ": ",
+    paste(unmapped$stem, collapse = ", "),
+    call. = FALSE
+  )
+}
+to_draw <- filter(to_draw, !is.na(.data$layout))
 
 drawn <- to_draw |>
   mutate(

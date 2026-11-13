@@ -6,19 +6,22 @@
 #          SpectroFlo. Noise floor: 1.8.8 zip re-embedded with seeds 1-3 vs seed 42. Two marker sets
 #          (lineage; lineage + functional) and two scalings (z-score; none). Descriptive, no threshold.
 #          The script stops unless FSC-A and SSC-A of every root row are identical in every arm (G8).
-# Run:     sbatch experiments/slurm/run_script_lib.sbatch \
-#            experiments/benchmarks/05_bmv-unmix-compare/92_umap_knn_common.R \
-#            experiments/runs/2026-11-11_bmv-common-umap-knn
-#            (repo root; run dir must not exist). Figures: 92b_plot_umap_knn_common.R.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/{as188_joint,opt188_pregate_joint_p1af1,
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> sbatch experiments/slurm/run_script_lib.sbatch \
+#            experiments/benchmarks/05_bmv-unmix-compare/92_umap_knn_common.R [<run dir>]
+#            (repo root; run dir must not exist; without the argument it is run_out("common-umap-knn")).
+#            Figures: 92b_plot_umap_knn_common.R.
+# Inputs:  datasets/<SW_DATASET>.json, <SW_DATASET>_runs.csv, samples_tbl(); run folders come from these registry keys
+#          run_in("common-gated")/gs/{as188_joint,opt188_pregate_joint_p1af1,
 #            af405_afrefine,as102_var,spectroflo}   common-gate GatingSets [batch 0], README.md
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv
+#          data_path("autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv")
 #            dye to marker map [user zip]
+#          cfg("umap_markers")   lineage, functional and colour markers of the UMAP
 # Outputs: <run_dir>/cells.csv          donor, root row of each sampled CD3+ cell
 #          <run_dir>/pairing.csv        arm, donor, root rows, FSC-A and SSC-A equal to 1.8.8 zip
-#          <run_dir>/embeddings.rds     arm, marker set, scaling, seed, donor, cell, UMAP 1-2, TNF and Th2
+#          <run_dir>/embeddings.rds     arm, marker set, scaling, seed, donor, cell, UMAP 1-2, colour markers (3D: TNF, Th2)
 #          <run_dir>/knn_overlap.csv    comparison, reference, marker set, scaling, donor, median and mean
-#                                       per-cell neighbour overlap
+#                                       per-cell neighbour overlap (donor = sample id; with conditions, also
+#                                       donor_id and condition)
 #          <run_dir>/sessionInfo.txt
 
 suppressPackageStartupMessages({
@@ -30,10 +33,21 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 pkgload::load_all(".", export_all = FALSE, quiet = TRUE) # sw_dimred_run; run from the repo root
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+
+# dataset.R calls a bare filter(); here flowCore's filter generic comes first on the search path, so give
+# its two helpers a scope where filter is dplyr's (dataset.R should say dplyr::filter itself)
+.dataset_scope <- new.env(parent = globalenv())
+.dataset_scope$filter <- dplyr::filter
+environment(run_in) <- .dataset_scope
+environment(cut_of) <- .dataset_scope
 
 # Parameters ---------------------------------------------------------------------------------------
 RUN_DIR <- commandArgs(trailingOnly = TRUE)[1]
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0; gs/<arm> for all arms
+if (is.na(RUN_DIR)) {
+  RUN_DIR <- run_out("common-umap-knn")
+}
+COMMON <- run_in("common-gated") # batch 0; gs/<arm> for all arms
 # grill Q1 (user, 2026-11-10): reference first; SpectroFlo pairs row for row with the AutoSpectral arms
 ARMS <- file.path(
   COMMON,
@@ -59,55 +73,23 @@ MIN_DIST <- 0.2 # grill Q6, inherited sw_dimred_run default
 SCALINGS <- c(zscore = TRUE, none = FALSE) # grill Q8 ("Both")
 COFACTOR <- 6000 # README "Transform": arcsinh, cofactor 6000, all fluorescence channels
 # 19a_gate_arm.R:113 writes these channels as arcsinh already; all other fluorescence channels are linear
-STORED_ARCSINH <- c(
-  "SBUV510-A",
-  "Spark Blue 574-A",
-  "SBUV445-A",
-  "BV510-A",
-  "BV570-A"
+STORED_ARCSINH <- unlist(
+  cfg("channels")[c("CD3", "CD4", "CD8", "TNF_slot", "IFNg_slot")],
+  use.names = FALSE
 )
-# README "Cluster markers": lineage only (user, 2026-11-09)
-LINEAGE <- c(
-  "CD45RA",
-  "TCRgd",
-  "CD8",
-  "CD3",
-  "CD161",
-  "CD25",
-  "CD38",
-  "CD7",
-  "CD4",
-  "CD56",
-  "CD57",
-  "CXCR5",
-  "CCR7",
-  "CD127"
-)
-# grill Q7: every other panel marker; viability and PE (no marker) left out
-FUNCTIONAL <- c(
-  "GLUT1",
-  "Th2",
-  "TNF",
-  "IFNg",
-  "IL-2",
-  "CTLA-4",
-  "ATP5A",
-  "TCRvd2",
-  "IL-10",
-  "FoxP3",
-  "CD71",
-  "CS",
-  "PD-1",
-  "T-bet",
-  "CPT1A",
-  "ATGL",
-  "G6PD"
-)
+# marker panel of the UMAP: a panel list is the user's choice per dataset (config), not a default here
+UMAP_MARKERS <- cfg("umap_markers")
+LINEAGE <- UMAP_MARKERS$lineage # README "Cluster markers": lineage only (user, 2026-11-09)
+FUNCTIONAL <- UMAP_MARKERS$functional # grill Q7: every other panel marker; viability and PE (no marker) left out
+COLOUR_MARKERS <- UMAP_MARKERS$colour # markers the embeddings carry for the colour figures
+
 MARKER_SETS <- list(
   lineage = LINEAGE,
   lineage_functional = c(LINEAGE, FUNCTIONAL)
 ) # grill Q3
-CONTROL_FILE <- "experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv"
+CONTROL_FILE <- data_path(
+  "autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv"
+)
 
 stopifnot(
   "batch 0 finished (README.md in the common dir)" = file.exists(file.path(
@@ -117,16 +99,29 @@ stopifnot(
   "run dir must not exist" = !dir.exists(RUN_DIR)
 )
 dir.create(RUN_DIR, recursive = TRUE)
+smp <- samples_tbl()
 
 # Marker to channel ----------------------------------------------------------------------------------
 channel_of <- read_csv(CONTROL_FILE, show_col_types = FALSE) |>
   dplyr::filter(marker %in% c(LINEAGE, FUNCTIONAL)) |>
   with(set_names(paste0(fluorophore, "-A"), marker))
+if (!all(c(LINEAGE, FUNCTIONAL) %in% names(channel_of))) {
+  stop(
+    "92_umap_knn_common.R: markers missing in the control file of dataset ",
+    DS$dataset,
+    ": ",
+    paste(setdiff(c(LINEAGE, FUNCTIONAL), names(channel_of)), collapse = ", "),
+    call. = FALSE
+  )
+}
 channel_of <- channel_of[c(LINEAGE, FUNCTIONAL)]
 
 # Sample the same CD3+ cells per donor from the common CD3pos label ----------------------------------------
 gs_list <- map(ARMS, load_gs)
 donors <- sampleNames(gs_list[["1.8.8 zip"]])
+stopifnot(
+  "gating set samples are the sample table" = setequal(donors, smp$sample)
+)
 set.seed(SUBSAMPLE_SEED)
 cells <- map(set_names(donors), \(d) {
   cd3_rows <- which(gh_pop_get_indices(gs_list[["1.8.8 zip"]][[d]], POP))
@@ -202,7 +197,7 @@ embeddings <- runs |>
       ) |>
         select(dim1, dim2) |>
         # no subsampling inside sw_dimred_run, so rows stay in mats order
-        bind_cols(select(mats[[a]], donor, cell, TNF, Th2))
+        bind_cols(select(mats[[a]], donor, cell, all_of(COLOUR_MARKERS)))
     })
   )
 saveRDS(embeddings, file.path(RUN_DIR, "embeddings.rds"))
@@ -254,6 +249,16 @@ knn_overlap <- comparisons |>
     mean_overlap = mean(overlap),
     .by = c(comparison, reference, marker_set, scaling, donor)
   )
+# with conditions, the sample's donor id and condition join the table; 3D and EXV keep their columns
+if (!is.null(DS$conditions)) {
+  knn_overlap <- knn_overlap |>
+    left_join(
+      select(smp, donor = sample, donor_id = donor, condition),
+      by = join_by(donor),
+      relationship = "many-to-one",
+      unmatched = "error"
+    )
+}
 write_csv(knn_overlap, file.path(RUN_DIR, "knn_overlap.csv"))
 
 writeLines(capture.output(sessionInfo()), file.path(RUN_DIR, "sessionInfo.txt"))

@@ -83,7 +83,8 @@ audit_z <- function(files, reference) {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = reference
+    reference = reference,
+    summary = NULL
   )
   sa <- sa[
     sa$check %in% c("median_z", "sd_z"),

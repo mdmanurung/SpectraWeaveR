@@ -1,12 +1,16 @@
-# Purpose: find which part of the AutoSpectral 1.0.2 spectra set makes BV510 (TNF) collapse to ~0 in many
-#          T cells. Unmix the 5 raw BMV files with 1.8.8 code and the 1.8.8 dye spectra, swapping one
+# Purpose: find which part of the AutoSpectral 1.0.2 spectra set makes the TNF dye (config targets$tnf_dye,
+#          BV510 in 3D) collapse to ~0 in many T cells. Unmix the raw BMV files with 1.8.8 code and the 1.8.8 dye spectra, swapping one
 #          component of the 1.8.8 set for the 1.0.2 one: the AF spectra (swap_af102) or the variants
 #          (swap_var102). Scoring is in 37b_score_swap.R.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/37_swap_af_variants.R <arm> <out_dir>
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/37_swap_af_variants.R <arm> <out_dir> [condition]
 #            from the repo root. arm = swap_af102 or swap_var102. <out_dir> must not exist.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8 (run 143803 dye spectra, AF, variants,
-#            Reference Group Clean controls, Raw, AutoSpectral_unmixed) [user zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2 (AF csv, Spectral_variants.rds) [user zip]
+#            condition = last argument, required when the dataset has conditions (24H: one task per condition,
+#            out_dir = <data_dir>/unmix_cells/<arm>/<condition>), refused otherwise.
+#            SW_RUN_DATE is only read by scripts that write a run folder; this one writes to <out_dir>.
+# Inputs:  <data_dir>/autoSpectral_v1.8.8 (config-stamp dye spectra and AF, variants,
+#            Reference Group Clean controls, Raw[/<condition>], AutoSpectral_unmixed[/<condition>]) [user zip]
+#          <data_dir>/autoSpectral_v1.0.2 (AF csv, Spectral_variants.rds) [user zip]
+#          stamp file names (spectra, AF) from config stamps; samples from datasets/<ds>_samples.csv [00_samples.R]
 # Outputs: <out_dir>/*.fcs      unmixed files
 #          <out_dir>/args.txt   what was run
 #          <out_dir>/verify.csv event count and channel names vs as188_joint, per file
@@ -21,8 +25,11 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path())
 PIPELINE <- "joint" # as in 06_unmix_c188.R and AutoSpectral_unmix_v1.8.8.R (inherited: user zip)
 SPEED <- "slow" # always slow (user, 2026-11-10); no effect under pipeline "joint" (repro188 = s188_c188_slow); was "fast" to match as188_joint
 
@@ -30,6 +37,30 @@ SPEED <- "slow" # always slow (user, 2026-11-10); no effect under pipeline "join
 cli_args <- commandArgs(trailingOnly = TRUE)
 arm <- cli_args[[1]]
 out_dir <- cli_args[[2]]
+# 24H: one task per condition subfolder (argument 3); 3D and EXV have no condition level
+cond <- if (length(cli_args) >= 3) cli_args[[3]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "37_swap_af_variants.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 3 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (!is.null(DS$conditions) && (is.null(cond) || !cond %in% DS$conditions)) {
+  stop(
+    "37_swap_af_variants.R: needs argument 3, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+samples <- samples_tbl()
+if (!is.null(cond)) {
+  samples <- filter(samples, .data$condition == .env$cond)
+}
 stopifnot(
   "arm is swap_af102 or swap_var102" = arm %in% c("swap_af102", "swap_var102")
 )
@@ -43,21 +74,13 @@ stopifnot(
 d102 <- file.path(DATA, "autoSpectral_v1.0.2")
 d188 <- file.path(DATA, "autoSpectral_v1.8.8")
 control_dir <- file.path(d188, "Reference Group Clean")
-spectra_file <- file.path(
-  d188,
-  "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
-)
-af188_file <- file.path(
-  d188,
-  "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
-)
+spectra_file <- file.path(d188, "table_spectra", cfg("stamps")$as188_spectra)
+af188_file <- file.path(d188, "table_spectra", cfg("stamps")$as188_af)
 af102_file <- file.path(
   d102,
   "Reference Group",
   "table_spectra",
-  "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs_H12 Unstained_BMV_Aurora_3dCD328_Batch1_AF.csv"
+  cfg("stamps")$as102_af
 )
 var188_rds <- file.path(
   d188,
@@ -128,7 +151,7 @@ flow.control <- reload.flow.control(
 )
 t0 <- Sys.time()
 unmix.folder(
-  fcs.dir = file.path(d188, "Raw"),
+  fcs.dir = paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
   spectra = spectra,
   asp = asp,
   flow.control = flow.control,
@@ -147,14 +170,29 @@ message(
 )
 
 # Verify: same files, event counts and channel names as as188_joint -----------------------------
-ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+ref_dir <- paste(
+  c(file.path(d188, "AutoSpectral_unmixed"), cond),
+  collapse = "/"
+)
 read_hdr <- \(path) {
   ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
   list(n = nrow(ff), channels = colnames(ff))
 }
-verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
+# one unmixed file per sample: the stem is the delivered file name without its " AutoSpectral*.fcs" suffix (EXV: _v1-8-8);
+# the join stops on any other file
+verify <- tibble(
+  ref_file = list.files(ref_dir, pattern = "\\.fcs$", recursive = TRUE)
+) |>
+  mutate(stem = sub(" AutoSpectral[^ ]*\\.fcs$", "", ref_file)) |>
+  inner_join(
+    select(samples, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
   mutate(
-    ref = map(file.path(ref_dir, file), read_hdr),
+    file = paste0(stem, " AutoSpectral.fcs"), # the arm's own file name
+    ref = map(file.path(ref_dir, ref_file), read_hdr),
     new = map(file.path(out_dir, file), read_hdr),
     n_ref = map_int(ref, "n"),
     n_new = map_int(new, "n"),
@@ -165,7 +203,7 @@ verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
   select(file, n_ref, n_new, channels_equal)
 write_csv(verify, file.path(out_dir, "verify.csv"))
 stopifnot(
-  "5 files unmixed" = nrow(verify) == 5,
+  "one unmixed file per sample" = nrow(verify) == nrow(samples),
   "event counts equal as188_joint" = all(verify$n_ref == verify$n_new),
   "channel names equal as188_joint" = all(verify$channels_equal)
 )

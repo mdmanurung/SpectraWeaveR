@@ -22,12 +22,16 @@
 #          - tilt: median |rho| over all channel pairs, cells negative for both in every arm
 #          - quadrature SSM as in 30, symmetric populations
 #          Every metric is NA when its population has fewer than MIN_N events (stain index and rSD too).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/34e_rank_symmetric_common_g16.R <new_run_dir>
-#          from the repo root, after batch 0 has written SRC_DIR/README.md. <new_run_dir> must not exist.
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> \
+#            pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/34e_rank_symmetric_common_g16.R [<new_run_dir>]
+#          from the repo root, after batch 0 has written SRC_DIR/README.md. <new_run_dir> overrides the registry
+#          output run_out("common-cut15-34e"); it must not exist.
 #          Copy of 34_rank_symmetric.R: source dir is the common-gate run (SRC_DIR), figures are redrawn
 #          in the Nature style (donors as points, median bar).
-# Inputs:  SRC_DIR/manifest.csv, shared_events.rds  [batch 0, common gates]
-#          SRC_DIR/mindensity_cuts.csv  cuts for all 11 arms, 5 donors, 32 channels [batch 0, 02_metrics.R]
+# Inputs:  run_in("common-final")/manifest.csv, shared_events.rds  [batch 0, common gates]
+#          SRC_DIR/mindensity_cuts.csv  cuts for all 11 arms, all samples, 32 channels [batch 0, 02_metrics.R]
+#          experiments/benchmarks/05_bmv-unmix-compare/datasets/  config (streak pair), run registry, sample table
+#          cut_of(arm, sample, channel, "pos" and "neg")  fixed-cut channels [config pos_rule and neg_rule]
 #          experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R, report_figures.R  arm order and labels
 # Outputs: <new_run_dir>/shared_counts.csv   per donor, channel: pinned_any, n_neg_shared, n_pos_shared
 #          <new_run_dir>/rank_channel.csv    per arm, donor, channel: n_neg, n_pos, rsd_nguyen, spread_q,
@@ -48,6 +52,7 @@ suppressPackageStartupMessages({
   library(stringr)
   library(ggplot2)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), cut_of()
 pkgload::load_all(".", export_all = FALSE, quiet = TRUE)
 source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R") # theme, save_panel, builders, ARM_LABELS, VERSION_ROWS
 
@@ -61,14 +66,25 @@ PIN_TOL <- 0.02 # a cut within this of the window edge counts as pinned (as in 3
 CUT_WINDOW <- c(0, 3) # mindensity window used for the cuts in 02 (user, 2026-11-09)
 MIN_N <- 100 # every metric is NA below this many events in its population (user, 2026-11-10)
 N_CORES <- 5 # one worker per donor
-STREAK <- c(TNF = "BV510-A", CD8 = "SBUV445-A") # pair from the stripe bisect (2026-11-10)
-FIXED_CUT_CHANNELS <- c("BV510-A", "BV570-A") # cytokine channels with a fixed cut (G16)
-FIXED_CUT <- 1.5 # arcsinh cut for those channels, every arm (G13, G16)
+# TNF-slot x CD8 channel pair from the stripe bisect (2026-11-10); the dataset config owns the pair
+STREAK <- cfg("targets")$streak_pair
+if (length(STREAK) != 2) {
+  stop(
+    "34e_rank_symmetric_common_g16.R: config targets$streak_pair (two channel names) is missing for dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
+# Cytokine channels with a fixed cut (G16); their cuts come from cut_of() (3D: arcsinh 1.5, G13)
+FIXED_CUT_CHANNELS <- c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot)
 ARMS <- unlist(VERSION_ROWS, use.names = FALSE) # the 11 figure arms, in version-group order
 
 # Batch 0 writes the common-gate shared events and mindensity cuts here (README.md names the files).
-SRC_DIR <- "experiments/runs/2026-11-11_bmv-common-final"
-new_dir <- commandArgs(trailingOnly = TRUE)[[1]]
+SRC_DIR <- run_in("common-final")
+new_dir <- commandArgs(trailingOnly = TRUE)[1]
+if (is.na(new_dir)) {
+  new_dir <- run_out("common-cut15-34e")
+}
 src_dir <- SRC_DIR
 stopifnot("new run dir must not exist" = !dir.exists(new_dir))
 dir.create(new_dir, recursive = TRUE)
@@ -77,7 +93,13 @@ dir.create(new_dir, recursive = TRUE)
 manifest <- read_csv(file.path(src_dir, "manifest.csv"), show_col_types = FALSE)
 stopifnot(
   "manifest arms equal the 11 figure arms" = setequal(manifest$arm, ARMS),
-  "5 files per arm" = all(count(manifest, arm)$n == 5)
+  "manifest samples equal the sample table" = setequal(
+    manifest$sample,
+    samples_tbl()$sample
+  ),
+  "one file per sample and arm" = all(
+    count(manifest, arm)$n == nrow(samples_tbl())
+  )
 )
 shared <- readRDS(file.path(src_dir, "shared_events.rds"))
 cuts <- read_csv(
@@ -130,8 +152,22 @@ process_sample <- function(s) {
       (\(v) v[channels])()
   }) |>
     set_names(ARMS)
-  # G16: fixed cut for the cytokine channels in every arm; the pinned flag below is left as in 34c
-  cut_arm <- map(cut_arm, \(v) replace(v, FIXED_CUT_CHANNELS, FIXED_CUT))
+  # G16: cytokine channels take the dataset's negative cut (below) and positive cut (above) in every
+  # arm; the pinned flag below is left as in 34c
+  cut_neg_arm <- imap(cut_arm, \(v, a) {
+    replace(
+      v,
+      FIXED_CUT_CHANNELS,
+      map_dbl(FIXED_CUT_CHANNELS, \(ch) cut_of(a, s, ch, "neg"))
+    )
+  })
+  cut_pos_arm <- imap(cut_arm, \(v, a) {
+    replace(
+      v,
+      FIXED_CUT_CHANNELS,
+      map_dbl(FIXED_CUT_CHANNELS, \(ch) cut_of(a, s, ch, "pos"))
+    )
+  })
   pinned_any <- cuts |>
     filter(sample == s) |>
     summarise(p = any(pinned), .by = channel) |>
@@ -140,10 +176,10 @@ process_sample <- function(s) {
 
   # A cell is negative (positive) in every arm: below (above) each arm's own cut
   below <- map(ARMS, \(a) {
-    sweep(asinh(lin[[a]] / COFACTOR), 2, cut_arm[[a]], "<")
+    sweep(asinh(lin[[a]] / COFACTOR), 2, cut_neg_arm[[a]], "<")
   })
   above <- map(ARMS, \(a) {
-    sweep(asinh(lin[[a]] / COFACTOR), 2, cut_arm[[a]], ">")
+    sweep(asinh(lin[[a]] / COFACTOR), 2, cut_pos_arm[[a]], ">")
   })
   neg_all <- reduce(below, `&`)
   pos_all <- reduce(above, `&`)
@@ -305,7 +341,7 @@ summaries <- list(
   ssm = sum_ssm |> transmute(arm, sample, value = median_ss)
 )
 
-# Never fail silently: no all-NA metric column, 5 donors x 11 arms in every summary ----------
+# Never fail silently: no all-NA metric column, every sample x 11 arms in every summary ----------
 iwalk(
   list(
     rank_channel = rank_channel[c(
@@ -330,7 +366,9 @@ iwalk(summaries, \(d, nm) {
   if (all(is.na(d$value))) {
     stop("summary ", nm, " is all NA", call. = FALSE)
   }
-  stopifnot("55 arm x donor rows" = nrow(d) == length(ARMS) * length(samples))
+  stopifnot(
+    "one row per arm and sample" = nrow(d) == length(ARMS) * length(samples)
+  )
 })
 n_excl <- sum(shared_counts$pinned_any)
 message(

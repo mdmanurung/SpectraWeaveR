@@ -1,15 +1,21 @@
 # Purpose: copy of 89b_pop_pct_fixed_cut.R on the common SpectroFlo gates (plans/common_gates_plan.md, G2, G7a,
 #          G12). The common GatingSets already hold TNFpos and IFNgpos as the fixed arcsinh 1.5 cut, so 89
 #          and this script agree; this script recomputes TNF+ and IFNg+ % of CD4T and CD8T from the events at
-#          CUT and stops if they differ from the node counts. Lineage gates (nonDebris to DP/DN) are the common
+#          the positive cut and stops if they differ from the node counts. Lineage gates (nonDebris to DP/DN) are the common
 #          SpectroFlo labels in both arms. Descriptive, no winner picked. Figure in the lucid-coder figure style.
-# Run:     sbatch experiments/slurm/run_script_lib.sbatch \
+#          The two cytokine slots, their labels and the positive cut come from the dataset config.
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> \
+#          sbatch experiments/slurm/run_script_lib.sbatch \
 #            experiments/benchmarks/05_bmv-unmix-compare/89b_pop_pct_fixed_cut_common.R \
-#            experiments/runs/2026-11-11_bmv-common-downstream-opt188-v2   (repo root; run dir must not exist)
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/{as188_joint,opt188_pregate_joint_p1af1}
+#            [<run_dir>]   (repo root; default run_out("common-downstream-opt188-v2"); run dir must not exist)
+# Inputs:  run_in("common-gated")/gs/{as188_joint,opt188_pregate_joint_p1af1}
 #            common-gate GatingSets, channels arcsinh (cofactor 6000) [batch 0], README.md
-# Outputs: <run_dir>/pop_pct.csv              arm, donor, population, count, parent count, % of parent
-#          <run_dir>/fig_pop_pct.{pdf,png,csv} population % of parent, donors joined by lines
+#          cut_of(arm, sample, channel, "pos")  positive cut [config pos_rule; cuts.csv from 97e when not fixed]
+#          experiments/benchmarks/05_bmv-unmix-compare/datasets/  config, run registry, sample table
+# Outputs: <run_dir>/pop_pct.csv              arm, donor (= sample id), population, count, parent count, % of
+#                                             parent; plus condition when the dataset has conditions
+#          <run_dir>/fig_pop_pct.{pdf,png,csv} population % of parent, donors joined by lines (faceted by
+#                                             condition when the dataset has conditions)
 #          <run_dir>/sessionInfo.txt
 
 suppressPackageStartupMessages({
@@ -22,13 +28,44 @@ suppressPackageStartupMessages({
   library(tibble)
   library(tidyr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), cut_of()
 
 # Parameters ---------------------------------------------------------------------------------------
 RUN_DIR <- commandArgs(trailingOnly = TRUE)[1]
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0; gs/<arm> for all arms
+if (is.na(RUN_DIR)) {
+  RUN_DIR <- run_out("common-downstream-opt188-v2")
+}
+COMMON <- run_in("common-gated") # batch 0; gs/<arm> for all arms
 ARMS <- c(as188_joint = "as188_joint", opt188 = "opt188_pregate_joint_p1af1") # grill Q1 (user, 2026-11-10)
-CUT <- 1.5 # cytokine+ above arcsinh 1.5, cofactor 6000 (G7a, user 2026-11-11; was 1)
-CYTOKINE_CHANNELS <- c(TNF = "BV510-A", IFNg = "BV570-A")
+# These T-cell nodes score TNF and IFNg; a dataset that labels the slots otherwise has no such target
+if (
+  !identical(
+    c(cfg("targets")$tnf_label, cfg("targets")$ifng_label),
+    c("TNF", "IFNg")
+  )
+) {
+  stop(
+    "89b_pop_pct_fixed_cut_common.R: needs TNF and IFNg, missing in dataset ",
+    DS$dataset,
+    " (slots are labelled ",
+    cfg("targets")$tnf_label,
+    " and ",
+    cfg("targets")$ifng_label,
+    ")",
+    call. = FALSE
+  )
+}
+# Cytokine+ above the dataset's positive cut, cofactor 6000 (3D: fixed arcsinh 1.5, G7a, user 2026-11-11).
+# Slot names are the dataset's marker labels (3D: TNF, IFNg).
+CYTOKINE_CHANNELS <- set_names(
+  c(cfg("channels")$TNF_slot, cfg("channels")$IFNg_slot),
+  c(cfg("targets")$tnf_label, cfg("targets")$ifng_label)
+)
+CUT_NOTE <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  "fixed cut"
+} else {
+  "sample cut"
+} # label suffix
 T_SUBSETS <- c("CD4T", "CD8T")
 LIB <- Sys.getenv("SW_LIB", "experiments/benchmarks/05_bmv-unmix-compare/lib")
 
@@ -78,9 +115,9 @@ lineage_pct <- gs_list |>
   }) |>
   list_rbind(names_to = "arm")
 
-# Cytokine+ at the fixed cut: events above arcsinh 1.5 in the common CD4T and CD8T -------------------
+# Cytokine+ at the positive cut: events above it in the common CD4T and CD8T -------------------
 cytokine_pct <- gs_list |>
-  map(\(gs) {
+  imap(\(gs, arm_name) {
     expand_grid(
       donor = sampleNames(gs),
       subset = T_SUBSETS,
@@ -93,9 +130,11 @@ cytokine_pct <- gs_list |>
             p
           )))[, CYTOKINE_CHANNELS[[k]]]
         }),
-        count = map_int(x, \(v) sum(v > CUT)),
+        count = pmap_int(list(x, donor, cytokine), \(v, s, k) {
+          sum(v > cut_of(ARMS[[arm_name]], s, CYTOKINE_CHANNELS[[k]], "pos"))
+        }),
         parent_count = lengths(x),
-        population = paste(subset, paste0(cytokine, "+ (fixed cut)"))
+        population = paste(subset, paste0(cytokine, "+ (", CUT_NOTE, ")"))
       ) |>
       select(donor, population, count, parent_count)
   }) |>
@@ -111,14 +150,26 @@ node_counts <- gs_list |>
         donor = name,
         population = paste(
           basename(Parent),
-          paste0(sub("pos$", "", basename(Population)), "+ (fixed cut)")
+          paste0(
+            unname(
+              c(
+                TNF = names(CYTOKINE_CHANNELS)[[1]],
+                IFNg = names(CYTOKINE_CHANNELS)[[2]]
+              )[
+                sub("pos$", "", basename(Population))
+              ]
+            ),
+            "+ (",
+            CUT_NOTE,
+            ")"
+          )
         ),
         node_count = Count
       )
   }) |>
   list_rbind(names_to = "arm")
 stopifnot(
-  "event counts at CUT equal the common TNFpos and IFNgpos node counts" = nrow(
+  "event counts at the positive cut equal the common TNFpos and IFNgpos node counts" = nrow(
     inner_join(
       cytokine_pct,
       node_counts,
@@ -133,6 +184,22 @@ stopifnot(
 
 pop_pct <- bind_rows(lineage_pct, cytokine_pct) |>
   mutate(pct_of_parent = 100 * count / parent_count)
+stopifnot(
+  "gated samples equal the sample table" = setequal(
+    pop_pct$donor,
+    samples_tbl()$sample
+  )
+)
+# Condition of each sample (24H only); 3D and EXV have none, so their tables stay as they are
+if (!is.null(DS$conditions)) {
+  pop_pct <- pop_pct |>
+    left_join(
+      select(samples_tbl(), donor = sample, condition),
+      by = "donor",
+      relationship = "many-to-one",
+      unmatched = "error"
+    )
+}
 write_csv(pop_pct, file.path(RUN_DIR, "pop_pct.csv"))
 
 # Figure: population % of parent, donors joined by lines -------------------------------------------
@@ -156,7 +223,11 @@ p_pop <- ggplot(pop_df, aes(arm, pct_of_parent)) +
   scale_shape_manual(values = shape_arm, guide = "none") +
   scale_x_discrete(labels = arm_n_labels(pop_df$donor)) +
   facet_wrap(
-    ~population,
+    if (is.null(DS$conditions)) {
+      vars(population)
+    } else {
+      vars(population, condition)
+    },
     scales = "free_y",
     ncol = 4,
     strip.position = "left"

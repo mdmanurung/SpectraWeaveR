@@ -101,7 +101,7 @@ one_run <- function(seed, fault, size) {
   names(files) <- ids
 
   na <- sw_negative_audit(files, CHANNELS, NEG_EVENTS, seed, HYPER_K, pairs = "all", spread_quantile = NULL, min_separation = 3) # G24
-  sa <- sw_fcs_signal_audit(files, CHANNELS, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL)
+  sa <- sw_fcs_signal_audit(files, CHANNELS, NULL, NULL, time_channel = NULL, time_bin = NULL, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL, summary = NULL)
   hit_row <- function(tab, check, item, file_col, item_col) {
     d <- tab[tab$check == check & tab[[item_col]] %in% item, ]
     as.numeric(tapply(abs(d$value), d[[file_col]], max, na.rm = TRUE)[ids])

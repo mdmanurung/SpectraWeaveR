@@ -92,8 +92,14 @@ process_sample <- function(s) {
       list(
         lin = exprs(ff)[, chans],
         descriptions = markernames(ff),
-        quality = suppressMessages(sw_unmix_quality(ff)) |>
-          select(-flagged) |>
+        # mean, sd, cv, pct_negative per channel: formulas of sw_unmix_quality(), removed from the package 2026-11-15
+        quality = tibble(
+          channel = flowCore::colnames(ff)[sw_channel_is_fluor(ff)],
+          mean = colMeans(exprs(ff)[, channel, drop = FALSE]),
+          sd = apply(exprs(ff)[, channel, drop = FALSE], 2, stats::sd),
+          cv = sd / abs(mean),
+          pct_negative = 100 * colMeans(exprs(ff)[, channel, drop = FALSE] < 0)
+        ) |>
           mutate(arm = a, sample = s, .before = 1)
       )
     })

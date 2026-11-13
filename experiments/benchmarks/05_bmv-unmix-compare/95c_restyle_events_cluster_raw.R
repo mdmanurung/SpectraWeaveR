@@ -4,15 +4,21 @@
 #          renumbers the shifted clusters: MC02, MC06 and MC12 are still shifted and are redrawn as the old
 #          figures; MC09 is not shifted any more and has no new source; the other shifted clusters (MC01, MC04,
 #          MC07, MC10, MC15, MC17, MC19) are drawn as extras. 89 mm wide, square panels.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_cluster_raw.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-downstream-opt188/{cluster_assignments.rds,cluster_match.csv}  [89 common]
-#          experiments/runs/2026-11-11_bmv-common-cluster-raw-scatter/{defining_markers,cluster_pct}.csv   [94 common]
-#          experiments/runs/2026-11-11_bmv-common-gated/gs/{as188_joint,opt188_pregate_joint_p1af1}   [97_common_gs.R]
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/21_raw_companions/cluster_raw/fig_cluster_MC<nn>.
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_cluster_raw.R from the repo root.
+# Inputs:  run_in("common-downstream-opt188")/{cluster_assignments.rds,cluster_match.csv}  [89 common]
+#          run_in("common-cluster-raw-scatter-g17")/{defining_markers,cluster_pct}.csv   [94 common, G17]
+#          run_in("common-gated")/gs/{as188_joint,opt188_pregate_joint_p1af1}   [97_common_gs.R]
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), channels, lineage_channels_other
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/21_raw_companions/cluster_raw/fig_cluster_MC<nn>.
 #            {pdf,png,csv}   the .csv holds the % of live cells in the cluster per arm and donor
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
@@ -27,9 +33,9 @@ source("experiments/benchmarks/05_bmv-unmix-compare/95c_common.R")
 SCRIPT <- "95c_restyle_events_cluster_raw.R"
 
 # Parameters ---------------------------------------------------------------------------------------
-RUN_89 <- "experiments/runs/2026-11-11_bmv-common-downstream-opt188"
-RUN_94 <- "experiments/runs/2026-11-11_bmv-common-cluster-raw-scatter-g17" # G17: same-sign shift and >= 1% of live cells (1.8.8 zip)
-GATED <- "experiments/runs/2026-11-11_bmv-common-gated/gs" # the GatingSets 89 clustered on
+RUN_89 <- run_in("common-downstream-opt188")
+RUN_94 <- run_in("common-cluster-raw-scatter-g17") # G17: same-sign shift and >= 1% of live cells (1.8.8 zip)
+GATED <- file.path(run_in("common-gated"), "gs") # the GatingSets 89 clustered on
 OLD_CLUSTERS <- c(2, 6, 9, 12) # the certified figures
 ARMS <- c(as188_joint = "as188_joint", opt188 = "opt188_pregate_joint_p1af1")
 ARM_LABELS <- c(
@@ -37,28 +43,14 @@ ARM_LABELS <- c(
   opt188 = str_wrap(arm_label("opt188_pregate_joint_p1af1"), 16)
 ) # display names shared with the other 95c figures
 COFACTOR <- 6000 # README "Transform"
-STORED_ARCSINH <- c(
-  "SBUV510-A",
-  "Spark Blue 574-A",
-  "SBUV445-A",
-  "BV510-A",
-  "BV570-A"
-) # as 94
+CH <- cfg("channels")
+STORED_ARCSINH <- c(CH$CD3, CH$CD4, CH$CD8, CH$TNF_slot, CH$IFNg_slot) # as 94
+# CD3, CD4, CD8 from the channel map, then the dataset's other lineage markers (marker = channel)
 LINEAGE <- c(
-  CD3 = "SBUV510-A",
-  CD4 = "Spark Blue 574-A",
-  CD8 = "SBUV445-A",
-  CD45RA = "Spark UV 387-A",
-  CCR7 = "PE-Fire 810-A",
-  CD127 = "APC-Fire 810-A",
-  CD25 = "SBUV605-A",
-  CD56 = "RB744-A",
-  TCRgd = "BUV395-A",
-  CD161 = "BUV563-A",
-  CD57 = "BV785-A",
-  CD38 = "SBUV740-A",
-  CD7 = "BUV805-A",
-  CXCR5 = "BV750-A"
+  CD3 = CH$CD3,
+  CD4 = CH$CD4,
+  CD8 = CH$CD8,
+  unlist(cfg("lineage_channels_other"))
 )
 N_OVERLAY <- 1500 # cluster cells drawn as dots per panel; display only (94)
 OVERLAY_SEED <- 42 # which cluster cells are drawn (94)
@@ -211,7 +203,10 @@ pwalk(
       labs(
         subtitle = "hexes = all live cells, black = cluster cells",
         caption = str_wrap(
-          "hex colour = event density. Shown: clusters shifting the same way in all 5 donors and holding at least 1% of live cells (1.8.8 zip).",
+          sprintf(
+            "hex colour = event density. Shown: clusters shifting the same way in all %d donors and holding at least 1%% of live cells (1.8.8 zip).",
+            length(donors)
+          ),
           70
         ),
         x = sprintf("%s (arcsinh, cofactor 6000)", pair[1]),

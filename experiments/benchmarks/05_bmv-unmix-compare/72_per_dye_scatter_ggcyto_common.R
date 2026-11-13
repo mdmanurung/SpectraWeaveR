@@ -1,6 +1,6 @@
 # Purpose: copy of 72_per_dye_scatter_ggcyto.R on the common SpectroFlo gates (plans/common_gates_plan.md,
 #          G2, G3, G7a, G11). Cytokine scatter per arm set with ggcyto: hexbin density (ggcyto's default
-#          pseudocolor, reversed Brewer Spectral, sqrt counts), the fixed cut (arcsinh 1.5, G7a) drawn with
+#          pseudocolor, reversed Brewer Spectral, sqrt counts), the positive cut (cut_of(): 3D arcsinh 1.5, G7a) drawn with
 #          geom_gate on every panel and the % above it as text, column strips coloured by arm (user,
 #          2026-11-10). CD8T cells carry the common SpectroFlo CD8T label in every arm, so each column holds
 #          the same cells; the only line drawn is the cut. The script stops unless FSC-A and SSC-A of every
@@ -10,22 +10,35 @@
 #            af_swap  y TNF; AF spectra and variants swapped between versions (37, 48); x: IFNg, AF, SSC
 #            tnf_new  y TNF; arms from tests 3, Q4/Q9 and the downstream comparison; x: IFNg, GLUT1, SSC
 #            th2      y Th2 (eFluor 450); arms that squeeze Th2 and the AF405 knock-out; x: GLUT1, IFNg, SSC
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/72_per_dye_scatter_ggcyto_common.R <set>
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/<arm>/   common-gate GatingSets [batch 0], README.md
+#          The set th2 needs the Th2 dye (config targets th2_dye); a set that needs a target the dataset lacks stops.
+#          24H: rows are condition and sample; pct_above_cut.csv and the figure source csv gain condition.
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/72_per_dye_scatter_ggcyto_common.R <set>
+#            from the repo root. <set> is per_dye, af_swap, tnf_new or th2.
+# Inputs:  registry key common-gated (datasets/<ds>_runs.csv): gs/<arm>/ common-gate GatingSets [batch 0], README.md
+#          registry key common-cuts, only when the dataset's pos_rule is not fixed: cuts.csv [97e]
+#          datasets/<ds>.json (channels, targets, lib_dirs, pos_rule) and datasets/<ds>_samples.csv [00_samples.R]
 #          BV510/BV570 stored arcsinh; Alexa Fluor 405, AF-A and eFluor 450 stored linear
 # Outputs: <out_dir>/fig_<y>_vs_<x>.{pdf,png,csv}      one figure per x marker, 183 mm wide, 300 dpi PNG
-#          <out_dir>/pct_above_cut.csv                  % of CD8T above the cut, per arm and donor
+#          <out_dir>/pct_above_cut.csv                  % of CD8T above the cut, per arm and donor (sample)
 #          <out_dir>/pairing.csv                        per arm and donor: FSC-A and SSC-A equal to SpectroFlo
 #          <out_dir>/sessionInfo.txt
+#          <out_dir> is run_out("common-72-<set>"), a new folder dated SW_RUN_DATE.
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+# dataset.R loads dplyr and readr only, so the library path can still change before ggplot2 loads
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), cut_of(), samples_tbl()
+LIB_GGPLOT2 <- grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE)
+stopifnot("one lib_ggplot2_35 in config lib_dirs" = length(LIB_GGPLOT2) == 1)
+.libPaths(c(LIB_GGPLOT2, .libPaths())) # ggplot2 3.5.2 for ggcyto
 suppressPackageStartupMessages({
   library(flowCore)
   library(flowWorkspace)
   library(ggcyto)
   library(ggplot2)
-  library(dplyr, exclude = "filter")
+  # dataset.R attached dplyr below flowCore. Attach it again on top, with filter(), because the dataset.R
+  # helpers call filter() and flowCore's filter would win (this script itself never calls filter()).
+  detach("package:dplyr", unload = FALSE)
+  library(dplyr)
   library(purrr)
   library(readr)
 })
@@ -35,8 +48,10 @@ source(file.path(
 )) # save_panel, FIG_FONT
 
 # Parameters ---------------------------------------------------------------------------------------
+GLUT1_DYE_ID <- gsub("[ -]", "_", cfg("targets")$glut1_dye) # as in the arm folder names
+GLUT1_ARM <- paste0("var102_only_", GLUT1_DYE_ID) # the GLUT1 dye with its 1.0.2 variants only
 SET <- commandArgs(trailingOnly = TRUE)[1]
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0; gs/<arm> for all arms
+COMMON <- run_in("common-gated") # batch 0; gs/<arm> for all arms
 # arms per set (label = arm folder), strip colour per arm, y marker, x blocks, output folder
 SETS <- list(
   per_dye = list(
@@ -44,15 +59,15 @@ SETS <- list(
       "1.8.8\nvariants" = "as188_joint",
       "opt188\n(optimized)" = "opt188_pregate_joint_p1af1",
       "+SBUV510\n1.0.2" = "var102_only_SBUV510",
-      "+ AF405\n1.0.2" = "var102_only_Alexa_Fluor_405",
-      "+SBUV510\n+AF405 1.0.2" = "var102_only_SBUV510__Alexa_Fluor_405",
+      "+ AF405\n1.0.2" = GLUT1_ARM,
+      "+SBUV510\n+AF405 1.0.2" = paste0("var102_only_SBUV510__", GLUT1_DYE_ID),
       "all 1.0.2\nvariants" = "swap_var102"
     ),
     # grey baseline, light to dark red as more of the TNF squeeze is swapped in
     fill = c("#d9d9d9", "#9ecae1", "#fdbb84", "#e34a33", "#b30000", "#7f0000"),
     y = "TNF",
     blocks = c("IFNg", "GLUT1", "SSC"),
-    out_dir = "experiments/runs/2026-11-11_bmv-common-72-per_dye"
+    out_key = "common-72-per_dye"
   ),
   af_swap = list(
     arms = c(
@@ -67,7 +82,7 @@ SETS <- list(
     fill = c("#d9d9d9", "#fdbb84", "#e34a33", "#7f0000", "#9ecae1", "#08519c"),
     y = "TNF",
     blocks = c("IFNg", "AF", "SSC"),
-    out_dir = "experiments/runs/2026-11-11_bmv-common-72-af_swap"
+    out_key = "common-72-af_swap"
   ),
   tnf_new = list(
     arms = c(
@@ -82,13 +97,13 @@ SETS <- list(
     fill = c("#d9d9d9", "#9ecae1", "#08519c", "#fdbb84", "#e34a33", "#7f0000"),
     y = "TNF",
     blocks = c("IFNg", "GLUT1", "SSC"),
-    out_dir = "experiments/runs/2026-11-11_bmv-common-72-tnf_new"
+    out_key = "common-72-tnf_new"
   ),
   th2 = list(
     arms = c(
       "1.8.8\nzip" = "as188_joint",
       "opt188" = "opt188_pregate_joint_p1af1",
-      "+ AF405\n1.0.2" = "var102_only_Alexa_Fluor_405",
+      "+ AF405\n1.0.2" = GLUT1_ARM,
       "AF405 knock-out\n(no BV510 part)" = "af405proof_ko_bv510",
       "1.0.2 code\n1.8.8 spectra" = "s188_c102",
       "1.0.2\nzip" = "as102_var"
@@ -96,7 +111,7 @@ SETS <- list(
     fill = c("#d9d9d9", "#9ecae1", "#e34a33", "#fdbb84", "#08519c", "#7f0000"),
     y = "Th2",
     blocks = c("GLUT1", "IFNg", "SSC"),
-    out_dir = "experiments/runs/2026-11-11_bmv-common-72-th2"
+    out_key = "common-72-th2"
   )
 )
 # SpectroFlo 3.3.0 export, first column of every set as the vendor reference (user, 2026-11-10)
@@ -104,7 +119,7 @@ REFERENCE <- c("SpectroFlo\n(reference)" = "spectroflo")
 REFERENCE_FILL <- "#252525"
 DARK_FILLS <- c("#e34a33", "#b30000", "#7f0000", "#08519c", REFERENCE_FILL) # strips that take white text
 POP <- "CD8T"
-CUT <- 1.5 # fixed cytokine cut, arcsinh, cofactor 6000 (G7a, user 2026-11-11; was 1)
+# positive cut of the y marker: cut_of(arm, sample, channel, "pos"), arcsinh, cofactor 6000 (G7a)
 COFACTOR <- 6000 # arcsinh cofactor for linear channels, as for the cytokines (CLAUDE.md)
 AXIS <- c(-1.5, 4) # display window only; the % above the cut uses every event
 BINS <- 60 # hexagon bins per panel; display only, fewer for the ~27 mm panels
@@ -112,15 +127,30 @@ PANEL_MM <- 23 # panel column width; seven columns fill a 183 mm double column
 LABEL_PT <- 7 # in-panel % and strip text; save_panel allows 5-7 pt
 FIG_WIDTH_MM <- 183 # double column, the only width save_panel takes besides 89
 PAIR_COLS <- c("FSC-A", "SSC-A") # scatter does not depend on unmixing; equal per row means the same cells
+# Th2 only where the panel has the dye (config targets th2_dye); a set that needs a missing target stops below
 CHANNELS <- c(
-  TNF = "BV510-A",
-  Th2 = "eFluor 450-A",
-  IFNg = "BV570-A",
-  GLUT1 = "Alexa Fluor 405-A",
+  TNF = cfg("channels")$TNF_slot,
+  if (!is.null(cfg("targets")$th2_dye)) {
+    c(Th2 = paste0(cfg("targets")$th2_dye, "-A"))
+  },
+  IFNg = cfg("channels")$IFNg_slot,
+  GLUT1 = paste0(cfg("targets")$glut1_dye, "-A"),
   AF = "AF-A",
   SSC = "SSC-A"
 )
-LINEAR_TO_ARCSINH <- c("Alexa Fluor 405-A", "AF-A", "eFluor 450-A")
+LINEAR_TO_ARCSINH <- unname(CHANNELS[intersect(
+  c("GLUT1", "AF", "Th2"),
+  names(CHANNELS)
+)])
+# display names of the keys above: the dataset's marker labels for the TNF and IFNg dye slots
+LABELS <- c(
+  TNF = cfg("targets")$tnf_label,
+  Th2 = "Th2",
+  IFNg = cfg("targets")$ifng_label,
+  GLUT1 = "GLUT1",
+  AF = "AF",
+  SSC = "SSC"
+)
 SCALE_LABEL <- c(
   TNF = "arcsinh",
   Th2 = "arcsinh, cofactor 6000",
@@ -136,19 +166,38 @@ stopifnot("set is one of the arm sets" = SET %in% names(SETS))
 ARMS <- c(REFERENCE, SETS[[SET]]$arms)
 ARM_FILL <- set_names(c(REFERENCE_FILL, SETS[[SET]]$fill), names(ARMS))
 Y_NAME <- SETS[[SET]]$y
-Y_CH <- CHANNELS[[Y_NAME]]
 BLOCKS <- SETS[[SET]]$blocks
-OUT_DIR <- SETS[[SET]]$out_dir
+absent_targets <- setdiff(c(Y_NAME, BLOCKS), names(CHANNELS))
+if (length(absent_targets) > 0) {
+  stop(
+    sprintf(
+      "72_per_dye_scatter_ggcyto_common.R: set %s needs %s, missing in dataset %s",
+      SET,
+      paste(absent_targets, collapse = ", "),
+      DS$dataset
+    ),
+    call. = FALSE
+  )
+}
+Y_CH <- CHANNELS[[Y_NAME]]
+Y_LABEL <- LABELS[[Y_NAME]]
+OUT_DIR <- run_out(SETS[[SET]]$out_key)
+COND_BY <- if (is.null(DS$conditions)) character() else "condition" # 24H only: rows by condition
+# a fixed cut is the same for every sample; the table records it only when it differs by sample
+CUT_COL <- if (identical(cfg("pos_rule")$type, "fixed")) {
+  character()
+} else {
+  "pos_cut"
+}
 
 stopifnot(
   "batch 0 finished (README.md in the common dir)" = file.exists(file.path(
     COMMON,
     "README.md"
   )),
-  "output dir must not exist" = !dir.exists(OUT_DIR),
   "every arm has a strip colour" = setequal(names(ARMS), names(ARM_FILL))
 )
-dir.create(OUT_DIR)
+dir.create(OUT_DIR, recursive = TRUE)
 
 # Row pairing: FSC-A and SSC-A of every root row equal to SpectroFlo's, per arm and donor (G8) ---------
 gs_list <- map(ARMS, \(a) load_gs(file.path(COMMON, "gs", a)))
@@ -204,34 +253,67 @@ pd <- tibble(name = sampleNames(fs)) |>
     cols_remove = FALSE
   ) |>
   mutate(arm = factor(arm, levels = names(ARMS)))
+# positive cut of the y marker per arm and sample; 24H adds the condition of each sample
+pd <- pd |>
+  mutate(
+    pos_cut = map2_dbl(ARMS[as.character(arm)], donor, \(a, s) {
+      cut_of(a, s, Y_CH, "pos")
+    })
+  )
+if (!is.null(DS$conditions)) {
+  pd <- pd |>
+    left_join(
+      select(samples_tbl(), donor = sample, condition),
+      by = "donor",
+      relationship = "many-to-one",
+      unmatched = "error"
+    )
+}
 pData(fs) <- as.data.frame(pd) |> `rownames<-`(pd$name)
 
 # % of CD8T above the cut per arm and donor, printed in each panel ----------------------------------
-pct_pos <- fsApply(fs, \(ff) 100 * mean(exprs(ff)[, Y_CH] >= CUT)) |>
-  as.data.frame() |>
-  tibble::rownames_to_column("name") |>
-  rename(pct_above_cut = V1) |>
-  left_join(pd, by = "name", relationship = "one-to-one", unmatched = "error")
+pct_pos <- pd |>
+  mutate(
+    pct_above_cut = map2_dbl(name, pos_cut, \(n, ct) {
+      100 * mean(exprs(fs[[n]])[, Y_CH] >= ct)
+    })
+  ) |>
+  select(name, pct_above_cut, arm, donor, all_of(COND_BY), all_of(CUT_COL))
 write_csv(
   pct_pos |>
     mutate(
       arm_id = ARMS[as.character(arm)],
       arm = gsub("\n", " ", arm),
-      marker = Y_NAME
+      marker = Y_LABEL
     ) |>
-    select(arm_id, arm, donor, marker, pct_above_cut),
+    select(
+      arm_id,
+      arm,
+      donor,
+      all_of(COND_BY),
+      marker,
+      pct_above_cut,
+      all_of(CUT_COL)
+    ),
   file.path(OUT_DIR, "pct_above_cut.csv")
 )
 
 # One ggcyto block per x marker: hexbin, fixed cut, %, donor x arm facets ----------------------------
+ROW_FACET <- paste(c(COND_BY, "donor"), collapse = " + ") # 24H: condition, then sample
 block <- function(x_name) {
   x_ch <- CHANNELS[[x_name]]
-  gate <- rectangleGate(
-    filterId = "above cut",
-    .gate = setNames(list(c(-Inf, Inf), c(CUT, Inf)), c(x_ch, Y_CH))
+  # ggcyto on a flowSet takes one gate per sample, named by sample; the cut is that sample's positive cut
+  gate <- filterList(
+    set_names(
+      map(pd$pos_cut, \(ct) {
+        rectangleGate(
+          filterId = "above cut",
+          .gate = setNames(list(c(-Inf, Inf), c(ct, Inf)), c(x_ch, Y_CH))
+        )
+      }),
+      pd$name
+    )
   )
-  # ggcyto on a flowSet takes one gate per sample, named by sample
-  gate <- filterList(set_names(rep(list(gate), length(fs)), sampleNames(fs)))
   # % from pct_pos, every event (geom_stats fails on the SSC block, so all blocks use this label)
   p <- ggcyto(fs, aes(x = !!rlang::sym(x_ch), y = !!rlang::sym(Y_CH))) +
     geom_hex(bins = BINS) +
@@ -241,7 +323,7 @@ block <- function(x_name) {
       aes(
         x = -Inf,
         y = Inf,
-        label = sprintf("%s+ %.1f%%", Y_NAME, pct_above_cut)
+        label = sprintf("%s+ %.1f%%", Y_LABEL, pct_above_cut)
       ),
       inherit.aes = FALSE,
       hjust = 0,
@@ -254,7 +336,7 @@ block <- function(x_name) {
       label.size = 0,
       label.padding = unit(0.12, "lines")
     ) +
-    facet_grid(donor ~ arm, switch = "y") +
+    facet_grid(as.formula(paste(ROW_FACET, "~ arm")), switch = "y") +
     ggcyto_par_set(limits = list(x = X_LIMITS[[x_name]], y = AXIS)) +
     # standard flow pseudocolor, as ggcyto's own default: blue (few events) to red (many)
     scale_fill_gradientn(
@@ -263,9 +345,9 @@ block <- function(x_name) {
       guide = "none"
     ) +
     labs(
-      x = sprintf("%s, %s (%s)", x_name, x_ch, SCALE_LABEL[[x_name]]),
-      y = sprintf("%s, %s (%s)", Y_NAME, Y_CH, SCALE_LABEL[[Y_NAME]]),
-      title = sprintf("CD8 T cells: %s vs %s", Y_NAME, x_name)
+      x = sprintf("%s, %s (%s)", LABELS[[x_name]], x_ch, SCALE_LABEL[[x_name]]),
+      y = sprintf("%s, %s (%s)", Y_LABEL, Y_CH, SCALE_LABEL[[Y_NAME]]),
+      title = sprintf("CD8 T cells: %s vs %s", Y_LABEL, LABELS[[x_name]])
     ) +
     ggpubr::theme_pubr(base_size = 7, base_family = FIG_FONT, border = TRUE) +
     # donor strips left, outside, no box (house style); arm strips keep their fill
@@ -309,9 +391,9 @@ fig_height_mm <- PANEL_MM * n_distinct(pd$donor) + 35
 walk(BLOCKS, \(x_name) {
   save_panel(
     block(x_name),
-    mutate(pct_pos, arm = gsub("\n", " ", arm), x_marker = x_name),
+    mutate(pct_pos, arm = gsub("\n", " ", arm), x_marker = LABELS[[x_name]]),
     OUT_DIR,
-    sprintf("fig_%s_vs_%s", Y_NAME, x_name),
+    sprintf("fig_%s_vs_%s", Y_LABEL, LABELS[[x_name]]),
     width_mm = FIG_WIDTH_MM,
     height_mm = fig_height_mm
   )

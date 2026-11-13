@@ -3,17 +3,21 @@
 #          with the sources repointed to the *-cg runs, setups named through arm_label(), the donor colour
 #          and shape of report_figures.R, and no lines across setups. Nothing is unmixed or rescored.
 #          Spike level +1 arcsinh, loss cut recovery < 0.5 and seed 42 are inherited (G5).
-# Run:     REDRAW_ONLY=spike pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_spike.R
+#          The markers are the keys of spike_marker_dyes in the dataset config; a figure whose marker is not in
+#          that list stops the script (EXV has no Th2, IL-2 or IL-10); REDRAW_ONLY names the figures to draw.
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD REDRAW_ONLY=spike pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_spike.R
 #            from the repo root. REDRAW_ONLY=spike (or a list of figure stems) adds only these figures to
 #            MANIFEST_restyle_common.csv and reuses the existing report_figures and 10_af405_proof folders.
-# Inputs:  experiments/runs/2026-11-11_bmv-spike-in-cg/{spike_summary,spike_cells}.csv         TNF, Th2, IL10; 5 setups
-#          experiments/runs/2026-11-11_bmv-spike-in-panel2-cg/{spike_summary,spike_cells}.csv   9 markers; 2 setups
-#          experiments/runs/2026-11-11_bmv-spike-in-cd3neg-cg/{spike_summary,spike_cells}.csv   12 markers in CD3-
-#          experiments/runs/2026-11-11_bmv-cospike-tnf-glut1-cg/cospike_summary.csv             TNF +1, GLUT1 +0/+1/+2
-#          experiments/runs/2026-11-11_bmv-tnf-spike-by-glut1-cg/summary_by_glut1.csv           TNF +1 by GLUT1 quartile
-#          experiments/runs/2026-11-11_bmv-spike-passes-cg/spike_summary.csv                    n.passes / n.af.passes
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/{spike_summary,fig5b_..._source,fig6_..._source}.csv
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/18_spike_in/fig_spike_<marker>.{pdf,png,csv}, fig_spike_recovery_ecdf
+# Inputs:  run_in("spike-in-cg")/{spike_summary,spike_cells}.csv         TNF, Th2, IL10; 5 setups
+#          run_in("spike-in-panel2-cg")/{spike_summary,spike_cells}.csv   9 markers; 2 setups
+#          run_in("spike-in-cd3neg-cg")/{spike_summary,spike_cells}.csv   12 markers in CD3-
+#          run_in("cospike-tnf-glut1-cg")/cospike_summary.csv             TNF +1, GLUT1 +0/+1/+2
+#          run_in("tnf-spike-by-glut1-cg")/summary_by_glut1.csv           TNF +1 by GLUT1 quartile
+#          run_in("spike-passes-cg")/spike_summary.csv                    n.passes / n.af.passes
+#          run_in("af405-proof-cg")/{spike_summary,fig5b_..._source,fig6_..._source}.csv
+#          datasets/<SW_DATASET>.json   targets, spike_marker_dyes, conditions
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/18_spike_in/fig_spike_<marker>.{pdf,png,csv}, fig_spike_recovery_ecdf
 #          .../20_spike_in_panel2/, .../22_spike_cd3neg/   same names
 #          .../23_cospike/fig_cospike_tnf_loss, fig_cospike_glut1_recovery, by_glut1_fig_loss_by_glut1
 #          .../25_spike_passes/fig_passes_<marker>
@@ -28,8 +32,13 @@ suppressPackageStartupMessages({
   library(readr)
   library(tidyr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_spike_common.R")
 SCRIPT <- "95c_restyle_spike.R"
+TNF_LAB <- cfg("targets")$tnf_label
+IFNG_LAB <- cfg("targets")$ifng_label
+TNF_DYE <- cfg("targets")$tnf_dye
+GLUT1_DYE <- cfg("targets")$glut1_dye
 
 # Parameters ---------------------------------------------------------------------------------------
 ECDF_GRID <- seq(-0.5, 1.5, by = 0.0025) # display window of the ECDF; cells outside it are counted in the .csv
@@ -39,26 +48,46 @@ SETUP_LINES <- setNames(
   c("solid", "dashed", "dotted", "dotdash", "longdash"),
   setup_label(c("c188", "s102_c102", "s188_c102", "opt188", "afrefine"))
 ) # second encoding of setup in the ECDFs
-DONORS_SHOWN <- names(DONOR_PAL)
+PASS_MARKERS <- c(TNF_LAB, "Th2", "IL10") # markers of the n.passes figures (section 25)
 
 # the figures report sections 18, 20, 22 and 23 cite (90_report.qmd show_kept), plus each section's ECDF
 SPIKE_FIGURES <- tribble(
-  ~section             , ~run                 , ~marker ,
-  "18_spike_in"        , "spike-in-cg"        , "TNF"   ,
-  "18_spike_in"        , "spike-in-cg"        , "Th2"   ,
-  "18_spike_in"        , "spike-in-cg"        , "IL10"  ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "GLUT1" ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CS"    ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "IFNg"  ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "IL2"   ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "ATP5A" ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CPT1A" ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "ATGL"  ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "G6PD"  ,
-  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CD71"  ,
-  "22_spike_cd3neg"    , "spike-in-cd3neg-cg" , "GLUT1" ,
-  "22_spike_cd3neg"    , "spike-in-cd3neg-cg" , "TNF"
+  ~section             , ~run                 , ~marker  ,
+  "18_spike_in"        , "spike-in-cg"        , TNF_LAB  ,
+  "18_spike_in"        , "spike-in-cg"        , "Th2"    ,
+  "18_spike_in"        , "spike-in-cg"        , "IL10"   ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "GLUT1"  ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CS"     ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , IFNG_LAB ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "IL2"    ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "ATP5A"  ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CPT1A"  ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "ATGL"   ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "G6PD"   ,
+  "20_spike_in_panel2" , "spike-in-panel2-cg" , "CD71"   ,
+  "22_spike_cd3neg"    , "spike-in-cd3neg-cg" , "GLUT1"  ,
+  "22_spike_cd3neg"    , "spike-in-cd3neg-cg" , TNF_LAB
 )
+# every figure to draw needs its marker in the dataset's spike panel (stop, never skip or reuse a 3D value)
+drawn_markers <- c(
+  SPIKE_FIGURES$marker[map_lgl(
+    paste0("fig_spike_", SPIKE_FIGURES$marker),
+    want
+  )],
+  PASS_MARKERS[map_lgl(paste0("fig_passes_", PASS_MARKERS), want)]
+)
+absent <- setdiff(drawn_markers, names(MARKERS))
+if (length(absent) > 0) {
+  stop(
+    SCRIPT,
+    ": needs ",
+    paste(absent, collapse = ", "),
+    ", missing in dataset ",
+    DS$dataset,
+    " (name other figures in REDRAW_ONLY)",
+    call. = FALSE
+  )
+}
 ECDF_FIGURES <- tribble(
   ~section             , ~run                 ,
   "18_spike_in"        , "spike-in-cg"        ,
@@ -95,9 +124,12 @@ draw_summary <- function(
   stem
 ) {
   panel_data <- d |>
+    sample_keys() |>
+    need_cond(SCRIPT) |>
     mutate(
       group = factor(.data[[group]], levels = group_levels),
-      donor = donor_factor(.data$sample),
+      donor = donor_factor(.data$donor_key),
+      donor_key = NULL,
       pop = factor(.data$pop, levels = c("CD4T", "CD8T", "CD3neg")),
       `Cells losing >50% of spike (%)` = 100 * .data$share_lost,
       `Median recovery (fraction of spike)` = .data$median_recovery
@@ -112,7 +144,7 @@ draw_summary <- function(
     ) |>
     mutate(group = droplevels(.data$group), pop = droplevels(.data$pop))
   n_groups <- nlevels(panel_data$group)
-  n_pops <- nlevels(panel_data$pop)
+  n_pops <- nlevels(panel_data$pop) * max(1, length(DS$conditions))
   floors <- tibble(
     readout = c(
       rep("Cells losing >50% of spike (%)", 2),
@@ -138,7 +170,8 @@ draw_summary <- function(
       size = 1.2
     ) +
     facet_grid(
-      pop ~ readout,
+      rows = vars(pop, !!!rlang::syms(COND)),
+      cols = vars(readout),
       scales = "free_x",
       axes = "all",
       axis.labels = "margins",
@@ -252,7 +285,7 @@ pwalk(ECDF_FIGURES, \(section, run) {
   src <- SRC(run, "spike_cells.csv")
   spiked <- data.table::fread(
     src,
-    select = c("setup", "marker", "pop", "level", "recovery")
+    select = c("setup", "marker", "pop", "level", "recovery", COND)
   ) |>
     as_tibble() |>
     filter(.data$level == FIG_LEVEL)
@@ -265,7 +298,7 @@ pwalk(ECDF_FIGURES, \(section, run) {
       n_above_window = sum(.data$recovery > max(ECDF_GRID)),
       cumulative = ecdf(.data$recovery)(ECDF_GRID),
       recovery_grid = ECDF_GRID,
-      .by = c(setup, marker, pop)
+      .by = c(setup, marker, pop, any_of(COND))
     ) |>
     mutate(
       setup = factor(setup_label(.data$setup), levels = SETUP_ORDER),
@@ -282,9 +315,19 @@ pwalk(ECDF_FIGURES, \(section, run) {
     nlevels(ecdf_frame$marker)
   }
   facets <- if (n_pops == 1) {
-    facet_wrap(~marker, ncol = 4, axes = "all", axis.labels = "margins")
+    facet_wrap(
+      vars(marker, !!!rlang::syms(COND)),
+      ncol = 4,
+      axes = "all",
+      axis.labels = "margins"
+    )
   } else {
-    facet_grid(marker ~ pop, axes = "all", axis.labels = "margins")
+    facet_grid(
+      rows = vars(marker),
+      cols = vars(pop, !!!rlang::syms(COND)),
+      axes = "all",
+      axis.labels = "margins"
+    )
   }
   p <- ggplot(
     ecdf_frame,
@@ -323,10 +366,26 @@ pwalk(ECDF_FIGURES, \(section, run) {
 # Co-spike and TNF loss by natural GLUT1: section 23 ---------------------------------------------------
 cospike_src <- SRC("cospike-tnf-glut1-cg", "cospike_summary.csv")
 by_glut1_src <- SRC("tnf-spike-by-glut1-cg", "summary_by_glut1.csv")
-COSPIKE_X <- "GLUT1 (Alexa Fluor 405) added with TNF +1 arcsinh (arcsinh units)"
+COSPIKE_X <- paste0(
+  "GLUT1 (",
+  GLUT1_DYE,
+  ") added with ",
+  TNF_LAB,
+  " +1 arcsinh (arcsinh units)"
+)
+# rows of the pop-by-setup grids: population, then condition when the dataset has them
+POP_BY_SETUP <- \(...) {
+  FACET_ALL(
+    rows = vars(pop, !!!rlang::syms(COND)),
+    cols = vars(setup_label),
+    ...
+  )
+}
 if (any(want(c("fig_cospike_tnf_loss", "fig_cospike_glut1_recovery")))) {
   out_dir <- fresh_dir("23_cospike")
   cospike <- read_csv(cospike_src, show_col_types = FALSE) |>
+    sample_keys() |>
+    need_cond(SCRIPT) |>
     mutate(
       setup_label = factor(
         setup_label(.data$setup),
@@ -336,20 +395,18 @@ if (any(want(c("fig_cospike_tnf_loss", "fig_cospike_glut1_recovery")))) {
         paste0("+", .data$glut1_level),
         levels = paste0("+", 0:2)
       ),
-      donor = donor_factor(.data$sample)
+      donor = donor_factor(.data$donor_key),
+      donor_key = NULL
     )
-  facets <- FACET_ALL(
-    pop ~ setup_label,
-    labeller = labeller(setup_label = label_wrap_gen(22))
-  )
+  facets <- POP_BY_SETUP(labeller = labeller(setup_label = label_wrap_gen(22)))
   p_tnf <- plot_donor_levels(
     cospike,
     "glut1_label",
     "pct_tnf_lost",
     facets,
     COSPIKE_X,
-    "Cells losing >50% of the TNF spike (%)",
-    "TNF + GLUT1 co-spike: TNF loss",
+    paste0("Cells losing >50% of the ", TNF_LAB, " spike (%)"),
+    paste0(TNF_LAB, " + GLUT1 co-spike: ", TNF_LAB, " loss"),
     y_floor = LOST_FLOOR
   )
   save_panel(p_tnf, cospike, out_dir, "fig_cospike_tnf_loss", 183, 85)
@@ -361,7 +418,7 @@ if (any(want(c("fig_cospike_tnf_loss", "fig_cospike_glut1_recovery")))) {
     facets,
     COSPIKE_X,
     "Median GLUT1 recovery (fraction of spike)",
-    "TNF + GLUT1 co-spike: GLUT1 recovery",
+    paste0(TNF_LAB, " + GLUT1 co-spike: GLUT1 recovery"),
     y_floor = RECOVERY_FLOOR,
     hline = 1
   )
@@ -378,6 +435,8 @@ if (any(want(c("fig_cospike_tnf_loss", "fig_cospike_glut1_recovery")))) {
 if (want("by_glut1_fig_loss_by_glut1")) {
   out_dir <- fresh_dir("23_cospike")
   by_glut1 <- read_csv(by_glut1_src, show_col_types = FALSE) |>
+    sample_keys() |>
+    need_cond(SCRIPT) |>
     mutate(
       setup_label = factor(
         setup_label(.data$setup),
@@ -387,19 +446,17 @@ if (want("by_glut1_fig_loss_by_glut1")) {
         sub("GLUT1 ", "", .data$glut1_bin),
         levels = paste0("Q", 1:4)
       ),
-      donor = donor_factor(.data$sample)
+      donor = donor_factor(.data$donor_key),
+      donor_key = NULL
     )
   p_loss <- plot_donor_levels(
     by_glut1,
     "glut1_bin",
     "pct_lost",
-    FACET_ALL(
-      pop ~ setup_label,
-      labeller = labeller(setup_label = label_wrap_gen(22))
-    ),
-    "Natural GLUT1 (Alexa Fluor 405), quartile per donor",
-    "Cells losing >50% of the TNF spike (%)",
-    "TNF +1 arcsinh spike by natural GLUT1",
+    POP_BY_SETUP(labeller = labeller(setup_label = label_wrap_gen(22))),
+    paste0("Natural GLUT1 (", GLUT1_DYE, "), quartile per donor"),
+    paste0("Cells losing >50% of the ", TNF_LAB, " spike (%)"),
+    paste0(TNF_LAB, " +1 arcsinh spike by natural GLUT1"),
     y_floor = LOST_FLOOR
   )
   save_panel(p_loss, by_glut1, out_dir, "by_glut1_fig_loss_by_glut1", 183, 90)
@@ -413,7 +470,7 @@ if (want("by_glut1_fig_loss_by_glut1")) {
 
 # Pass settings: section 25 ----------------------------------------------------------------------------
 pass_src <- SRC("spike-passes-cg", "spike_summary.csv")
-walk(c("TNF", "Th2", "IL10"), \(marker) {
+walk(PASS_MARKERS, \(marker) {
   stem <- paste0("fig_passes_", marker)
   if (!want(stem)) {
     return(invisible())
@@ -440,7 +497,6 @@ walk(c("TNF", "Th2", "IL10"), \(marker) {
 })
 
 # AF405 proof: spike recovery, GLUT1 deciles, anatomy -----------------------------------------------------
-PROOF <- "2026-11-11_bmv-af405-proof-cg"
 OLD_PROOF <- "2026-11-10_bmv-af405-proof"
 proof_summary <- SRC("af405-proof-cg", "spike_summary.csv")
 PROOF_SETUPS <- c("1.8.8", "1.8.8 + 1.0.2 AF405 variants")
@@ -448,11 +504,22 @@ proof_levels <- \(x) {
   factor(paste0("+", x, " arcsinh"), levels = paste0("+", 1:3, " arcsinh"))
 }
 proof <- read_csv(proof_summary, show_col_types = FALSE) |>
+  sample_keys() |>
+  need_cond(SCRIPT) |>
   mutate(
     setup = factor(.data$setup, levels = PROOF_SETUPS),
     level_label = proof_levels(.data$level),
-    donor = donor_factor(.data$sample)
+    donor = donor_factor(.data$donor_key),
+    donor_key = NULL
   )
+# the AF405 proof spikes the BV510 slot (TNF in 3D)
+PROOF_TITLE <- paste0(
+  "AF405 proof: recovery of a known ",
+  TNF_DYE,
+  " (",
+  TNF_LAB,
+  ") spike"
+)
 
 # s10_spike: the report figure, level across, setup in the columns
 if (want("s10_spike")) {
@@ -461,17 +528,24 @@ if (want("s10_spike")) {
     proof,
     "level_label",
     "median_recovery",
-    FACET_ALL(pop ~ setup),
+    FACET_ALL(rows = vars(pop, !!!rlang::syms(COND)), cols = vars(setup)),
     "Spike level",
-    "Median spike recovery (BV510)",
-    "AF405 proof: recovery of a known BV510 (TNF) spike",
+    paste0("Median spike recovery (", TNF_DYE, ")"),
+    PROOF_TITLE,
     y_floor = RECOVERY_FLOOR,
     hline = 1
   )
   save_panel(p10, proof, out_dir, "s10_spike", 183, 85)
   caption <- tibble(
     key = "s10_spike",
-    caption = "Median recovery of the added BV510 (TNF) spike per spike level, population (rows) and setup (columns). Each point is one donor (colour and shape); the bar is the median of 5 donors."
+    caption = paste0(
+      "Median recovery of the added ",
+      TNF_DYE,
+      " (",
+      TNF_LAB,
+      ") spike per spike level, population (rows) and setup (columns). ",
+      PAIRED
+    )
   )
   captions_file <- file.path(out_dir, "captions.csv")
   captions <- read_csv(captions_file, show_col_types = FALSE) |>
@@ -516,7 +590,11 @@ if (want("fig5_spike_recovery")) {
       position = position_jitter(width = 0, height = 0.15, seed = SEED),
       size = 1.2
     ) +
-    FACET_ALL(pop ~ level_label, scales = "free_x") +
+    FACET_ALL(
+      rows = vars(pop, !!!rlang::syms(COND)),
+      cols = vars(level_label),
+      scales = "free_x"
+    ) +
     donor_scales() +
     scale_y_discrete(limits = rev, labels = scales::label_wrap(22)) +
     scale_x_continuous(
@@ -525,9 +603,9 @@ if (want("fig5_spike_recovery")) {
       guide = guide_axis(check.overlap = TRUE)
     ) +
     labs(
-      x = "Median share of added BV510 recovered",
+      x = paste0("Median share of added ", TNF_DYE, " recovered"),
       y = NULL,
-      title = "AF405 proof: recovery of a known BV510 (TNF) spike"
+      title = PROOF_TITLE
     ) +
     theme(panel.spacing.x = unit(4, "mm")) +
     value_grid("x")
@@ -545,23 +623,27 @@ fig5b_src <- SRC("af405-proof-cg", "fig5b_recovery_by_glut1_source.csv")
 if (want("fig5b_recovery_by_glut1")) {
   out_dir <- fresh_dir("10_af405_proof")
   fig5b <- read_csv(fig5b_src, show_col_types = FALSE) |>
+    sample_keys() |>
+    need_cond(SCRIPT) |>
     mutate(
       setup = factor(.data$setup, levels = PROOF_SETUPS),
       level_label = proof_levels(.data$level),
       decile = factor(.data$glut1_decile, levels = 1:10),
-      donor = donor_factor(.data$sample)
+      donor = donor_factor(.data$donor_key),
+      donor_key = NULL
     )
   p5b <- plot_donor_levels(
     fig5b,
     "decile",
     "median_recovery",
     FACET_ALL(
-      level_label ~ pop + setup,
+      rows = vars(level_label, !!!rlang::syms(COND)),
+      cols = vars(pop, setup),
       labeller = labeller(setup = label_wrap_gen(16))
     ),
-    "GLUT1 (Alexa Fluor 405) decile within donor",
+    paste0("GLUT1 (", GLUT1_DYE, ") decile within donor"),
     "Median share recovered",
-    "AF405 proof: BV510 recovery by GLUT1 decile",
+    paste0("AF405 proof: ", TNF_DYE, " recovery by GLUT1 decile"),
     y_floor = RECOVERY_FLOOR,
     hline = 1
   )

@@ -9,17 +9,23 @@
 #          floor from as188_joint reclustered with seeds 1-3, and metacluster abundance with each as188_joint
 #          metacluster matched to the opt188 metacluster it overlaps most.
 #          Figures follow the lucid-coder figure style (style/theme.R, palettes.R, plots.R).
-# Run:     sbatch experiments/slurm/run_script.sbatch \
+#          Dataset: SW_DATASET (3d, 24h, exv) picks the config; with conditions (24H) the marker flags and the
+#          metacluster abundance are summarised per condition.
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> \
+#          sbatch experiments/slurm/run_script.sbatch \
 #            experiments/benchmarks/05_bmv-unmix-compare/89_downstream_as188_vs_opt188_common.R \
-#            experiments/runs/2026-11-11_bmv-common-downstream-opt188      (repo root; run dir must not exist)
-# Inputs:  experiments/runs/2026-11-11_bmv-common-gated/gs/{as188_joint,opt188_pregate_joint_p1af1}
+#            [<run_dir>]      (repo root; default run_out("common-downstream-opt188"); run dir must not exist)
+# Inputs:  run_in("common-gated")/gs/{as188_joint,opt188_pregate_joint_p1af1}
 #            common-gate GatingSets [batch 0], README.md
-#          experiments/runs/2026-11-11_bmv-clean3/manifest.csv   clean3 FCS of every arm [97c_reclean_pooled.R]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv
+#          run_in("clean3")/manifest.csv   clean3 FCS of every arm [97c_reclean_pooled.R]
+#          data_path("autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv")
 #            dye to marker map [user zip]
-# Outputs: <run_dir>/pop_pct.csv              arm, donor, population, count, parent count, % of parent
+#          experiments/benchmarks/05_bmv-unmix-compare/datasets/  config (channels, targets, neg_rule, pos_rule,
+#            cluster_markers_other, live_only_markers), run registry, sample table
+# Outputs: <run_dir>/pop_pct.csv              arm, donor (= sample id), population, count, parent count, % of
+#                                             parent (+ condition when the dataset has conditions)
 #          <run_dir>/marker_scores.csv        arm, donor, population, channel: 39b/51 readouts
-#          <run_dir>/marker_flags.csv         per population and marker: donor medians and the Q2 flag
+#          <run_dir>/marker_flags.csv         per population and marker (and condition): donor medians, Q2 flag
 #          <run_dir>/cluster_assignments.rds  donor, event row, metacluster per arm and noise seed
 #          <run_dir>/clusters_ari.csv         comparison (opt188 or noise seed), donor, ARI vs as188_joint seed 42
 #          <run_dir>/cluster_match.csv        as188_joint metacluster, matched opt188 metacluster, Jaccard
@@ -40,18 +46,40 @@ suppressPackageStartupMessages({
   library(tibble)
   library(tidyr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), cut_of()
 pkgload::load_all(".", export_all = FALSE, quiet = TRUE) # sw_cluster_run; run from the repo root
 
 # Parameters ---------------------------------------------------------------------------------------
 RUN_DIR <- commandArgs(trailingOnly = TRUE)[1]
-COMMON <- "experiments/runs/2026-11-11_bmv-common-gated" # batch 0; gs/<arm> for all arms
-CLEAN3_MANIFEST <- "experiments/runs/2026-11-11_bmv-clean3/manifest.csv" # the rows the common gs hold
+if (is.na(RUN_DIR)) {
+  RUN_DIR <- run_out("common-downstream-opt188")
+}
+COMMON <- run_in("common-gated") # batch 0; gs/<arm> for all arms
+CLEAN3_MANIFEST <- file.path(
+  run_in(if (identical(cfg("dataset"), "3d")) "clean3" else "common-gated"),
+  "manifest.csv"
+) # the rows the common gs hold (3D: clean3 files; 24H and ex vivo: the uncleaned files of 97e)
 ARMS <- c(as188_joint = "as188_joint", opt188 = "opt188_pregate_joint_p1af1") # grill Q1 (user, 2026-11-10)
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-CUT <- 1.5 # negatives below / positives above arcsinh 1.5 (G7a, user 2026-11-11; was 1). Also the marker-score cut in helper75
+# helper75_marker-scores.R reads one global scalar CUT (arcsinh) for the negative rSD and the positive share,
+# so only a dataset with the same fixed negative and positive cut can run here (3D: 1.5, G7a, user
+# 2026-11-11; was 1). A per-sample cut needs helper75 to call cut_of() per arm, sample and channel.
+if (
+  !(identical(cfg("neg_rule")$type, "fixed") &&
+    identical(cfg("pos_rule")$type, "fixed") &&
+    identical(cfg("neg_rule")$value, cfg("pos_rule")$value))
+) {
+  stop(
+    "89_downstream_as188_vs_opt188_common.R: helper75_marker-scores.R takes one scalar CUT; dataset ",
+    DS$dataset,
+    " has no single fixed cut for negatives and positives",
+    call. = FALSE
+  )
+}
+CUT <- cfg("neg_rule")$value
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| below this fraction of as188_joint's rSD (39b; user, 2026-11-10)
 FLAG_D_SQUEEZED <- 0.10 # grill Q2, revised 2026-11-10 (README): donor-median squeezed-share rise at or above this, same sign in all donors; rSD criterion dropped
-LIVE_ONLY <- c("Viability", "CD56", NA) # scored in live cells, as in 75_all_marker_screen.R
+LIVE_ONLY <- cfg("live_only_markers") # scored in live cells, as in 75_all_marker_screen.R (3D: Viability, CD56, NA)
 XDIM <- 10 # README "P10 clustering": SOM grid
 YDIM <- 10
 N_META <- 20 # P10: metaclusters
@@ -59,23 +87,16 @@ SOM_SEED <- 42 # P10
 NOISE_SEEDS <- c(1, 2, 3) # ARI noise floor, as in 03_downstream.R (user, grill Q2 and Q4, 2026-11-09)
 # README "Cluster markers": lineage only (user, 2026-11-09), channels as in 03_downstream.R
 CLUSTER_MARKERS <- c(
-  CD3 = "SBUV510-A",
-  CD4 = "Spark Blue 574-A",
-  CD8 = "SBUV445-A",
-  CD45RA = "Spark UV 387-A",
-  CCR7 = "PE-Fire 810-A",
-  CD127 = "APC-Fire 810-A",
-  CD25 = "SBUV605-A",
-  CD56 = "RB744-A",
-  TCRgd = "BUV395-A",
-  CD161 = "BUV563-A",
-  CD57 = "BV785-A",
-  CD38 = "SBUV740-A",
-  CD7 = "BUV805-A",
-  CXCR5 = "BV750-A"
+  CD3 = cfg("channels")$CD3,
+  CD4 = cfg("channels")$CD4,
+  CD8 = cfg("channels")$CD8,
+  unlist(cfg("cluster_markers_other")) # the other lineage markers, channel by marker (3D: CD45RA to CXCR5)
 )
 FLAG_LIMIT <- 0.25 # display only: symmetric limit of the diverging squeezed-share scale
-CONTROL_FILE <- "experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv"
+CONTROL_FILE <- data_path(
+  "autoSpectral_v1.8.8/Reference Group Clean/fcs_control_file.csv"
+)
+COND_KEY <- if (is.null(DS$conditions)) character() else "condition" # extra summary key (24H)
 LIB <- Sys.getenv("SW_LIB", "experiments/benchmarks/05_bmv-unmix-compare/lib")
 
 stopifnot(
@@ -90,6 +111,19 @@ source("experiments/benchmarks/05_bmv-unmix-compare/helper75_marker-scores.R")
 source(file.path(LIB, "theme.R"))
 source(file.path(LIB, "palettes.R"))
 source(file.path(LIB, "plots.R"))
+# Condition of each sample (24H); 3D and EXV have none, so their tables stay as they are
+with_condition <- function(d) {
+  if (is.null(DS$conditions)) {
+    return(d)
+  }
+  left_join(
+    d,
+    select(samples_tbl(), donor = sample, condition),
+    by = "donor",
+    relationship = "many-to-one",
+    unmatched = "error"
+  )
+}
 # one palette and shape set for every figure, keyed by label: the two arms and the seed noise floor
 pal_arm <- categorical_palette(c(names(ARMS), "as188_joint, other seed"))
 shape_arm <- c(as188_joint = 16, opt188 = 17, "as188_joint, other seed" = 1) # encode twice
@@ -130,7 +164,8 @@ pop_pct <- gs_list |>
         pct_of_parent = 100 * Count / ParentCount
       )
   }) |>
-  list_rbind(names_to = "arm")
+  list_rbind(names_to = "arm") |>
+  with_condition()
 write_csv(pop_pct, file.path(RUN_DIR, "pop_pct.csv"))
 
 # (2) Q2 flags: every marker, opt188 vs as188_joint on the common labels (paired rows) ------------
@@ -143,6 +178,12 @@ marker_parent <- read_csv(CONTROL_FILE, show_col_types = FALSE) |>
   )
 pooled <- read_csv(CLEAN3_MANIFEST, show_col_types = FALSE)
 donors <- sort(pooled$sample[pooled$arm == "as188_joint"])
+stopifnot(
+  "clean3 samples equal the sample table" = setequal(
+    donors,
+    samples_tbl()$sample
+  )
+)
 gs_ref <- gs_list$as188_joint
 mats <- donors |>
   set_names() |>
@@ -184,14 +225,15 @@ per_donor <- marker_scores |>
   mutate(
     d_squeezed = squeezed_share_opt188 - squeezed_share_as188_joint,
     rsd_ratio = rsd_ratio_opt188
-  )
+  ) |>
+  with_condition()
 marker_flags <- per_donor |>
   summarise(
     median_d_squeezed = median(d_squeezed),
     median_rsd_ratio = median(rsd_ratio),
     all_donors_up = all(d_squeezed > 0),
     all_donors_narrower = all(rsd_ratio < 1),
-    .by = c(pop, channel, marker)
+    .by = all_of(c("pop", "channel", "marker", COND_KEY))
   ) |>
   mutate(
     flag = median_d_squeezed >= FLAG_D_SQUEEZED & all_donors_up
@@ -296,7 +338,8 @@ cluster_abundance <- bind_rows(
     relationship = "many-to-one",
     unmatched = "error"
   ) |>
-  mutate(pct = 100 * n / n_live)
+  mutate(pct = 100 * n / n_live) |>
+  with_condition()
 write_csv(cluster_abundance, file.path(RUN_DIR, "cluster_abundance.csv"))
 
 # Figure 1: population % of parent, donors joined by lines ------------------------------------------
@@ -320,7 +363,7 @@ p_pop <- ggplot(pop_df, aes(arm, pct_of_parent)) +
   scale_shape_manual(values = shape_arm, guide = "none") +
   scale_x_discrete(labels = arm_n_labels(pop_df$donor)) +
   facet_wrap(
-    ~population,
+    vars(population, !!!rlang::syms(COND_KEY)),
     scales = "free_y",
     ncol = 4,
     strip.position = "left"
@@ -342,10 +385,15 @@ flag_df <- marker_flags |>
     label = paste0(marker, " (", sub("-A$", "", channel), ")"),
     text = if_else(flag, "flag", sprintf("%.2f", median_d_squeezed))
   )
+HEAT_COL <- "pop" # one column per population; per population and condition in 24H
+if (!is.null(DS$conditions)) {
+  flag_df <- mutate(flag_df, pop_condition = paste(pop, condition))
+  HEAT_COL <- "pop_condition"
+}
 p_flag <- plot_heatmap(
   flag_df,
   row = "label",
-  col = "pop",
+  col = HEAT_COL,
   value = "median_d_squeezed",
   limit = FLAG_LIMIT,
   title = "Squeezed share change",
@@ -385,7 +433,12 @@ p_abund <- ggplot(abund_df, aes(arm, pct)) +
   scale_colour_manual(values = pal_arm, guide = "none") +
   scale_shape_manual(values = shape_arm, guide = "none") +
   scale_x_discrete(labels = arm_n_labels(abund_df$donor)) +
-  facet_wrap(~cluster, scales = "free_y", ncol = 4, strip.position = "left") +
+  facet_wrap(
+    vars(cluster, !!!rlang::syms(COND_KEY)),
+    scales = "free_y",
+    ncol = 4,
+    strip.position = "left"
+  ) +
   labs(
     x = NULL,
     y = "% of live events",

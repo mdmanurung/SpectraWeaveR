@@ -2,9 +2,12 @@
 #          artifact builder (artifact/build_common.py) and the Quarto dashboard (96c_dashboard.qmd).
 #          A cited run-dir figure is swapped for its restyled copy when MANIFEST_restyle_common.csv has one;
 #          otherwise the cited path is used. A figure that resolves to no file is an error.
-# Run:     python3 experiments/benchmarks/05_bmv-unmix-compare/dashboard/figs_common.py OUT.csv   (repo root)
-# Inputs:  experiments/runs/2026-11-11_bmv-summary-common/INDEX.md              cited figures, in text order
-#          experiments/runs/2026-11-11_bmv-restyle-common/MANIFEST_restyle_common.csv   old -> new paths
+# Run:     SW_DATASET=3d python3 experiments/benchmarks/05_bmv-unmix-compare/dashboard/figs_common.py OUT.csv   (repo root)
+#          SW_DATASET (3d, 24h, exv) is required; SW_RUN_DATE is not needed here (no run folder is created).
+# Inputs:  run_in("summary-common")/INDEX.md                        cited figures, in text order (registry: datasets/<ds>_runs.csv)
+#          run_in("restyle-common")/MANIFEST_restyle_common.csv     old -> new paths
+#          run_in("restyle-common")/report_figures/captions.csv     fallback titles
+#          run_in("common-gates-clean3")                            only when the INDEX cites figures/strategy_<donor>.png
 # Outputs: OUT.csv  section_idx, heading, line_no, token, cited, path (relative to experiments/runs),
 #                   kind (restyled, cited, run-dir), caption
 
@@ -14,14 +17,24 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dataset as ds  # noqa: E402  (stops when SW_DATASET is unset)
+
 RUNS = Path("experiments/runs")
-INDEX_MD = RUNS / "2026-11-11_bmv-summary-common/INDEX.md"
-MANIFEST = RUNS / "2026-11-11_bmv-restyle-common/MANIFEST_restyle_common.csv"
-RESTYLE = "2026-11-11_bmv-restyle-common/"
+INDEX_MD = ds.run_in("summary-common") / "INDEX.md"
+_RESTYLE_DIR = ds.run_in("restyle-common")
+MANIFEST = _RESTYLE_DIR / "MANIFEST_restyle_common.csv"
+RESTYLE = _RESTYLE_DIR.name + "/"
 CAPTION_MAX = 240  # characters of the citing sentence kept as the figure caption
 
 # The INDEX names these without a run folder (§02); the figures that match the common labels are in the clean3 gate run (G10b).
-OVERRIDES = {"figures/strategy_<donor>.png": "2026-11-11_bmv-common-gates-clean3/figures/strategy_<donor>.png"}
+# The run folder is looked up only when the INDEX cites the file, so a dataset without that citation needs no registry key.
+OVERRIDE_FILES = {"figures/strategy_<donor>.png": "common-gates-clean3"}
+
+
+def override(token):
+    key = OVERRIDE_FILES.get(token)
+    return token if key is None else ds.run_in(key).name + "/" + token
 
 PREFIX = "experiments/runs/"
 strip = lambda s: s[len(PREFIX) :] if s.startswith(PREFIX) else s
@@ -106,7 +119,7 @@ def trim_sentence(line, pos):
 
 
 TITLES = {}  # figure stem -> title, from report_figures/captions.csv (the fallback when no sentence of the INDEX fits)
-_cap_file = RUNS / "2026-11-11_bmv-restyle-common/report_figures/captions.csv"
+_cap_file = _RESTYLE_DIR / "report_figures/captions.csv"
 if _cap_file.exists():
     with _cap_file.open(newline="") as _f:
         TITLES = {r["key"]: r["caption"].strip() for r in csv.DictReader(_f)}
@@ -166,7 +179,7 @@ def collect():
             for t, pos in toks:
                 if not t.endswith(".png"):
                     continue
-                t = OVERRIDES.get(t, t)
+                t = override(t)
                 full = t.startswith("20") and "/" in t
                 dirs = [""] if full else folders + ctx
                 hits = []

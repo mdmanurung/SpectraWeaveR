@@ -4,16 +4,18 @@
 #          the donor-median squeezed share rises >= 0.10 vs as188_joint AND the donor-median negative rSD ratio
 #          is <= 0.8, with the same sign in all 5 donors (read here as: squeezed share up in every donor and
 #          rSD ratio below 1 in every donor).
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/86a_apply_flag_rule_common.R   (repo root)
-# Inputs:  experiments/runs/2026-11-11_bmv-all-marker-screen-common/scores.csv        per donor, arm, pop, channel [75]
-#          experiments/runs/2026-11-11_bmv-all-marker-screen-common/marker_parent.csv channel -> marker, dye [75]
-#          experiments/runs/2026-11-11_bmv-per-dye-channel-map-common/scores.csv      per donor, swapped dye [76]
-# Outputs: experiments/runs/2026-11-11_bmv-marker-flags-common/flags.csv   source, arm or swapped dye, pop, marker:
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript \
+#            experiments/benchmarks/05_bmv-unmix-compare/86a_apply_flag_rule_common.R   (repo root)
+# Inputs:  registry key all-marker-screen-common: scores.csv per donor, arm, pop, channel [75]; marker_parent.csv
+#            channel -> marker, dye [75]
+#          registry key per-dye-channel-map-common: scores.csv per donor, swapped dye [76]
+#          datasets/<ds>.json (marker_parent) and datasets/<ds>_samples.csv [00_samples.R]
+# Outputs: <run_out("marker-flags-common")>/flags.csv   source, arm or swapped dye, pop, marker:
 #                                                                  the three rule components and the flag
-#          experiments/runs/2026-11-11_bmv-marker-flags-common/fig_flags_screen_<pop>.{pdf,png,csv}   screen heatmap per
+#          <run_out("marker-flags-common")>/fig_flags_screen_<pop>.{pdf,png,csv}   screen heatmap per
 #            population, flagged cells outlined (save_panel: PDF, PNG, plotted frame)
-#          experiments/runs/2026-11-11_bmv-marker-flags-common/fig_flags_per_dye_<pop>.{pdf,png,csv}  per-dye heatmap
-#          experiments/runs/2026-11-11_bmv-marker-flags-common/sessionInfo.txt
+#          <run_out("marker-flags-common")>/fig_flags_per_dye_<pop>.{pdf,png,csv}  per-dye heatmap
+#          <run_out("marker-flags-common")>/sessionInfo.txt
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -21,6 +23,7 @@ suppressPackageStartupMessages({
   library(purrr)
   library(readr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), run_in(), run_out(), samples_tbl()
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R") # theme_set(), save_panel()
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/palettes.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/plots.R")
@@ -28,10 +31,33 @@ source("experiments/benchmarks/05_bmv-unmix-compare/lib/plots.R")
 # Parameters ---------------------------------------------------------------------------------------
 D_SQUEEZE_MIN <- 0.10 # grill Q2 (user, 2026-11-10)
 RSD_RATIO_MAX <- 0.8 # grill Q2
-N_DONORS <- 5 # every donor must agree in sign (grill Q2)
+# every donor must agree in sign (grill Q2): samples per condition, one per donor (3D, EXV: no condition, all samples)
+N_DONORS <- samples_tbl() |>
+  count(condition) |>
+  pull(n) |>
+  unique()
+stopifnot(
+  "86a_apply_flag_rule_common.R: unequal samples per condition" = length(
+    N_DONORS
+  ) ==
+    1
+)
 REF_ARM <- "as188_joint"
 HEAT_LIMIT <- 0.5 # colour scale saturates at +/-0.5 squeezed share (largest change 0.53); beyond is squished
-POPS <- c("CD4T", "CD8T", "live")
+# populations scored in 75 and 76, from config marker_parent (3D: CD4T, CD8T, live)
+MARKER_PARENT <- cfg("marker_parent")
+stopifnot(
+  "marker_parent needs default and no_marker" = !is.null(
+    MARKER_PARENT$default
+  ) &&
+    !is.null(MARKER_PARENT$no_marker)
+)
+POPS <- unique(c(
+  MARKER_PARENT$default,
+  unlist(MARKER_PARENT$by_marker),
+  MARKER_PARENT$no_marker
+))
+COND_BY <- if (is.null(DS$conditions)) character() else "condition" # 24H only: rule per condition
 TITLES <- list(
   screen = list(
     CD4T = "Marker squeeze, CD4 T cells",
@@ -45,24 +71,27 @@ TITLES <- list(
   )
 )
 X_LABELS <- c(screen = "Unmixing arm", per_dye = "Dye given its 1.0.2 variants")
-OUT_DIR <- "experiments/runs/2026-11-11_bmv-marker-flags-common"
-
-stopifnot("output dir must not exist" = !dir.exists(OUT_DIR))
-dir.create(OUT_DIR)
+OUT_DIR <- run_out("marker-flags-common")
+stopifnot(
+  "every scored population has a title in TITLES" = all(
+    POPS %in% names(TITLES$screen)
+  )
+)
+dir.create(OUT_DIR, recursive = TRUE)
 
 # Per-donor change vs as188_joint, then the rule per arm, pop and channel ----------------------------
 marker_of <- read_csv(
-  "experiments/runs/2026-11-11_bmv-all-marker-screen-common/marker_parent.csv",
+  file.path(run_in("all-marker-screen-common"), "marker_parent.csv"),
   show_col_types = FALSE
 ) |>
   select(channel, dye, marker)
 inputs <- list(
   screen = read_csv(
-    "experiments/runs/2026-11-11_bmv-all-marker-screen-common/scores.csv",
+    file.path(run_in("all-marker-screen-common"), "scores.csv"),
     show_col_types = FALSE
   ),
   per_dye = read_csv(
-    "experiments/runs/2026-11-11_bmv-per-dye-channel-map-common/scores.csv",
+    file.path(run_in("per-dye-channel-map-common"), "scores.csv"),
     show_col_types = FALSE
   ) |>
     rename(arm = swapped_dye)
@@ -87,7 +116,7 @@ flags <- imap(inputs, \(scores, which_source) {
       median_d_squeezed = median(d_squeezed),
       median_rsd_ratio = median(rsd_ratio),
       all_donors_up = all(d_squeezed > 0) && all(rsd_ratio < 1),
-      .by = c(arm, pop, channel)
+      .by = c(arm, pop, channel, all_of(COND_BY))
     ) |>
     mutate(
       source = which_source,
@@ -154,6 +183,10 @@ heat_panel <- function(which_source, which_pop, width_mm, height_mm) {
       fill = guide_colourbar(title.position = "top", barwidth = unit(40, "mm"))
     ) +
     rotate_x()
+  # 24H: one panel per condition
+  if (!is.null(DS$conditions)) {
+    p <- p + facet_wrap(vars(condition))
+  }
   save_panel(
     p,
     d,

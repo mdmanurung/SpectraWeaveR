@@ -60,7 +60,7 @@ tool_scores <- function(files, seed) {
   ids <- names(files)
   feat <- sw_anomaly_features(files, CHANNELS, c("quantile", "emd"), QSTEP, NEV, seed, "simulated", "all", AGG, reference_group = NULL)
   fl <- sw_anomaly_flag_outlier(feat, NTREES, FOREST_SAMPLE, 1, 0.5, seed)
-  aud <- sw_fcs_signal_audit(files, CHANNELS, range_max = NULL, range_min = NULL, time_channel = "Time", time_bin = 5, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL)
+  aud <- sw_fcs_signal_audit(files, CHANNELS, range_max = NULL, range_min = NULL, time_channel = "Time", time_bin = 5, area_height = NULL, area_height_quantile = NULL, reference_group = NULL, reference = NULL, summary = NULL)
   by_abs <- function(check) {
     a <- aud[aud$check == check, ]
     as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[ids])

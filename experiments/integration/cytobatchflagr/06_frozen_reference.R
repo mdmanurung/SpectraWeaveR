@@ -105,7 +105,8 @@ long <- lapply(SEEDS, \(seed) {
         area_height = NULL,
         area_height_quantile = NULL,
         reference_group = NULL,
-        reference = if (arm == "frozen") ref else NULL
+        reference = if (arm == "frozen") ref else NULL,
+        summary = NULL
       )
       mz <- sa[sa$check == "median_z" & sa$channel == mk, ]
       tibble(

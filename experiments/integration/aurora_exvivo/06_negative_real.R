@@ -129,7 +129,8 @@ score_arm <- function(files, bad, pick, seed) {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   row_of <- function(tab, check, item) {
     d <- tab[tab$check == check & tab$channel == item, ]

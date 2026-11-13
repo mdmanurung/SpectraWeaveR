@@ -3,18 +3,26 @@
 #          through arm_label(), a density colourbar on the hexagons, and axis limits taken from the data so no cell is
 #          cut (the old window -1.5 to 4 dropped about 0.2% of TNF cells). Same cells (+1 arcsinh level), same % losing
 #          more than half of the spike. Also covers the n.passes figure of section 25 (fig_raw_Th2_CD8T).
-# Run:     REDRAW_ONLY=spike pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_spike_raw.R
-#            from the repo root.
-# Inputs:  experiments/runs/2026-11-11_bmv-spike-in-cg/spike_cells.csv          TNF, Th2 in CD8T; 5 setups
-#          experiments/runs/2026-11-11_bmv-spike-in-panel2-cg/spike_cells.csv    CS in CD8T; 2 setups
-#          experiments/runs/2026-11-11_bmv-spike-in-cd3neg-cg/spike_cells.csv    TNF, GLUT1 in live CD3-; 2 setups
-#          experiments/runs/2026-11-11_bmv-spike-passes-cg/spike_cells.csv       Th2 in CD8T; 4 pass settings
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/21_raw_companions/spike_raw/fig_raw_<marker>_CD8T.{pdf,png,csv}
+#          The marker names are the keys of spike_marker_dyes (TNF is the dataset's tnf_label); a figure whose
+#          marker is not in that list stops the script (EXV has no Th2).
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD REDRAW_ONLY=spike pixi run Rscript
+#            experiments/benchmarks/05_bmv-unmix-compare/95c_restyle_events_spike_raw.R from the repo root.
+# Inputs:  run_in("spike-in-cg")/spike_cells.csv          TNF, Th2 in CD8T; 5 setups
+#          run_in("spike-in-panel2-cg")/spike_cells.csv    CS in CD8T; 2 setups
+#          run_in("spike-in-cd3neg-cg")/spike_cells.csv    TNF, GLUT1 in live CD3-; 2 setups
+#          run_in("spike-passes-cg")/spike_cells.csv       Th2 in CD8T; 4 pass settings
+#          datasets/<SW_DATASET>.json   lib_dirs (ggplot2 3.5 entry), targets, spike_marker_dyes
+# Outputs: run_out("restyle-common") (shared by the 95c scripts)/21_raw_companions/spike_raw/fig_raw_<marker>_CD8T.{pdf,png,csv}
 #          .../22_spike_cd3neg/raw/fig_raw_<marker>_CD3neg.{pdf,png,csv}
 #          .../25_spike_passes/raw/fig_raw_Th2_CD8T.{pdf,png,csv}   each .csv holds the % losing >50% per panel
 #          .../manifest_parts/95c_restyle_events_spike_raw.R.csv
 
-.libPaths(c("experiments/bmv_test/compare_3D/data/lib_ggplot2_35", .libPaths())) # ggplot2 3.5.2 for ggcyto
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# ggplot2 3.5.2 for ggcyto: only the ggplot2_35 entry of lib_dirs, as before
+.libPaths(c(
+  grep("lib_ggplot2_35$", cfg("lib_dirs"), value = TRUE),
+  .libPaths()
+))
 suppressPackageStartupMessages({
   library(flowCore)
   library(ggcyto)
@@ -25,18 +33,31 @@ suppressPackageStartupMessages({
 })
 source("experiments/benchmarks/05_bmv-unmix-compare/95c_spike_common.R")
 SCRIPT <- "95c_restyle_events_spike_raw.R"
+TNF_LAB <- cfg("targets")$tnf_label
 
 # Parameters ---------------------------------------------------------------------------------------
 # the figures 90_report.qmd cites: marker, population, run, column that names the unmix, folder, old figure
 FIGURES <- tribble(
   ~marker , ~pop     , ~run                 , ~by       , ~folder                       , ~old                                                                      ,
-  "TNF"   , "CD8T"   , "spike-in-cg"        , "setup"   , "21_raw_companions/spike_raw" , "2026-11-11_bmv-restyle/21_raw_companions/spike_raw/fig_raw_TNF_CD8T.png" ,
+  TNF_LAB , "CD8T"   , "spike-in-cg"        , "setup"   , "21_raw_companions/spike_raw" , "2026-11-11_bmv-restyle/21_raw_companions/spike_raw/fig_raw_TNF_CD8T.png" ,
   "Th2"   , "CD8T"   , "spike-in-cg"        , "setup"   , "21_raw_companions/spike_raw" , "2026-11-11_bmv-restyle/21_raw_companions/spike_raw/fig_raw_Th2_CD8T.png" ,
   "CS"    , "CD8T"   , "spike-in-panel2-cg" , "setup"   , "21_raw_companions/spike_raw" , "2026-11-11_bmv-restyle/21_raw_companions/spike_raw/fig_raw_CS_CD8T.png"  ,
-  "TNF"   , "CD3neg" , "spike-in-cd3neg-cg" , "setup"   , "22_spike_cd3neg/raw"         , "2026-11-11_bmv-restyle/22_spike_cd3neg/raw/fig_raw_TNF_CD3neg.png"       ,
+  TNF_LAB , "CD3neg" , "spike-in-cd3neg-cg" , "setup"   , "22_spike_cd3neg/raw"         , "2026-11-11_bmv-restyle/22_spike_cd3neg/raw/fig_raw_TNF_CD3neg.png"       ,
   "GLUT1" , "CD3neg" , "spike-in-cd3neg-cg" , "setup"   , "22_spike_cd3neg/raw"         , "2026-11-11_bmv-restyle/22_spike_cd3neg/raw/fig_raw_GLUT1_CD3neg.png"     ,
   "Th2"   , "CD8T"   , "spike-passes-cg"    , "setting" , "25_spike_passes/raw"         , "2026-11-11_bmv-spike-passes/raw/fig_raw_Th2_CD8T.png"
 )
+# every figure needs its marker in the dataset's spike panel (rule: stop, never skip or reuse a 3D value)
+absent <- setdiff(FIGURES$marker, names(MARKERS))
+if (length(absent) > 0) {
+  stop(
+    SCRIPT,
+    ": needs ",
+    paste(absent, collapse = ", "),
+    ", missing in dataset ",
+    DS$dataset,
+    call. = FALSE
+  )
+}
 POP_LABELS <- c(CD4T = "CD4T", CD8T = "CD8T", CD3neg = "Live CD3-")
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md)
 AXIS_STEP <- 1 # axis limits are the data range rounded outward to this step (arcsinh); no cell is cut

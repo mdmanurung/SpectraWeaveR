@@ -1,13 +1,17 @@
 # Purpose: shared figure builders for the BMV report notebooks (90_report.qmd, 91_all_figures.qmd), in
 #          the lucid-coder figure style (user, 2026-11-10). Each builder reads a SAVED table only and returns
 #          list(plot, data, width_mm, height_mm) for save_panel(); nothing is recomputed from events.
-# Run:     source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R") from the repo root.
+# Run:     SW_DATASET=<3d|24h|exv> source("experiments/benchmarks/05_bmv-unmix-compare/report_figures.R") from the
+#          repo root (SW_RUN_DATE only where the calling script writes a run folder). The dataset sets the
+#          donor list and palette (samples_tbl()), the cytokine labels and channels (cfg("targets"), cfg("channels")).
 #          Nature spec (user, 2026-11-11): widths 89 or 183 mm, text 5-7 pt; save_panel() enforces it.
-# Inputs:  experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R   Nature theme, value_grid(), save_panel()
+# Inputs:  experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R   DS, cfg(), samples_tbl() (registry keys:
+#            none; the saved tables come from the calling script)
+#          experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R   Nature theme, value_grid(), save_panel()
 #          experiments/benchmarks/05_bmv-unmix-compare/lucid/palettes.R, plots.R
 #            [lucid-coder 0.5.0 templates, copied 2026-11-10]
 #          experiments/benchmarks/05_bmv-unmix-compare/arm_labels.R   ARM_LABELS for the 11 main arms
-# Outputs: none; defines DONORS, DONOR_PAL, DONOR_SHAPES, arm_label(), panel_gap(), panel_arm_donor(),
+# Outputs: none; defines DONORS, N_DONORS, DONOR_PAL, DONOR_SHAPES, arm_label(), panel_gap(), panel_arm_donor(),
 #          panel_signed_tile(), panel_set_points(), LAYOUTS, BUILDERS and redraw_panel()
 
 suppressPackageStartupMessages({
@@ -19,6 +23,7 @@ suppressPackageStartupMessages({
   library(tibble)
   library(tidyr)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lib/theme.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lucid/palettes.R")
 source("experiments/benchmarks/05_bmv-unmix-compare/lucid/plots.R")
@@ -28,11 +33,46 @@ FACET_AXES <- list(axes = "all", axis.labels = "margins")
 # Height per category row in a flipped panel: one 7 pt label plus spacing.
 ROW_MM <- 4.5
 
+# Dataset labels and channels -------------------------------------------------------------------
+# The two cytokine dye slots keep their channel; the marker label comes from the dataset config.
+TNF_LABEL <- cfg("targets")$tnf_label
+IFNG_LABEL <- cfg("targets")$ifng_label
+TNF_DYE <- cfg("targets")$tnf_dye
+TNF_SLOT <- cfg("channels")$TNF_slot
+IFNG_SLOT <- cfg("channels")$IFNg_slot
+CD8_CHANNEL <- cfg("channels")$CD8
+
 # Donor encoding -------------------------------------------------------------------------------
-# Donors are the replicates: one colour and one shape per donor, the same in every figure.
-DONORS <- c("A3", "A6", "B11", "B2", "D1")
+# Donors are the replicates: one colour and one shape per donor, the same in every figure. Without
+# conditions the table's `donor` column holds the sample id (the well in 3D and EXV); with conditions
+# (24H) the samples are donor x condition, so the replicate is the donor id and `condition` facets.
+DONORS <- if (is.null(DS$conditions)) {
+  samples_tbl()$sample
+} else {
+  unique(samples_tbl()$donor)
+}
+N_DONORS <- length(DONORS)
 DONOR_PAL <- categorical_palette(DONORS)
-DONOR_SHAPES <- setNames(c(16, 17, 15, 18, 25), DONORS)
+# the first five are the 3D shapes; the rest serve datasets with more donors
+DONOR_SHAPE_POOL <- c(16, 17, 15, 18, 25, 8, 3, 4, 7, 9)
+stopifnot(
+  "a point shape for every donor" = N_DONORS <= length(DONOR_SHAPE_POOL)
+)
+DONOR_SHAPES <- setNames(DONOR_SHAPE_POOL[seq_len(N_DONORS)], DONORS)
+# Table with a `sample` column to the replicate columns: `donor` (and `condition` when the dataset has them)
+with_donor <- function(d) {
+  if (is.null(DS$conditions)) {
+    return(rename(d, donor = sample))
+  }
+  d |>
+    left_join(
+      select(samples_tbl(), sample, donor, condition),
+      by = join_by(sample),
+      relationship = "many-to-one",
+      unmatched = "error"
+    ) |>
+    select(-sample)
+}
 # Gap criterion from the README decision table (D3): median >= 0.8 and every donor >= 0.5.
 GAP_LINES <- c(0.5, 0.8)
 
@@ -53,8 +93,8 @@ donor_scales <- function() {
 # each arm closes. Arms sorted by median squeeze; donors as points over a median crossbar.
 panel_gap <- function(src, title) {
   readout_labels <- c(
-    squeezed_share = "CD8T TNF squeezed near 0",
-    pos_share = "CD8T TNF above arcsinh 1"
+    squeezed_share = sprintf("CD8T %s squeezed near 0", TNF_LABEL),
+    pos_share = sprintf("CD8T %s above arcsinh 1", TNF_LABEL)
   )
   # Some runs saved the readout key, others its label; both map to the key.
   gap <- read_csv(src, show_col_types = FALSE) |>
@@ -110,7 +150,8 @@ panel_gap <- function(src, title) {
 # donor across arms, because the arms have no order (user, 2026-11-11).
 # Arms run down the y axis with horizontal labels (r-0012), first arm on top; the value is on x with
 # a thin grid (r-0014). The table's `rows` (readouts with their own units) become columns with
-# their own x scale; its `cols` (populations) become rows.
+# their own x scale; its `cols` (populations) become rows. With conditions, `condition` is one more facet
+# row (24H: one row block per condition), and the many-readout wrap is off.
 panel_arm_donor <- function(
   df,
   value,
@@ -126,6 +167,15 @@ panel_arm_donor <- function(
       arm = factor(.data$arm, levels = arm_levels)
     )
   stopifnot("every arm has a level" = !anyNA(plot_df$arm))
+  by_condition <- !is.null(DS$conditions)
+  if (by_condition && !"condition" %in% names(plot_df)) {
+    stop(
+      "report_figures.R panel_arm_donor: dataset ",
+      DS$dataset,
+      " has conditions but the table has no condition column",
+      call. = FALSE
+    )
+  }
   p <- ggplot(plot_df, aes(.data[[value]], arm)) +
     value_grid("x") +
     stat_summary(
@@ -145,8 +195,17 @@ panel_arm_donor <- function(
     theme(panel.spacing.x = unit(4, "mm"))
   n_readouts <- if (is.null(rows)) 1 else n_distinct(plot_df[[rows]])
   # many readouts and no population split: wrap them three to a row so strips and ticks fit
-  wrap <- is.null(cols) && n_readouts > 4
-  if (wrap) {
+  wrap <- !by_condition && is.null(cols) && n_readouts > 4
+  if (by_condition) {
+    p <- p +
+      facet_grid(
+        rows = vars(!!!rlang::syms(c(cols, "condition"))),
+        cols = if (is.null(rows)) NULL else vars(.data[[rows]]),
+        scales = "free_x",
+        axes = "all",
+        axis.labels = "margins"
+      )
+  } else if (wrap) {
     p <- p +
       facet_wrap(
         vars(.data[[rows]]),
@@ -172,6 +231,9 @@ panel_arm_donor <- function(
     1
   } else {
     n_distinct(plot_df[[cols]])
+  }
+  if (by_condition) {
+    n_facet_rows <- n_facet_rows * n_distinct(plot_df$condition)
   }
   list(
     plot = p,
@@ -354,7 +416,12 @@ METRIC_LABELS <- c(
   fig_spread_sym = "Median over channels of Nguyen rSD (q84 - q50, linear)",
   fig_stain_index_sym = "Median over channels of stain index",
   fig_hyperneg_sym = "Median over channels of hypernegatives (%)",
-  fig_streak_sym = "TNF-CD8 Spearman rho (BV510-A vs SBUV445-A)",
+  fig_streak_sym = sprintf(
+    "%s-CD8 Spearman rho (%s vs %s)",
+    TNF_LABEL,
+    TNF_SLOT,
+    CD8_CHANNEL
+  ),
   fig_tilt_sym = "Median |Spearman rho| over channel pairs",
   fig_ssm_sym = "Median quadrature SS over source i, target j",
   fig_spread = "Median over channels of Nguyen rSD (q84 - q50, linear)",
@@ -368,7 +435,10 @@ METRIC_LABELS <- c(
   fig_biology = "Value"
 )
 
-PAIRED <- "Each point is one donor (colour and shape); the bar is the median of 5 donors."
+PAIRED <- sprintf(
+  "Each point is one donor (colour and shape); the bar is the median of %d donors.",
+  N_DONORS
+)
 FLAGGED <- "A grey ring marks a value from a failed own gate or a pinned reference gate."
 
 # Paired donors per arm, with an optional ring on flagged values.
@@ -428,7 +498,10 @@ BUILDERS <- list(
   gap = \(d, src, title) {
     out <- panel_gap(src, title)
     out$caption <- paste(
-      "Fraction of the as188_joint to s102_c188 gap each arm closes, for the CD8T TNF squeezed and positive shares.",
+      sprintf(
+        "Fraction of the as188_joint to s102_c188 gap each arm closes, for the CD8T %s squeezed and positive shares.",
+        TNF_LABEL
+      ),
       "Each point is one donor; the bar is the median; dashed lines mark the D3 criterion (every donor 0.5, median 0.8)."
     )
     out
@@ -452,7 +525,7 @@ BUILDERS <- list(
     out
   },
   rank = \(d, src, title) {
-    d <- rename(d, donor = sample)
+    d <- with_donor(d)
     out <- arm_donor(d, "value", METRIC_LABELS[[title]], title)
     out$caption <- paste("Ranking metric per arm.", PAIRED)
     out
@@ -536,7 +609,10 @@ BUILDERS <- list(
       cols = "pop"
     )
     out$caption <- paste(
-      "Change per marker (rows) and arm (columns) against the reference, median of 5 donors, per population.",
+      sprintf(
+        "Change per marker (rows) and arm (columns) against the reference, median of %d donors, per population.",
+        N_DONORS
+      ),
       "Blue is lower, red higher; grey is not tested."
     )
     out
@@ -557,10 +633,18 @@ BUILDERS <- list(
     out
   },
   dye_share = \(d, src, title) {
-    d <- d |> rename(donor = sample) |> mutate(arm = .data$dye)
-    out <- arm_donor(d, "squeezed_share", "CD8T TNF squeezed share", title)
+    d <- d |> with_donor() |> mutate(arm = .data$dye)
+    out <- arm_donor(
+      d,
+      "squeezed_share",
+      sprintf("CD8T %s squeezed share", TNF_LABEL),
+      title
+    )
     out$caption <- paste(
-      "CD8T TNF squeezed share when only one dye takes 1.0.2 variants (x).",
+      sprintf(
+        "CD8T %s squeezed share when only one dye takes 1.0.2 variants (x).",
+        TNF_LABEL
+      ),
       PAIRED
     )
     out
@@ -623,18 +707,27 @@ BUILDERS <- list(
         values_to = "pct"
       ) |>
       mutate(
-        among = if_else(.data$among == "pct_tnf_of_ifng", "IFNg+", "IFNg-")
+        among = if_else(
+          .data$among == "pct_tnf_of_ifng",
+          paste0(IFNG_LABEL, "+"),
+          paste0(IFNG_LABEL, "-")
+        )
       )
     out <- arm_donor(
       long,
       "pct",
-      "% TNF+",
+      paste0("% ", TNF_LABEL, "+"),
       title,
       rows = "among",
       cols = "parent"
     )
     out$caption <- paste(
-      "Share of TNF+ cells among IFNg+ and IFNg- cells (rows) per parent (columns).",
+      sprintf(
+        "Share of %s+ cells among %s+ and %s- cells (rows) per parent (columns).",
+        TNF_LABEL,
+        IFNG_LABEL,
+        IFNG_LABEL
+      ),
       PAIRED
     )
     out
@@ -674,7 +767,10 @@ BUILDERS <- list(
       data = d,
       width_mm = 183,
       height_mm = 80,
-      caption = "Median over 5 donors per pass grid cell (text); the fill is that median scaled within each readout."
+      caption = sprintf(
+        "Median over %d donors per pass grid cell (text); the fill is that median scaled within each readout.",
+        N_DONORS
+      )
     )
   },
   anatomy = \(d, src, title) {
@@ -728,7 +824,10 @@ BUILDERS <- list(
       data = plot_df,
       width_mm = 183,
       height_mm = 85,
-      caption = "Mean AF405 variant spread per detector for each variant set, with the AF and BV510 (1.8.8) reference shapes."
+      caption = sprintf(
+        "Mean AF405 variant spread per detector for each variant set, with the AF and %s (1.8.8) reference shapes.",
+        TNF_DYE
+      )
     )
   },
   interventions = \(d, src, title) {
@@ -809,13 +908,17 @@ BUILDERS <- list(
         name = "Arm"
       ) +
       facet_wrap(~donor, nrow = 1, axes = "all", axis.labels = "margins") +
-      labs(x = "BV510 (arcsinh)", y = "Density", title = title)
+      labs(x = paste0(TNF_DYE, " (arcsinh)"), y = "Density", title = title)
     list(
       plot = p,
       data = plot_df,
       width_mm = 183,
       height_mm = 60,
-      caption = "BV510 (TNF) distribution per arm and donor (panels), drawn from the saved event values."
+      caption = sprintf(
+        "%s (%s) distribution per arm and donor (panels), drawn from the saved event values.",
+        TNF_DYE,
+        TNF_LABEL
+      )
     )
   },
   glut1 = \(d, src, title) {
@@ -1087,13 +1190,15 @@ BUILDERS <- list(
     )
   },
   scores = \(d, src, title) {
-    # Two channels per table: BV510-A is TNF, BV570-A is IFNg (the panel's cytokine dyes).
+    # Two channels per table: the TNF and IFNg dye slots, named by the dataset's labels.
     long <- d |>
-      rename(donor = sample) |>
+      with_donor() |>
       mutate(
         panel = paste(
           .data$pop,
-          c(`BV510-A` = "TNF", `BV570-A` = "IFNg")[.data$channel]
+          setNames(c(TNF_LABEL, IFNG_LABEL), c(TNF_SLOT, IFNG_SLOT))[
+            .data$channel
+          ]
         )
       ) |>
       pivot_longer(
@@ -1111,7 +1216,11 @@ BUILDERS <- list(
     )
     out$width_mm <- 183
     out$caption <- paste(
-      "TNF and IFNg readouts (rows) per arm, population and cytokine (columns).",
+      sprintf(
+        "%s and %s readouts (rows) per arm, population and cytokine (columns).",
+        TNF_LABEL,
+        IFNG_LABEL
+      ),
       PAIRED
     )
     out
@@ -1155,7 +1264,11 @@ BUILDERS <- list(
         axis.labels = "margins"
       ) +
       labs(
-        x = "Odds ratio TNF+ given IFNg+ (log scale)",
+        x = sprintf(
+          "Odds ratio %s+ given %s+ (log scale)",
+          TNF_LABEL,
+          IFNG_LABEL
+        ),
         y = NULL,
         title = title
       )
@@ -1170,7 +1283,12 @@ BUILDERS <- list(
           ROW_MM * nrow(distinct(plot_df, experiment, arm))
       ),
       caption = paste(
-        "Odds of TNF+ in IFNg+ versus IFNg- cells per arm, grouped by experiment.",
+        sprintf(
+          "Odds of %s+ in %s+ versus %s- cells per arm, grouped by experiment.",
+          TNF_LABEL,
+          IFNG_LABEL,
+          IFNG_LABEL
+        ),
         PAIRED
       )
     )
@@ -1224,12 +1342,20 @@ BUILDERS <- list(
     out <- arm_donor(
       d,
       "share_tnfpos",
-      "Share TNF+ among IFNg+ TNF- source",
+      sprintf(
+        "Share %s+ among %s+ %s- source",
+        TNF_LABEL,
+        IFNG_LABEL,
+        TNF_LABEL
+      ),
       title,
       cols = "pop"
     )
     out$caption <- paste(
-      "Share of TNF+ cells per arm and population (columns).",
+      sprintf(
+        "Share of %s+ cells per arm and population (columns).",
+        TNF_LABEL
+      ),
       PAIRED
     )
     out
@@ -1239,8 +1365,70 @@ BUILDERS <- list(
 # Redraw one figure -----------------------------------------------------------------------------
 # Reads the saved table, builds the layout's panel, writes it with save_panel(); returns the PNG
 # path and the caption. Event panels write a seeded 20,000-event subsample as their source CSV.
+# Builders that draw their own panels do not split by condition; a dataset with conditions stops there.
+# 91_all_figures.qmd should key LAYOUTS with table_signature(), and stop on a mapped table with no layout.
+CONDITION_LAYOUTS <- c(
+  "cyto",
+  "rank",
+  "pct_pos",
+  "rho_pairs",
+  "dye_share",
+  "rho_marker",
+  "tnf_of_ifng",
+  "interventions",
+  "il2",
+  "neg_spread",
+  "scores",
+  "readouts",
+  "share_tnfpos"
+)
+# Tables the scripts write with `donor` = sample id (24H: BMV_006C_SEB): put the donor id into `donor`,
+# which keys DONOR_PAL and DONOR_SHAPES, and add `condition`. Tables with a `sample` column go through
+# with_donor() in their builder; tables that already carry `condition` are left as they are.
+with_donor_ids <- function(d) {
+  if (
+    is.null(DS$conditions) ||
+      !"donor" %in% names(d) ||
+      "condition" %in% names(d) ||
+      !all(d$donor %in% samples_tbl()$sample)
+  ) {
+    return(d)
+  }
+  d |>
+    left_join(
+      select(samples_tbl(), donor = sample, donor_id = donor, condition),
+      by = join_by(donor),
+      relationship = "many-to-one",
+      unmatched = "error"
+    ) |>
+    mutate(donor = .data$donor_id) |>
+    select(-donor_id)
+}
+# Column signature of a saved table without `condition`, the key into LAYOUTS (a dataset with conditions
+# may save the same table with or without that column)
+table_signature <- function(path) {
+  paste(
+    setdiff(
+      names(read_csv(path, n_max = 1, show_col_types = FALSE)),
+      "condition"
+    ),
+    collapse = ","
+  )
+}
 redraw_panel <- function(src, layout, title, out_dir, name) {
-  d <- read_csv(src, show_col_types = FALSE)
+  if (!is.null(DS$conditions) && !layout %in% CONDITION_LAYOUTS) {
+    stop(
+      "report_figures.R redraw_panel: layout '",
+      layout,
+      "' does not split by condition (dataset ",
+      DS$dataset,
+      "); figure ",
+      name,
+      call. = FALSE
+    )
+  }
+  d <- read_csv(src, show_col_types = FALSE) |>
+    with_donor_ids()
   set.seed(1)
   out <- BUILDERS[[layout]](d, src, title)
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)

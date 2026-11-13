@@ -1,0 +1,411 @@
+{
+  "dataset": "3d",
+  "data_dir": "experiments/bmv_test/compare_3D/data",
+  "run_tag": "",
+  "raw_layout": "flat",
+  "conditions": null,
+  "mindensity_method": "mindensity",
+  "viability_range": null,
+  "gate_group": null,
+  "sample_regex": "^([A-Z][0-9]+) ",
+  "donor_regex": "BMV_(\\d+[A-Z]|REF1)",
+  "stamps": {
+    "as188_spectra": "Automated_autospectral_spectra_20261105_143803.csv",
+    "as188_af": "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv",
+    "as102_spectra": "Cells Matching Negative_autospectral_spectra.csv",
+    "as102_af": "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs_H12 Unstained_BMV_Aurora_3dCD328_Batch1_AF.csv",
+    "as102_afclean_spectra": "Cells AF clean up_autospectral_spectra.csv"
+  },
+  "channels": {
+    "viability_spectroflo": "LIVE DEAD NIR-A",
+    "viability_autospectral": "Zombie NIR-A",
+    "CD3": "SBUV510-A",
+    "CD4": "Spark Blue 574-A",
+    "CD8": "SBUV445-A",
+    "TNF_slot": "BV510-A",
+    "IFNg_slot": "BV570-A",
+    "IL2": "BV605-A",
+    "IL10": "BB700-A",
+    "Th2": "eFluor 450-A",
+    "Th2_slot": "eFluor 450-A",
+    "IL10_slot": "BB700-A"
+  },
+  "targets": {
+    "tnf_dye": "BV510",
+    "ifng_dye": "BV570",
+    "glut1_dye": "Alexa Fluor 405",
+    "tnf_label": "TNF",
+    "ifng_label": "IFNg",
+    "th2_dye": "eFluor 450",
+    "il10_dye": "BB700",
+    "th2_label": "Th2",
+    "cytokines": [
+      "TNF",
+      "IFNg",
+      "IL-2",
+      "IL-10",
+      "Th2"
+    ],
+    "streak_pair": [
+      "BV510-A",
+      "SBUV445-A"
+    ]
+  },
+  "control_gates_zip": {
+    "cell_zip": {
+      "fsc": [
+        600000.0,
+        4000000.0
+      ],
+      "ssc": [
+        100000.0,
+        1600000.0
+      ]
+    },
+    "bead_zip": {
+      "fsc": [
+        300000.0,
+        800000.0
+      ],
+      "ssc": [
+        1300000.0,
+        1900000.0
+      ]
+    }
+  },
+  "pos_rule": {
+    "type": "fixed",
+    "value": 1.5
+  },
+  "neg_rule": {
+    "type": "fixed",
+    "value": 1.5
+  },
+  "smoke_donor": "A3",
+  "lib_dirs": [
+    "experiments/bmv_test/compare_3D/data/lib_as102",
+    "experiments/bmv_test/compare_3D/data/lib_cytoutils",
+    "experiments/bmv_test/compare_3D/data/lib_ggplot2_35"
+  ],
+  "reasons": {
+    "control_gates_zip": "What the zip ships: the rectangleGate values in compare_3D/data/autoSpectral_v1.8.8/AutoSpectral_unmix_v1.8.8.R lines 39-41 and 62-64. Dataset-specific; never copied between datasets. The widened rectangles (bead_wide, cell_wide) and the landmark settings in 3D are the user's 3D choices and are not in the 24H or ex vivo zips, so control_gates stays null for them (user 2026-11-12: do not apply the 3D control gates).",
+    "mindensity_method": "Unchanged so the 3D regression stays valid (97d reproduces the 2026-11-11 gates).",
+    "data_dir": "3D zip unpacked here (B05 README).",
+    "run_tag": "Empty so existing 3D run folder names are reproduced.",
+    "raw_layout": "3D Raw/ and arm folders hold the 5 files directly.",
+    "sample_regex": "3D sample id is the well code (01_manifest-gate.R:62).",
+    "stamps": "Literal in ~58 scripts today (decision G2: as188_joint spectra 143803).",
+    "channels": "19a_gate_arm.R and 97d channel literals.",
+    "pos_rule": "G7a: fixed cut at arcsinh 1.5 in every arm (user 2026-11-11).",
+    "neg_rule": "G13: negatives are cells below arcsinh 1.5.",
+    "lib_dirs": "Code libraries, not data; stay in the 3D folder (88cg:203, 97b:28-29).",
+    "smoke_donor": "42_unmix_gls_noise.R:41 SMOKE_DONOR <- \"A3\" (whole donor for the smoke test).",
+    "stamps.as102_afclean_spectra": "36_af_bv510_common.R:80 (HEAD) sp102_afclean file name 'Cells AF clean up_autospectral_spectra.csv' in autoSpectral_v1.0.2/Reference Group/table_spectra.",
+    "channels.extra": "47c_other_cytokines_common.R:45-47 (IL2 BV605-A, IL10 BB700-A, Th2 eFluor 450-A); Th2_slot and IL10_slot: 51c_score_ablation_common.R:54-55, 87_af405_forced_af_common.R:45, 87b_af405_afremove_common.R:53.",
+    "targets.th2_il10": "86_th2_proof_arms_common.R:5-6,39 (Th2 = eFluor 450, IL-10 = BB700); th2_label 'Th2': marker name in 47c_other_cytokines_common.R:47 and 92_umap_knn_common.R:205.",
+    "targets.cytokines": "47c_other_cytokines_common.R:41-47 CYTOKINES (TNF, IFNg, IL-2, IL-10, Th2). Only the presence of the field is tested by 95c_restyle_report_tables.R:468.",
+    "targets.streak_pair": "34c_rank_symmetric_common.R:58 STREAK <- c(TNF = \"BV510-A\", CD8 = \"SBUV445-A\"); the scripts test only membership, so names are dropped.",
+    "stained_sample": "53_opt188.R:59 STAINED_SAMPLE is the raw file 'A3 BMV_009C_3dCD328_BMV_Aurora_3dCD328_Batch1.fcs'; the id is its sample A3 (user 2026-11-10).",
+    "check_sample": "95c_restyle_events_gate_cd4_cd8.R:228 (97f check figure, donor A3).",
+    "af405_variants_102_n": "70_af405_absorption_test_common.R:56 stopifnot(length(coef_102) == 65).",
+    "spike_panels": "panel1: 88cg_spike_in_markers.R:58; panel2: 88bcg_spike_in_panel2.R:54-64; cd3neg: 88ecg_spike_cd3neg.R:54-67; passes: 88hcg_spike_passes.R:66. Marker = dye; order sets figure and file order.",
+    "spike_marker_dyes": "95c_spike_common.R:19-32 MARKERS (the 12 markers of 88, 88b, 88e); names equal the marker column of spike_summary.csv.",
+    "cluster_markers_other": "89_downstream_as188_vs_opt188_common.R:61-75 CLUSTER_MARKERS without CD3, CD4, CD8 (those come from channels).",
+    "lineage_channels_other": "95c_restyle_events_cluster_raw.R:47-61 LINEAGE without CD3, CD4, CD8; same markers and channels as cluster_markers_other.",
+    "live_only_markers": "89_downstream_as188_vs_opt188_common.R:54 and 75_all_marker_screen_common.R:53 LIVE_ONLY <- c(\"Viability\", \"CD56\", NA); null is the PE channel without a marker.",
+    "marker_parent": "75_all_marker_screen_common.R:50-63 (POPS CD4T, CD8T, live; LIVE_ONLY; ALSO_NON_T), 76_per_dye_channel_map_common.R:38-39 (MAP_POP_T CD8T), 86a_apply_flag_rule_common.R:34.",
+    "umap_markers": "lineage: 92_umap_knn_common.R:70-86 LINEAGE; functional: :87-105 FUNCTIONAL; colour: :205 bind_cols(select(mats[[a]], donor, cell, TNF, Th2)).",
+    "control_gates": "bead_zip: 48b_ablation_bead.R:40; bead_wide: 53_opt188.R:53-54; cell_wide: 53_opt188.R:55-56; landmark: 53_opt188.R:57-58; landmark_define: 50_cell_gate_plots.R:56-63. Written as doubles so paste() output matches the old literals.",
+    "arms_cg": "Unique arm column of experiments/runs/2026-11-11_bmv-common-gated/manifest.csv, in first-seen order (70 arms); read by 51c_score_ablation_common.R:66.",
+    "palette": "integration/clean_run_bmv.R:60-66 DONOR_COLOURS (Tol bright, one colour per well).",
+    "dashboard_banner": "dashboard/artifact/build_common.py:40 BANNER.",
+    "dashboard_subject": "96c_dashboard.qmd:3 subtitle text between 'on ' and ', 5 donors'.",
+    "label_key": "3D: SpectroFlo labels of the clean3 gate fit (97d), unchanged.",
+    "manifest_key": "3D: clean3 files of every arm (97c)."
+  },
+  "stained_sample": "A3",
+  "check_sample": "A3",
+  "af405_variants_102_n": 65,
+  "spike_panels": {
+    "panel1": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700"
+    },
+    "panel2": {
+      "IFNg": "BV570",
+      "IL2": "BV605",
+      "GLUT1": "Alexa Fluor 405",
+      "ATP5A": "Alexa Fluor 488",
+      "CS": "Alexa Fluor 594",
+      "CPT1A": "PE-Cy5.5",
+      "ATGL": "PE-Cy7",
+      "G6PD": "APC-Cy7",
+      "CD71": "Spark YG 593"
+    },
+    "cd3neg": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700",
+      "IFNg": "BV570",
+      "IL2": "BV605",
+      "GLUT1": "Alexa Fluor 405",
+      "ATP5A": "Alexa Fluor 488",
+      "CS": "Alexa Fluor 594",
+      "CPT1A": "PE-Cy5.5",
+      "ATGL": "PE-Cy7",
+      "G6PD": "APC-Cy7",
+      "CD71": "Spark YG 593"
+    },
+    "passes": {
+      "TNF": "BV510",
+      "Th2": "eFluor 450",
+      "IL10": "BB700"
+    }
+  },
+  "spike_marker_dyes": {
+    "TNF": "BV510",
+    "Th2": "eFluor 450",
+    "IL10": "BB700",
+    "IFNg": "BV570",
+    "IL2": "BV605",
+    "GLUT1": "Alexa Fluor 405",
+    "ATP5A": "Alexa Fluor 488",
+    "CS": "Alexa Fluor 594",
+    "CPT1A": "PE-Cy5.5",
+    "ATGL": "PE-Cy7",
+    "G6PD": "APC-Cy7",
+    "CD71": "Spark YG 593"
+  },
+  "cluster_markers_other": {
+    "CD45RA": "Spark UV 387-A",
+    "CCR7": "PE-Fire 810-A",
+    "CD127": "APC-Fire 810-A",
+    "CD25": "SBUV605-A",
+    "CD56": "RB744-A",
+    "TCRgd": "BUV395-A",
+    "CD161": "BUV563-A",
+    "CD57": "BV785-A",
+    "CD38": "SBUV740-A",
+    "CD7": "BUV805-A",
+    "CXCR5": "BV750-A"
+  },
+  "lineage_channels_other": {
+    "CD45RA": "Spark UV 387-A",
+    "CCR7": "PE-Fire 810-A",
+    "CD127": "APC-Fire 810-A",
+    "CD25": "SBUV605-A",
+    "CD56": "RB744-A",
+    "TCRgd": "BUV395-A",
+    "CD161": "BUV563-A",
+    "CD57": "BV785-A",
+    "CD38": "SBUV740-A",
+    "CD7": "BUV805-A",
+    "CXCR5": "BV750-A"
+  },
+  "live_only_markers": [
+    "Viability",
+    "CD56",
+    null
+  ],
+  "marker_parent": {
+    "default": [
+      "CD4T",
+      "CD8T"
+    ],
+    "by_marker": {
+      "Viability": [
+        "live"
+      ],
+      "CD56": [
+        "live"
+      ]
+    },
+    "no_marker": [
+      "live"
+    ],
+    "map_pop": "CD8T",
+    "also_non_t": [
+      "CD45RA",
+      "CD7",
+      "CD161",
+      "CD57",
+      "CD38",
+      "CD71",
+      "CCR7",
+      "CD127",
+      "CD25"
+    ]
+  },
+  "umap_markers": {
+    "lineage": [
+      "CD45RA",
+      "TCRgd",
+      "CD8",
+      "CD3",
+      "CD161",
+      "CD25",
+      "CD38",
+      "CD7",
+      "CD4",
+      "CD56",
+      "CD57",
+      "CXCR5",
+      "CCR7",
+      "CD127"
+    ],
+    "functional": [
+      "GLUT1",
+      "Th2",
+      "TNF",
+      "IFNg",
+      "IL-2",
+      "CTLA-4",
+      "ATP5A",
+      "TCRvd2",
+      "IL-10",
+      "FoxP3",
+      "CD71",
+      "CS",
+      "PD-1",
+      "T-bet",
+      "CPT1A",
+      "ATGL",
+      "G6PD"
+    ],
+    "colour": [
+      "TNF",
+      "Th2"
+    ]
+  },
+  "control_gates": {
+    "bead_zip": {
+      "fsc": [
+        300000.0,
+        800000.0
+      ],
+      "ssc": [
+        1300000.0,
+        1900000.0
+      ]
+    },
+    "bead_wide": {
+      "fsc": [
+        200000.0,
+        900000.0
+      ],
+      "ssc": [
+        1300000.0,
+        2250000.0
+      ]
+    },
+    "cell_wide": {
+      "fsc": [
+        400000.0,
+        4000000.0
+      ],
+      "ssc": [
+        100000.0,
+        1600000.0
+      ]
+    },
+    "landmark": {
+      "n_cells": 2000.0,
+      "percentile": 70.0
+    },
+    "landmark_define": [
+      "Alexa Fluor 405",
+      "Alexa Fluor 488",
+      "Alexa Fluor 594",
+      "PE-Cy5.5",
+      "PE-Cy7",
+      "APC-Cy7"
+    ]
+  },
+  "arms_cg": [
+    "as102_basic",
+    "as102_var",
+    "as188_fast_csv",
+    "as188_joint",
+    "best102_af",
+    "best102_neg",
+    "best188_p1",
+    "best188_p5",
+    "s102_c188",
+    "s188_c102",
+    "spectroflo",
+    "af405_102_highAF",
+    "af405_102_highBV510",
+    "af405_102_lowAF",
+    "af405_102_lowBV510",
+    "af405_102_rand26",
+    "af405_102_thr",
+    "af405_188_noattr",
+    "af405_afrefine",
+    "af405_afremove",
+    "af405proof_base188",
+    "af405proof_dose_000",
+    "af405proof_dose_025",
+    "af405proof_dose_050",
+    "af405proof_ki_bv510",
+    "af405proof_ko_bv510",
+    "af405proof_recentre",
+    "bead_wide",
+    "chain1_var",
+    "chain1_var_s43",
+    "chain2_filt",
+    "chain3_af",
+    "chain4_spec",
+    "chain5_bead",
+    "chain6a_neg",
+    "chain7a_pregate",
+    "chain7b_legacy",
+    "chain8_legacy",
+    "legacy102in",
+    "legacy188",
+    "opt188_legacyspec_joint_p1af1",
+    "opt188_legacyspec_joint_p5af5",
+    "opt188_legacyspec_legacy",
+    "opt188_pregate_joint_p1af1",
+    "opt188_pregate_joint_p5af5",
+    "opt188_pregate_legacy",
+    "p10_af1",
+    "p10_af10",
+    "p10_af5",
+    "p1_af1",
+    "p1_af10",
+    "p1_af5",
+    "p5_af1",
+    "p5_af10",
+    "p5_af5",
+    "regen188",
+    "rev_af188",
+    "rev_var188",
+    "sbuv510_beadgate",
+    "sbuv510_refonly",
+    "swap_af102",
+    "swap_af102_var102",
+    "swap_spec102",
+    "swap_thr102",
+    "swap_var102",
+    "var102_only_Alexa_Fluor_405",
+    "var102_only_SBUV510",
+    "var102_only_SBUV510__Alexa_Fluor_405",
+    "var102code_clean_af405",
+    "var102code_clean_af405_s43"
+  ],
+  "palette": {
+    "A3": "#4477AA",
+    "A6": "#EE6677",
+    "B11": "#228833",
+    "B2": "#CCBB44",
+    "D1": "#66CCEE"
+  },
+  "dashboard_banner": "Rerun on common SpectroFlo gates, cut arcsinh 1.5 (2026-11-11)",
+  "dashboard_subject": "3-day CD3/CD28-stimulated BMV cells",
+  "gate_ref_arm": "spectroflo",
+  "population_gates": null,
+  "gate_pool": null,
+  "label_key": "common-gates-clean3",
+  "manifest_key": "clean3"
+}

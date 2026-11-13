@@ -1,11 +1,12 @@
 # Purpose: merge the per-script manifest parts of the 95c restyles into MANIFEST_restyle_common.csv and
 #          list every certified figure (audit_freshness.csv plus the old restyle folders) that has no new figure,
 #          with the reason: skipped as spike (batch 5), superseded, or no new source.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_manifest.R   (repo root)
-# Inputs:  experiments/runs/2026-11-11_bmv-restyle-common/manifest_parts/95c_*.csv   one per script
-#          experiments/runs/2026-11-11_bmv-restyle/audit_freshness.csv   the certified figure list
-# Outputs: experiments/runs/2026-11-11_bmv-restyle-common/MANIFEST_restyle_common.csv
-#          experiments/runs/2026-11-11_bmv-restyle-common/MANIFEST_coverage.csv   every certified figure and its status
+# Run:     SW_DATASET=3d SW_RUN_DATE=YYYY-MM-DD pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/95c_manifest.R
+#          (repo root). SW_RUN_DATE names the restyle root the 95c scripts wrote.
+# Inputs:  <SW_RUN_DATE>_bmv<run_tag>-restyle-common/manifest_parts/95c_*.csv   one per script
+#          registry key "restyle": audit_freshness.csv, the certified 3D figure list (3d only)
+# Outputs: <SW_RUN_DATE>_bmv<run_tag>-restyle-common/MANIFEST_restyle_common.csv
+#          <SW_RUN_DATE>_bmv<run_tag>-restyle-common/MANIFEST_coverage.csv   every certified figure and its status (3d only)
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -13,8 +14,15 @@ suppressPackageStartupMessages({
   library(readr)
   library(stringr)
 })
-OUT_ROOT <- "experiments/runs/2026-11-11_bmv-restyle-common"
-OLD_ROOT <- "experiments/runs/2026-11-11_bmv-restyle"
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
+# the root the 95c_restyle_*.R scripts wrote (95c_common.R builds the same name)
+OUT_ROOT <- file.path(
+  "experiments/runs",
+  paste0(Sys.getenv("SW_RUN_DATE"), "_bmv", cfg("run_tag"), "-restyle-common")
+)
+stopifnot(
+  "restyle root exists: run the 95c scripts first" = dir.exists(OUT_ROOT)
+)
 
 # Merge -----------------------------------------------------------------------------------------------
 parts <- list.files(
@@ -33,8 +41,17 @@ stopifnot("every new figure exists" = all(file.exists(drawn$new_figure)))
 write_csv(manifest, file.path(OUT_ROOT, "MANIFEST_restyle_common.csv"))
 
 # Coverage of the certified list -------------------------------------------------------------------------
+# The certified list is the 3D figure audit; 24H and EXV have none, so their coverage table is not written.
+if (DS$dataset != "3d") {
+  message(
+    "95c_manifest.R: no certified figure list for dataset ",
+    DS$dataset,
+    "; MANIFEST_coverage.csv not written"
+  )
+  quit(save = "no", status = 0)
+}
 audit <- read_csv(
-  file.path(OLD_ROOT, "audit_freshness.csv"),
+  file.path(run_in("restyle"), "audit_freshness.csv"),
   show_col_types = FALSE
 ) |>
   filter(!str_detect(.data$used_in, "^dashboard v19 img"))

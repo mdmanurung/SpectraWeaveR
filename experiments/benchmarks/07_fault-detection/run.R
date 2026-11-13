@@ -194,7 +194,8 @@ file_tool_scores <- function(files, seed) {
     area_height = NULL,
     area_height_quantile = NULL,
     reference_group = NULL,
-    reference = NULL
+    reference = NULL,
+    summary = NULL
   )
   by <- function(check) {
     a <- aud[aud$check == check, ]

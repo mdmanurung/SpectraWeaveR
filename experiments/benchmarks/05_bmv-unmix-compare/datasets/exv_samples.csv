@@ -1,0 +1,6 @@
+sample,donor,condition,well,acq_batch,stem
+A3,BMV_009C,NA,A3,exvivo,A3 BMV_009C_exvivo_BMV_Aurora_exvivo_Batch1
+A6,BMV_006C,NA,A6,exvivo,A6 BMV_006C_exvivo_BMV_Aurora_exvivo_Batch1
+B11,BMV_008A,NA,B11,exvivo,B11 BMV_008A_exvivo_BMV_Aurora_exvivo_Batch1
+B2,BMV_011A,NA,B2,exvivo,B2 BMV_011A_exvivo_BMV_Aurora_exvivo_Batch1
+D1,BMV_REF1,NA,D1,exvivo,D1 BMV_REF1_exvivo_BMV_Aurora_exvivo_Batch1

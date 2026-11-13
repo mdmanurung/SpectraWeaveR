@@ -100,7 +100,8 @@ long <- lapply(SEEDS, \(sd) {
         area_height = NULL,
         area_height_quantile = NULL,
         reference_group = NULL,
-        reference = NULL
+        reference = NULL,
+        summary = NULL
       )
       a <- aud[aud$check == j$check, ]
       mx <- as.numeric(tapply(abs(a$value), a$file, max, na.rm = TRUE)[names(

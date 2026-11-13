@@ -10,20 +10,30 @@
 #          Step 6: for 10 CD8T cells (set.seed(42), user-approved) with TNF above arcsinh 1 under 1.8.8 and
 #          squeezed under the 1.0.2 AF405 variants, rebuild the raw spectrum from each unmix (reference
 #          spectra for the other dyes, AF row by AF Index x AF-A) and find which AF405 variant fits best.
-# Run:     sbatch experiments/slurm/run_spike_cg.sbatch 64cg_af405_spike_anatomy.R
-# Inputs:  experiments/runs/2026-11-11_bmv-af405-proof-cg/spike_key.csv   [62_af405_spike_build.R]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/af405proof_{base188,spike188,spike102af405} [61]
-#          experiments/bmv_test/compare_3D/data/unmix_cells/var102_only_Alexa_Fluor_405 [45_variant_per_dye.R]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Raw, table_spectra, Spectral_variants.rds
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.0.2/.../Spectral_variants.rds
-# Outputs: experiments/runs/2026-11-11_bmv-af405-proof-cg/spike_cells.csv       per spiked cell: added, recovered
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/spike_summary.csv     recovery and squeezed share by level
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/fig5_spike_recovery.png (+ _source.csv)
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/fig5b_recovery_by_glut1.png (+ _source.csv)
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/predictions_spike.csv  pass / fail
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/anatomy_cells.csv     10 cells: abundances, best variant
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/fig6_anatomy.png (+ _source.csv)
-#          experiments/runs/2026-11-11_bmv-af405-proof-cg/sessionInfo_64.txt
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> sbatch experiments/slurm/run_spike_cg.sbatch 64cg_af405_spike_anatomy.R
+#          Both variables are required. The dataset sets the data dir, the stamps, the BV510-slot channel, the AF405
+#          dye, the negative cut (cut_of(..., "neg")) and the run folder.
+#          Here "BV510" is the TNF-slot dye (cfg("targets")$tnf_dye) and "AF405" the GLUT1 dye (cfg("targets")$glut1_dye);
+#          the column names bv510_* are kept for every dataset.
+# Inputs:  run_in("af405-proof-cg")/spike_key.csv   [62cg_af405_spike_build.R; registry key of datasets/<ds>_runs.csv]
+#          data_path("unmix_cells")/af405proof_{base188,cgspike188,cgspike102af405} [61cg]
+#          data_path("unmix_cells")/var102_only_<GLUT1 dye> [45_variant_per_dye.R]
+#            unmixed folders are found recursively and matched to samples_tbl() on the file stem (24H keeps one
+#            folder per condition)
+#          data_path("autoSpectral_v1.8.8")/Raw, table_spectra (cfg("stamps") names), Spectral_variants.rds
+#          data_path("autoSpectral_v1.0.2")/.../Spectral_variants.rds
+# Outputs: all into run_in("af405-proof-cg") (= experiments/runs/<date>_bmv<run_tag>-af405-proof-cg, written by 62cg;
+#          "-smoke" is added to the key in a smoke run):
+#          <run dir>/spike_cells.csv       per spiked cell: added, recovered
+#          <run dir>/spike_summary.csv     recovery and squeezed share by level
+#          <run dir>/fig5_spike_recovery.png (+ _source.csv)
+#          <run dir>/fig5b_recovery_by_glut1.png (+ _source.csv)
+#          <run dir>/predictions_spike.csv  pass / fail
+#          <run dir>/anatomy_cells.csv     10 cells: abundances, best variant
+#          <run dir>/fig6_anatomy.png (+ _source.csv)
+#          <run dir>/sessionInfo_64.txt
+#          Datasets with conditions (24H) add donor and condition columns to spike_cells.csv, spike_summary.csv and
+#          the fig5 and fig5b source files, and facet figures 5 and 5b by condition.
 
 suppressPackageStartupMessages({
   library(flowCore)
@@ -34,29 +44,32 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(tibble)
 })
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R")
 
 # Parameters ------------------------------------------------------------------------------
-DATA <- "experiments/bmv_test/compare_3D/data"
+DATA <- data_path()
 SMOKE_DONOR <- Sys.getenv("SW_SMOKE_DONOR", "") # one whole donor for a smoke run; empty = full run
 SMOKE_TAG <- if (nzchar(SMOKE_DONOR)) "smoke_" else ""
 SMOKE_SUFFIX <- if (nzchar(SMOKE_DONOR)) "-smoke" else ""
-RUN_DIR <- paste0(
-  "experiments/runs/2026-11-11_bmv-af405-proof-cg",
-  SMOKE_SUFFIX
-) # 62cg wrote spike_key.csv here
+RUN_DIR <- run_in(paste0("af405-proof-cg", SMOKE_SUFFIX)) # 62cg wrote spike_key.csv here; 64cg adds its tables
 UNMIX <- file.path(DATA, "unmix_cells")
 COFACTOR <- 6000 # arcsinh cofactor (CLAUDE.md, confirmed by user)
-NEG_CUT <- 1.5 # negatives for the rSD: BV510 below this arcsinh (G13, user 2026-11-11; was 1)
+NEG_ARM <- "as188_joint" # arm whose BV510 negatives set the rSD; the cut per sample comes from cut_of(..., "neg")
 SQUEEZE_FRAC <- 0.5 # squeezed = |x| below 0.5 x the 1.8.8 rSD of BV510 negatives (39b; user, 2026-11-10)
 RECOVERY_MIN <- 0.9 # pre-registered: 1.8.8 recovers >= 0.9 of the spike (user-approved plan)
 N_DECILES <- 10
 N_ANATOMY <- 10 # cells shown in step 6 (user-approved plan)
 SEED <- 42 # user-approved
-DYE <- "Alexa Fluor 405"
+DYE <- cfg("targets")$glut1_dye
+GLUT1_CH <- paste0(DYE, "-A")
+TNF_DYE <- cfg("targets")$tnf_dye # the "BV510" of the column names below
+TNF_CH <- cfg("channels")$TNF_slot
+VAR102_DIR <- paste0("var102_only_", gsub(" ", "_", DYE))
+UNMIXED_SUFFIX <- " AutoSpectral\\.fcs$"
 SETUPS <- tribble(
-  ~setup                         , ~spiked                                             , ~baseline                     ,
-  "1.8.8"                        , paste0("af405proof_", SMOKE_TAG, "cgspike188")      , "af405proof_base188"          ,
-  "1.8.8 + 1.0.2 AF405 variants" , paste0("af405proof_", SMOKE_TAG, "cgspike102af405") , "var102_only_Alexa_Fluor_405"
+  ~setup                         , ~spiked                                             , ~baseline            ,
+  "1.8.8"                        , paste0("af405proof_", SMOKE_TAG, "cgspike188")      , "af405proof_base188" ,
+  "1.8.8 + 1.0.2 AF405 variants" , paste0("af405proof_", SMOKE_TAG, "cgspike102af405") , VAR102_DIR
 )
 
 # Inputs ----------------------------------------------------------------------------------
@@ -70,39 +83,86 @@ key <- read_csv(file.path(RUN_DIR, "spike_key.csv"), show_col_types = FALSE)
 read_x <- \(path) {
   exprs(read.FCS(path, transformation = FALSE, truncate_max_range = FALSE))
 }
-unmixed_name <- \(raw_file) sub("\\.fcs$", " AutoSpectral.fcs", raw_file)
-files <- distinct(key, sample, raw_file)
+d188 <- file.path(DATA, "autoSpectral_v1.8.8")
+sample_info <- samples_tbl() |>
+  filter(sample %in% key$sample)
+# adds the file of each raw file found by its stem under dir (recursive: 24H has a folder per condition)
+add_path <- \(files, dir, suffix, col) {
+  found <- tibble(
+    path = list.files(
+      dir,
+      pattern = suffix,
+      recursive = TRUE,
+      full.names = TRUE
+    )
+  ) |>
+    mutate(stem = sub(suffix, "", basename(path))) |>
+    filter(stem %in% files$stem)
+  stopifnot(
+    "64cg: one file per raw file under dir" = setequal(found$stem, files$stem)
+  )
+  files |>
+    inner_join(
+      found,
+      by = "stem",
+      relationship = "one-to-one",
+      unmatched = "error"
+    ) |>
+    rename(!!col := path)
+}
+# raw file -> registered sample (join on the full file stem) -> its raw file and every unmixed file used below
+files <- distinct(key, sample, raw_file) |>
+  mutate(stem = sub("\\.fcs$", "", basename(raw_file)))
+stopifnot(
+  "64cg: every key raw file is a registered sample (samples_tbl stem)" = all(
+    files$stem %in% sample_info$stem
+  )
+)
+files <- files |>
+  inner_join(
+    select(sample_info, sample, stem),
+    by = c("sample", "stem"),
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
+  add_path(file.path(d188, "Raw"), "\\.fcs$", "raw_path")
+files <- reduce(
+  unique(c("af405proof_base188", SETUPS$baseline, SETUPS$spiked)),
+  \(f, d) add_path(f, file.path(UNMIX, d), UNMIXED_SUFFIX, d),
+  .init = files
+)
+# path of one kind of file for one raw file; files holds exactly one (one-to-one joins above)
+path_of <- \(raw, col) files[[col]][files$raw_file == raw]
 
 # Step 5: per spiked cell, recovered BV510 and GLUT1 -----------------------------------------
-cells <- pmap(files, \(sample, raw_file) {
+cells <- pmap(distinct(files, sample, raw_file), \(sample, raw_file) {
   key_s <- filter(key, .data$sample == .env$sample)
-  base188 <- read_x(file.path(
-    UNMIX,
-    "af405proof_base188",
-    unmixed_name(raw_file)
-  ))
+  base188 <- read_x(path_of(raw_file, "af405proof_base188"))
   per_setup <- pmap(SETUPS, \(setup, spiked, baseline) {
-    sp <- read_x(file.path(UNMIX, spiked, unmixed_name(raw_file)))[
-      key_s$raw_row,
-      "BV510-A"
-    ]
-    bl <- read_x(file.path(UNMIX, baseline, unmixed_name(raw_file)))[
-      key_s$raw_row,
-      "BV510-A"
-    ]
+    sp <- read_x(path_of(raw_file, spiked))[key_s$raw_row, TNF_CH]
+    bl <- read_x(path_of(raw_file, baseline))[key_s$raw_row, TNF_CH]
     tibble(setup = setup, bv510_base = bl, bv510_spiked = sp)
   }) |>
     list_rbind()
   bind_cols(key_s[rep(seq_len(nrow(key_s)), nrow(SETUPS)), ], per_setup) |>
     mutate(
       glut1 = rep(
-        asinh(base188[key_s$raw_row, "Alexa Fluor 405-A"] / COFACTOR),
+        asinh(base188[key_s$raw_row, GLUT1_CH] / COFACTOR),
         nrow(SETUPS)
       )
     )
 }) |>
   list_rbind() |>
   mutate(recovered = bv510_spiked - bv510_base, recovery = recovered / k)
+if (!is.null(DS$conditions)) {
+  cells <- cells |>
+    inner_join(
+      select(sample_info, sample, donor, condition),
+      by = "sample",
+      relationship = "many-to-one",
+      unmatched = "error"
+    )
+}
 
 # unspiked cells must be unchanged by the spike, else the baseline is not the same unmix
 unspiked_diff <- cells |>
@@ -116,8 +176,16 @@ stopifnot(
 )
 
 # 1.8.8 rSD of BV510 negatives per donor and population, for the squeezed share
+neg_cuts <- tibble(sample = unique(cells$sample)) |>
+  mutate(neg_cut = map_dbl(sample, \(s) cut_of(NEG_ARM, s, TNF_CH, "neg")))
 ref_rsd <- cells |>
-  filter(setup == "1.8.8", asinh(bv510_base / COFACTOR) < NEG_CUT) |>
+  inner_join(
+    neg_cuts,
+    by = "sample",
+    relationship = "many-to-one",
+    unmatched = "error"
+  ) |>
+  filter(setup == "1.8.8", asinh(bv510_base / COFACTOR) < neg_cut) |>
   summarise(
     ref_rsd = unname(diff(quantile(bv510_base, c(0.5, 0.84)))),
     .by = c(sample, pop)
@@ -139,7 +207,7 @@ spike_summary <- cells |>
     q25 = quantile(recovery, 0.25),
     q75 = quantile(recovery, 0.75),
     squeezed_share = mean(squeezed),
-    .by = c(setup, sample, pop, level)
+    .by = c(setup, sample, any_of(c("donor", "condition")), pop, level)
   )
 write_csv(spike_summary, file.path(RUN_DIR, "spike_summary.csv"))
 
@@ -147,20 +215,35 @@ write_csv(spike_summary, file.path(RUN_DIR, "spike_summary.csv"))
 fig5 <- spike_summary |>
   mutate(level = factor(level, labels = paste0("+", 1:3, " arcsinh")))
 write_csv(fig5, file.path(RUN_DIR, "fig5_spike_recovery_source.csv"))
+# colour by sample (one per donor) in 3D and EXV, by donor in 24H (3 samples per donor); Dark2 holds 8 colours
+colour_by <- if (is.null(DS$conditions)) "sample" else "donor"
+n_colours <- n_distinct(fig5[[colour_by]])
+fig_rows <- if (is.null(DS$conditions)) vars(pop) else vars(pop, condition)
+fig_height <- 6 * max(1, length(DS$conditions)) # one block of rows per condition
 p5 <- ggplot(fig5, aes(setup, median_recovery)) +
   geom_hline(yintercept = c(0, 1), colour = "grey60") +
-  geom_line(aes(group = sample, colour = sample), alpha = 0.5) +
-  geom_point(aes(colour = sample), size = 1.8) +
-  scale_colour_brewer(palette = "Dark2", name = "Donor") +
-  facet_grid(pop ~ level) +
-  labs(x = NULL, y = "Median share of added BV510 recovered") +
+  geom_line(aes(group = sample, colour = .data[[colour_by]]), alpha = 0.5) +
+  geom_point(aes(colour = .data[[colour_by]]), size = 1.8) +
+  (if (n_colours <= 8) {
+    scale_colour_brewer(palette = "Dark2", name = "Donor")
+  } else {
+    scale_colour_manual(
+      values = hcl.colors(n_colours, "Dark 3"),
+      name = "Donor"
+    )
+  }) +
+  facet_grid(rows = fig_rows, cols = vars(level)) +
+  labs(
+    x = NULL,
+    y = sprintf("Median share of added %s recovered", TNF_DYE)
+  ) +
   theme_bw(base_size = 11) +
   theme(axis.text.x = element_text(angle = 20, hjust = 1))
 ggsave(
   file.path(RUN_DIR, "fig5_spike_recovery.png"),
   p5,
   width = 11,
-  height = 6,
+  height = fig_height,
   dpi = 130,
   bg = "white"
 )
@@ -170,7 +253,7 @@ fig5b <- cells |>
   filter(level > 0) |>
   summarise(
     median_recovery = median(recovery),
-    .by = c(setup, pop, level, glut1_decile, sample)
+    .by = c(setup, pop, level, glut1_decile, sample, any_of("condition"))
   )
 write_csv(fig5b, file.path(RUN_DIR, "fig5b_recovery_by_glut1_source.csv"))
 p5b <- ggplot(fig5b, aes(glut1_decile, median_recovery, colour = setup)) +
@@ -188,11 +271,12 @@ p5b <- ggplot(fig5b, aes(glut1_decile, median_recovery, colour = setup)) +
   ) +
   scale_x_continuous(breaks = 1:N_DECILES) +
   facet_grid(
-    pop ~ level,
+    rows = fig_rows,
+    cols = vars(level),
     labeller = labeller(level = \(l) paste0("+", l, " arcsinh"))
   ) +
   labs(
-    x = "GLUT1 (Alexa Fluor 405) decile within donor",
+    x = sprintf("GLUT1 (%s) decile within donor", DYE),
     y = "Median share recovered (points = donors)"
   ) +
   theme_bw(base_size = 11) +
@@ -201,7 +285,7 @@ ggsave(
   file.path(RUN_DIR, "fig5b_recovery_by_glut1.png"),
   p5b,
   width = 11,
-  height = 6,
+  height = fig_height,
   dpi = 130,
   bg = "white"
 )
@@ -242,15 +326,8 @@ write_csv(predictions, file.path(RUN_DIR, "predictions_spike.csv"))
 read_raw <- \(path) {
   as.matrix(read.csv(path, row.names = 1, check.names = FALSE))
 }
-d188 <- file.path(DATA, "autoSpectral_v1.8.8")
-s188 <- read_raw(file.path(
-  d188,
-  "table_spectra/Automated_autospectral_spectra_20261105_143803.csv"
-))
-af <- read_raw(file.path(
-  d188,
-  "table_spectra/H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs Autofluorescence spectra 20261105_143933.csv"
-))
+s188 <- read_raw(file.path(d188, "table_spectra", cfg("stamps")$as188_spectra))
+af <- read_raw(file.path(d188, "table_spectra", cfg("stamps")$as188_af))
 v102 <- readRDS(file.path(
   DATA,
   "autoSpectral_v1.0.2/Reference Group/figure_spectral_variants/Spectral_variants.rds"
@@ -260,7 +337,7 @@ v188 <- readRDS(file.path(
   "figure_spectral_variants/Spectral_variants.rds"
 ))$variants[[DYE]]
 fluor_cols <- paste0(rownames(s188), "-A")
-b510 <- s188["BV510", ]
+b510 <- s188[TNF_DYE, ]
 cand <- cells |>
   filter(
     setup == "1.8.8 + 1.0.2 AF405 variants",
@@ -271,19 +348,11 @@ cand <- cells |>
 # TNF above 1 under 1.8.8 and squeezed under the 1.0.2 AF405 variants, unspiked cells only
 anatomy_pool <- pmap(distinct(cand, sample, raw_file), \(sample, raw_file) {
   rows <- cand$raw_row[cand$sample == sample]
-  x188 <- read_x(file.path(
-    UNMIX,
-    "af405proof_base188",
-    unmixed_name(raw_file)
-  ))[rows, , drop = FALSE]
-  x102 <- read_x(file.path(
-    UNMIX,
-    "var102_only_Alexa_Fluor_405",
-    unmixed_name(raw_file)
-  ))[rows, , drop = FALSE]
+  x188 <- read_x(path_of(raw_file, "af405proof_base188"))[rows, , drop = FALSE]
+  x102 <- read_x(path_of(raw_file, VAR102_DIR))[rows, , drop = FALSE]
   rsd <- ref_rsd$ref_rsd[ref_rsd$sample == sample & ref_rsd$pop == "CD8T"]
-  ok <- asinh(x188[, "BV510-A"] / COFACTOR) > 1 &
-    abs(x102[, "BV510-A"]) < SQUEEZE_FRAC * rsd
+  ok <- asinh(x188[, TNF_CH] / COFACTOR) > 1 &
+    abs(x102[, TNF_CH]) < SQUEEZE_FRAC * rsd
   tibble(sample = sample, raw_file = raw_file, raw_row = rows[ok])
 }) |>
   list_rbind()
@@ -309,22 +378,14 @@ fit_one <- \(raw_vec, unmixed, variants) {
     recon = rest + af_part + a[[paste0(DYE, "-A")]] * variants[best, ],
     best = names(best),
     best_coef = sum((variants[best, ] - s188[DYE, ]) * b510) / sum(b510^2),
-    bv510 = a[["BV510-A"]],
+    bv510 = a[[TNF_CH]],
     af405 = a[[paste0(DYE, "-A")]]
   )
 }
 anatomy <- pmap(picked, \(sample, raw_file, raw_row) {
-  raw_vec <- read_x(file.path(d188, "Raw", raw_file))[raw_row, colnames(s188)]
-  u188 <- read_x(file.path(
-    UNMIX,
-    "af405proof_base188",
-    unmixed_name(raw_file)
-  ))[raw_row, ]
-  u102 <- read_x(file.path(
-    UNMIX,
-    "var102_only_Alexa_Fluor_405",
-    unmixed_name(raw_file)
-  ))[raw_row, ]
+  raw_vec <- read_x(path_of(raw_file, "raw_path"))[raw_row, colnames(s188)]
+  u188 <- read_x(path_of(raw_file, "af405proof_base188"))[raw_row, ]
+  u102 <- read_x(path_of(raw_file, VAR102_DIR))[raw_row, ]
   f188 <- fit_one(raw_vec, u188, v188)
   f102 <- fit_one(raw_vec, u102, v102)
   cell_id <- paste(sample, raw_row)

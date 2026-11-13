@@ -2,17 +2,21 @@
 #          universal negative and three cell controls with candidate cell rectangles (current FSC floor
 #          6e5, and 4e5 and 3e5), with events kept per candidate. (2) AutoSpectral 1.8.8 tune.gate() grid
 #          (landmark gating, docs article 08) for the stained cell controls.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/50_cell_gate_plots.R
-#          from the repo root.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group/  raw controls [zip]
-#          experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group Clean/
-#            Zombie NIR (Cells).fcs, 84,528-event file (user, 2026-11-10, D13); fcs_control_file.csv
-# Outputs: experiments/runs/2026-11-10_bmv-cell-gating/cell_rectangles.png   FSC x SSC with candidates
-#          experiments/runs/2026-11-10_bmv-cell-gating/cell_rectangles_kept.csv  events kept per candidate
-#          experiments/runs/2026-11-10_bmv-cell-gating/fcs_control_file_landmark.csv  control file copy
-#            with gate.name and gate.define for landmark gating (the original is not touched)
-#          experiments/runs/2026-11-10_bmv-cell-gating/figure_gate_tuning/  tune.gate() grid, PDF and PNG
-#          experiments/runs/2026-11-10_bmv-cell-gating/sessionInfo.txt
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/50_cell_gate_plots.R
+#          from the repo root. The control files are dataset-level (no condition argument).
+# Inputs:  <data_dir>/autoSpectral_v1.8.8/Reference Group/  raw controls [zip]
+#          <data_dir>/autoSpectral_v1.8.8/Reference Group Clean/
+#            Zombie NIR (Cells).fcs (3D: 84,528-event file, user, 2026-11-10, D13); fcs_control_file.csv
+#          config control_gates$landmark_define: the stained cell controls that define the landmark gate
+# Outputs: run_out("cell-gating")/cell_rectangles.png   FSC x SSC with candidates
+#          run_out("cell-gating")/cell_rectangles_kept.csv  events kept per candidate
+#          run_out("cell-gating")/fcs_control_file_landmark.csv  control file copy
+#            with gate.name and gate.define for landmark gating (the original is not touched); read by
+#            49_ablation_chain.R, 53_opt188.R, 87b_af405_afremove.R through run_in("cell-gating")
+#          run_out("cell-gating")/figure_gate_tuning/  tune.gate() grid, PDF and PNG
+#          run_out("cell-gating")/sessionInfo.txt
+#          Run folder is experiments/runs/<SW_RUN_DATE>_bmv<run_tag>-cell-gating; register it in
+#          datasets/<ds>_runs.csv before the scripts above read it.
 
 suppressPackageStartupMessages({
   library(flowCore)
@@ -24,8 +28,11 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA_DIR <- "experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8"
+DATA_DIR <- data_path("autoSpectral_v1.8.8")
 RAW_DIR <- file.path(DATA_DIR, "Reference Group")
 CLEAN_DIR <- file.path(DATA_DIR, "Reference Group Clean")
 # Files to show: the cell universal negative, two stained cell controls, and the viability control
@@ -53,18 +60,12 @@ CANDIDATE_COLOURS <- c(
 )
 # Stained cell controls that share one landmark gate and define it (user approved landmark gating,
 # 2026-11-10, O2); viability keeps its own gate, the unstained uses the gate without defining it
-LANDMARK_DEFINE <- c(
-  "Alexa Fluor 405",
-  "Alexa Fluor 488",
-  "Alexa Fluor 594",
-  "PE-Cy5.5",
-  "PE-Cy7",
-  "APC-Cy7"
-)
+# (3D: Alexa Fluor 405, Alexa Fluor 488, Alexa Fluor 594, PE-Cy5.5, PE-Cy7, APC-Cy7; dataset config)
+LANDMARK_DEFINE <- cfg("control_gates")$landmark_define
 TUNE_N_CELLS <- c(100, 500, 2000) # user, 2026-11-10 (O2), docs article 08 grid
 TUNE_PERCENTILES <- c(30, 50, 70)
 
-run_dir <- "experiments/runs/2026-11-10_bmv-cell-gating"
+run_dir <- run_out("cell-gating")
 stopifnot("run dir must not exist" = !dir.exists(run_dir))
 dir.create(run_dir)
 

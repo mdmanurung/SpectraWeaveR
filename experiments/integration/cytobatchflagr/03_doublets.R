@@ -79,7 +79,8 @@ long <- lapply(SEEDS, function(seed) {
           area_height = AREA_HEIGHT,
           area_height_quantile = q,
           reference_group = NULL,
-          reference = NULL
+          reference = NULL,
+          summary = NULL
         )
         z <- sa[sa$check == "area_height_z", ]
         fsc_sd <- sa[sa$check == "sd_z" & sa$channel == markers[1], ]

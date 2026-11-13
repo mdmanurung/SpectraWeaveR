@@ -1,4 +1,5 @@
-# Purpose: regenerate the zip AutoSpectral 1.8.8 spectra set from the controls and unmix, for two arms.
+# Purpose: regenerate the zip AutoSpectral 1.8.8 spectra set from the controls and unmix, for two arms
+#          (the unmix runs on the dataset's raw samples).
 #          bead_wide: bead pre-gate widened to FSC 2e5-9e5, SSC 1.3e6-2.25e6 (user, 2026-11-10, README O1);
 #            the zip gate (FSC 3e5-8e5, SSC 1.3e6-1.9e6) clipped the brightest stained beads.
 #          regen188: zip bead gate, everything else identical; the nuisance control for bead_wide, because
@@ -7,13 +8,18 @@
 #          (cell files copied from Reference Group Clean, including the 84,528-event Zombie NIR file, user
 #          D13), get.spectra.automated(10000, 500, 0.95), get.af.spectra(refine = FALSE) on H12,
 #          get.spectral.variants() defaults, unmix.folder(joint). Scoring is in 51_score_ablation.R.
-# Run:     pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/48b_ablation_bead.R <arm>
+# Run:     SW_DATASET=<3d|24h|exv> SW_RUN_DATE=<YYYY-MM-DD> pixi run Rscript experiments/benchmarks/05_bmv-unmix-compare/48b_ablation_bead.R <arm> [condition]
 #            from the repo root; arm = bead_wide or regen188. Output goes to
-#            experiments/bmv_test/compare_3D/data/unmix_cells/<arm>, which must not exist.
-# Inputs:  experiments/bmv_test/compare_3D/data/autoSpectral_v1.8.8/Reference Group (raw bead controls,
-#            unstained_AF/H12), Reference Group Clean (cell controls, fcs_control_file.csv), Raw,
-#            AutoSpectral_unmixed, table_spectra (run 143803 spectra, AF 143933),
+#            <data_dir>/unmix_cells/<arm>[/<condition>], which must not exist.
+#            condition = last argument, required when the dataset has conditions (24H: one task per condition;
+#            the spectra are regenerated in each condition folder), refused otherwise.
+#            SW_RUN_DATE is only read by scripts that write a run folder.
+# Inputs:  <data_dir>/autoSpectral_v1.8.8/Reference Group (raw bead controls,
+#            unstained_AF), Reference Group Clean (cell controls, fcs_control_file.csv), Raw[/<condition>],
+#            AutoSpectral_unmixed[/<condition>], table_spectra (config-stamp spectra),
 #            figure_spectral_variants/Spectral_variants.rds [user zip]
+#          bead rectangles from config control_gates (bead_zip, bead_wide); stamp file name (spectra) from
+#            config stamps; samples from datasets/<ds>_samples.csv [00_samples.R]
 # Outputs: <out_dir>/*.fcs                 unmixed files
 #          <out_dir>/controls/             control files used (beads re-gated, cells copied)
 #          <out_dir>/work/                 AutoSpectral tables and figures from regeneration
@@ -31,20 +37,50 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Dataset config --------------------------------------------------------------------------
+source("experiments/benchmarks/05_bmv-unmix-compare/datasets/dataset.R") # DS, cfg(), data_path(), run_in(), run_out(), samples_tbl()
+
 # Parameters ------------------------------------------------------------------------------
-DATA <- normalizePath("experiments/bmv_test/compare_3D/data")
+DATA <- normalizePath(data_path())
 PIPELINE <- "joint" # as in AutoSpectral_unmix_v1.8.8.R (inherited: user zip)
 SPEED <- "slow" # always slow (user, 2026-11-10); no effect under pipeline "joint"
 EXTRACT_SEED <- 42 # set.seed() around get.spectra.automated (user, 2026-11-10, D5); inside, asp$bird.seed
+# bead rectangles are dataset config (3D: zip gate FSC 3e5-8e5, SSC 1.3e6-1.9e6, AutoSpectral_unmix_v1.8.8.R:62-65;
+# bead_wide FSC 2e5-9e5, SSC 1.3e6-2.25e6, user 2026-11-10 O1)
 BEAD_GATES <- list(
-  regen188 = list(fsc = c(3e5, 8e5), ssc = c(1.3e6, 1.9e6)), # zip gate, AutoSpectral_unmix_v1.8.8.R:62-65
-  bead_wide = list(fsc = c(2e5, 9e5), ssc = c(1.3e6, 2.25e6)) # user, 2026-11-10 (O1)
+  regen188 = cfg("control_gates")$bead_zip,
+  bead_wide = cfg("control_gates")$bead_wide
 )
 
 # Setup -----------------------------------------------------------------------------------
-arm <- commandArgs(trailingOnly = TRUE)[[1]]
+cli_args <- commandArgs(trailingOnly = TRUE)
+arm <- cli_args[[1]]
 stopifnot("arm is bead_wide or regen188" = arm %in% names(BEAD_GATES))
-out_dir <- file.path(DATA, "unmix_cells", arm)
+# 24H: one task per condition subfolder (argument 2); 3D and EXV have no condition level
+cond <- if (length(cli_args) >= 2) cli_args[[2]] else NULL
+if (is.null(DS$conditions) && !is.null(cond)) {
+  stop(
+    "48b_ablation_bead.R: dataset ",
+    DS$dataset,
+    " has no conditions; drop argument 2 ",
+    cond,
+    call. = FALSE
+  )
+}
+if (!is.null(DS$conditions) && (is.null(cond) || !cond %in% DS$conditions)) {
+  stop(
+    "48b_ablation_bead.R: needs argument 2, a condition of dataset ",
+    DS$dataset,
+    ": ",
+    paste(DS$conditions, collapse = ", "),
+    call. = FALSE
+  )
+}
+samples <- samples_tbl()
+if (!is.null(cond)) {
+  samples <- filter(samples, .data$condition == .env$cond)
+}
+out_dir <- paste(c(file.path(DATA, "unmix_cells", arm), cond), collapse = "/")
 stopifnot("out dir must not exist" = !dir.exists(out_dir))
 ctrl_dir <- file.path(out_dir, "controls")
 work_dir <- file.path(out_dir, "work")
@@ -103,12 +139,14 @@ spectra <- get.spectra.automated(
   n.spectral = 500,
   cosine.threshold = 0.95
 )
+unstained <- list.files(
+  file.path(raw_ctrl_dir, "unstained_AF"),
+  pattern = "\\.fcs$",
+  full.names = TRUE
+)
+stopifnot("one unstained AF file" = length(unstained) == 1)
 af_spectra <- get.af.spectra(
-  unstained.sample = file.path(
-    raw_ctrl_dir,
-    "unstained_AF",
-    "H12 Unstained_BMV_Aurora_3dCD328_Batch1.fcs"
-  ),
+  unstained.sample = unstained,
   asp = asp,
   spectra = spectra,
   refine = FALSE
@@ -131,7 +169,7 @@ read_raw <- \(path) {
 spectra_zip <- read_raw(file.path(
   d188,
   "table_spectra",
-  "Automated_autospectral_spectra_20261105_143803.csv"
+  cfg("stamps")$as188_spectra
 ))
 variants_zip <- readRDS(file.path(
   d188,
@@ -204,7 +242,7 @@ writeLines(
 flow.control <- reload.flow.control(ctrl_dir, control_file, asp)
 t0 <- Sys.time()
 unmix.folder(
-  fcs.dir = file.path(d188, "Raw"),
+  fcs.dir = paste(c(file.path(d188, "Raw"), cond), collapse = "/"),
   spectra = spectra,
   asp = asp,
   flow.control = flow.control,
@@ -223,14 +261,29 @@ message(
 )
 
 # Verify: same files, event counts and channel names as as188_joint -----------------------------
-ref_dir <- file.path(d188, "AutoSpectral_unmixed")
+ref_dir <- paste(
+  c(file.path(d188, "AutoSpectral_unmixed"), cond),
+  collapse = "/"
+)
 read_hdr <- \(path) {
   ff <- read.FCS(path, transformation = FALSE, truncate_max_range = FALSE)
   list(n = nrow(ff), channels = colnames(ff))
 }
-verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
+# one unmixed file per sample: the stem is the delivered file name without its " AutoSpectral*.fcs" suffix (EXV: _v1-8-8);
+# the join stops on any other file
+verify <- tibble(
+  ref_file = list.files(ref_dir, pattern = "\\.fcs$", recursive = TRUE)
+) |>
+  mutate(stem = sub(" AutoSpectral[^ ]*\\.fcs$", "", ref_file)) |>
+  inner_join(
+    select(samples, stem),
+    by = "stem",
+    relationship = "one-to-one",
+    unmatched = "error"
+  ) |>
   mutate(
-    ref = map(file.path(ref_dir, file), read_hdr),
+    file = paste0(stem, " AutoSpectral.fcs"), # the arm's own file name
+    ref = map(file.path(ref_dir, ref_file), read_hdr),
     new = map(file.path(out_dir, file), read_hdr),
     n_ref = map_int(ref, "n"),
     n_new = map_int(new, "n"),
@@ -241,7 +294,7 @@ verify <- tibble(file = list.files(ref_dir, pattern = "\\.fcs$")) |>
   select(file, n_ref, n_new, channels_equal)
 write_csv(verify, file.path(out_dir, "verify.csv"))
 stopifnot(
-  "5 files unmixed" = nrow(verify) == 5,
+  "one unmixed file per sample" = nrow(verify) == nrow(samples),
   "event counts equal as188_joint" = all(verify$n_ref == verify$n_new),
   "channel names equal as188_joint" = all(verify$channels_equal)
 )
