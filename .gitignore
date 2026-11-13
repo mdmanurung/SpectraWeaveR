@@ -70,3 +70,12 @@ experiments/bmv_test/**/*.fcs
 
 tests/testthat/PeacoQC_results/
 tests/testthat/Rplots.pdf
+
+# Local run outputs and tool state (not part of the package or experiments)
+slurm-*.out
+Rplots.pdf
+PeacoQC_results/
+figure_*/
+__pycache__/
+.mycelium-extra/
+plans/*.zip
