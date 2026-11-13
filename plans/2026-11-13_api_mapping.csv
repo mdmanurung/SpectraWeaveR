@@ -1,0 +1,242 @@
+export,destination
+sw_annotate_load_ref,-> sw_annotate_run
+sw_annotate_manual,-> sw_annotate_run
+sw_annotate_run,KEEP
+sw_anomaly_features,-> sw_qc_check
+sw_anomaly_flag_novelty,-> sw_qc_check
+sw_anomaly_flag_outlier,-> sw_qc_check
+sw_assistant,KEEP
+sw_assistant_batch_correction,-> sw_assistant
+sw_assistant_configure,-> sw_assistant
+sw_assistant_gating,-> sw_assistant
+sw_assistant_mcp,-> sw_assistant
+sw_assistant_unmixing,-> sw_assistant
+sw_batch_candidates_from_metrics,-> sw_batch_check
+sw_batch_decide,KEEP
+sw_batch_interaction,-> sw_batch_check
+sw_batch_matrix,-> sw_batch_check
+sw_batch_mixing,-> sw_batch_check
+sw_batch_otd,-> sw_batch_check
+sw_batch_policy,-> sw_batch_check
+sw_batch_scores,-> sw_batch_check
+sw_channel_get_fluor,"internal (I/O, channel and transform helpers)"
+sw_channel_is_fluor,"internal (I/O, channel and transform helpers)"
+sw_channel_is_signal,"internal (I/O, channel and transform helpers)"
+sw_channel_set_markers,"internal (I/O, channel and transform helpers)"
+sw_clean_run,KEEP
+sw_cluster_assignments,-> sw_cluster_check
+sw_cluster_mfi,-> sw_cluster_check
+sw_cluster_predict,-> sw_cluster_run
+sw_cluster_run,KEEP
+sw_cluster_scores,-> sw_cluster_check
+sw_cluster_stability,-> sw_cluster_check
+sw_correct_apply,-> sw_batch_correct
+sw_correct_detect_batch,-> sw_batch_correct
+sw_correct_emd,-> sw_batch_correct
+sw_correct_evaluate_emd,-> sw_batch_correct
+sw_correct_evaluate_mad,-> sw_batch_correct
+sw_correct_evaluate_quick,-> sw_batch_correct
+sw_correct_metrics,-> sw_batch_correct
+sw_correct_normalize,-> sw_batch_correct
+sw_correct_prepare,-> sw_batch_correct
+sw_correct_run,-> sw_batch_correct
+sw_correct_som,-> sw_batch_correct
+sw_corrector_anchors,-> sw_batch_correct
+sw_corrector_compare,-> sw_batch_correct
+sw_corrector_diagnose,-> sw_batch_correct
+sw_corrector_engines,-> sw_batch_correct
+sw_corrector_fit,-> sw_batch_correct
+sw_corrector_integrate,-> sw_batch_correct
+sw_corrector_load,-> sw_batch_correct
+sw_corrector_register_engine,-> sw_batch_correct
+sw_corrector_save,-> sw_batch_correct
+sw_cytoscan_preprocess_none,-> sw_qc_check
+sw_cytoscan_run,-> sw_qc_check
+sw_cytotools_header,-> sw_import_check / sw_import_report
+sw_design_audit,-> sw_batch_check
+sw_diagnose,KEEP
+sw_diagnosis_top,-> sw_diagnose
+sw_diff_abundance,-> sw_diff_run / sw_diff_report
+sw_diff_expression,-> sw_diff_run / sw_diff_report
+sw_dimred_run,KEEP
+sw_emd_1d,-> sw_qc_check
+sw_faust_compare,"-> sw_gate_run(method = ""faust"") / sw_gate_check"
+sw_faust_gatingset,"-> sw_gate_run(method = ""faust"") / sw_gate_check"
+sw_faust_labels,"-> sw_gate_run(method = ""faust"") / sw_gate_check"
+sw_faust_run,"-> sw_gate_run(method = ""faust"") / sw_gate_check"
+sw_fcs_batch_date_check,-> sw_import_check / sw_import_report
+sw_fcs_compensation_state,-> sw_import_check / sw_import_report
+sw_fcs_header_audit,-> sw_import_check / sw_import_report
+sw_fcs_header_signatures,-> sw_import_check / sw_import_report
+sw_fcs_header_summary,-> sw_import_check / sw_import_report
+sw_fcs_integrity_audit,-> sw_import_check / sw_import_report
+sw_fcs_marker_dye_map,-> sw_import_check / sw_import_report
+sw_fcs_signal_audit,-> sw_import_check / sw_import_report
+sw_filter_debris,-> sw_clean_run
+sw_filter_doublets,-> sw_clean_run
+sw_filter_doublets_peacoqc,-> sw_clean_run
+sw_filter_margins,-> sw_clean_run
+sw_filter_margins_peacoqc,-> sw_clean_run
+sw_flag_iqr,-> sw_batch_check
+sw_flag_iqr_summary,-> sw_batch_check
+sw_gate_apply,-> sw_gate_run
+sw_gate_density_2d,-> sw_gate_run
+sw_gate_density_apply,-> sw_gate_run
+sw_gate_density_cut,-> sw_gate_run
+sw_gate_density_range,-> sw_gate_run
+sw_gate_density_spec,-> sw_gate_run
+sw_gate_draw,-> sw_gate_run
+sw_gate_extract,-> sw_gate_run
+sw_gate_flowmagic,-> sw_gate_run(method = )
+sw_gate_flowmagic_train,-> sw_gate_run(method = )
+sw_gate_from_flowcore,-> sw_gate_read / sw_gate_write
+sw_gate_from_gatingset,-> sw_gate_read / sw_gate_write
+sw_gate_plot,KEEP
+sw_gate_polygon,-> sw_gate_run
+sw_gate_qc,-> sw_gate_check
+sw_gate_range,-> sw_gate_run
+sw_gate_read_flowjo,KEEP
+sw_gate_read_gatingml,-> sw_gate_read / sw_gate_write
+sw_gate_run,KEEP
+sw_gate_singlets,-> sw_clean_run
+sw_gate_template,-> sw_gate_run
+sw_gate_to_flowcore,-> sw_gate_read / sw_gate_write
+sw_gate_transfer,-> sw_gate_run(method = )
+sw_gate_write_gatingml,-> sw_gate_read / sw_gate_write
+sw_io_event_audit,-> sw_import_check / sw_import_report
+sw_io_exprs_to_tibble,"internal (I/O, channel and transform helpers)"
+sw_io_ff_to_tibble,"internal (I/O, channel and transform helpers)"
+sw_io_flowstate_to_ff,"internal (I/O, channel and transform helpers)"
+sw_io_flowstate_to_tibble,"internal (I/O, channel and transform helpers)"
+sw_io_flowstate_transform,"internal (I/O, channel and transform helpers)"
+sw_io_load_unmixed,"internal (I/O, channel and transform helpers)"
+sw_io_read_fcs,KEEP
+sw_io_read_flowstate,"internal (I/O, channel and transform helpers)"
+sw_io_spectracle_to_spectra,"internal (I/O, channel and transform helpers)"
+sw_io_subsample,"internal (I/O, channel and transform helpers)"
+sw_io_tibble_to_ff,"internal (I/O, channel and transform helpers)"
+sw_io_write_flowstate,"internal (I/O, channel and transform helpers)"
+sw_manifest_bind_files,-> sw_import_check / sw_import_report
+sw_manifest_from_sample_meta,-> sw_sample_manifest
+sw_negative_audit,-> sw_qc_check
+sw_otd_scores,-> sw_batch_check
+sw_pipeline,KEEP
+sw_pipeline_add,internal (composable-pipeline methods)
+sw_pipeline_concat,internal (composable-pipeline methods)
+sw_pipeline_config_type,internal (composable-pipeline methods)
+sw_pipeline_generate_code,internal (composable-pipeline methods)
+sw_pipeline_length,internal (composable-pipeline methods)
+sw_pipeline_quick,internal (composable-pipeline methods)
+sw_pipeline_remove,internal (composable-pipeline methods)
+sw_pipeline_replace,internal (composable-pipeline methods)
+sw_pipeline_run,KEEP
+sw_pipeline_run_all,KEEP
+sw_pipeline_run_targets,internal (composable-pipeline methods)
+sw_pipeline_show,internal (composable-pipeline methods)
+sw_pipeline_step,internal (composable-pipeline methods)
+sw_pipeline_step_batch_decide,internal (composable-pipeline methods)
+sw_pipeline_step_bind_files,internal (composable-pipeline methods)
+sw_pipeline_step_cluster,internal (composable-pipeline methods)
+sw_pipeline_step_correct,internal (composable-pipeline methods)
+sw_pipeline_step_correct_apply,internal (composable-pipeline methods)
+sw_pipeline_step_design_audit,internal (composable-pipeline methods)
+sw_pipeline_step_filter_margins,internal (composable-pipeline methods)
+sw_pipeline_step_flag_iqr,internal (composable-pipeline methods)
+sw_pipeline_step_integrity_audit,internal (composable-pipeline methods)
+sw_pipeline_step_names,internal (composable-pipeline methods)
+sw_pipeline_step_normalize,internal (composable-pipeline methods)
+sw_pipeline_step_qc,internal (composable-pipeline methods)
+sw_pipeline_step_read_fcs,internal (composable-pipeline methods)
+sw_pipeline_step_run,internal (composable-pipeline methods)
+sw_pipeline_step_som,internal (composable-pipeline methods)
+sw_pipeline_to_targets,internal (composable-pipeline methods)
+sw_plot_abundance,-> sw_diff_run / sw_diff_report
+sw_plot_annotation,-> sw_annotate_run
+sw_plot_batch_densities,-> sw_batch_report
+sw_plot_batch_dimred,-> sw_batch_report
+sw_plot_batch_matrix,-> sw_batch_report
+sw_plot_boxplots,-> sw_diff_run / sw_diff_report
+sw_plot_clusters,-> sw_cluster_report
+sw_plot_dimred,-> sw_cluster_report
+sw_plot_pipeline,internal (composable-pipeline methods)
+sw_plot_spillover_matrix,-> sw_unmix_report
+sw_plot_volcano,-> sw_diff_run / sw_diff_report
+sw_protected_contrast_change,-> sw_batch_check
+sw_qc_app,KEEP
+sw_qc_batch,-> sw_clean_run
+sw_qc_heatmap,-> sw_clean_report
+sw_qc_plot,-> sw_clean_report
+sw_qc_run,-> sw_clean_run
+sw_qc_summary,-> sw_clean_run
+sw_ref_composition,-> sw_batch_check
+sw_ref_consistency,-> sw_batch_check
+sw_ref_coverage,-> sw_batch_check
+sw_ref_inventory,-> sw_batch_check
+sw_ref_noise_floor,-> sw_batch_check
+sw_ref_vs_study,-> sw_batch_check
+sw_relativise_apply,"-> sw_batch_correct(engine = ""relativise"")"
+sw_relativise_batch_map,"-> sw_batch_correct(engine = ""relativise"")"
+sw_relativise_diagnose,"-> sw_batch_correct(engine = ""relativise"")"
+sw_relativise_fit,"-> sw_batch_correct(engine = ""relativise"")"
+sw_relativise_internal_map,"-> sw_batch_correct(engine = ""relativise"")"
+sw_relativise_split_kmeans,"-> sw_batch_correct(engine = ""relativise"")"
+sw_report_import,-> sw_import_check / sw_import_report
+sw_sample_manifest,KEEP
+sw_signal_reference_fit,-> sw_qc_check
+sw_signal_reference_load,-> sw_qc_check
+sw_signal_reference_save,-> sw_qc_check
+sw_sinkhorn_divergence,-> sw_batch_check
+sw_synref_as_manifest,-> sw_batch_check(synref = )
+sw_synref_check_overlap,-> sw_batch_check(synref = )
+sw_synref_downsample,-> sw_batch_check(synref = )
+sw_synref_fidelity,-> sw_batch_check(synref = )
+sw_synref_goal,-> sw_batch_check(synref = )
+sw_synref_load,-> sw_batch_check(synref = )
+sw_synref_mix,-> sw_batch_check(synref = )
+sw_synref_save,-> sw_batch_check(synref = )
+sw_synref_shift,-> sw_batch_check(synref = )
+sw_synref_split,-> sw_batch_check(synref = )
+sw_synref_spread,-> sw_batch_check(synref = )
+sw_transform_apply,"internal (I/O, channel and transform helpers)"
+sw_transform_estimate,"internal (I/O, channel and transform helpers)"
+sw_unmix_app,KEEP
+sw_unmix_check_controls,-> sw_unmix_check
+sw_unmix_compare_spectra,-> sw_unmix_check
+sw_unmix_condition_number,-> sw_unmix_check
+sw_unmix_correct,-> sw_unmix_run(correct = )
+sw_unmix_correct_signatures,-> sw_unmix_run(correct = )
+sw_unmix_correct_spillover,-> sw_unmix_run(correct = )
+sw_unmix_dashboard,-> sw_unmix_report
+sw_unmix_dashboard_quarto,-> sw_unmix_report
+sw_unmix_diagnose,-> sw_unmix_check
+sw_unmix_edges,-> sw_unmix_check
+sw_unmix_event_metrics,-> sw_unmix_check
+sw_unmix_extract_af,-> sw_unmix_run
+sw_unmix_extract_variants,-> sw_unmix_run
+sw_unmix_figure_biplot,-> sw_unmix_report
+sw_unmix_figure_distributions,-> sw_unmix_report
+sw_unmix_figure_scatter_grid,-> sw_unmix_report
+sw_unmix_figure_similarity,-> sw_unmix_report
+sw_unmix_figure_spectra,-> sw_unmix_report
+sw_unmix_figure_spike_ecdf,-> sw_unmix_report
+sw_unmix_figure_spike_summary,-> sw_unmix_report
+sw_unmix_heldout,-> sw_unmix_check
+sw_unmix_limits_autospectral,-> sw_unmix_check
+sw_unmix_marker_screen,-> sw_unmix_check
+sw_unmix_negative_shape,-> sw_unmix_check
+sw_unmix_pipeline,-> sw_unmix_run
+sw_unmix_prepare,-> sw_unmix_run
+sw_unmix_report,KEEP
+sw_unmix_result,-> sw_unmix_check
+sw_unmix_run,KEEP
+sw_unmix_sample_events,-> sw_unmix_report
+sw_unmix_save_figures,-> sw_unmix_report
+sw_unmix_setup,-> sw_unmix_run
+sw_unmix_spectracle,-> sw_unmix_run
+sw_unmix_spike_build,-> sw_unmix_check
+sw_unmix_spike_cospike,-> sw_unmix_check
+sw_unmix_spike_jobs,-> sw_unmix_check
+sw_unmix_spike_pairs,-> sw_unmix_check
+sw_unmix_spike_rows,-> sw_unmix_check
+sw_unmix_spike_score,-> sw_unmix_check
+sw_unmix_spillover_matrix,-> sw_unmix_run
